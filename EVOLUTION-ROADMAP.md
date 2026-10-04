@@ -324,7 +324,8 @@
 > ★**R146 结算：按我预写的判据撤回报 TIMED_OUT（余量 8.7%，不是"稳了"）**。最长跨 `13,016@83422080 → 13,238@83422887` = **+222/807 拍 = 0.275/拍**；所需 = 剩余 1,762 ÷ 到 `83429857` 的 6,970 拍 = **0.253/拍** ⇒ 过线，撤案条件（"≥2 窗且长跨过 0.26"）字面满足（两窗 `built=32`、`built≈168`）。**同段还出现过 0.019/0.07/1.81 三种短跨** ⇒ 这条工地仍是**两态跳变**，任何平均速率都不是预测；168 那一跳的来源是 **creep 背包与两堆 45 掉落**，不是新增的大池 ⇒ **状态写"仍在跑，但没有任何机制在持续供给"**（#117 未修）。
 > ★**abort 分支的代价已量到可决策精度**（读码 + 现读 `kernel.expansionRhythm={"ring":[0,0,0],"blacklistMultiplier":0.5,"minSources":1}`，`codeToKind`: **0=success** ⇒ 环上三次成功记录）：`blacklistCooldown=20,000`（`config/index.ts:946`）× 乘子；走 `timeout` 后成功比仍 3/4 ≥ `2/3` ⇒ **乘子保持 0.5 ⇒ 该房被拉黑 ≈10,000 拍 ≈7.7 小时**；`consecutiveFailures=1 < pauseFailures=3` ⇒ **不触发全局暂停扩张**（`pauseTicks=20,000` 要三连败才落）。**冷却确实会过期**：`pruneBlacklist`（`uoem-events.ts:263`）在 `plan-adapter.ts:29` 每 pass 先跑，所以消费处只查"键在不在"是安全的 ⇒ **我一度怀疑"冷却其实永久"，读到底后否证了自己**（今天第四次"把链读完"，这次拦下的是一个假缺陷）。**给选项④定价时别漏**：`reclaimExpeditionCreeps` 只回收 creep，**已投进工地的 13,238 点建造能量与该房 11 段墙/2 container 随 claim 释放一并作废**。
 > ★**下一发（R147）取数清单（不新增读码，只撞签名；基线已更新）**：`progress`（**对 `13,238@83422887` 差分**；所需速率按"剩余 `15,000−p` ÷ (83429857 − 当前 tick)"现算，别沿用 0.253）、`FIND_MY_SPAWNS`、`kernel.bootstrap`（`waves/until`，**wave7 在 83424757**）、`kernel.expansion`（**整个消失＝已 abort，按上面失败分支签名逐条对**）、`bk` 的 `built` 与 `upgraded:built` 比值、以及 **carrier 台账**（`role==="carrier" && remoteTarget==="W38S58"` 的所在房/背包/mode —— 这是 #117 的发作面，若"满载+idle 在目标房"再次出现就是同一故障复现）。
-> ★**判据仍按预写的两条**：建成 → 同拍查 `ea≥300 || spawning!==null`（CP2）与 `state` 是否前进、`startedAt` 是否重置；消失 → 查 `expansionBlacklist["W38S58"] = tick + 20,000 × 乘子` 的实际值（预报 ≈10,000 拍）与 `expansionRhythm.ring` 是否多了 `timeout` 码（**码表：0=success／1=stolen／2=timeout／3=lost／4=aborted**，映射在 `uoem-events.ts:217-223`）。**别把"条目没了"当"闭环验证过了"。**
+> ★★**R147 修正（把"两条判据"改成三条出口；我前面写的"超时⇒abort"只在没建成时成立）**：读 `state-machine.ts:340-362` 原文——超时时先 `emitMilestone(FORCED_ADVANCE)`，**若 `spawns.length > 0` 就直接把 `state` 强推成 `economic_startup` 并重置 `startedAt`（不看 `ea≥300`，CP2 根本不是必要条件）**，只有 `spawns==0` 才 `abort(TIMED_OUT)`。⇒ 三条出口：**A** 正常 CP2（`spawnBuilt && (ea≥300 || 正在孵化)`）；**B** `83429857` 到且 spawn 在场 ⇒ **FORCED**，签名是 `Memory.kernel.expansion.forcedAdvance`（现读为 `false`、键存在）翻真 + `state="economic_startup"`，而 **`checkpointsPassed` 可能仍是 1**（注释原文：P5 是 Milestone、**不进 OutcomeChannel** ⇒ 不计失败、不改 blacklist 乘子）⇒ **"检查点数"与"状态"允许不一致，别拿它当闭环证据**；**C** `83429857` 到且 `spawns==0` ⇒ `abort(TIMED_OUT)`：`kernel.expansion` 消失 + `expansionBlacklist["W38S58"] = tick + 20,000 × 乘子(现算 0.5 ⇒ ≈10,000 拍)`。
+> ★**另两条此前漏写的分支**：**LOST/STOLEN**（`:262-280`，条件 `!targetRoom?.controller?.my`）—— 本轮核过**不是近期风险**（我在该房有自有结构：11 段墙 + 2 container + storage ⇒ 自有结构给视野，`Game.rooms.W38S58` 不会因"没 creep"消失；claim 衰减是"天"级）；**车道会被敌情掐停**（`:358-361`：`submitPioneers` 前提是 `hostiles.length === 0 && spawningAllowed`）⇒ **wave7 是否真发，要先看目标房有无敌对**（本轮 `R147T1` 实测 `hostile=0`、在场 4 只、工地 `13,238` 自 83422887 起 61 拍零推进）。
 > **禁令**：不改码、不动阈值/常量、不 push（`c58ff9d` 等批复）、不新建自动化、市场只读；幼房 `→bootstrap` 本轮已**自愈回 normal**、姿态 `fortify→develop` 属 threatWindow 有界自解，都只登记。
 
 ### 4.0-pre（10-04 10:4xZ 由 R142 为 R143 立的预期；**R143 当轮已收：三读数全否、带因拍长估错失效、CP2/CP3 判据已从代码原文读出**，保留作状态出处）下一轮主目标：**见证第三次扩张的终态：W38S58 自有 spawn 是否建成、`kernel.bootstrap` 条目是否被删、`kernel.expansion.state` 是否离开 `bootstrapping`，并把"进入下一态后第一道判据"在读完代码之后预先写下**
@@ -6261,3 +6262,36 @@ W37S58 `noSiteAtAll 479` 是自家核心房没排工地，正常。
 **如实记的测试缺口**：这个 bug 是"对象字面量少一个键"，`runExpectations` 是私有方法、没有可测缝；我没有为塞一个用例把整块（含 P3 跟踪与事件限流）重构出来 ⇒ 该分支**当前无单测**，
 以线上判据代替：部署后经历一次 `violations` 由非空变空，`recent` 应仍存在且含变空之前的 id。
 **方法**：这次是"判据设计里预写的第三种态（未上线/未执行/实现缺陷）"救了我——若只写"缺键=没部署"，我会把这条真缺陷误读成部署失败，然后**去重推一次同样有 bug 的码**。
+
+### R312（10-04 20:1xZ，本会话）#111 定价收口：**射程内的施工机会 100% 落在空载腿上**——两房的 `built` 在整段 boot 内都是 0
+现读（`kernel.stats.roadBuild.*`，逐字段单路径取；整行 JSON 会被 `peek` 的 ~700 字符截断，那是一台已知会骗人的仪器）：
+
+| 房 | calls | noEnergy | **noEnergyInRange** | noWork | outOfRange | **built** | rejected | pending | progSum | roadsBuilt |
+|---|---|---|---|---|---|---|---|---|---|---|
+| W37S57 | 468 | 375 | **348** | 0 | 93 | **0** | 0 | 18 | 505 | 14 |
+| W36S58 | 516 | 321 | **82** | — | — | **0** | — | 4 | 405 | 4 |
+
+**算术把结论钉死（W37S57）**：`calls − noEnergy − outOfRange − built − rejected = 468 − 375 − 93 − 0 − 0 = 0`
+⇒ **满载（或有能）调用共 93 次，全部在射程外；射程内的机会 348 次，全部空手**。
+也就是说这条车道上**没有一次"带着能却够不着工地"**，反过来也成立：**够得着工地的拍一次都没带着能**。
+`noEnergyInRange` 的口径已含 `workParts>0` 闸门，而该房 `noWork=0` ⇒ 这 348 次机会**每一次都落在有 WORK 的身上**，
+所以 (B)（空载腿留 200–300）不是"也许能省"，而是把 `built` 从 0 变成非零的**唯一已知路径**。
+
+**给 (B) 定价还差的那一格，我不编**：`预期点数 = 机会次数 × WORK 部件数 × 每 WORK 每拍的 build 点数` —— 后两项我没从 docs/@types 取到就**不填数字**（这次学乖了，见 §20 的两次假缺口）。
+校准法是现成的：缺口点数已知（W37S57 `18×300 − 505 ≈ 4,895`；W36S58 `4×300 − 405 = 795`；合计 ≈ **5,690 点**），
+一旦 (B) 上线，`built` 就成了天然分母 ⇒ **`每拍点数 = ΔroadProgressSum / Δbuilt`**，一次 boot 内即可标定，不用猜引擎常数。
+代价侧仍是每趟交付 −20~30%（远矿 hauler 容量 ~1,000、留 200–300）——**这是有数可依的属人取舍**：拿 20~30% 交付率去换"一条车道从 0 施工变满施工 + 约 5,690 点缺口"。
+
+**一条被两房同时支持、但我不定案的反常读数**：`roadsBuilt` 相对部署前**同向大跌**（W37S57 26/27 → 14；W36S58 7 → 4）。
+两房独立同向 ⇒ 不像单房视野抖动；且该计数只在**有视野**时更新（无视野时冻结，不会自己变小），所以"变小"要求**真的看到路消失**。
+但 `built=0` 意味着这一整段**没有任何新建**，衰减是唯一的免费解释——可我仍不写"路网在净衰减已定罪"，因为：
+①跨 boot 段比较本身有口径风险（ roadsBuilt 是快照不是累计，理论上可比，但我的基线取自不同 boot 的两次读数）；
+②敌方拆除与天然衰减在结构上不可分，而本会话远房敌情仪器被记过"是空的"。
+**下一手的便宜检验（零 console）**：连续两读 `roadsBuilt` + `roadProgressSum` + `pending`，
+若 `roadsBuilt` 单调下降而 `pending`/`progSum` 不动 ⇒ 是**存量在掉**（衰减或拆除），本案性质从"发展慢"升为"维护赤字"；
+若它企稳 ⇒ 我这次读到的是跨 boot 的口径噪声，撤回该疑点。
+
+**方法论**：这一轮的两处"整行读数被工具截断"（JSON 解析失败、字段缺失）都靠**退到逐字段单路径读**救回来，
+没有把截断当"值为空"——那正是我这天在第 100 号缺陷上犯过的错形状。
+**边界**：两房、同一 boot 段（部署后 ~7 小时）；`noEnergyInRange` 是机会计数不是点数；`built=0` 只在本 boot 段成立（部署前该两房分别有 175/58 次）。
+本轮零 console、零 src 改动、零 push。
