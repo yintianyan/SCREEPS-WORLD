@@ -328,6 +328,13 @@
   **修法方向（摆给人，三个候选）**：①在 `captureWorldSnapshot` 一处收口：`storage` 只有在 `getCapacity(energy) > 0` 时才写进 snapshot（**最小改动、全库生效**，但会改变 146 个消费方的输入语义 ⇒ 属设计决策）；②给快照加一个正交键 `storageUsable`，逐个消费方迁移（稳但慢，且新旧键并存期易漏读）；③只在相位与排产两处特判（面最小、留下同类隐患）。**默认＝什么都不动**：该房继续被记 crisis、继续被 aid 线喂一间收不下能量的库房。
   ★**与 #120/#121 的关系**：#120 讲"这间房为什么出不了解带态"，#121 讲"CP4 的并行度被名额卡着"，**本条讲"这两个判断的共同前提错了"**——修掉它，#120 的 `hasBank` 一支自然失效（遗留房不再被当"有银行"），所以它的优先级高于前两条，但**改动面最大**，故只摆数。
 
+- **#123 扩张 CP5 的"净流为正"在 CP4 要求的建造期里按构造为假——消耗估算按工地数记（每址 5/t、封顶 30/t），而 2-source 新房的产出上限只有 20/t（10-04 R160 补17 立案；属模型语义决策，我只摆数）**
+  估算式原文 `state-machine.ts:812-835`：`production = min(sources.length × 10, harvesterWORK × 5)`；`consumption = (spawn 在孵 ? 3 : 0) + min(sites × 5, 30)`。⇒ 消耗按**工地数**记代理，不按真实施工速率；产出被 source 数硬顶。
+  现算（`R160D8@83426714`，把现场量代进上式）：`src=2, harv=2, workParts=3, sites=5, hatching=false` ⇒ `prod=min(20,15)=15`、`cons=min(25,30)=25` ⇒ **`net=−10`** ⇒ `netPositive` 假 ⇒ `advancePositiveStreak` 归零 ⇒ `consecutivePositiveTicks` 无法开始累计。转正条件（纯算术）：`min(sites×5,30) < min(20, workParts×5)` ⇒ 现值下要 **sites ≤ 2**；WORK 部件补到 ≥6 则 sites ≤ 3 可行。
+  为什么与 CP4 结构性互斥：CP4 要求**建成 5 只 extension**（期间必须有 extension 工地在场；现读 `ext=0`、串行建造中），CP5 要求净流为正——同一间房同一时段，"正在建"就让净流为负。⇒ 自然完成路径的顺序被钉死：CP4 落成 → 工地降到 ≤2 → 净流转正 → 还要 `externalEnergyInflow === 0`（援助线停，见 #120/#122）→ 再两趟正 pass 才凑够 `SELF_SUSTAINING_TICKS=500`（首趟 elapsed=0）。剩下的出口只有 `integrating` 的 60,000 拍超时强推（`COMPLETED_FORCED`）。
+  给下一轮的判读规则（**判别位**）：N+1 趟读到 `consecutivePositiveTicks=0` 有两重原因（elapsed=0 与 net<0），**那一拍无法区分**；**N+2 趟才是判别位**——读到 ≈400~900 ⇒ 该拍 net>0（工地 ≤2 或 WORK≥6）；读到 0 ⇒ net≤0（按现算 sites=5/workParts=3 ⇒ **预期如此**）。读到非 0 时必须重跑 `R160D8` 那发公式核对现值，不许直接引用本节的 15/25。
+  选项（都不自办）：①按真实施工进度差分记消耗（现成源：`bk.built`）；②给幼房按 RCL/工地规模缩放 sites 权重；③什么都不动 ⇒ CP5 自然路径只能等"建完之后"，否则由超时强推收成 `COMPLETED_FORCED`。**默认＝③。**
+
 ## 3.6 判等效外部事件（不是我的修没生效）
 
 - **#48 / #35 跨房交付成对入账**：本窗证据——两房 `exported` 皆空、在场 9 只跨房 creep **全是远矿角色**
