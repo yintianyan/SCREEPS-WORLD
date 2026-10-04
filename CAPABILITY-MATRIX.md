@@ -482,3 +482,27 @@ Observer 是**不派 creep 就能拿到目标房视野**的机制（引擎侧 1 
 `Memory` 侧读数；本轮零 console 没取）；②Observer 视野只进**当拍快照**还是要落段 5/冷存才够 fact 级——后者连着 #109（段 5 线上为空，
 按人归因的敌意记忆不跨部署）。⇒ **#100 仍属人**，但现在能给出一条更便宜的候选路径和它缺的那两块砖。
 （记法照旧：`UNRESOLVED` 不是结论，读完那一行才升档；这次升档同时把一个 pending 请示的选项集缩小了。）
+
+### §20 第二次更正（R303）：Observer 那条**我判错了两次**，正确结论是"能力在、持久化与射程不在"
+错因：`StructureObserver` 的方法名是 **`observeRoom(roomName)`**（docs.screeps.com/api/StructureObserver 已核），
+而我按 `observe(` / `.observe(` 去搜 ⇒ 命中 0，于是先把"没接线"当候选、又"确认"成 `ZERO`。
+**同一条假缺口我造了两次**（§16 族、上一轮 `boost(` 也是同形错误），所以规矩要升级：**先拿到引擎真实方法名（docs 或 `@types/screeps`），再搜调用形状**。
+实际代码（现读）：
+- `src/systems/room-observer.ts:142` `if (observer.observeRoom(target) === OK)` ⇒ **调用点存在**；
+  `:37` 与 `:148` 写明"视野只存续下一 tick"，系统 `interval` 必须为 1，并有下一 tick 的捕获分支。
+- `:118-140 requestObservation()`：靶子来自 `Game.map.describeExits(homeRoom)` ⇒ **只打 8 个邻房**，
+  优先级＝"从未有视野（sources 未知）> 陈旧超阈"，公路房跳过；**没有按"是否他人有主房"加权**。
+- `:102-113 submitObservation()`：结果进 `globalCache().intelHandoff`（heap，满则 `shift()` 丢最旧）。
+⇒ 所以 `ZERO` 撤消，正确分档是：
+| 环节 | 状态 |
+|---|---|
+| Observer 楼与 `observeRoom()` 调用 | **WIRED**（`room-observer.ts:142`） |
+| 下一 tick 视野捕获 | WIRED（同一文件，interval=1 的注释即为此约束） |
+| 侦察结果**持久化到按人归因的记忆** | **缺口**：只进 heap 环形缓冲，部署即清（与 #109 段 5 线上为空同源） |
+| 邻房以外的目标（2+ 房外） | **缺口**：`describeExits` 只给 8 邻居；引擎射程是 **10 房**（docs 已核），代码只用 1 层 |
+| 玩家有主房的**优先级** | **缺口**：靶子按"未知/陈旧"排，不按"敌情价值"排 |
+**引擎事实（docs 已核，写进矩阵以免再猜）**：`hits 500`、建造需 **controller level 8**、造价 **8,000**、射程 **10 rooms**、
+`observeRoom(roomName: string)` 返回 `OK`；错误码 `ERR_NOT_OWNER / ERR_BUSY(区域内有敌人) / ERR_NOT_IN_RANGE / ERR_INVALID_ARGS / ERR_RCL_NOT_ENOUGH`；
+**该页未给 CPU 成本与冷却** ⇒ 这两项仍是未记录项，不许引用成"已知便宜"（我上面写"1 拍 CPU"属未经核实的口头数，一并撤回）。
+**对 #100 的净影响**：原候选"接上已有楼的一个调用"**作废**（调用早就在）；剩下的实质是
+①把 `intelHandoff` 落到段 5/冷存（连 #109）②把靶子扩到射程内非邻房并给敌情权重。两条都比"新写侦察"小，但都比"加一个调用"大。
