@@ -5957,3 +5957,27 @@ W38S58（危机房、bootstrap 中）第一次读就有内容，因为它的窗�
 - `deathByCause={natural:337, combat:**11**, recycled:5}` ⇒ combat **+1**（上一跨 +0），仍在对端 V1"+≥3"之下 ⇒ "持续战损"维持未证。敌情仪器本轮未取。
 - `tier=constrained@83416306` **第三次同 since**（持续 1,978 拍）⇒ R136/R137 的"真实状态、非部署税"继续成立；`Pressure=MEDIUM(0.57)`、`Budget=164,920/958,827`、`Readiness=NOT_READY`、`errorsPerTick 0`、`ExpectationViolation=0.6%`。
 - 边界：**零 src、零 push、零 build、零 npm**；探针 `observe×1 + console-eval×1`（mark=D1，整块打印不接 `tail` ⇒ 无截断；R132 自记的两条取证缺陷本轮都规避）`+ peek×1`；pgrep 无并发 console/测试进程；`.gitignore` 未 stage、`git stash list` 空；线上 sha 本轮未重取（上次读数 `d2f0b0cd00ad` 属 R136）。
+
+---
+
+### 巡检 R138 续（2026-10-04 07:3xZ，本会话）**速率判完了：施工是双峰的（喂能 3.9/拍、饿着 0/拍），死线在 tick 83429857 —— 判定"能走完，余量 ≈55%，但由占空比而非 builder 数量决定"**
+
+**读到的东西（同一 siteId `…5a`，六发，全部整块打印无截断）**
+- 进度：`64@83414022 → 1,850@83415491 → 5,392@83418284 → 5,392@83418347 → 5,392@83418430 → 5,392@83418482 → **5,686@83418557**`（最后 75 拍 +294 ⇒ **3.9/拍**，同拍只有 **1 只 builder 在 `work` 且携带 146、assignment=`…5a`**）。
+- 中间出现过**连续 ≈200 拍零推进**，期间房内 **builder×4（2 只 `idle` + 2 只 `acquire`，全部携带 0、无 assignment）**，而 **两处 source 都是满的 3,000/3,000、container 能量 `[2, 0]`**。
+- ⇒ **人均速率不再是 0.64/拍那种"平均数"**：喂到能的 builder ≈3.9/拍，没能的 0/拍。R138 上文我用"段 B 合计 1.27/拍 ÷ 2 人"推的 0.64（以及 1.05 的另一端）**被 D5/D6 这组直接观测取代**：限制是**占空比**。
+
+**机制（读码 + 现场，零 src 改动）**
+- `state-machine.ts:745-748` 的拓荒编队 = `worker(pioneerWorkers=2) + builder(pioneerBuilders=2)`（`config/index.ts:939-940`），**编队里没有采集角色** ⇒ 现场表现为 source 恒满、container 恒空 ⇒ builder 只能自采（14W 采得快但只有 **200 载重**），于是"灌一波 294 → 走一趟 → 空窗"。这就是双峰的来源，也是 **#116 的实体**。
+- 补给闸：`advanceBootstrapping` 末尾 `if (hostiles.length === 0 && spawningAllowed) submitPioneers()`（`:359-362`）；`hostiles` 只数带 ATTACK/RANGED_ATTACK 且非盟友（`:322-329`）；`spawningAllowed = budget.tier ∈ {healthy,guarded} && bucket ≥ 5000`（`expansion-manager.ts:81-83`）。本轮现读 **敌意 0 / tier healthy / bucket≈10,000 ⇒ 两闸都开**（我先前怀疑"hostiles 挡住补给"，被自己的读数否证）。
+- ⚠️口径边界（我差点踩）：这里的 `ctx.budget.tier` **不是** `kernel.capacity.tier`（后者现在是 `constrained`）。两把尺不同源，**别拿 G6 的档位去推 `spawningAllowed`**。
+- 死线：`startedAt=83409857 + pioneerTimeout=20,000 ⇒ tick 83429857`；超时且 `spawns.length===0` ⇒ `abortExpansion(TIMED_OUT)`；若届时 squad 无 worker/builder 且有武装敌意 ⇒ `LOST`。距 D6 **≈11,300 拍 ≈ 8.2 小时**。
+
+**判定（objective 要的"判能否无人干预走完 15,000"）**
+- 剩余 `15,000 − 5,686 = 9,314`，死线前可用 ≈11,300 拍 ⇒ **所需持续速率 ≥ 0.82/拍**；观测长段合计 **1.27/拍**、喂能瞬时 **3.9/拍**、实测空窗 ≈200 拍。
+- ⇒ **能走完，余量约 55%，但成败系于占空比（builder 能否拿到能量），不系于 builder 数量**——本轮 4 只 builder 在场照样 200 拍零推进。三条会吃掉余量的条件都点名可测：①占空比恶化；②武装敌意出现 ⇒ 补给停 + squad 空 ⇒ `LOST`；③`budget.tier` 跌出 healthy/guarded 或 bucket<5,000 ⇒ 补给停。
+- **这不是"已验证"**：终态三读数（`FIND_MY_SPAWNS ≥ 1`、`kernel.bootstrap` 条目被 `bootstrap-lane.ts:46-48` 删除、`kernel.expansion.state` 离开 `bootstrapping`）**尚未发生**。按 1.27/拍 外推完成点 ≈ **83425,900（≈5.4 小时）**，按 3.9/拍 ≈ 2,388 拍 ⇒ 下一轮应能收到终态（闭环成立，或死线前未建成）。
+- **#116（候选缺陷，等终态再定，本轮不改码）**：拓荒编队缺采集角色 ⇒ 新房补能链不存在、施工双峰化。若最终 `TIMED_OUT`，第一嫌疑人是 #116，不是 #115（#115 的排序问题在 wave4 之后已被"两只 builder 同绑 spawn"绕开）。两个修法方向代价不同（编队加 harvester / 让 builder 取用 sponsor 运来的能量），**都不自办**。
+- 顺带第三次坐实：`FIND_MY_SPAWNS=0` + `ea/ec=0` + `spawnStarvationCount` 恒增 ⇒ R130 那条"无 spawn 的房该计数器按构造恒真"继续成立。
+- 另记一次**超额补给现象**：D5 一度 4 只 builder（>pioneerBuilders=2）。注释称编队读数按"驻地"（那间房里的我的 creep）计 ⇒ 若按物理在场计，通勤中的不算 ⇒ 过供是可预期后果。**未证实**（要看通勤途中 creep 的 room 归属），只登记。
+- 边界：**零 src、零 push、零 build、零 npm**；本轮（R138 全轮）探针 `observe×1 + peek×2 + ring-dump×1 + console-eval×6`（D1–D6，全只读、整块打印）；`.gitignore` 未 stage、`git stash list` 空；线上 sha 未重取（上次 `d2f0b0cd00ad`）。
