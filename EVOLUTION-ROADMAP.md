@@ -346,7 +346,7 @@
 - **#123 扩张 CP5 的"净流为正"在 CP4 要求的建造期里按构造为假——消耗估算按工地数记（每址 5/t、封顶 30/t），而 2-source 新房的产出上限只有 20/t（10-04 R160 补17 立案；属模型语义决策，我只摆数）**
   估算式原文 `state-machine.ts:812-835`：`production = min(sources.length × 10, harvesterWORK × 5)`；`consumption = (spawn 在孵 ? 3 : 0) + min(sites × 5, 30)`。⇒ 消耗按**工地数**记代理，不按真实施工速率；产出被 source 数硬顶。
   现算（`R160D8@83426714`，把现场量代进上式）：`src=2, harv=2, workParts=3, sites=5, hatching=false` ⇒ `prod=min(20,15)=15`、`cons=min(25,30)=25` ⇒ **`net=−10`** ⇒ `netPositive` 假 ⇒ `advancePositiveStreak` 归零 ⇒ `consecutivePositiveTicks` 无法开始累计。转正条件（纯算术）：`min(sites×5,30) < min(20, workParts×5)` ⇒ 现值下要 **sites ≤ 2**；WORK 部件补到 ≥6 则 sites ≤ 3 可行。
-  为什么与 CP4 结构性互斥：CP4 要求**建成 5 只 extension**（期间必须有 extension 工地在场；现读 `ext=0`、串行建造中），CP5 要求净流为正——同一间房同一时段，"正在建"就让净流为负。⇒ 自然完成路径的顺序被钉死：CP4 落成 → 工地降到 ≤2 → 净流转正 → 还要 `externalEnergyInflow === 0`（⚠️**R165 补4：这一半待复核**——`economic-activation.ts:80-89` 自陈旧实现把"幼房背包存量 ×25/t"当外部流（量纲错、≈175/t）且**已删**，现在 `externalInflowPerTick = carrier 线数 × 50` ⇒ 若本房 carrier 援助线已为 0（`observe` 现读 `W38S58 ops=0/0` 提示如此，但我本轮那一发探针超时、未取到 carrier 线现值），则 `selfSustaining` 只等 `netPositive`，**本段"自然 COMPLETED 按构造不可达"这句要降级**；引本条前先现读线数，别沿用这句原文。另注：`netFlow = production − consumption`（`:102`）**不含**外部流 ⇒ 本条"CP4 建造期 `netPositive` 为假"那一半不受此影响）＋（援助线停，见 #120/#122）→ 再两趟正 pass 才凑够 `SELF_SUSTAINING_TICKS=500`（首趟 elapsed=0）。剩下的出口只有 `integrating` 的 60,000 拍超时强推（`COMPLETED_FORCED`）。
+  为什么与 CP4 结构性互斥：CP4 要求**建成 5 只 extension**（期间必须有 extension 工地在场；现读 `ext=0`、串行建造中），CP5 要求净流为正——同一间房同一时段，"正在建"就让净流为负。⇒ 自然完成路径的顺序被钉死：CP4 落成 → 工地降到 ≤2 → 净流转正 → 还要 `externalEnergyInflow === 0`（✅**R168 补1 已复核：这一半成立，"按构造不可达"不降级，但两处措辞改掉**——`economic-activation.ts:80-89` 的旧实现把"幼房背包存量 ×25/t"当外部流（量纲错、≈175/t）且**已删**，现在 `externalInflowPerTick = carrier 线数 × 50`；现读 `R168E1@83,430,964` 在场 **2 只 carrier 的 `home` 全是 W37S58**（一只 `→W38S56`、一只 `→W38S58`，各 TTL 416），配 `kernel.expansion.sponsor="W37S58"`、`target="W38S58"` ⇒ `state-machine.ts:851-852` 的三重筛（role ∧ `remoteTarget===target` ∧ `home===sponsor`）**只命中 1 只** ⇒ 外部流 =50 ≠0 ⇒ `selfSustaining` **仍假**。纠正：①此前写的"2 条线"是在场 carrier 总数，与本房相关的该记 **1 条**；②该项的有效期＝那只 carrier 的存活期（TTL 416 ⇒ ≈27 分钟 @3.8 s/拍），换代后必须重读，**不是常量**。本轮新增一条不对称：`carrier.ts:44` 的 `getFreeCapacity <= 0` 在这间 `null` 读数的遗留 storage 上恒真 ⇒ 这条线**从未交付过一克**（自读 `W38S58.imported=0`，同读法控制组非空 `W38S56.imported=82,785` ⇒ 不是读法坏），而 `imported` 的唯一作者就是同一 if 块里的 `:57` ⇒ **撤掉这条线能量代价为 0，却能把 `selfSustaining` 的输入翻成 0**（属人决定，且它与 #122 互不替代：#122 管 CP4 的 builder 需求乘 0，本条只管 CP5 第三判据）。另注：`netFlow = production − consumption`（`:102`）**不含**外部流 ⇒ 本条"CP4 建造期 `netPositive` 为假"那一半不受此影响）＋（援助线停，见 #120/#122）→ 再两趟正 pass 才凑够 `SELF_SUSTAINING_TICKS=500`（首趟 elapsed=0）。剩下的出口只有 `integrating` 的 60,000 拍超时强推（`COMPLETED_FORCED`）。
   给下一轮的判读规则（**判别位**）：N+1 趟读到 `consecutivePositiveTicks=0` 有两重原因（elapsed=0 与 net<0），**那一拍无法区分**；**N+2 趟才是判别位**——读到 ≈400~900 ⇒ 该拍 net>0（工地 ≤2 或 WORK≥6）；读到 0 ⇒ net≤0（按现算 sites=5/workParts=3 ⇒ **预期如此**）。读到非 0 时必须重跑 `R160D8` 那发公式核对现值，不许直接引用本节的 15/25。
   选项（都不自办）：①按真实施工进度差分记消耗（现成源：`bk.built`）；②给幼房按 RCL/工地规模缩放 sites 权重；③什么都不动 ⇒ CP5 自然路径只能等"建完之后"，否则由超时强推收成 `COMPLETED_FORCED`。**默认＝③。**
 
@@ -448,6 +448,13 @@
 > ★**R164 补7（20:33Z）在表仪器名册——旧的那支已下班，别再引它**：`r160-cp4-watch`（pid 58241）跑满 45 发后自行收尾，末行是预先设计的 `WATCH_DONE shift=exhausted (未越阈，非结论)` ⇒ **它的 `Q=` builder 否证位就此断供**。我补挂 **`tmp/observe/r164-queue.log`（pid 77019，600 s × 72 = 12 h）** 专盯 `spawnQueue` 键列＋`spawnBlacklist`：命中 `builder:W38S58:*` 就打 `FALSIFIER`（⇒ `demand.ts:1098` 的乘 0 机制作废），黑名单出现就打 `NOTE purge 支复活`。⇒ 跨窗的两支活表是 **`r164-verdict.log`（pid 73248：`state/cp/startedAt/forcedAdvance/lastEconomicEvalTick/CPT` + `reserve/bandTicks` + `upgraded/built` + `controllerProgressChangedAt`）** 与 **`r164-queue.log`（pid 77019）**；`r160-cp4.log` 降级为**历史 45 发**（`builder` 命中 0）。首发：`Q=` 空、`spawnBlacklist` 不存在 ⇒ 与机制一致。这正是我自己记过的老规矩的现场重演——**判效器有自己的下班时刻，交接里引仪器必须带 pid 与视界末拍，并每轮重跑 `pgrep`**。
 >
 > ★**R165 补2（20:39Z）第二支的期望值改由函数体给出，附一条单位陷阱**：`economic-activation.ts:65-72` `advancePositiveStreak(prev, elapsedTicks, positive){ if(!positive) return 0; return prev + Math.max(0, elapsedTicks); }` 配 `state-machine.ts:543-544`（第一趟 `lastEconomicEvalTick` 未定义 ⇒ `elapsed=0`）⇒ **第一趟 `consecutivePositiveTicks` 必为 0，netFlow 正/负两分支都给 0** ⇒ objective 那句"按原文必为 0"不再依赖注释文句。⚠️**单位陷阱：它累加拍数不是趟数** ⇒ 第二趟若 `netFlow>0`，`CPT` 会从 0 **跳到 ≈ 一趟间隔而不是 1**（⚠️R166 更正：原写"实测 400~500"取自 10-04 R158 在 CPU 让位闸咬住 P3 时的测量；本轮现读 `systemLastRun["expansion-manager"]` 距当拍仅 **78 拍**、`CONFIG.expansion.interval=100` ⇒ **今日节拍 ≈100 拍一趟**）。⇒ 读数口径改成不依赖估计的一条：**`CPT` 的增量＝相邻两趟 `lastEconomicEvalTick` 之差**（今日 ≈100；让位闸若再咬住会拉到 400~500 量级，两种都算正常），判据只看 **`CPT>0` ⇔ 该趟 `netFlow>0`；`CPT=0` ⇔ `netFlow≤0` 被清零**，且 CP4 的时刻分辨率＝一趟（今日 ≈100 拍）。**绝不把 450 读成"450 趟"**（判地位仍在 N+2 趟）。两件顺带事：(a) `:80-86` 注释自陈"把背包存量 ×25/t 当外部流"这一量纲错**已删** ⇒ 引用 #123 的"CP5 恒假"前须按新口径复核（下一轮顺手做，本轮不动结论）；(b) §3.5 现存 **`#116` 三条同号、`#88` 两条**（非我所立、不属本目标）⇒ 只登记不改写他人编号，请人拍一次号。
+>
+> ★**R168 补1（21:1xZ）#123 挂着的那半复核掉了：`selfSustaining` 仍然为假，但计数与机制要改写，而且它多出一个"零代价可撤"的形状**：现读 `R168E1@83,430,964` 在场 carrier **共 2 只、`home` 全为 W37S58**（一只 `→W38S56`、一只 `→W38S58`，各 TTL 416），`peek kernel.expansion` 读到 `sponsor="W37S58"`、`target="W38S58"` ⇒ 按 `state-machine.ts:851-852` 的三重筛（role=carrier ∧ `remoteTarget===target` ∧ `home===sponsor`）**命中 1 只** ⇒ `externalInflowPerTick(1)=1×50` ⇒ `externalEnergyInflow≠0` ⇒ `economic-activation.ts:104` 的 `selfSustaining` **假**。⇒ ①**#123 那句"CP5 自然 COMPLETED 按构造不可达"不降级、仍成立**；②我此前写的"2 条 carrier 线"是**在场 carrier 总数**，其中送 W38S56 的那只与本房的 `selfSustaining` 无关 ⇒ 正确计数是 **1 条线**，以后按 1 引用；③机制不是已删的"背包存量 ×25/t"而是"线数 ×50" ⇒ 它的有效期＝那只 carrier 的存活期（TTL 416 ⇒ ≈27 分钟 @3.8 s/拍），换代后必须重读，**别当常量引用**。
+> 本轮真正多出来的是这条**不对称**：**同一处缺陷从两侧把 CP5 关住**。`carrier.ts:44` 的 `getFreeCapacity("energy") <= 0` 在这间读数为 `null` 的遗留 storage 上恒真（`R168E2@83,431,010` 复证 `free=null / used=0`）⇒ 这条线**物理上一克都没进过本房**；而账本里唯一能写 `W38S58.imported` 的作者就是同一个 if 块里的 `carrier.ts:57` ⇒ 我自读的 `W38S58.imported=0`（同一次读法里控制组非空：`W38S56.imported=82,785`、`W37S58.exported=27,600`，与对端 R343 逐字对上 ⇒ 不是读法坏）**就等于**"从未成功卸进"，不是漏账。⇒ 合起来：**撤掉这条 supply 线对本房能量的代价是 0（它从未交付过），却把 CP5 第三判据的输入从 50 翻成 0**。这与 #122 是两件独立决定（#122 解的是 builder 需求乘 0 ⇒ 管 CP4；本条只管 CP5 的 `selfSustaining`，且它不动 CP4），我不自办、也不为造证据去停任何 op。
+> 附一条读数口径（本轮我自己踩的）：账本的正路是 **`kernel.stats.energyLedger.rooms.<房>`**；我先试的 `rooms.<房>.energyLedger` 与 `energyLedger.rooms.<房>` 两发都报"不存在"，而**控制组用同样形状也"不存在"** ⇒ 那是我的读法失败、不是"没有账"，按既有规矩只登记为"我读不到"。
+>
+> ★**R168 补2 预登记"CP4 到手的形状"——沿真出现时逐步核对，别临场重新推**：①**最早的一格是 `r164-queue.log` 命中 `builder:W38S58:*`，其次是 `built` 离开 4,064**（不是 site 数）⇒ `demand.ts:1098` 的乘 0 一旦解除，第一只 builder 先被队列表抓到；若 `Q=` 出现 builder 而 `built` 长期不动 ⇒ 缺口在孵化/供能侧，不在需求侧。②extension **site 3→5** 由 #121 的每房名额（`maxNormalSitesPerRoom:3`，config:290）放开；`claimSecure=true` **不挡**（R165 补5：`construction-manager.ts:127-139` 被严格门禁拒绝时仍走 R2 关键发展通道，明文放行 extension / controller container）。③第 5 张建成那一拍 `checkpoint.ts:184` 合取为真 ⇒ `state-machine.ts:466` `checkpointsPassed=Math.max(现有,4)`（**只升不降 ⇒ 掉级抹不掉已过 CP**）＋`:474-479` `state=integrating`、`startedAt` 重置为当拍。④下一趟（今日 ≈100 拍）`advanceIntegrating` 在 `:543-544` 写 `lastEconomicEvalTick` ⇒ **"从 `不存在` 变成数字"就是那两行真跑过的签名**（基线已在表：五发恒 `?（不存在）`、`CPT=0`），第一趟 `CPT` 必为 0（R165 补2），**N+2 趟才是判别位**。⑤两种"看着像但不是 CP4"的形状预先写死：`state=integrating` 而 `checkpointsPassed` **仍是 3** ⇒ 那是 `:482-497` 的 40,000 拍超时强推（`FORCED_ADVANCE` 只改 `state`/`startedAt`，**不碰 `checkpointsPassed`**），按 `startedAt=83,425,257` 该点 ≈**83,465,257**；`state=abandoned/failed` ⇒ 那是 `abortExpansion`（失守 `:508-515 LOST`／cp3 未过时 `:499 TIMED_OUT`）。⚠️**这条对目标第二支有实际收益**：超时强推同样会让 `advanceIntegrating` 跑起来 ⇒ **`lastEconomicEvalTick`/`CPT` 两键在 83,465,257 那一趟也能被读到**，不需要等 CP4；届时按⑤把"cp 仍 3"如实记成强推而非 CP4，两支分别记账，不许合并成"CP4 到手"。
+> 本轮状态（**未到拍子**）：t≈83,431,0xx，裁决窗 `[83,434,100, 83,434,500]` 还剩 ≈3,100 拍（@3.8 s/拍 ≈3.3 小时）；两支表都在跑（`pgrep` 现证 pid 73248 verdict / 77019 queue，各 72 发 × 600 s ⇒ 覆盖到 t≈83,441,0xx，跨过窗口右端）；verdict 5 发恒 `cp=3 / economic_startup / LET 不存在 / CPT=0`、`upgraded=2,500 / built=4,064` 双双逐字不动（③的目标判据"ext 数变了要重算天花板"因此**不需触发**——`built` 不动即无新建造成交，天花板仍 ≈4,300 结构承载＋在途携带）。连续性有一发免费自证：**`bandTicks` 五发 6,309→6,946、恰好 +1.000/拍** ⇒ 中间没有部署把该计数器清零（对端 `1f9cd035` 的 src 改动尚未推上线）。
 
 
 ### 4.0-pre（10-04 18:0xZ 改写，R160 补32；**上一条（R159 立的 objective：见证 CP4＋`integrating` 第一趟两键＋给 #120 补复证）本轮只拿到第三支**——#120 复证到手（8 发同拍分支排除：`reserve≈4,574~4,580` 顶在结构性承载天花板 ≈4,300 之上（算法见 #120 的补9／补22 逐级表）之上、退出线 15,000 高 2.8~3.3 倍，且 `ext=0` 故不需重算），**CP4 与 `integrating` 那两支未到手**：`kernel.expansion`@t≈83428100 现读 `state=economic_startup、checkpointsPassed=3、consecutivePositiveTicks=0、forcedAdvance=false、reservedEnergy=5000、startedAt=83425257`，卡点已判到"builder 车道"这一层（§3.5 #124 补31/补32：domain 层跑真函数证到会投 4 条 builder，而现场队列三发样本只有 3 条 upgrader），原文保留在下面的 4.0-pre 作状态出处）下一轮主目标：**读回判效器日志 `tmp/observe/r160-cp4.log`（`r160-cp4-watch.sh`，45 发 × 180 s，覆盖 t≈83428,1xx → 83432,6xx；读前先 `pgrep -f r160-cp4-watch` 证它还在，末行若是 `shift=exhausted` 只能记"未越阈"）见证 CP4 到手（`extensions.length ≥ 5 && containers.length > 0` ⇒ `checkpointsPassed 3→4`、`state` 进 `integrating`、`startedAt` 重置为当拍、`forcedAdvance=false`）的时刻与形状，并在进入 `integrating` 的第一趟 pass 上读 `lastEconomicEvalTick` 这个新键是否出现、`consecutivePositiveTicks` 首值（按原文第一趟必为 0，因为 `elapsed = ctx.tick − (lastEconomicEvalTick ?? ctx.tick)`）；若日志里没有 CP4 沿，就用同一份日志的 `Q=` 队列键列把 #124 那句"那一支 builder 从哪条通道离开"判进三支之一：出现 `builder:W38S58:*` ⇒ 被成功孵化摘走且需求在恢复／`spawnBlacklist` 出现 ⇒ purge 迟到（补32 ②(i) 复活）／两者都不出现而我算的 4 条始终不落 ⇒ 挡点在 `spawn-manager.ts:196` 之前，下一发读 heap 的 `globalThis.__churnCounter["W38S58"]` 与 `telemetry.skips` 的 `spawn/churn/builder/*`（**先证那两键有写者**）**
@@ -7246,3 +7253,40 @@ mem  : stats.energyLedger.rooms.W38S56 = { harvested 149,460 , imported 81,585 }
 
 **顺带**：`#129` 的"落盘比写入粗"结论在这里反过来帮了忙——正因为我知道 Memory 是粗窗，才会去补终端排除这一步，而不是拿"两侧同涨"直接定罪。
 **边界**：本轮零 src、零 push、零 build；探针 2 发（`R343T1` 只读、带 mark）；判效器继续跑到 40 次收工。含 src 未推 5 笔（逻辑）+2 笔注释/文档，`behind=0`。goal active。
+
+## 巡检 R344（10-05 05:12Z / 21:12Z）——本轮没动 src，动的是"下一轮能不能读懂现状"那条通道；顺手把待推批次核到可一键执行
+
+**一、发现并修掉的问题：项目记忆索引自己超限了，而且超限的方式正好会误导人。**
+`projects/.../memory/MEMORY.md` 实测 **78,172 字节**，而该系统只加载 25,000 字节以内 ⇒ 过去若干轮每一轮开头看到的都是**被截断的任意一片**，
+不是"索引"而是"随机目录"。更要命的是内容形态：条目把"当前判定"和"这条判定被推翻的过程"塞进同一行，
+所以任何被截到前半段的会话都会读到**已被自己否证过的旧结论**（这不是假想：本轮就看到 "§十八 已作废" 那种整行警告散落在条目之间）。
+处置：逐字全文存档 `memory-index-archive-2026-10-05.md`（78,599 字节，含全部历史长句），索引重写为 49 条一行钩子 + 一句"当前状态一律去主题文件读"。
+现读 **9,836 字节、49 条、零丢失**（条目数与标题集两边各数过一遍）。
+
+**二、本轮自抓的一个错（写下来，因为它很容易再犯）**：第一版瘦身脚本跑完打印
+`entries=49 bytes=7809` ——两个统计都对，**内容却是废的**：分段循环的首个片段判断写反，40 条钩子退化成 "…（含更正链）"，
+等于把一份"过长但可读"的索引换成一份"合规但无信息"的索引。是**看产物**才发现的，不是看打印。
+⇒ 规矩：任何"改写我自己生产资料"的脚本，验收口径必须包含一次人眼读产物；统计数只用来证明没丢条目。
+
+**三、为什么这件事算 L2 的一轮而不算家务**：本项目的推进方式是把判定链写进文件、下一轮从文件恢复。
+索引坏掉时，坏的不是排版，是**恢复质量**——过去几轮里"同一现象第二次立案""编号撞车"这类开销，成因之一就是恢复时看到的是截断片。
+本轮把这条通道修回可用，直接服务"持续优化"，且不越权（不碰产线、不动阈值）。
+
+**四、待推批次现状（核到能一键执行）**：含 src/tests 的未推提交 **6 笔**——
+`c76aad4`(#113 expectations.recent 不再被干净一拍抹掉) / `c2e3e30`(#111 noWorkInRange) / `994bf54`(#100 observeCounters) /
+`1ac133d`(#119 safeMode 出口账本) / `1f9cd03`(§3.4 strayAssets 普查) / `7553710`(注释级：更正两处过度声明)。
+文件面：`src/` 8 个 + `tests/` 4 个，**+562 / −13**。`git fetch` 后 **ahead=132 behind=0** ⇒ 无人推码 ⇒ 单二进制 A/B 仪器仍然有效
+（本轮也因此**没跑 build**：e2e 的 script 自带 build，跑了就毁掉"本地 dist==线上"）。
+门禁（同一条命令串，`tmp/observe/r344-gate.log`，EXIT=0）：`typecheck` **通过**、`test:unit` **392 文件 / 5,277 用例全绿**、
+`test:integration` **30 文件 / 239 用例全绿**（pre-push 钩子只跑前两项，"门禁全绿"历来要自己补 integration）。
+**e2e 未覆盖——是没跑，不是失败**（`test:e2e` 的 script 自带 build，窗内跑了就毁掉"本地 dist==线上"那台免费仪器）。
+
+**五、五件先写死的线上签名仍在表上，位置已核**：`EVOLUTION-ROADMAP.md:6845/6846`（observe 的 noObserver 两列：核心房应=0、幼房按构造>0）、
+`:6970`（三读数：expectations.recent 挂违例转空沿 / noWorkInRange / stats.observe 且预报 `noTarget/gate≈1`、闭合式 `ok===captured+lostVision+staleSlot`）、
+`:7126`（safeMode 和平期三列形态）、`:7106`（noEnergyInRange 两走廊 38% vs 91% 的对照）。
+判读口径不变：**触发事件没发生就记"验证未开始"**，不许把"读不到"写成"坏了"，也不许为拿读数去制造条件。
+
+**六、边界**：本轮零 src 改动、零 push、零 build、零 npm install、零阈值改动、零线上写动作；只动 L1 文档与自己的记忆文件；
+`.gitignore` 仍未 stage（并行会话的未提交物）；`git stash list` 未新增。
+**唯一恢复动作仍然是一个字：「推」**——它触发的是既定的四步（push→CI 绿+check-code 认 sha→上表五件签名第一读→按命中/否证/未开始三态回报）。
+其余全部属人：#50（两条目标位 −0.25/拍出 constrained、−4.25/拍到 comfortable）、#111 (B)、#118+#78+#13、#106/#107/#104/#110（"这层要不要存在"）、#130、#88/#114、#97（八项记录只做了两项）。
