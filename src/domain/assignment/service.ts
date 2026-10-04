@@ -22,6 +22,15 @@ export interface AssignmentTaskEntry {
 }
 
 /**
+ * 存在性阻塞结构：缺了它整间房无法自孵（spawn）/开火（tower）。
+ * 与 build 任务的 priority=1 判定**同一来源**（`isPriorityContainerSite` 的同族口径：
+ * 判据写两处就会漏一处，#115 的线上实证是"门禁认 spawn 为 P0、工时却永远轮不到它"）。
+ */
+export function isBlockingStructureType(structureType: string | undefined): boolean {
+  return structureType === STRUCTURE_SPAWN || structureType === STRUCTURE_TOWER;
+}
+
+/**
  * 站桩/物流关键工地：controller 或任一 source 相邻的 container。
  * 与 build 任务的 priority=1 判定**同一来源**（曾经两处各写一遍，改一处漏一处）。
  */
@@ -152,8 +161,7 @@ export function buildRoomTasks(
   // assignment 对齐：集中 builder 工时优先完工，而非与 extension 平分。
   const needsStorage = snapshot.rcl >= 4 && snapshot.storage === undefined;
   for (const site of snapshot.myConstructionSites) {
-    const isCritical =
-      site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
+    const isCritical = isBlockingStructureType(site.structureType);
     const isStorageSite = needsStorage && site.structureType === STRUCTURE_STORAGE;
     // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
     // 确保 builder 优先建造它而非远处的 extension。判定与抢占豁免共用同一函数。
@@ -292,6 +300,28 @@ export function chooseTaskForRole(
   // 站桩升级链随之趴窝（升级仅 0.11 E/tick，upgrader 卡在 range 13~21 且疲劳）。
   // 半成品不产出任何功能：builder 稀缺时，"最快能完工的那个"比"离得最近的那个"更该先做。
   // 只有 build 任务带 remaining（builder 也只接 build），故本步不影响 fill/haul/upgrade。
+  //
+  // #115 例外：**存在性阻塞结构（spawn/tower）不参与剩余量升序**，先接它们。
+  // D1 的量级比较在这里是反的 —— 线上实证 W38S58（自主扩张的第三间房）：spawn 工地
+  // 剩 15,000，源旁 container 剩 4,872，两者同 priority=1 且 container 也判 priority 1
+  // （`isPriorityContainerSite`），于是 D1 恒选 container，而它 maxWorkers=2 恰好把
+  // 房里仅有的两只 builder 全吃掉。spawn 工地跨 1,688 拍七次读数恒 0/15,000，
+  // 期间两只 builder 各**全新孵化**并重选过一次（assignedAt 83411701/83411717）
+  // ⇒ 不是租约黏性，是排序本身缺一列"没有它这房动不起来"。
+  // 同档内多个阻塞结构之间仍按剩余量升序（先把一个做完再做下一个），保持 D1 原意。
+  const blocking = candidates.filter(t => isBlockingStructureType(t.structureType));
+  if (blocking.length > 0) {
+    const blocked = blocking.filter(t => t.remaining !== undefined);
+    if (blocked.length > 0) {
+      const least = Math.min(...blocked.map(t => t.remaining!));
+      return closestTask(
+        blocked.filter(t => t.remaining === least),
+        creepPos,
+      );
+    }
+    return closestTask(blocking, creepPos);
+  }
+
   const costed = candidates.filter(t => t.remaining !== undefined);
   if (costed.length > 0) {
     const least = Math.min(...costed.map(t => t.remaining!));

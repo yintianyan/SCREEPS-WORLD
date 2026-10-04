@@ -991,6 +991,29 @@ describe("chooseTaskForRole — 同优先级按剩余建造量（D1）", () => {
     expect(picked?.targetId).toBe("ctrl-c");
   });
 
+  // #115（2026-10-04 线上实证 W38S58，自主扩张的第三间房）：spawn 工地剩 15,000，
+  // 源旁 container 剩 4,872，两者同 priority=1（`isPriorityContainerSite` 把源旁 container
+  // 也判 1）⇒ D1 恒选 container，而它 maxWorkers=2 恰好吃掉房里仅有的两只 builder。
+  // 现场跨 1,688 拍七次读数 spawn 恒 0/15,000，期间两只 builder 各全新孵化并重选过一次
+  // ⇒ 根因是排序缺一列"没有它这房动不起来"，不是租约黏性。
+  it("存在性阻塞工地（spawn/tower）在同档内压倒剩余量升序", () => {
+    const spawn = t("spawn", 1, 15000, { x: 28, y: 28 }, STRUCTURE_SPAWN);
+    const sourceContainer = t("src-c", 1, 4872, { x: 31, y: 14 });
+    // builder 在 (30,13)：距离与剩余量两项都偏 container。
+    const picked = chooseTaskForRole("builder", [sourceContainer, spawn], { x: 30, y: 13 });
+    expect(picked?.targetId).toBe("spawn");
+    // 换个位置的第二个 builder 同样该落到 spawn —— container 的 2 个工位不该吃掉整间房的出路。
+    const second = chooseTaskForRole("builder", [sourceContainer, spawn], { x: 24, y: 20 });
+    expect(second?.targetId).toBe("spawn");
+  });
+
+  it("多个阻塞结构之间仍按剩余量先完工一个（豁免不废掉 D1 原意）", () => {
+    const spawn = t("spawn", 1, 15000, { x: 28, y: 28 }, STRUCTURE_SPAWN);
+    const tower = t("tower", 1, 5000, { x: 20, y: 20 }, STRUCTURE_TOWER);
+    // builder 站在 spawn 旁：距离偏 spawn，但 tower 剩余量小 ⇒ 先做完 tower。
+    expect(chooseTaskForRole("builder", [spawn, tower], { x: 28, y: 28 })?.targetId).toBe("tower");
+  });
+
   it("buildRoomTasks 给 build 任务带上 remaining，且随进度递减", () => {
     const sites = [
       {
