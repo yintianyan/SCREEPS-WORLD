@@ -5495,3 +5495,24 @@ W36S58 = **一个带 WORK 的我方 creep 都没有**；W37S57 = 有 3 个却不
 - 判据侧：分布至少 **6 个去重后的窗**，报 `mean/meanAbs` 的**同时报 n 与 pos/neg 计数**；
   `n<6` 时无论算出什么一律标 `INSUFFICIENT`，不许出"单边/抖动"的判断。
 **边界**：本轮零 console、零 src、零 push、零 build；采样器仍在后台跑（8 窗），跑完后的原始日志按上面两条清理再判。
+
+### R296（10-04 11:50Z，本会话）#114 判据链加固完成：五窗 drift 已有正有负，但**按我自己写的 n≥6 闸门，仍然不出判决**
+`drift-dist-report.cjs` 这轮又抓出并修掉两处**我自己刚写下的**缺陷（都是"看着能算"的那种）：
+1. **拼来的日志不按 t 排序** ⇒ 差分把不相邻的两窗相减，造出 `Δcr=+10,650` 这种荒谬数；现在先 `sort((a,b)=>a.t-b.t)`。
+2. **排序还不够**：中间丢过一块（坏行被拒收）时，前后两块不相邻，`Δcr` 会跨窗相减 ⇒ 实测造出 `−7,798`。
+   现在要求 `t` 差恰为 `windowTicks=50` 才给 `pools` 列，否则输出 `N/A`（drift 本身来自读数、不受影响，所以不整体丢窗）。
+3. 无 `bk` 的窗（`roll-poll.sh` 压根没读那一列）以前被算成"不闭合"，现在记 `no-bk` 并从自校分母里摘出去。
+4. 崩栈行（`Node.js v` / `fetch failed`）从数据流里拒收，本轮日志里 **6 行**全是这类。
+
+**现有可用窗（去重、拒坏行后）**：`drift = +1,324 / −639 / +1,986 / −1,248 / +1,726`（W37S58，t=83414729…83414979）。
+- 正负各半（3 正 2 负），`mean=+630`、`meanAbs=1,385` ⇒ `mean/meanAbs ≈ 0.45`，**贴着**我 0.4 的"抖动"阈值但没有余量。
+- `n=5 < 6` ⇒ 输出 **`VERDICT=INSUFFICIENT`**，不写"单边"也不写"窗太短"。**这一条是 R295 自己立的规矩在起作用**：
+  上一轮 n=2 时它算出过 `1.00 ⇒ 单边`，那一行现在被证明是坏样本喂出来的，不是现象。
+- 自校仍在工作：本轮新增的两窗（83414929/83414979）`drift` 都由 `bk` **逐位复现**（−1,248、+1,726），
+  累计已有 **5 个窗**做到这一点 ⇒ 恒等式与字段清单（`INCOME=harvested/bought/imported/recycled`、
+  `CONSUMPTION=spawned/upgraded/built/repaired/towerSpent/sold/exported/tradeFee`、`pickedUp 不在 income`）是可靠的。
+**判决条件（不变，等窗数够）**：≥6 个相邻去重窗后，`|mean/meanAbs| ≤ 0.4` ⇒ 判"50 拍窗对 drift 太短、`ws` 的同量级警语在该窗长上先天不可分辨"；
+`> 0.4` ⇒ 按符号找"被记成消耗却仍在 tracked 池"（正）或"未记账的实际流出"（负）。
+采样器（后台 `drift-dist.sh W37S58 8`）仍在跑；日志与工具都是只读产物，谁都能重跑：
+`bash tmp/tools/official/drift-dist.sh <房> <窗数>` 然后 `node tmp/tools/official/drift-dist-report.cjs tmp/observe/drift-dist-<房>.log`。
+**边界**：本轮零 console、零 src、零 push、零 build；改动只落在 `tmp/tools/official/`（不进产线，不影响 A/B 窗）。
