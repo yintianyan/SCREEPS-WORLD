@@ -446,3 +446,26 @@ L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含�
   ⇒ 判据必须按**内容键**去重（我用 `(pl 两端, dr)` 作键，实测抓到 1 个真重复），
   相邻性也不要靠 `Δt==N`，要靠池面链（上一窗 `trackedEnd === 本窗 trackedStart`）——
   后者还能在 `t` 那行恰好是坏读数时救回整个窗（八窗里有两窗是这样回来的）。
+
+## 20. L0 §3.1–3.8 覆盖对照（R301 首次做成"可核的表"，状态只按调用形状判）
+方法：`grep -rF '<name>('`（调用形状），不是符号命中。符号命中只算"存在文本"，**不进状态**。
+三档：`WIRED`=有生产调用点；`ZERO`=调用形状零命中（缺口）；`UNRESOLVED`=两条模式给出不同答案、必须人读那一行才能定性。
+- **ZERO（本轮可负责的缺口，§3.5/§3.6/§3.7）**
+  · `InterShardMemory` **0** ⇒ §3.7 的跨 Shard 机制**完全没有**（不是没接线，是没有调用形状）。
+  · `generatePowerCreepFromSpawns` **0** ⇒ Power Creep 的**生成/升级链不存在**；但 `processPower` 有 9 处命中且 `domain/economy/power-processing.ts` 在册
+    ⇒ 形状是"**收 Power 而不造 Power 单位**"，这条要么是有意的政策、要么是缺口，**本轮不裁决**（政策应有注释或 CONFIG 记录，我没找到）。
+  · `StructurePortal` **0**、`clone(` **0** ⇒ Portal 与复制类行动完全未覆盖（§3.7）。
+  · `.extract(` **0** ⇒ 矿物开采链不存在；`extractor` 有 53 处文本命中、`mineral` 423 处 ⇒ **是"围着它搬运/存储但不采"的形状**，与 §3.5"Lab/Mineral"的部分覆盖一致。
+- **WIRED（有调用点，不代表线上跑过）**
+  · `activateSafeMode(` 2 处（`systems/room/recovery-execution-system.ts`、`systems/military/tower-defense.ts`）⇒ Safe Mode 接线；线上是否激活过属另一档。
+  · `createOrder(` 1 处（`systems/trade/terminal-manager.ts`）⇒ 市场下单接线（本 bot 对市场是**只读**策略，见 §4）。
+  · `boostCreep(` 2 处（`systems/room/lab-system.ts`）⇒ Boost 接线（先前一轮我按 `boost(` 搜到 0 就差点把它记成缺口——**搜错形状会造出一个假缺口**，这条按规矩记在这里）。
+  · `.launchNuke(` 1 处 ⇒ 核弹发射**有调用点**（先前按符号看以为只是备料）；战争授权链是否允许它走到这一步属 §8/§3.6 的事。
+- **UNRESOLVED（诚实标注，不当结论用）**
+  · Observer：`grep -rF '.observe('` 给 **0**，而 `grep -rnE 'observer\.observe|\.observe\('` 给 **1**
+    ⇒ 说明那一行不是标准的 `x.observe(` 形状（可能是属性访问或不同拼写）。**我没读那一行，所以不定性。**
+    这条之所以重要：#100（攻击面缺"他人有主房的 fact 级侦察"）的候选修法里就有"用已排进 RCL8 模板的 Observer 侦察"——
+    若那 1 处其实是活的，修法就从"新写"变成"接上"；若不是，`STRUCTURE_OBSERVER` 在 `layout/templates/compact-core-v2.ts:155` 与
+    `constraint-placer.ts:85` 有槽位却无人调用，就是**建了也不用的死槽位**（属 §16 那一族）。**下一个人读那一行即可结案。**
+- **§3.8 的"八项记录"仍未逐机制做**（官方规则/前置/输入输出/资源成本/CPU 成本/API/失败条件/模块关系）。
+  本表只做到"覆盖与否"，**没有**做到八项 ⇒ §2.3 交付物里 §3.8 那一半**仍是未完成**，这条不粉饰。
