@@ -171,6 +171,9 @@ export const telemetryCollectorSystem: System = {
     // 3. 人口普查（每 populationInterval tick = 每 100 tick）
     if ((tick - phase) % CONFIG.telemetry.populationInterval === 0) {
       samplePopulationData(tick);
+      // §3.4 只读普查（L0「失守房间与资产损失处理」的检测面）：#118 是手工探针才发现的
+      // ——「我名下、但房不在 `Memory.rooms`」的残留结构今天**没有任何机制看得见**。
+      sampleStrayAssets(tick);
       // P0-1: Memory 体积监控——与人口普查同频率（每 100 tick），
       // RawMemory.get().length 零 JSON 解析成本（只读字符串长度）[Fact: typings 验证]。
       // 官服上限 2MB（2*1024*1024）；超 1.5MB 告警留 25% 余量。
@@ -824,4 +827,52 @@ function incrementCrisisCount(): void {
     };
   }
   Memory.kernel.stats.crisisCount++;
+}
+
+/**
+ * §3.4 残留资产普查的**纯归集部分**（#118 的机器可读版）。
+ *
+ * 为什么要有：L0 §3.4 要求处理"失守房间与资产损失"，但今天**没有任何机制能发现**
+ * "我名下、而那个房不在 `Memory.rooms`"的结构 —— W37S55 那两只 spawn 是靠手工探针
+ * 两次读数才发现的（mark R318A2/A4）。凡按 `Memory.rooms`/`snapshots()` 遍历的机制
+ * 对它天然失明，所以这台仪器特意**反过来走**：从"我拥有的对象"出发，问它们在哪个房。
+ *
+ * 取数口径：`Game.structures` / `Game.constructionSites` 就是"我方对象登记表"，
+ * **零 `find`、零视野依赖** ⇒ 无视野的残留房也能被数到（这正是本条要的）。
+ */
+export function tallyStrayObjects(
+  entries: readonly { pos?: { roomName: string } }[],
+  managed: ReadonlySet<string>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const e of entries) {
+    const roomName = e.pos?.roomName;
+    if (!roomName) continue; // 无位置信息（异常输入）跳过
+    if (managed.has(roomName)) continue; // 在管控内 ⇒ 不是残留
+    out[roomName] = (out[roomName] ?? 0) + 1;
+  }
+  return out;
+}
+
+/**
+ * 每 `populationInterval`（100 拍）一次，写在相位相对门里（K-6 约定，见 run() 的注释）。
+ * ⚠️**干净态也落盘**（`structures: {}`）—— 这台仪器的"没残留"必须是正面读数；
+ * 键整个不见只意味着两件事之一：这段代码没上线，或本 boot 段没跑到那一拍。
+ */
+function sampleStrayAssets(tick: number): void {
+  const managed = new Set(Object.keys(Memory.rooms ?? {}));
+  const structures = tallyStrayObjects(
+    Object.values(Game.structures ?? {}) as { pos?: { roomName: string } }[],
+    managed,
+  );
+  const sites = tallyStrayObjects(
+    Object.values(Game.constructionSites ?? {}) as { pos?: { roomName: string } }[],
+    managed,
+  );
+  // ⚠️守卫而不是直写：`Memory.kernel.stats` 在**首拍**可能还不存在（本文件后面的大块才建它），
+  // 直接写会在那一拍抛异常、连带打断同拍的人口普查与体积监控（现有夹具当场复现过）。
+  // 生产态下 stats 几乎总是已存在 ⇒ 跳过的那一拍只是少一次 100 拍普查，无副作用。
+  const stats = Memory.kernel?.stats as Record<string, unknown> | undefined;
+  if (!stats) return;
+  stats.strayAssets = { tick, structures, sites };
 }
