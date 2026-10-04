@@ -6613,3 +6613,32 @@ domain/economy/supply-contract.ts      ← src 导入者：2（logistics-planner
 4. 若 ①③ 的键存在但全 0 ⇒ 先证"这段窗口没发生对应事件"，再谈失效（`guardMiss`/`staleSlot` 这类桶在和平期本就应为 0）。
 
 **边界**：本轮零 src、零 push、零 build、零 npm；探针 0 次（只用 HTTP 只读 API 两次）；`.gitignore`(对端) 与两份未跟踪文档未 stage、stash 空；含 src 未推 **3** 笔（不是 4——`0d8e1db` 已随对端批次上线，这条对端已更正过，我照实沿用）。goal active：目标未达成，部署与线上验证这两步仍卡在授权上。
+
+---
+
+## 巡检 R326（13:0xZ，t≈83423750）——**#111 拿到价格了**：`noEnergyInRange=831`、上限 ≈13 段路、缺口 4,895 点；顺带我的子集不变式在真数据上第一次自证，以及 #113 的读数**证实不了也否证不了**（诚实记）
+
+只读 `peek.mjs kernel.stats.*` 三次（控制组+两待验），零 console、零 src、零 push。**关键副产物：`noEnergyInRange` 是已上线的**（`c58ff9d` 那批），而 `noWorkInRange` 缺键（`c2e3e30` 未推）⇒ 这发读数同时是"哪一批在线上"的形状证据。
+
+**一、线上实读（本 boot 段累计）**
+```
+W37S57  calls 1212 | noEnergy 912 | noEnergyInRange 831 | noWork 0    | outOfRange 300(near296/mid4/far0) | built 0 | prog 505 | pending 18
+W39S56  calls 2001 | noEnergy 1318| noEnergyInRange 0   | noWork 683  | outOfRange 0                      | built 0 | prog 0   | pending 0 | roads 2
+W37S58  calls 1278 | noEnergy 0   | noEnergyInRange 0   | noWork 0    | noSiteAtAll 1278                  | built 0
+```
+① **我自己写的不变式在真数据上成立**：`noEnergyInRange(831) ≤ noEnergy(912)`，且 W39S56 那行 `noWork=683>0` 而 `noEnergyInRange=0` —— 正是 R317 预言的**结构性失明**（0-WORK 档扫描根本不跑），不是我读错。
+② W37S57 的失明比例是决定性的：**912 次空腿里有 831 次脚下就有自己的格（91%）**，而该房 `built=0`、`roadProgressSum` 在 370 拍里纹丝不动（505→505）。⇒ "空腿把能量先交出去了"不是猜，是这条走廊的主要止步原因，而且**机会几乎不缺货**（不是落点问题：`outOfRange` 只 300 次，其中 296 次差 4-5 格）。
+
+**二、(B)「空载腿留 200-300 能量」的价格，第一次可以算成段数**
+- 单次机会的产能 = `WORK 部件 × BUILD_POWER`。口径都有出处：W37S57 的 remoteHauler 实测 `[1W 20C 21M]`（R315 body 现读、R316 普查复证），`BUILD_POWER=5`（`@types/screeps:174`，R314 现读）。⇒ **5 点/次**。
+- 产能上界 = `831 × 5 = 4,155` 点；对照缺口 = `pending 18 × 300 − prog 505 = 4,895` 点 ⇒ **约 85%**。
+- ⚠️但产能 ≠ 建成。**每段路要 60 个施工拍**（300÷5），而 `300 点/段` 与"46 拍/段"的分散度意味着：831 次机会按 60 拍/段折算 ⇒ **上限约 13 段**（对 18 个 pending）。这条折算就是 R311 那份"摊薄反例"（一串永远建不满的 site）现在能算出来的版本——**别把 4,155 点读成 13 段，13 段是上界**，实际取决于选择键能否把 60 拍集中在同一格（现行规则已是"射程内进度高者优先"，R146 之前的摊薄 bug 已修）。
+⇒ **给 #111 的决策口径**：(B) 在 W37S57 一条走廊上值"最多 13 段路 / 缺口的 85% 产能"，代价是该房 hauler 每次空腿少运 200-300 能量（载重 1000 的 20-30%，**不是** R315 那句 −5%——那句是 1W→2W 换 body 的代价，两件事别再混）。W39S56/W38S56 两条 0-WORK 走廊**不在受众内**（`pending=0`，R319 已更正）。
+
+**三、#113 的读数：证实不了，也否证不了——按实记**
+`kernel.expectations = {"tick":83423712,"violations":[],"e3":{}}`，**`recent` 键不存在**。但这**不能**当成"旧缺陷仍在线上"的证据：本 boot 段若从未出现过违例，`violations` 一直是 `[]`，那么按**新**代码写出的 `recent: undefined` 也会被 Memory 原样丢掉 ⇒ 两种代码给出**同一个形状**。
+⇒ 判据必须挂在"**违例由非空转空**"那一沿上，而不是挂在"键不存在"上（这正是我记忆里那条"判效前逐条问这个读数可达吗"的用法）。本轮线上没有违例 ⇒ #113 的验证仍未开始，`c76aad4` 继续等推。
+
+**四、#100 的仪器同次核对**：`kernel.stats.observe` → **不存在**，与"三笔未推"完全一致 ⇒ 这是"未部署"，不是"没写者"，也不是"坏了"。
+
+**边界**：本轮全部结论来自 `peek.mjs` 三次单路径读（控制组 `roadBuild` 先读通，再判 `observe` 缺键——这条"判空前先读通已知非空邻居"的规矩今天救过我两次）；`roadBuild` 是 heap 本 boot 段累计，跨段不可比；`pending/prog` 只 W37S57 有值（其余房为 0）；零 src、零 push、零 build、零 npm、零 console 探针；`.gitignore`(对端) 与两份未跟踪文档未 stage、索引为空。goal active。
