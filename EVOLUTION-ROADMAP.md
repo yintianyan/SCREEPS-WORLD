@@ -6589,3 +6589,26 @@ domain/economy/supply-contract.ts      ← src 导入者：2（logistics-planner
 3. 另外 `:269` 的 `consecutiveShortfall >= 0` 恒真、`:320` 恒可达这两处**是缺陷而不是设计**（注释自己说"简化：…调用方应自行追踪"）⇒ 真要接，得先修这两把恒真/恒假的判据。
 
 **边界**：零 src、零 push、零 build、零探针（本轮全在读码）；`#106` 的标题已按本轮结论重述，`#107` 的清单里可据此把这三本记为「同一族的合同层」；`.gitignore`(对端) 与两份未跟踪文档未 stage、commit 前索引为空、含 src 未推仍 3 笔。goal active。
+
+---
+
+## 巡检 R325（13:0xZ）——批次与线上状态的机械核对：部署这一步现在是"单动作、无歧义"的
+
+**为什么这轮只做核对**：剩下的是授权问题不是工程问题。核对的目的是让"推"这一句落下时不需要任何人再现场查任何东西。
+
+| 核对项 | 命令 | 结果 |
+|---|---|---|
+| 我的 3 笔是否已随对端批次偷偷上线 | `git fetch` + `merge-base --is-ancestor` | **全部 NO**（`c76aad4`/`c2e3e30`/`994bf54` 都不在 `origin/dev`）⇒ `behind=0 ahead=33`，纯 fast-forward |
+| 线上跑的是哪一份码 | `node tmp/tools/official/check-code.mjs` | 本地 `dist/main.js` **787,752B sha=`649eb94b9784`**；`GET /api/user/code` 与 `?shard=shard3` **两处同值同尺寸** ⇒ **本地 dist == 线上** |
+| 该 sha 里有没有我的改动 | 上一条 + 上一条第一行 | **没有**（三笔未推）⇒ `stats.observe`/`noWorkInRange`/`expectations.recent` 三处线上必然仍缺，任何"键不存在"的读数**不算否证**，只算未部署 |
+| 这批的门禁覆盖 | 已在 R320 记录 | unit 390/5264 + integration 30/239 + `tsc` + `check:docs` 全绿；**e2e 未跑**（它自带 `npm run build`，会毁掉上面那行"本地==线上"这台免费仪器——而这台仪器现在正在被对端的判效窗使用） |
+
+**一条纪律上的自纠**：本轮我又一次敲了 `timeout …`（macOS 没有 `timeout`，这条在我的记忆里就写着）。同族的错今天还有一次：探针里写了不存在的 `my(...)` 辅助函数 ⇒ `ReferenceError`。**共同点是我在用"手感"而不是"已核过的形状"**——工具层和引擎层各犯一次，代价都很小，但形状是同一个。
+
+**授权落下时的完整链路（照此执行，不需再判断）**
+1. `export PATH=$HOME/.nvm/versions/node/v24.18.0/bin:$PATH` 后 `git push origin dev`（pre-push 钩子会跑 typecheck+unit+**build** ⇒ 本地 dist 会随推送变成"我的树"，这**正是部署**，不是意外）。
+2. CI 绿 + `check-code` 认新 sha（锚 `modules: {main: …}` 那一行；`/api/user/code` 可能 429，体为 `null` 按失败形状处理）。
+3. 三个先写死的读数（零 console）：① `kernel.expectations.recent` 在违例转空后仍存活（#113）；② `stats.roadBuild.<W38S56/W39S56>.noWorkInRange > 0`，同两房 `noEnergyInRange` 恒 0 属预期（#111）；③ `stats.observe` 出现且**预报 `noTarget/gate ≈ 1`**（#100 的射程 vs 权重二选一，闭合式 `ok === captured+lostVision+staleSlot` 必须成立）。
+4. 若 ①③ 的键存在但全 0 ⇒ 先证"这段窗口没发生对应事件"，再谈失效（`guardMiss`/`staleSlot` 这类桶在和平期本就应为 0）。
+
+**边界**：本轮零 src、零 push、零 build、零 npm；探针 0 次（只用 HTTP 只读 API 两次）；`.gitignore`(对端) 与两份未跟踪文档未 stage、stash 空；含 src 未推 **3** 笔（不是 4——`0d8e1db` 已随对端批次上线，这条对端已更正过，我照实沿用）。goal active：目标未达成，部署与线上验证这两步仍卡在授权上。
