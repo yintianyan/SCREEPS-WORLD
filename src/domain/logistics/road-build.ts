@@ -20,6 +20,16 @@ export interface RoadBuildCounters {
   calls: number;
   /** 因背包无能量早退的次数（情形③的直接证据）。 */
   noEnergy: number;
+  /**
+   * 情形③的**可行动拆分**：`noEnergy` 那一拍本就有 WORK、且射程（range≤3）内确实有自己的 site
+   * 的次数 —— 即「只要背包里留着能量，这一拍就会真建上」。
+   *
+   * 为什么要单独立一列：`classifyRoadBuildAttempt` 先判能后判人（本文件注释自己承认 `noEnergy`
+   * 会盖住双重缺陷），于是 2026-10-04 线上 `W36S58` 的 `noEnergy=3,216` 里**有多少落在射程内**
+   * 账本答不出来 ⇒ 「让空载腿留 200-300 能量」这条修法的收益无法定价（见 #111/R286）。
+   * 不变式：`noEnergyInRange ≤ noEnergy`（它是子集，不是并列桶），所以两者**不可相加**。
+   */
+  noEnergyInRange: number;
   /** 因 body 无 WORK 早退的次数（本次线上实测：应为 0 —— 该归因已被证伪）。 */
   noWork: number;
   /** 本房一个自己的 site 都没有的次数（规划器没铺，或视野/缓存为空）。 */

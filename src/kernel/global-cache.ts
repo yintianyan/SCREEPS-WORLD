@@ -940,6 +940,7 @@ export function roadBuildCounters(room: string): RoadBuildCounters {
   return (ledger[room] ??= {
     calls: 0,
     noEnergy: 0,
+    noEnergyInRange: 0,
     noWork: 0,
     noSiteAtAll: 0,
     outOfRange: 0,

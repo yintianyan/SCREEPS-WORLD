@@ -85,6 +85,7 @@ describe("road-build — classifyRoadBuildAttempt（唯一归因，按早退顺�
     expect(roadBuildCounters("W37S54")).toEqual({
       calls: 0,
       noEnergy: 0,
+      noEnergyInRange: 0,
       noWork: 0,
       noSiteAtAll: 0,
       outOfRange: 0,
@@ -116,6 +117,42 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     buildRoadSiteUnderfoot(creep);
     expect(creep.build).not.toHaveBeenCalled();
     expect(roadBuildCounters("W37S54").noEnergy).toBe(1);
+  });
+
+  it("背包空但脚下有格且带 WORK → 追加记 noEnergyInRange（(B) 修法的定价入口），仍不发 build", () => {
+    const creep = hauler({ sites: [site(1, 1), site(9, 9)], energy: 0 });
+    buildRoadSiteUnderfoot(creep);
+    expect(creep.build).not.toHaveBeenCalled();
+    const counters = roadBuildCounters("W37S54");
+    expect(counters.calls).toBe(1);
+    expect(counters.noEnergy).toBe(1);
+    // 两格里只有 (1,1) 在射程内 ⇒ 子集关系：noEnergyInRange 可与 noEnergy 同为 1，但两者不可相加。
+    expect(counters.noEnergyInRange).toBe(1);
+  });
+
+  it("背包空且最近 site 在射程外 → noEnergyInRange 不记（留着能量也没处建，动作属落点不属时机）", () => {
+    const creep = hauler({ sites: [site(6, 6)], energy: 0 });
+    buildRoadSiteUnderfoot(creep);
+    const counters = roadBuildCounters("W37S54");
+    expect(counters.noEnergy).toBe(1);
+    expect(counters.noEnergyInRange).toBe(0);
+  });
+
+  it("背包空且 body 无 WORK → noEnergyInRange 不记（那一类的动作是换 body，不是留能量）", () => {
+    const creep = hauler({ sites: [site(1, 1)], energy: 0, work: 0 });
+    buildRoadSiteUnderfoot(creep);
+    const counters = roadBuildCounters("W37S54");
+    expect(counters.noEnergy).toBe(1);
+    expect(counters.noEnergyInRange).toBe(0);
+  });
+
+  it("满载那一拍不落入新桶（控制组）：built 记 1、noEnergyInRange 恒 0", () => {
+    const creep = hauler({ sites: [site(1, 1)], energy: 500 });
+    buildRoadSiteUnderfoot(creep);
+    const counters = roadBuildCounters("W37S54");
+    expect(counters.built).toBe(1);
+    expect(counters.noEnergy).toBe(0);
+    expect(counters.noEnergyInRange).toBe(0);
   });
 
   it("site 全在射程外：记 outOfRange 而不发 build（情形①的直接读数）", () => {

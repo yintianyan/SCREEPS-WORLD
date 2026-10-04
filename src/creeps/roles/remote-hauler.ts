@@ -47,6 +47,17 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
   const workParts = creep.getActiveBodyparts(WORK);
   if (energyInStore <= 0) {
     counters.noEnergy++;
+    // 观测拆分（#111/R286 定价）：`noEnergy` 先于射程判定，会把「空手但脚下就有自己的 site」
+    // 这一类整个盖住，于是「让空载腿留着能量施工」的收益无法计算。这里只补一次数组遍历
+    // （site 由 room-scans 按 tick 缓存，不发 find、不发寻路），不改任何动作、不发 build。
+    // 无 WORK 的 body 即便有能也建不动，所以不计 —— 那一类要的动作是 body，不是能量。
+    if (workParts > 0) {
+      let inRange = 0;
+      for (const site of findMySitesCached(creep.room)) {
+        if (creep.pos.getRangeTo(site) < UNDERFOOT_BUILD_RANGE_LIMIT) inRange++;
+      }
+      if (inRange > 0) counters.noEnergyInRange++;
+    }
     return;
   }
   if (workParts === 0) {
