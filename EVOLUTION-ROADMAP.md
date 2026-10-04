@@ -7309,3 +7309,24 @@ mem  : stats.energyLedger.rooms.W38S56 = { harvested 149,460 , imported 81,585 }
 
 **归属**：C1/C2 的**读数**我可以自办（属观测，不动产线判定）；**"要不要为此花 CPU 做寿命感知排序"属人**，且必须先有 C1。
 本轮不起手改排序，也不起手加计数器——预算只够把这条立案到"只差一次形参读取"的程度，规格已经在这里。
+
+## 巡检 R346（10-05 05:2xZ）——**预部署对照读数已取**，五件签名因此从"待读"升级成"挂在状态沿上"
+动机是自家用过的规矩：**判据要挂状态沿而不是状态值**，而"新键在不在"恰好是"这批代码真上线了"的直接签名（比 sha 更直接证明生效而非只换了字节）。
+工具本轮**端到端跑通一次**（此前它只出现在判据文本里）：`node tmp/tools/official/peek.mjs <leaf>`，Node 24，只读。
+
+现读 `t=83,431,205`（`kernel.stats.lastSample`）：
+| 签名 | 预部署真相（叶子路径逐个取，**不靠 700 字符截断的整对象**） | 上线后判据形状 |
+|---|---|---|
+| #111 `noWorkInRange` | `stats.roadBuild.W39S56` **整行在**（14 键：calls,noEnergy,noEnergyInRange,noWork,noSiteAtAll,outOfRange×4,built,buildRejected,roadProgressSum,roadSitesPending,roadsBuilt），**但 `noWorkInRange` 叶子="不存在"** | 键**出现**（absent→present）＝`c2e3e30` 上线；随后才谈 >0 |
+| #100 `stats.observe` | 不存在 | absent→present，且预报 `noTarget/gate≈1`、闭合式 `ok===captured+lostVision+staleSlot` |
+| #119 `stats.safeMode` | 不存在 | absent→present；只有 `guardMiss>0 && tried===0` 才说明末线没炸 |
+| §3.4 `stats.strayAssets` | 不存在 | absent→present（同时是 #118 的免费复证） |
+| #113 `kernel.expectations.recent` | **在且非空**：`[{"id":"siteStaleWorkerIdle:W36S58:6aa86a54…","seenAt":834272xx}…]` | 判据是**沿**："违例转空的那一拍之后 recent 仍存活"；非空基线今天已到手 |
+
+**同一次取数顺手到的旁证**（都不是本轮的判据，记下来免得下轮重新问）：`crisisCount=1762`、`tierTransitions=0`、`skipHotspot="creep/upgrader/colony-state"`（＝#127 那把冻结仍是当前热点）、
+`cpuAvg10=16.3 / cpuMax10=20.8 / bucketMin10=10000`、`cpuByHome {W38S58 0.769, W37S58 1.754, W38S56 2.731}`、`memorySize=47709`；
+`energyLedger.tick=83,422,285` 比 lastSample 旧 ~8,900 拍 ⇒ 与既有口径一致（**那是创建戳不是新鲜度**，别读成"写入停了"，#129 的 H1/H2 仍未分）。
+
+**这次自办为什么算推进而不算家务**：如果五件里任何一件的读法本身是坏的（路径写错、工具没跑通），部署后那一轮会把"仪器坏了"误读成"改动没生效"，
+而这两种情形的处置方向相反（前者要修仪器、后者要查上线）。对照已经取完 ⇒ 推之后**只需看键的出现与沿**，不需要临场猜。
+边界：零 src、零 push、零 build、零 npm install、零线上写动作（本轮全是只读 API）；`.gitignore` 与对方 R168 那行仍未 stage。
