@@ -5255,3 +5255,30 @@ R284 写「第二个分支更可能是真的：主干已铺完，剩下西缘 16
 **R287 附记（台账更正，非读数）**：本文件的巡检标签 **R279 被我写过两次**（05:22Z「#111 再否证一条」= `e76a91a`，
 05:35Z「#111 由假设升为实测」= `5cb69c5`），且 R278 排在第一个 R279 之后、第二个 R279 之前 ⇒ 编号序在本段是乱的。
 文件是 append-only，不回改历史；引用 R279 时必须带提交号。**后续我起的号只按提交时间单调追加，并在追加前先 `grep -c "^### R<号>"`。**
+
+### R288（10-04 11:2xZ，本会话）#111 缺的那一列装上落了码（本地 `0d8e1db`，未推送）——(B) 从此可定价
+R286 把修法收窄到只剩 (B)（空载腿留能），但当场卡在"收益算不出来"：`classifyRoadBuildAttempt` 先判能后判人，
+`noEnergy` 会把「空手但脚下就有自己的 site」那一类整个盖住（该文件注释自己承认这是已接受的盲区）。本轮把这一列补齐。
+
+**改动（4 文件，+59 行）**：`noEnergy` 那一支里，`workParts>0` 时按 `UNDERFOOT_BUILD_RANGE_LIMIT` 数一次射程内的 site，
+>0 则 `counters.noEnergyInRange++`。site 走 `findMySitesCached`（按 tick 缓存，不新开 `find`、不新开寻路），
+**动作零变化**：那一支仍然早退、不发 `build`、不放宽射程、不动回收阈值。新列进 `RoadBuildCounters` 类型 + `global-cache` 建行零值。
+⚠️口径：**子集不是并列桶** ⇒ 不变式 `noEnergyInRange ≤ noEnergy`，两者**不可相加**（写进了类型注释）。
+
+**门禁与反向实验（两次独立短路，各恰好 1 例转红、18 例控制组全绿）**
+- A 摘掉整个新分支 ⇒「背包空但脚下有格且带 WORK → 追加记 noEnergyInRange」`expected +0 to be 1`；
+- B 摘掉 `workParts` 闸门 ⇒「无 WORK 不记」`expected 1 to be +0`（这一条证明的是**闸门语义**，不是分支存在性）；
+- 两次改完都用备份 `cmp` 逐字节还原，避免"改回去时留下我的理解"。
+- `tsc --noEmit` 退出 0；`tests/unit/remote` 33 files/492 全绿；`tests/integration` 30 files/239 全绿；
+  全量 unit **419 files/5,493 通过**，唯一红文件是**对端放在 gitignored `tmp/observe/pending-62-files/` 的未跟踪夹具**
+  （`import ../../support/factories` 解析不到 ⇒ 套件加载错误，与本次改动无关）⇒ **我不写"全量 unit 全绿"这句话**，也不代删他人的在制品。
+- 提交时 prettier 改写过 staged 文件 ⇒ 提交后**重跑**该测试文件确认 19/19 仍绿（不是复用提交前的读数）。
+
+**判效签名（零新增仪器）**：`noEnergyInRange` 就在 `Memory.kernel.stats.roadBuild.<房>` 里 ⇒ 现有巡检读那一行就能看到，不必另挂表。
+- 未上线态先说清：本列**在部署前必然读不到**（键不存在 ≠ 键为 0），别把"没有这个键"读成"收益为零"。
+- 上线后判据：① 某房 `noEnergyInRange > 0` ⇒ 本列有写者、(B) 有价格 = `noEnergyInRange × 每次 WORK·点` 对 `剩余 4,500−progressSum` 的比值；
+  ② 一整段 boot 内 `noEnergy>0` 而 `noEnergyInRange` 恒 0 ⇒ **(B) 按构造收益为零**，本案结案为"不该做"，
+  下一动作回到 (C)（热度语义与落点）或维持现状，而不是去调射程。
+**未推送的理由（不变）**：一次部署＝清堆 + ≈400 拍 G6 税，且会把 `27a8a51`(#113)/`b20a67b`(#103)/`c58ff9d`(#115) 一起带走 ⇒ 属人。
+本批现在含 **4 笔含 src 的未推提交**（ahead=33）；本笔的边际部署成本为零（同批走），但**它增加了对端那两笔的上线风险敞口**，
+所以推不推仍由你定，我不催。
