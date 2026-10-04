@@ -421,3 +421,28 @@ L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含�
       ⇒ "读数没动"≠"仪器没在算"，凡慢仪判据都要按 flush 采样多次，别用一次相同值否证趋势。
       推论：R258 那条"G4 ≈9~13 分钟带"**本会话无法确认**（会话只有几分钟），它只能由 `posture-exit3.log` 的 `Blocked=` 在往后一小时内免费记录；
       我不把它当已证结论，也不在任何地方引用它当"已翻绿"。
+
+### §19 补（10-04 R290–R299，本会话）：三台自度量器拿到了现场证据，另一台写进了**分辨力上限**
+状态一律按写者/消费者与现读判定，不按符号名。
+- **E7 的两类分裂 = `EXERCISED`**（原 `WIRED+TESTED`，本会话首次在线上同时读到两类并看到它们各自翻转）：
+  `kernel.expectations.violations` 原文 03:42 为 `siteStaleNoWorker:W36S58:*`（`workers=0`）×3 +
+  `siteStaleWorkerIdle:W37S57:*`（`workers=4`），04:03 同一房翻回 `siteStaleWorkerIdle:W36S58:*`（`workers=2`、`noProg=8,012`）。
+  ⇒ 两类的**可行动性不同**已被证实：`NoWorker` 那一支后来自己消失（编制回来），而 `WorkerIdle` 留在原地不推进；
+  所以看到 `WorkerIdle` 不要去动编制，看到 `NoWorker` 不要去动射程/取活。
+  ⚠️列表是 `slice(0,10)` 的人读截断 ⇒ 其中的条数只能当下界，计数一律取轮询器的 `siteStaleTotal`。
+- **脚下建路账本 = 可信的第一因读数（两次闭合到单位）**：`W36S58 calls 11,186 = noEnergy 3,216 + outOfRange 7,912 + built 58`，
+  ~400 拍后差分 `+231 = +79 + +152 + 0` 仍逐位闭合；`W37S57 +246 = +233 + +12 + +1`。
+  ⇒ "这一拍为什么不施工"现在是可以读、不必再推理的。新列 `noEnergyInRange`（`0d8e1db`）状态 = **`WIRED+TESTED`，未上线**
+  ⇒ 线上读不到那个键是**未部署**，不是"收益为零"（本轮亲验：`kernel.stats.roadBuild.*` 无此键而线上 sha 未变）。
+- **drift 逐窗拆账 = 已验证 + 带分辨力上限**（这条是本节的重点，因为它把"能不能信"变成可算的东西）：
+  仪器 `tmp/tools/official/drift-dist.sh` + `drift-dist-report.cjs`（零 console）；核心房 8 窗里
+  **有 `bk` 的 7/7 窗 `drift` 由 `harvested/bought/imported/recycled − spawned/upgraded/built/repaired/towerSpent/sold/exported/tradeFee` 逐位复现**
+  ⇒ 三条口径自此可靠：字段清单、`pickedUp 不在 income`（#40 修复在字段层）、`bk = 本窗增量`。
+  但**分辨力必须一起写**：`mean=+440`、`sd=1,427`、`se=505` ⇒ 95%CI **[−549, +1,429]**；
+  要把 CI 收到 ±300 需 `n≈87` 窗 ≈ 4,300 拍（实测拍长 3.7 秒 ≈ 4.5 小时）。
+  ⇒ 结论级别到此为止：**50 拍窗的 drift 既证不出"漏账"，也证不出"没漏账"**；
+  谁要用 `ws` 那条「同量级 ⇒ nf/G4 不可信」下结论，得先付上面那个样本量，或改用长视界 `kernel.gateNetFlow`（τ≈5,000 拍，现成）。
+- **护栏 (a) 加强一条**（本会话实测）：Memory 端点不只是"flush 之间不变"，**同一次 flush 内两次读数会逐字段完全相同**
+  ⇒ 判据必须按**内容键**去重（我用 `(pl 两端, dr)` 作键，实测抓到 1 个真重复），
+  相邻性也不要靠 `Δt==N`，要靠池面链（上一窗 `trackedEnd === 本窗 trackedStart`）——
+  后者还能在 `t` 那行恰好是坏读数时救回整个窗（八窗里有两窗是这样回来的）。
