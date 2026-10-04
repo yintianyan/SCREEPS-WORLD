@@ -5081,3 +5081,41 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 - `dangerUntil=83415805`（`W38S56.remoteOps.W38S55`，op `abandoned`）到期的真实含义：`targeting.ts:190,196` ⇒ 到期后该房**重新可选**（注释明写"否则 abandoned 远矿永远重不开"），而 `shouldPauseOp:233-239` 仍按 abandoned 暂停 ⇒ **eligible≠selected，没有定时器会自己复活它**。同窗车道在动：`W38S56→W39S56` active→**abandoned**（挂起 2→0）、新开 `W38S56→W37S56`=active（W37S56 是 `WAITING_EXECUTION` 的下一个目标）；环内死亡 W39S56 reserver@83411207 / remoteHauler@83411213、W37S57 reserver@83411213。
 - CPU：`window=3987t / total=15.58/拍` ⇒ 缺口 **3.58/拍**（R130 3.24）；A 路线杠杆 remoteHarvester 2.01 + remoteHauler 0.88 +（10 拍板 reserver 0.4）≈ **3.3**，仍差 ≈0.3；每房 `W38S58 0.371→0.636` ⇒ "第三房开始花钱"已在数上。人口 46（26/16/4）、`skippedPerTick 9.4`、`errorsPerTick 0`。
 - 边界：**零 src、零 push、零 build、零 npm**；`observe×1 + peek×1 + console-eval×2`（mark=B7/B8，同值复采是为防我把读数记错，全只读）；取探针前 pgrep `console-eval/vitest/tsc/rollup` 全空（对端不在跑测试或构建，`dist/main.js` 仍是 20:41Z 本地产物）；git 领先 24 / behind 0。
+
+---
+
+### 巡检 R132（2026-10-04 01:1xZ，本会话）#115 修复落码（本地 `c58ff9d`，**未推送**）；R131 那条"真嫌疑=租约黏性"被下一发读数否证
+
+**状态等级变化**：#115 从「机制已验证 / 修复未设计」→ **「已实现、已测试（unit+integration+e2e），未集成到线上」**。上线之后才允许写 `已验证`。
+
+**一、机制收口（新证据把根因换了位置）**
+- `spawn 0/15,000` 七次读数恒 0（83410489/515/537、83411233/242、83412168/177，跨 1,688 拍）；container 288→384（+96/≈926 拍）。
+- **决定性一条**：两只 builder 的 `assignedAt` 由 R131 的 `83410105` 变成 **83411701 / 83411717** ⇒ 全新孵化、全新选择（与 revision 抬升无关），**仍双双落到源旁 container**。⇒ R131 写的"真嫌疑是续约绕过 `chooseTaskForRole`"**作为主因作废**（续约只起"冻住"作用）；根因是 **D1「同档剩余量升序」对存在性阻塞结构没有豁免列**。L2（取能地板）保留为**速率**成因，不是目标选择成因。
+
+**二、改动本体（一个纯函数 + 一条同源谓词，零阈值改动）**
+- `src/domain/assignment/service.ts`：新增 `isBlockingStructureType()`（spawn/tower），**与 `buildRoomTasks` 的 `isCritical` 判定同源共用**（本文件既有口径"判据写两处就会漏一处"）；`chooseTaskForRole` 在**同一 best priority 档内**先接阻塞结构，多个阻塞结构之间仍按剩余量升序（**D1 原意保留**）。
+- 影响面：`ROLE_TASK_KINDS:75-83` ⇒ worker/harvester 只接 fill、upgrader 只接 upgrade，**只有 builder 接 build**；成熟房没有 spawn/tower 工地 ⇒ 改动按构造不进场。**不动 priority、maxWorkers、任何 CONFIG 阈值。**
+- **反向实验（自改自测也要）**：把豁免短路成 `false` ⇒ **恰好 1 例转红** `expected 'src-c' to be 'spawn'`（正是线上那次选择），其余 49 例含 D1 控制组（storage 30,000 vs 站桩 container 5,000）全绿。第二例新用例（tower 5,000 vs spawn 15,000 先做 tower）**两种代码下都绿 ⇒ 只算既有守卫，不算本次改动的证明力**。
+- 门禁：unit **389 files / 5,250 tests** 绿；integration **30 files / 239 tests** 绿；`npm run test:e2e`（含 `tsc --noEmit` + rollup）**退出码 0**。
+- ⚠️取证自记两条缺陷：①`test:e2e` 的输出被我 `| tail -30` 后转后台 ⇒ **只有退出码、没有 files/tests 计数**（要计数就别接管道、或直接落日志文件）；②console payload 我两发只看了开头就凭印象写数，改判为"重跑一发整块打印"，为此多花 2 发探针——**宁可重跑也不要把读数写错**。
+- ⚠️**副作用要记账**：`test:e2e` 自带 build ⇒ 本地 `dist/main.js` 已在 08:53:50 重建，**"本地 dist==线上"这台免费仪器从现在起失效**（线上仍是旧码），下一轮第一件事是 `check-code` 认线上 sha。
+- **未推送的理由（属人决策点）**：这批 push 会连带对端两笔未推 src（#113 `27a8a51`、#103 `b20a67b`）一起上线，且一次部署 = 清堆 + ≈400 拍 G6 税。**门禁已全绿，随时可推**；修复的价值窗口在下面这条 wave3 之前（`kernel.bootstrap.W38S58.until=83414757`，≈2,600 拍）。
+
+**三、两条挂了多轮的旧账结案（都不是我此前给的任一种解释）**
+- **"0.9 贴线不落"**：同房同时读到 `phase.storageEnergyPrev=898,744`（ratio 0.8987）与 `se=903,541`（0.9035）⇒ **库存在阈值上下逐拍穿越**，`storageNearFull` 时真时假都是正确读数。⇒ R129 那对"901,309 却 false"和 R131 的"true 却在跌"**不需要任何机制**（不是写节拍滞后、不是采样坏）。第 5/6 次"贴线不落"到此结案。
+- **reserver"早逝却算寿终"是我读错常数**：`event-log.ts:284-286` 写死 `lifespan = reserver/claimer ? 600 : 1500`、`natural = age ≥ lifespan−60` ⇒ 环内 `age≈611~617` 的 reserver 死亡**确实按构造是寿终**。⇒ "战损被误分类"这个怀疑作废（第 N 次被"**阈值/常量也算读数**"救回来）。
+- **方法撤一条**：α 与间隔读死（`netFlowGateAlpha=0.02`@`config/index.ts:506`、`empire-economy interval:100`@`:224`、`updateNetFlowEma prev+α(input−prev)`@`accounting.ts:311-318`）后，按 R128 的两点反解本轮得 **I≈+25.3/拍**，而**物理面**（两房 `rs` 差分）只有 **≈+7.5/拍**；且 `empire-economy` 会被 budget 跳过 ⇒ 两次读之间到底走了几步是**假设不是读数**。⇒ **"I 反解"自本轮起不作决策输入**，R128/R130/R131 引过的 +10.4 / +4.4 / +9.8 / +12.9 全部降级为"当时那发的产物"。Σ 本身照旧（它是 G4 的直接输入），跨仪器对照改用物理差分。**遗留线索（不立案）**：EMA 输入均值与物理累积之间 ≈17~18/拍 的缺口与长期挂着的"核心房 ≈25/拍残差"同族，可能同源。
+
+**四、第一次有非自然死亡（#90 的账要改一行，§2 的战争行要加一条边界）**
+- `deathByCause = {natural:152, **combat:3**, recycled:2}`（R128 {59,0,0}、R129 {85,0,1}）⇒ **combat 首次非零**。非自然事件 4 条：`83411678 W38S56(age 413)` + `83411924/83411963/83411985 W39S56(age 1115/1007/1377)`；口径 `natural=0 且 memory.recycle≠true ⇒ combat` ⇒ **+3 combat / +1 recycled 对齐**（⚠️环里哪条是 recycled 分不出，别给 recycled 指派房与角色）。
+- 上下文：`W38S56.remoteOps.W39S56` `state=abandoned`、`stateSince=lastSeen=83410905`、`dangerUntil=83420905`（+10,000，只在威胁目击时写）⇒ **先有目击并弃道，之后 ≈1,000 拍里 3 只死在房里** ⇒ 弃道时留在里面的编制没被收干净。**本轮不立案**（要抓到 recyclePass 为什么没带走它们），但 §2「战争：线上无敌情可采」得加边界：**远房敌情这台仪器是空的**——环内 `EnemyInvasion/EnemyCleared/TowerVolley` 一条都没有，却死了 3 只。
+- `W38S56→W39S56` 车道由此 active→abandoned；新开 `W38S56→W37S56`=active（`热度格=96 / 挂起=0 / W37S56 机会=645 无能量=533 无WORK=112 sites=0`）⇒ 与 **#111 同族，不双立案**。
+- ⚠️只登记给对端的一条：`W37S57 roadsBuilt 38→34`、`W36S58 sites 16→15 且 progSum 989→839` ⇒ **已建路在掉、工地进度和被抹平**（衰减或拆除，本轮未归因）。
+
+**五、满仓态的第二发（将 §3.5 的 #50/#88 措辞再收紧）**
+- 语义读死：`demand.ts:431-433` 满仓 ⇒ `harvesterTarget=min(sources, minCount)`（**限采这一支真的会跑**）；`:928-935` 满仓解除升级上限那一支**要 `allowUpgrader` 为真才到得了**，而 RCL8 无降级风险时它为假 ⇒ **核心房现在只有"少采"生效、没有"多花"出口**。唯一能吃盈余的是幼房（W38S56 `se +5,714/≈900 拍 ≈ +6.3/拍`），而最该吃盈余的第三房被 #115 冻着。
+- 新房仍冻结：`recovery` 未变、`ea/ec=0`、`spawnQueue=6/buildQueue=13`、home 人口**仍 4**（又 930 拍没增）、`spawnStarvationCount 1,533→2,437`。⚠️我一度把 `kernel.bootstrap.W38S58.until=83414757` 读成弃房期限，读码否证：`domain/expansion/bootstrap.ts:64-88` 的 `until` **只是每波冷却**（过期 ⇒ `waves+1` 再发一波），真正弃房只有 `ttd<阈值 且 hostileCount>0` ⇒ **83414757 是 wave3，不是止损**（当前 `waves=2`）。
+- 闸集合未变 `G0+G2+G3+G6`；`Pressure` 标签 MEDIUM→**HIGH 而数值仍是 0.60** ⇒ 判读要连阈值一起读，别拿标签当斜率。
+- CPU：`window=4887t / total=15.77/拍` ⇒ 缺口 **3.77/拍**（R131 3.58），A 路线杠杆 ≈**3.1**（remoteHarvester 2.03 + remoteHauler 0.87 + 榜上 reserver 0.2）⇒ **缺口在涨、杠杆没跟上**；每房 `{W38S58:0.381, W37S58:2.866, W38S56:2.163}`；人口 42（21/17/4）、`skippedPerTick 11.4`、`errorsPerTick 0`、`tier=tight@83387005`。
+- #61（请求-拍）：`budget 2936→2958(+22) / reserveOnly 7345→7855(+510) / degradeGateClosed 4236→4767(+531)` ⇒ **⊆ 第十六次成立**（531 ≤ 532）；≈0.60/拍（R131 0.19）⇒ 仍是队列深度在摆。
+- 边界：**动了 src**（本轮唯一一次，1 src + 1 test，本地 `c58ff9d`）、**零 push**、`.gitignore` 未 stage、提交后 `git stash list` 为空、钩子未跳过；探针 `observe×1 + peek×3 + ring-dump×1 + console-eval×4`；`check:docs` 通过；git 领先 26 / behind 0。
