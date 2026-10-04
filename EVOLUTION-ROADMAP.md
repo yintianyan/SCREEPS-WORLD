@@ -6644,3 +6644,28 @@ W37S58  calls 1278 | noEnergy 0   | noEnergyInRange 0   | noWork 0    | noSiteAt
 **四、#100 的仪器同次核对**：`kernel.stats.observe` → **不存在**，与"三笔未推"完全一致 ⇒ 这是"未部署"，不是"没写者"，也不是"坏了"。
 
 **边界**：本轮全部结论来自 `peek.mjs` 三次单路径读（控制组 `roadBuild` 先读通，再判 `observe` 缺键——这条"判空前先读通已知非空邻居"的规矩今天救过我两次）；`roadBuild` 是 heap 本 boot 段累计，跨段不可比；`pending/prog` 只 W37S57 有值（其余房为 0）；零 src、零 push、零 build、零 npm、零 console 探针；`.gitignore`(对端) 与两份未跟踪文档未 stage、索引为空。goal active。
+
+---
+
+## 巡检 R327（13:0xZ）——#113 的线上判据**当前按构造不可达**：违例沿在环内 1,042 拍里零命中，所以"推上去之后读不到 `recent`"将是**预期**而不是失败
+
+**取数**（零 src、零 push、零 build、零 console）：写侧先读码定名 ⇒ `kernel.ts:600` `recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length])`；读侧用**已核过的** `death-count.mjs` 取段 2 事件环，然后**枚举** `Object.entries` 全表（不是正则命中 ⇒ 零是完整计数，不是下界）。
+
+**现场**：环内 500 条、跨度 `83422710→83423752`（**1,042 拍**，密度 0.48 条/拍），11 种 kind：
+```
+AssignmentAssigned=212  AssignmentExpired=195  CreepDeath=34  PhaseTransition=28
+TowerVolley=17  ColonyStateChange=6  AccountingDrift=4  RecoveryEscalation=1
+ControllerDowngradeRisk=1  EnemyInvasion=1  EnemyCleared=1
+ExpectationViolation = 0   ← 完整枚举，非采样
+```
+
+**三条结论，都要按实说**
+1. **#113 的判据不能挂在"有没有 `recent` 键"**（R326 已记：本 boot 段 `violations` 恒 `[]` ⇒ 新代码写出的 `recent: undefined` 也会被序列化丢掉，两版同形）。现在进一步：**违例这一沿在可观测跨度内从未发生** ⇒ 部署后我大概率**仍然读不到可判形状**。所以汇报口径必须是"**#113 线上验证未开始**"，既不是 PASS 也不是 FAIL。（这是记忆里那条"判效前逐条判这个读数可达吗"的第五次命中。）
+2. **严重度随之降级但缺陷不变**：这个 else 分支抹掉留痕，只有在**真出过违例**之后才造成损失 ⇒ 今天的影响面是 0，修复的价值是**条件性的**（下次真违例时能不能留下现场）。我不把它报成"已修的现役故障"，也不报成"无关紧要可回退"。
+3. **免费复证挂在触发器上，不必制造条件**（不能为了证据去改期望值——那是造假）：把判据写成"环里**第一次**出现 `ExpectationViolation` 之后，紧邻的干净一拍读 `kernel.expectations.recent` 必须仍存在且含该 id"。这条判据一旦触发就是硬证据；不触发就长期记 PENDING，**不许把 PENDING 读成结论**。
+
+**顺带两条本次读数里长出来的可用事实**（留给下一轮，不用重新取）：
+- 环密度 0.48 条/拍 ⇒ **环跨度只有约 1,000 拍**，任何"整个 boot 段有没有发生过 X"的问题都不能靠段 2 回答（本 boot 段是 83422285 起，已 1,400+ 拍）⇒ 判"从未发生"要说成"环内跨度未发生"。
+- `TowerVolley=17` 与 `EnemyInvasion=1/Cleared=1`（`83423485@W38S56 → 83423505` ⇒ **在场 20 拍**）：幼房又挨了一次波，20 拍清除、塔打了 17 轮；这与 #41/#92 那条"在场时长 vs 5,000 拍尾税"的比值直接相关，**但税收不属我这条车道**（对端在跑 W38S58 扩张），只登记读数不动作。
+
+**边界**：本轮零 src、零 push、零 build、零 npm、零 console 探针（只用只读 API 的现成脚本）；含 src 未推仍 3 笔；`.gitignore`(对端) 与两份未跟踪文档未 stage、commit 前索引为空、stash 空。goal active。
