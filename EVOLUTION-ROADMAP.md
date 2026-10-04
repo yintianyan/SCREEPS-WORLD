@@ -7210,3 +7210,15 @@ mem  : stats.energyLedger.rooms.W38S56 = { harvested 149,460 , imported 81,585 }
 **顺带把 #48 的可达性说准**：`imported` 两侧同值（81,585）⇒ 自上次 flush 起没有新的跨房交付 ⇒ 想抓"同拍同额"的那一次成对增量，**得按落盘节拍以外的口径**——直接在 heap 上对比 `W38S56.imported` 与 `W37S58.exported` 两读之间的增量（≥300 拍跨度），或承认"**同拍由代码结构保证**"（`carrier.ts:57-61` 在同一个 `if (result === OK)` 块里成对记账）+ 两侧累计皆非零，即为本条可达的最强证据。⚠️`exported` 仍混 terminal 交易（`≈ sold`），差分法必须**只看 W37S58.exported 的增量是否等于某次 W38S56.imported 增量**，别用累计比率。
 
 **边界**：本轮探针 1 发（只读、带 mark、无副作用）、零 src、零 push、零 build、零 npm；`#129` 关闭、`#48` 措辞收紧（见任务行）；`.gitignore`(对端) 与两份未跟踪文档未 stage、commit 前索引为空；含 src 未推 4 笔。goal active。
+
+---
+
+## 巡检 R340（20:5xZ）——上线前自我审查：把 `origin/dev..HEAD` 的 `src/` 全量 diff 逐块读完，**抓到 1 处我自己写下的过度声明**
+
+`git diff --stat` = 8 文件 **+194/−11**。逐块核对的结论（"纯仪表"这句到底成不成立）：
+- **`room-observer.ts` 的守卫换序**：旧 `if (snapshot.observer && tick%25===0)` → 新 `if (tick%25===0){ gate++; if(observer) request(...) else noObserver++ }`。⇒ **`requestObservation` 的调用条件逐字不变**，新增只有一次取模与一次 heap 取行。唯一意图内行为改动是 `kernel.ts` 那一行 `recent`（#113）。
+- `captureObservedIntel` 的 `slot.pending = undefined` 在两条路径前都已置，语义未变；`tower-defense` 只是把返回码接进变量并计数、`tryActivateSafeMode` 加 `export`（既有约定：仅供单测）。
+- **★抓到的问题在注释不在代码**：我在 `remote-hauler.ts` 两处写了"不发 find / 只补一次数组遍历"，但 `findMySitesCached`（`room-scans.ts:146-152`）在**按房按 tick 缓存未命中时真的会 `room.find(FIND_MY_CONSTRUCTION_SITES)`**。⇒ 两处注释已改成实话：**代价上界 = 每房每拍最多多 1 次 find（缓存按房共享，不随该房 creep 数放大）**，不是"零 find"。
+  为什么值得较真：这正是我自己定过的规矩——**"账本不能改变 CPU 曲线"，写"代价/浪费/止血"之前必须先量**；注释过度声明会让下一轮把"确实多了一次 find"当成仪器坏了，或者反过来拿"零成本"去说服自己加更多列。
+  ⇒ 顺带记一条**部署后的自证项**：若 `cpuRate.byRole` 里 remoteHauler 相对 boot 前明显上升，**第一个嫌疑就是这两处新扫描**（不是"仪表免费"）。
+**边界**：本轮只改注释（`src` 2 行注释文本），零逻辑改动、零 push、零 build；测试与类型由钩子（prettier/eslint/tsc）在提交时代跑；含 src 未推仍 4 笔（本笔只是注释，随批走，不单独换码）。goal active。
