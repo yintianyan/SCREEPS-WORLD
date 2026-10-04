@@ -5779,3 +5779,20 @@ segment 6: len=    0
 顺带一条**新口径**（记进 §19）：`segment-store` 的段 0 只承载覆盖项 ⇒ 判"布局是否已建成"不能靠段 0；
 而 `screeps_kernel_process_execution_seconds_*{process_type=...}` 的 bucket 值 = **被调度次数**，
 与"该逻辑是否真的发出过引擎调用"之间**没有任何等式关系**（本案实测：4058 次调度 vs 落盘零痕迹）。
+
+### R309（10-04 12:5xZ，本会话）危机房给出本会话**唯一一次"先预测后读数"的命中**：`loose` 的双重处理在线上精确相消
+W38S58（危机房、bootstrap 中）第一次读就有内容，因为它的窗里 **`Δloose` 非零**（前两房一直是 0，所以那条分支从未在线上被跑到过）：
+`pl=[133, 1321, 0, 0, 1200]` ⇒ `Δtracked=+1,188`、`Δother=0`、**`Δloose=+1,200`**；`ce=[98,201]` ⇒ `Δcarry=+103`；`cr=23`（只有 storage）；
+`bk={"harvested":130,"upgraded":78,"built":64}`。
+**先算后读**（这一步是我自己要求的可证伪形式）：
+`income = harvested 130`；`consumption = upgraded 78 + built 64 = 142` ⇒ `flowBalance = −12`；
+`drift = Δtracked − flowBalance − Δloose + Δother = 1,188 + 12 − 1,200 + 0 = **0**`。
+现读 **`economy.dr = 0`** ⇒ **预测命中**。
+**这条为什么值得记**：`loose` 既在 `trackedPoolsOf()` 里、又在 drift 公式里被单独减掉（`accounting.ts:191-201 / 269-270`），
+注释声称"散落能量自然衰减单独报告、不影响 drift"，而此前它只在**单测夹具**里被验证过；
+本轮它在一个 `Δloose` 达到 1,200 的真实窗里精确相消 ⇒ **该不变式第一次拿到线上证据**（也是 #40 那族"拾取/掉落记账"改动的下游一致性证据）。
+顺带三个便宜但可靠的事实：危机房的桶形是 `{harvested, upgraded, built}`（没有 spawned/towerSpent/tradeFee）
+⇒ 用同一套字段清单去算**任何房**的 flowBalance 都成立（现已在三种桶形上各自对单位：核心房 3 窗、幼房 6 窗、危机房 1 窗）。
+**边界**：危机房只有 1 个窗，不构成分布；它的 `pendingHarvesters/low ea` 与 #115 同源（属对端域，我只登记）。
+**方法留档**：本轮 #114 全程我错判三次（`spawned` 主项、`Δcarry` 解释、`ZERO` 缺口），
+唯一一次"先写数再读数"的命中就是这条 ⇒ 后续凡是能提前算出期望值的判据，**先把期望值落进文件再取读数**。
