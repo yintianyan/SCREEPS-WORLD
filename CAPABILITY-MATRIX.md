@@ -518,3 +518,29 @@ Observer 是**不派 creep 就能拿到目标房视野**的机制（引擎侧 1 
 - 可靠的只有一条：`observeRoom(` 命中 1（`room-observer.ts:142`）——因为它的名字是从 docs 取来的，不是猜的。
 ⇒ 本节因此**不产出任何"能力缺口清单"级别的结论**，只产出"该用什么名字去查"的待办；
 `§3.1–3.8 覆盖对照` 的完成度也据此下调：**当前只做完了"有调用点"那一半，"没有调用点"那一半大多还没核名**。
+
+### R304：`§20` 的 `ZERO` 列**大面积是假缺口**——按真名重搜后，矿物开采与 Power Creep 生成都已接线
+我上一节刚写下"先取真名再搜形状"，这一节就用它推翻了自己两条 `ZERO`。证据都是现读的：
+- **矿物开采链存在且完整**（我先前搜 `.extract(` 得 0 就记成"不存在"，而引擎根本没有 `extract()`：docs 的 `StructureExtractor` 页写明
+  采集靠 **`harvest`** 动作、每次附 **5 tick 冷却**，由 `cooldown` 属性表达；`@types/screeps` 里也只有 `harvest(`，没有 `extract(`）：
+  · `src/creeps/roles/mineral-miner.ts:16-19` —— 专门的采矿 role，注释还处理了 `extractor` 冷却返回 `ERR_TIRED` 时"置 idle 而非卡死"；
+  · `src/creeps/engine/actions/harvest.ts:271-272` —— 从 `snapshot.minerals[0]` 取靶子；
+  · `src/systems/room/layout-planner.ts:268-269` —— 布局把矿物点当规划输入；
+  · `src/creeps/roles/hauler.ts:183` —— 能量装完后有余量再补矿（接力到 `extractor` 旁 container）；
+  · `terminal-manager.ts:337`、`terminal-selfaid.ts:155`、`terminal-market.ts:162,431` —— 市场侧按 `mineralType` 决策。
+  ⇒ 这条不是"缺口"，是**已实现并在被下游消费**。`harvester.ts:27` 还特意**不**让主力采油者离岗去采矿物（经济断流的防护），
+  这说明"谁去采"是被想过的，不是遗漏。
+- **Power Creep 生成存在**（我搜的是 `generatePowerCreepFromSpawns` / `createPowerCreep`，真名是静态方法 **`PowerCreep.create`**）：
+  `src/systems/empire/power-creep-manager.ts:23` 有引擎能力守卫
+  （`if (!Game.powerCreeps || typeof PowerCreep?.create !== "function") return;`），`:37` 调 `PowerCreep.create(plan.pcName, "operator")`，
+  `:39` 成功即记 `EventKind.PowerCreepMilestone`。⇒ 分档 **WIRED**（是否在线上真跑出过单位是另一档，本会话未验）。
+- **`InterShardMemory` 这条 `ZERO` 站得住**：名字在 `@types/screeps` 里确认存在（6 处声明），而 `src/` 内 0 命中 ⇒ 跨 Shard 机制确实未用。
+  这是本节**唯一**一条我用"真名 + 零调用"两个条件同时卡过的负向结论。
+- **仍待复核**（不再当缺口引用）：`StructurePortal`/portal 移动、`clone(`、Observer 的"射程只打邻房/无持久化"三条里，
+  只有"结果只进 heap 的 `intelHandoff`"和"靶子取自 `describeExits`"是读码得到的，其余需要按同一流程先定名。
+### ⇒ `§2.3`/`§3.1–3.8` 覆盖对照的真实完成度（把话说到底）
+**我先前那张"缺口清单"里，能留下的只有 `InterShardMemory` 一条。**
+其余所谓缺口全是我用错方法名造的假阳性，而它们本来会被拿去影响 #100（攻击面）和 §3.5（高级经济）的判断。
+所以这一节现在的价值不是"发现了缺口"，而是**给出了一张可用的入口图**：`observeRoom()`/`harvest()`/`PowerCreep.create()`/`boostCreep()`/
+`launchNuke()`/`processPower()`/`activateSafeMode()`/`createOrder()` 都在，且我知道该去哪个文件读它们的消费者。
+八项记录（§3.8）只做了 Observer 一项，其余七项未做 ⇒ **§2.3 交付物仍远未完成**，这个判断不因本轮更正而改变。
