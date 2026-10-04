@@ -626,3 +626,41 @@ Observer 这一格的八项现在是：官方规则✔（docs：hits500/RCL8/造
 **分档**：`WIRED`（六段全接、有守卫、有事件编码）／**`EXERCISED = 否`**（`gpl=0` 是聚合证据：这条链一次都没交付过 GPL）。
 **因此 #3.7 的真问题被重新表述**（原来问"要不要接 Power Creep"）：链在，缺的是**第一次跑通**——上游是"帝国范围内有没有 Power Bank 可打"（外因，服务器刷）与"要不要开 POWER 的市场买入口"（现被 `terminal-selfaid:85`/`terminal-market:445` 显式关着，属人）。**两个都不是我能替的决定**，也不该为它造证据（去打 PB 会真发生战斗；开买入口会真花钱）。
 **可判读的下一次签名（零改动）**：`Game.gpl.level > 0` ⇒ 链条至少跑通一次；`kernel` 事件环出现 `PowerCreepMilestone` 任意编码 ⇒ 相应分支真被执行；`storage/terminal/powerSpawn` 三处 POWER 库存（`terminal-market.ts:487-489` 那个和式）由 0 变正 ⇒ 上游回收或买入开始流动。
+
+---
+
+## §23 L0 §3.4「衰减与遗留物回收」八项记录（R345，10-05 05:1xZ）：**回收链四段齐全，但整条链不知道"寿命"这个量存在**
+
+> 名字与常数一律取自本轮 `node_modules/@types/screeps/index.d.ts`（行号为现读），不靠记忆造名。
+> 本节 **计数以 §23 为准**：§3.8 的八项记录已完成 **4 项**（§20 Observer／§21 Safe Mode／§22 Power-PC／§23 本节）；
+> §21 末那句「目前做成 2 项」**自本节起作废**（它写在 §22 之前，属陈旧行而非我新造的结论）。撤的只有"计数"，§21 的八项内容不动。
+
+| §3.8 要求 | 本轮记录 |
+|---|---|
+| **官方规则** | 掉落堆：`Resource` 注释（`@types:4501-4502`）「pile decays for **`ceil(amount/1000)` units per tick**」⇒ 是**绝对量随堆大小变、相对速率随堆大小反比**的非线性定律（100 单位堆＝1%/拍，5,000 单位堆＝0.1%/拍）。<br>坟墓：`TOMBSTONE_DECAY_PER_PART: 5`（`:767`，每具尸体按 body part 数扣 5 拍）＋`TOMBSTONE_DECAY_POWER_CREEP: 500`（`:768`）。<br>废墟：注释「**Usually decays in 500 ticks** except some special cases」（`:5439`）＋`ticksToDecay`（`:5458`）＋`RUIN_DECAY_STRUCTURES`（`:771`）。<br>建筑侧常数：路 `ROAD_DECAY_AMOUNT: 100 / ROAD_DECAY_TIME: 1000`（`:149-150`）、壁垒 `RAMPART_DECAY_AMOUNT: 300 / RAMPART_DECAY_TIME: 100`（`:107-108`）、容器 `CONTAINER_DECAY_TIME{,_OWNED}` **只声明为 `number`**（`:426-427`）、矿脉 `DEPOSIT_DECAY_TIME: number`（`:415`）、要塞 `STRONGHOLD_DECAY_TICKS: 75000`（`:858`）。 |
+| **前置条件** | 目标必须**在快照里存在**：`room-snapshot.ts:96-97` 把 `FIND_TOMBSTONES/FIND_RUINS` **先按 `store.getUsedCapacity()>0` 过滤**再入快照 ⇒ 空坟墓/空废墟根本不进决策面（省 CPU 的口径，代价见"失败条件"）。<br>取矿物额外一条：`pickup.ts:86-88` 门禁——**无 storage 且无 terminal 时直接放弃矿物**（注释给出理由：唯一卸货出口 `haulMineralsToStorage` 需要二者，否则捡了无处倒、且配 `updateMode` 总量口径会把 hauler 冻住）。 |
+| **输入与输出** | 输入＝`contracts.ts:194/198/201` 三列（`droppedResources / tombstones / ruins`，由 `room-scans.ts:59/78/94/105` 按拍缓存产出）。<br>输出＝`lootRemains(minAmount)`（`pickup.ts:49`）选出一个 `Tombstone|Ruin`，执行侧走 **`withdraw`（坟墓/废墟不能 `pickup`）**，取货量 `min(可用, 空闲)`。<br>排序键：range≤1 内**存量最多**优先，否则 `findClosestByRange`。 |
+| **资源成本** | 引擎侧无造价。本仓的"成本"体现在**放弃的场景**：`minAmount` 过滤零头（注释原文：大额遗留值得专程，零头由链尾无阈值实例顺手清理）。⇒ 这条设计正好**顶在**上面那条非线性定律上（见"为什么值得记"）。 |
+| **CPU 成本** | **未记录**——`@types` 没给 `FIND_TOMBSTONES/FIND_RUINS/FIND_DROPPED_RESOURCES` 的成本，本轮也没做线上标定 ⇒ 不许引用成"已知便宜"。已知的只有"三处 find 都在 `room-scans` 的按拍缓存里"（同拍复用，不重复发 find）。 |
+| **相关 API** | `Resource.ticksToDecay`、`Ruin.ticksToDecay`、`Tombstone.ticksToDecay`、`Deposit.ticksToDecay`、`StructurePortal.ticksToDecay: number \| undefined`（`:6688`，**稳定门为 `undefined`**——这一条是防"把 undefined 读成 0"的既有坑位）。 |
+| **失败条件** | ①执行侧有防护：取货量截到 `min(可用,空闲)`，注释写明是为了**避免 `ERR_NOT_ENOUGH_RESOURCES` 竞态把 creep 置 idle**。②矿物分支的 `return` 是**有意的空操作**，不是漏码。③真实盲区＝快照的 `store>0` 过滤与 creep 实际到达之间有拍差：遗留物可能在"被选中"与"到手"之间被他人取空或衰减殆尽，此时本轮决策无从归因（**过滤在前 ⇒ 事后看不见零容量目标**）。 |
+| **与现有模块的关系** | ①`economy.ts:121-122` 把坟墓+废墟里的能量**算进 `loose`**（松散能量口径）——所以 #41「地上常年 ~1,000 能量」这一读数里含尸体存量，不含则低估。②`core-clearer.ts:35-75` 在远矿房 loot 废墟（`loot-ruin` 动作）——invader core 被毁必留 ruin。③`repair.ts:250` 是**全仓唯一**引用引擎衰减常数的地方（RAMPART 族），且只在注释里。 |
+
+**两条负向结论（带搜过的确切形状＋名字来源，供复核）**
+- `ticksToDecay` 的**属性读**在 `src/` 命中 0：本轮 `grep -n "ticksToDecay" src/` 只回到 `core-clearer.ts:31` 的一句注释（"资源随 ticksToDecay 灭失"）。名字取自 `@types`（上面五处声明）。
+  ⇒ **本仓没有任何"按剩余寿命排序/择时"的机制**：回收优先级只有"最多"和"最近"两个键，引擎明明把寿命交到了手上（`Resource/Ruin/Tombstone/Deposit` 四个 `ticksToDecay`），我们一次都没读。
+- `FIND_DEPOSITS` 与 `Deposit` 在 `src/` 命中 0（名字取自 `@types:1670-1682` 的 `interface Deposit`，含 `cooldown/lastCooldown/ticksToDecay`）⇒ **守护者矿脉（source-keeper 的 deposit）整条能力未用**。这与 #130（Power 线机器全在、产出为零）是**同形**的：能力存在、入口未接。
+
+**⚠️ 一名两义陷阱（记下来，因为它就在本轮的 grep 结果里）**：`domain/logistics/walk-heat.ts:39` 的 `const decayed = Math.floor(value * options.decay)` 是**我们自己修路热度的 EMA 衰减**，与引擎对象衰减无关。
+以后凡是 grep `decay` 得出的结论，必须先分清这两族，否则会把"热度冷却"读成"道路寿命"（这正是债单里"一个数据结构两种语义"那一族）。
+
+**为什么这条今天值得记（不是为记而记）**：#41 与 #107 的口径都压在 §3.4 这层，而引擎定律是**反比**的——小堆相对衰减最快。
+我们现在的"最多者优先"恰好把**相对最紧急的小堆**排在后面；设计里那句"零头由链尾无阈值实例顺手清理"是有意的缓解，
+但**这条缓解没有读数**（回收成功率／零头是否真被清掉，本轮零取证）。⇒ 本节只到"知道有权衡、且权衡不可测"，不产出"该改排序"的结论。
+
+**分档**：`WIRED`＝生产/快照/决策/执行四段都有调用点（上表逐行给位）。`EXERCISED`＝**本轮未取证**。
+可区分两者的间接证据只有"掉落与衰减确实在发生"（#41 地面能量、#107 路 1 段/570 拍），那**不是**"回收成功过"的证据 ⇒ 按矩阵规矩记 **`UNOBSERVABLE-THIS-ROUND`**。
+
+**零改动的下一发签名（挂表等，不制造条件）**：取一次已按 `name` 逐字锚定的 creep 死亡（事件环里有 `CreepDeath`），
+比较死亡那一拍之后 `stats.energyLedger` 的 `pickedUp` 是否出现一次≈该尸存量（本服 CARRY=50×parts）的跳增。
+命中 ⇒ `lootRemains` 判为 EXERCISED 一次；不出现 ⇒ 只能记"该次遗留无人回收"，**不能**记"回收机制坏了"（因为目标房可能压根没有具备空余载重 hauler，这一列今天无处区分这两种成因——那才是要不要给 §3.4 补计数器的真问题）。
