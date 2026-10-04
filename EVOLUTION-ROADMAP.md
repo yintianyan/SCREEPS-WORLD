@@ -434,6 +434,12 @@
 > · **两支反例（都算数）**：**D** 若 ③+600 拍仍无 hauler/distributor 出生、而队列里 hauler/distributor 条目持续存在或反复重投 ⇒ **该房自有 spawn-manager 不服务 `survival:false` 的非零优先请求**（新缺陷，命名"priority-1 survival:false 在自有 spawn 上排不进"，属人裁决前我不动码）；**E** 若 hauler 条目过期后**不再重投**（队列只剩 harvester/builder）⇒ 需求生产者只保 `survival:true` 那一类，CP3 的 transporter 项**按构造等不来**，那是比 D 更硬的一条结构性发现。
 > · **口径**：CP3 过了也不进 `integrating` —— 还要 **CP4 的 5 只 extension**（现读 `ext` 只有 `controller,storage,spawn`，extension **0** 只，buildQueue 里 4~5 条 `extension/queued` 无 site）≈15,000 能量。⇒ 汇报链要说清"**①建成 → ③进 economic_startup → CP3 能量环 → CP4 才有 integrating**"，中间每一跳都不自动。
 
+> ★★**R158 补15（14:1xZ，纯读码，S3 已持续 ≈1,250 拍）：把我自己预写的签名逐个回代码验了一遍——一条验实、两条要降级**
+> · **验实的一支**：**B 分支（超时强推）的签名确实有写者** —— `uoem-events.ts:44-45`：`if (milestone === "FORCED_ADVANCE" && !expansion.forcedAdvance) expansion.forcedAdvance = true;`，而 `advanceBootstrapping:344` 在超时那拍正是 `emitMilestone(expansion,"FORCED_ADVANCE",tick)` ⇒ **若 pass 落在 `83429857` 之后，`Memory.kernel.expansion.forcedAdvance` 会真的翻成 `true`**（WIRED 已证；尚未 EXERCISED —— 现读仍 `false`）。
+> · **降级一：`reservedEnergy=5000` 不是"5,000 能量被扣住"**。`state-machine.ts:152-165` 调 `tryReserve({energyNeeded:5000, availableExpansionBudget:getAvailableBudget(ctx)})`（`plan-adapter.ts:254`），释放点在 `:603-606`（completed 路径）与 `:654-657`（abort）——**它是"扩张预算"上的记账，不是把 5,000 物理能量锁进某个池子**。⇒ **"承认滞后"到目前为止没有可量的能量损失**，代价形态是 **CP 评估的节拍被拖成 pass 节拍**（本该 100 拍一次，实测 ≥1,250 拍一次），以及 `economic_startup`/CP3/CP4 的判定与超时计时器**全都还没开始走**（`startedAt` 仍 83409857）。**别把 S3 说成"在漏能量"。**
+> · **降级二：`executionDashboard` 不在 Memory**：`state-machine.ts:129-141` 把它写进 **`globalCache()`（heap）** ⇒ `peek` 永远读不到，只能 console，且**换码即清**。⇒ 要 dashboard 里的 `progress`/`reservedEnergy` 就走 console，别拿 peek 的空结果当"dashboard 没了"。
+> · **对 ②③ 的影响**：两者在同一趟 pass 里顺序完成（车道 `delete` → `advanceBootstrapping` 评 CP2），所以 **②③ 到手那一拍只有两种形状**：`boot=0` 且 state 前进（CP2 过：`ea≥300` 或那拍正在孵）；`boot=0` 且 state 仍 `bootstrapping`（CP2 没过：`ea<300` 且没在孵）——**没有第三种**。若 pass 拖过 `83429857`，才会多出 `forcedAdvance=true` 那支（写者已验）。
+
 ### 4.0-pre（10-04 10:4xZ 由 R142 为 R143 立的预期；**R143 当轮已收：三读数全否、带因拍长估错失效、CP2/CP3 判据已从代码原文读出**，保留作状态出处）下一轮主目标：**见证第三次扩张的终态：W38S58 自有 spawn 是否建成、`kernel.bootstrap` 条目是否被删、`kernel.expansion.state` 是否离开 `bootstrapping`，并把"进入下一态后第一道判据"在读完代码之后预先写下**
 
 > **为什么换目标**：上一条（核心房库存流失归因）**R142 当轮判完**——`ws` 视界累计给出"账面 −18.2/拍 vs 物理 −17.2/拍、残差 0.8%"⇒ 落在设计内消费（补员 30.6/拍 > 采集 19.0/拍），结案文与三条更正进 §3.5 #88。**照字面再读同一条就是空转**。
