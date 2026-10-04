@@ -382,6 +382,12 @@
 > · **#115 的签名条件第一次真出现（但不许写 PASS）**：`6ac17f2c…` 既是该房唯一工地（spawn site）的 object id，又**同时是两只先锋 builder 的 `assignment.targetId`**，且其中一只正背 200 能量 ⇒ "带能量的 builder 钉在关键工地上"成立。**缺的那一半**：竞争任务类（rampart 维修）**住 heap 的任务池、Memory 里没有**（`Memory.rooms.W38S58` 键表只有 `spawnQueue/buildQueue/layout/economy/phase/...`）⇒ 拿不出"同一 tier 里同时存在 build 与 repair、而它选了 build"⇒ 任务 #12 继续 pending（判据＝一次 console 读 heap 任务池，且要配控制组）。
 > · **平台期近因再挪一格，而且 `lastPos` 是可解的**：`Memory.creeps.*.lastPos` 存的是 **`x*50+y`** ⇒ `1035⇒(20,35)`、`1178⇒(23,29)`，而工地在 `(28,28)` ⇒ 两只 builder 都在 5~10 格外的采矿位；`stuckTicks=0` 且 `lastRepathAt` 在前进（83424187→83424202）⇒ **在走，不是卡**；该房 **0 条路、4 条 `road/queued`** ⇒ 最后 391 点的节拍被"采矿点→工地"的**步行**支配（这与"施工速率=背包到货脉冲"是同一件事的两面：到货频率 ≈ 1/(采满时间+往返时间)）。
 
+> ★★**R158 补5（13:4xZ，读码为主；现场 `site 14,609/15,000@83424224`）：②这一条读数有两种成因，代码给了判别位**
+> · **车道条目消失 ≠ 只有"建成"一种**。`bootstrap-lane.ts` 改 `kernel.bootstrap[room]` 的分支有两条：**`:44-49` 该房有自有 spawn ⇒ `delete`（条目真的没了）**；`:109-121` `abandon` ⇒ **条目不删**，而是写回 `{until:0, waves, abandoned:<tick>}`，并 `cancelRequestsByHome` **按 home 撤单**、记 `ExpansionOutcome [1,4,0]`。⇒ **判别位＝条目里有没有 `abandoned` 字段**：条目没了 ⇒ 自有 spawn 建成；条目还在但带 `abandoned` ⇒ 弃房止损，且那 6 条 `home=W38S58` 的请求会被一起撤掉。**我挂的守望只数"W38S58 在不在"，分不清这两者 ⇒ 命中后必须整块 peek 一次 `kernel.bootstrap`。**
+> · **abandon 分支现在按构造不可达**（`bootstrap.ts:69-77`）：要 `ttd < ABANDON_TTD_THRESHOLD(=800) && hostileCount > 0`，本轮 `hostile=0` ⇒ "条目没了"目前只可能是建成。派波侧常数一并落定：`BOOTSTRAP_COOLDOWN_TICKS=2500`（与现读 `until 83424757 = wave6 派波点 83422257 + 2500` 逐字对上）、`sponsor.capacityAvailable ≥ BOOTSTRAP_MIN_SPONSOR_CAPACITY(=1000)` 否则 `no-capacity-sponsor`。
+> · **wave7 带来的不是 builder**：车道派的是 `BOOTSTRAP_WORKER_BODY = 3W3C3M(600)` 与 `BOOTSTRAP_DEFENDER_BODY = 2RA2M(400)`（`:36-49`），而 `submitPioneers` 补的是 `worker×pioneerWorkers + builder×pioneerBuilders` ⇒ **83424757 之后若 `waves` 6→7，补的是 worker/defender，不是施工队**；别把"波次到了"读成"工地有人了"。
+> · **时序预期（照旧不许挪）**：长跨账本给 `built 0.81/拍` vs `upgraded 1.20/拍` ⇒ 最后 **391** 点按 0.81/拍 ≈480 拍 ⇒ 建成点 ≈**83424,700** 前后（与 wave7 同量级，两件事会在同一窗里撞车）；届时若条目仍在且无 `abandoned`，用 `bootstrapDiag.hasSpawn`（2→3）分开"已建成但没到 pass"与"仍未建成"。
+
 ### 4.0-pre（10-04 10:4xZ 由 R142 为 R143 立的预期；**R143 当轮已收：三读数全否、带因拍长估错失效、CP2/CP3 判据已从代码原文读出**，保留作状态出处）下一轮主目标：**见证第三次扩张的终态：W38S58 自有 spawn 是否建成、`kernel.bootstrap` 条目是否被删、`kernel.expansion.state` 是否离开 `bootstrapping`，并把"进入下一态后第一道判据"在读完代码之后预先写下**
 
 > **为什么换目标**：上一条（核心房库存流失归因）**R142 当轮判完**——`ws` 视界累计给出"账面 −18.2/拍 vs 物理 −17.2/拍、残差 0.8%"⇒ 落在设计内消费（补员 30.6/拍 > 采集 19.0/拍），结案文与三条更正进 §3.5 #88。**照字面再读同一条就是空转**。
