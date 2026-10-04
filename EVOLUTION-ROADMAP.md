@@ -5119,3 +5119,32 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 - CPU：`window=4887t / total=15.77/拍` ⇒ 缺口 **3.77/拍**（R131 3.58），A 路线杠杆 ≈**3.1**（remoteHarvester 2.03 + remoteHauler 0.87 + 榜上 reserver 0.2）⇒ **缺口在涨、杠杆没跟上**；每房 `{W38S58:0.381, W37S58:2.866, W38S56:2.163}`；人口 42（21/17/4）、`skippedPerTick 11.4`、`errorsPerTick 0`、`tier=tight@83387005`。
 - #61（请求-拍）：`budget 2936→2958(+22) / reserveOnly 7345→7855(+510) / degradeGateClosed 4236→4767(+531)` ⇒ **⊆ 第十六次成立**（531 ≤ 532）；≈0.60/拍（R131 0.19）⇒ 仍是队列深度在摆。
 - 边界：**动了 src**（本轮唯一一次，1 src + 1 test，本地 `c58ff9d`）、**零 push**、`.gitignore` 未 stage、提交后 `git stash list` 为空、钩子未跳过；探针 `observe×1 + peek×3 + ring-dump×1 + console-eval×4`；`check:docs` 通过；git 领先 26 / behind 0。
+
+---
+
+### 巡检 R133（2026-10-04 02:0xZ，本会话）**#115 自我降级**：现场证据支持的是"每次扩张多花 1~2 小时"，不是"停摆"；满仓 episode 也已自行结束（措辞收回一半）
+
+**一、撤的是"无界"这一支，不是"排序错"那一支**
+- 仍然成立的：`spawn` 工地第八次读数恒 0（`83413120`，siteId `6ac17f2c32019b86d4b0775a`），且**第三次独立的全新重选**（两只 builder `assignedAt=83413010/83413010`，序列 83410105 → 83411701/83411717 → 83413010/83413010）仍落到源旁 container ⇒ D1 排序缺"存在性阻塞"这一列，`c58ff9d` 修的就是它。
+- **过头的那句要收回**：R131/R132 我写过"spawn 永远拿不到工时 / 帝国把唯一能花钱的地方冻住"。实际结构是：`buildQueue` 13 条里那 11 条新 site **被 `p0-spawn / lane:p0-spawn` 挡着开不出来**，所以 container（现 2,197/5,000）完工后场上**只剩 spawn 一个候选**，D1 无从竞争 ⇒ **#115 的现实代价 ≈ container 剩余 2,803 ÷ 1.9/拍 ≈ 1,475 拍 ≈ 64 分钟**（拍长实测 2.62s，且这速率本轮刚从 0.10/拍 跳到 1.9/拍、**未归因**，别当稳态斜率）。
+- **自然实验（零改码、下一轮就能收，写成互斥两支）**：① container 到 5,000 后 spawn 开始进进度 ⇒ #115 定性为"**每次扩张约 1~2 小时的额外延迟**"，修复的价值是去延迟 + 修通用规则（同档并存 storage 30,000 与 tower 5,000 那类，见 R131 读码注释）；② container 已满而 spawn 仍 0 ⇒ "停摆"恢复原判并**升级**。⚠️在①/②分出来之前，**不建议为这条催一次部署**（部署会连带对端 #113/#103 上线 + ≈400 拍 G6 税）。
+- 第三方仪器会独立签字：`E7_STALE_TICKS=5,000`@`expectations.ts:126`，spawn site 现龄 ≈3,260 拍 ⇒ **≈83414861 起**期望自检应出现 `siteStaleWorkerIdle:W38S58:6ac17f2c32019b86d4b0775a`（若届时仍无进度）。⚠️口径提醒：该 detail 里 `workers=` 是 **`workerCreepsInRoom`＝房内带 WORK 的我方 creep 数**，不是"指派到该 site 的工人数"（我差点据此读成超派）。
+
+**二、满仓那一章：episode 结束，两处措辞按此改**
+- `W37S58.storageNearFull` 本轮 **false**（`se=887,766`，ratio 0.8878）⇒ 从 R131 首次 true 起只维持 ≈1,000~2,000 拍。⇒ ①"0.9 像天花板"这条继续成立但**性质是边界振荡**；②R132 那句"帝国正在限采集"**降级为分钟级 episode，不是 regime**；③§3.5 里凡是拿"饱和 imminent / 持续限采"当时间压力的论据，一律按"分钟级事件"重写。
+- 本轮**刻意不做收支闭合**：`bk={harvested:900, towerSpent:1500, towerSpendWalls:1500, imported:1970}` 是"每核算窗口"的量，而这一发没有窗口长度 ⇒ 拿它算 /拍 就是凭空造残差（#53 那次 25/拍"漏账"同族错误）。
+- **RCL8 迟滞带本轮翻真**：`controllerDowngradeRisk=true`，但 `spawnQueue=[]`、`bk` 无 `upgraded`。⇒ 项目记忆 #52 的预写签名"**标志翻真后 ≤600 拍出 upgrader**"进入待验状态：出=设计在跑；不出=要去读 `allowUpgrader` 那一支被哪把闸挡着（`skip creep/upgrader/budget=225` 只是嫌疑不是证据）。
+
+**三、E7 自己响了：`siteStaleWorkerIdle` 首次可见（属对端 #111，我只登记数字）**
+- 期望自检 `0% → 0.6%（3 条事件）`，内容全是 `siteStaleWorkerIdle:W36S58:*`，**10 个 site**：`type=road prog=215/300 noProg=5868 workers=5`、`prog=90/300`、`prog=70/300`，另有多条 `prog=0/300` ⇒ `noProg=5868` 说明它们 ≈868 拍前刚跨过 5,000 阈值（本轮才首次可见）。
+- 同族：`W36S58 roadsBuilt 13→11`、`W37S57 34→32`（R132 已见 38→34）、`W36S58 progSum 839` 冻住 ⇒ **已建路在消失、停滞工地不推进**。⚠️不立案、不碰 `roadHeat`/回收阈值（对端 `e7-prefix-watch.sh` PID 22299 在跑同一件事，同域别双改）。
+- 判据侧读到的两条口径（写给下一轮，别再重读）：`P3_BOOT_GRACE_TICKS=1500`@`expectations.ts:8`、`E7_STALE_TICKS=5000`@`:126`；`siteProgresses` 由 `kernel.ts:577` 收集，**远房 site 也在内**（W36S58 不是我方房）。
+
+**四、其余差分与锚**
+- **线上 sha 重认（新基线）**：`modules:{main:<786,453B sha=d2f0b0cd00ad>}`；本地 `dist/main.js=789,460B sha=33e78bd675db` ⇒ **不等 ⇒ `c58ff9d` 未上线**（本地 dist 是 08:53:50 `test:e2e` 自带 build 的产物，"本地==线上"这台仪器仍作废，判上线只认 `d2f0b0cd00ad` 有没有被换走）。
+- `deathByCause={natural:175, combat:3, recycled:3}` ⇒ **combat 没再涨**：R132 那 +3 是**一批性事件**（全在弃道后的 W39S56），不是持续战损。#90 的账不变。
+- `kernel.bootstrap.W38S58={until:83414757, waves:2}` ⇒ wave3 ≈1,637 拍后；`home=W38S58` 人口 **4→3**（83413069 worker 寿终 age 1,511）⇒ 编制在代孵冷却之间**净减**。
+- 闸与扩张：`G0+G2+G3+G6` 未变、`state=bootstrapping`、`Pressure` 本轮 MEDIUM(0.58)（R132 曾 HIGH(0.60) ⇒ **标签与数值都会摆，别看标签推趋势**）、`Budget=167,410/973,308`、`Top=W37S56(WAITING_EXECUTION)`。
+- 幼房花钱了：`W38S56 se 84,529→85,519`（+990/≈930 拍，比 R132 的 +6.3/拍 慢一个量级）、`ea 1800→1039`、`site 1`、`cte 2,340` ⇒ §3.5 一直缺的"盈余有没有去处"这一列现在有数了。
+- CPU：`window=5787t / total=15.88/拍` ⇒ 缺口 **3.88/拍**（R132 3.77，仍在涨）；榜上 remote 角色 1.99+0.85≈**2.84** ⇒ **A 路线杠杆追不上缺口**；每房 `{W38S58:0.362, W37S58:3.562, W38S56:3.422}`；人口 44（26/15/3）、`errorsPerTick 0`、`tier=tight@83387005`。
+- 边界：**零 src、零 push、零 build、零 npm**；探针 `check-code×1 + observe×1 + peek×1 + console-eval×1`（mark=B11；其 payload 的 `n`/`sk` 两列被显示截断 ⇒ **本轮不引用**，要用就拆小表达式）；读码 3 处；`.gitignore` 未 stage；git 领先 28 / behind 0。
