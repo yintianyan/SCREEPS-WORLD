@@ -6701,3 +6701,25 @@ ExpectationViolation = 0   ← 完整枚举，非采样
 `#97`：§3.8 八项目前 2 格（Observer 7/8、Safe Mode 6/8）。下一格建议 §3.6 的 **Nuker/Ghodium** 或 §3.3 的 **Link/Storage 协作**，规矩不变：名字与字段一律先取 `@types`/docs 行号，未记录的（CPU 成本、冷却、造价数值）就写"未记录"，不引口头数。
 
 **这一层不新增任何事实**，只把已核过的东西排序；所有编号沿用现有序列（#1xx，本轮数过不撞号）。goal active——L1 排序完成不等于目标达成，T0 仍需授权。
+
+---
+
+## 巡检 R329（13:1xZ）——完成审计抓到一条我自己从没登记过的缺口：**L0 §7 点名的 7 件产物，实际只有 2 件有真身**
+
+按本轮的 prompt-to-artifact 核对（现读 L0 原文 `Long-Term Mission…md:1024-1040` + `ls` 根目录，不靠记忆）：L0「建议维护」列出 `docs/evolution/` 下 **ROADMAP / BASELINE / CAPABILITY_MATRIX / KNOWN_ISSUES / EXPERIMENT_LOG / ITERATION_LOG / CPU_BENCHMARKS** 七件，并写「如果项目已有对应文档，优先更新原有文件」。
+
+| L0 点名 | 仓内真身 | 判定 |
+|---|---|---|
+| `ROADMAP.md` | `EVOLUTION-ROADMAP.md`（已跟踪，本文件） | ✅ 按"优先更新原有文件"满足 |
+| `CAPABILITY_MATRIX.md` | `CAPABILITY-MATRIX.md`（已跟踪，§1–§21） | ✅ 同上（连字符差异，语义同一件） |
+| `KNOWN_ISSUES.md` | `audit/FINDINGS.md` + `audit/VERIFIED.md` + 本文件的 #1xx 台账 | ⚠️ **半满足**：内容在，但没有"当前已知问题"单一入口（分散在三处，新会话要先学一遍坐标） |
+| `ITERATION_LOG.md` | 本文件的「巡检 R###」序列 | ⚠️ **半满足**：每轮日志在这里，但它同时是 roadmap（一根时钟两用，正是 §19 点过的形状） |
+| `CPU_BENCHMARKS.md` | 无文件；实测散在 `RawMemory.segments[1]` + 记忆 `cpu-calibration-harness` + 提交信息 | ❌ **缺件**：定标数据有真读数，但没有可引用的一份产物 |
+| `BASELINE.md` | 无 | ❌ **缺件**（影响最直接：本会话反复"跨段不可比"，因为没有基线快照可对照） |
+| `EXPERIMENT_LOG.md` | 无；`tmp/observe/*.log` 是未纳管的临时通道 | ❌ **缺件**：反向实验/判效窗的结论只活在 commit 信息里，不可检索 |
+
+**为什么本轮不就地补三份文件**：这三件缺的不是"文件"，是**内容口径**——`BASELINE` 需要一次新鲜的全帝国快照（房/RCL/资产/CPU/账本速率）作为锚点，`CPU_BENCHMARKS` 需要现测拍长与负载而不是引用我一天里作废过两次的常数，`EXPERIMENT_LOG` 需要把散在 commit 信息里的判效结论按"预期→实测→裁决"重排。用今天已有的读数硬拼一份，就是把**推算当实测**——那是本文件最反对的动作（§19 与记忆"提交里的数字不能是推算"同一条）。**所以本轮只登记，不造件。**
+
+**登记后的处置建议（属人，一次决定）**：要么认可"roadmap + matrix + audit/ 三件即 L0 §7 的实现"并在 L0 里写明这个映射（最省，且不新增维护面）；要么补三件、并明确 `KNOWN_ISSUES` 收敛到一处。**不要**长期停在"语义满足、文件名不满足"的中间态——那是每个新会话都要重新考古一次的代价（今天的我就是这样，`audit/` 的存在直到 R323 才发现）。
+
+**边界**：零 src、零 push、零 build、零探针；`.gitignore`(对端) 与两份未跟踪文档（L0 本身 + `PATROL-PROMPT.md`）仍未 stage、来历不由我判定；commit 前索引为空。goal active——这条缺口是审计产物，不是完成项。
