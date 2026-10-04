@@ -417,6 +417,10 @@
 > · **因此下一发（②③）的判据要换形**（原预报作废、按此重写，不许口头挪）：`expansion-manager` 下一次 pass 时，只要 `Spawn7.spawning !== null` **或** `ea ≥ 300`，**CP2 就过** ⇒ 预期 **②（条目删除）与③（`state→economic_startup`、`startedAt` 重置为 pass tick、`cp` 至少 2）同拍到手**，同时 `diag.hasSpawn 2→3`。当前 pass 已 **≥617 拍没跑**（`systemLastRun=83424357` @实测 tick `83424574`，成因见 §3.5 #50 的 R158 补10：`cpuMax10 26.3 ≥ hardLimit 19.2` 触 `scheduler.ts:189` 对 P2+ 一律拒）。**反例两支**：**B′** pass 跑了、`spawning` 非空但 `state` 仍 `bootstrapping` ⇒ 我 CP2 还读漏了合取项（回去重读 `advanceBootstrapping:283-296` 的 `spawnBuilt` 取值口径）；**C′** `state` 前进而条目还在 ⇒ 车道 `ctx.snapshots()` 未纳入新房（独立一条，另立案）。
 > · **顺带一条与 #117 的关系**：bay 能被填到 ≥孵化成本，说明**"喂得进 spawn"与"carrier 送不进 storage"是两件事**（前者走 `fillTargets`、后者走 storage 守卫，且 spawn 的 `getFreeCapacity` 实测返回数字）⇒ 新房的能量通路并非全断，**卡的是跨房那一段**，#117 的排产理由照旧成立但别再扩成"这房什么都进不去"。
 
+> ★**R158 补12（14:0xZ）：`83424757` 那个波次冷却点到 = 一次免费判别（不必制造条件）**
+> · **为什么免费**：`bootstrap-lane.ts:44-49` 在**同一趟遍历里**"看见自有 spawn ⇒ `delete` 条目 ⇒ `continue`"，所以只要 pass 跑过一次且车道看得见这房，**wave7 就不可能被派发**（它根本走不到 dispatch 分支）。⇒ 到 `83424757` 之后现场只会有三种形状，各自对应唯一结论：**S1** `waves` 仍 6 **且**条目已删 **且** `hasSpawn=3` ⇒ ② 正常到手，与"①先发生、②等 pass"完全一致；**S2** `waves` 变 7 ⇒ **车道在"该房已有自有 spawn"时仍派波** ⇒ 它的 `FIND_MY_SPAWNS` 判定或 `ctx.snapshots()` 覆盖有问题（就是补11 写的 **C′** 分支，独立立案，且此时 `kernel.bootstrap` 必然还在）；**S3** `waves` 仍 6 且条目仍在 ⇒ **pass 至今没跑**（与 `systemLastRun=83424357` 一致，纯 CPU 侧，见 #50 补10 的 `scheduler.ts:189`），**这不是扩张链失败，只是还没被承认** —— 不许把它读成②为否。
+> · **口径**：判 S1/S2/S3 时以 `diag.tick` 为准（它等于最近一次车道真正遍历过的拍），不要用墙钟/上一发读数。
+
 ### 4.0-pre（10-04 10:4xZ 由 R142 为 R143 立的预期；**R143 当轮已收：三读数全否、带因拍长估错失效、CP2/CP3 判据已从代码原文读出**，保留作状态出处）下一轮主目标：**见证第三次扩张的终态：W38S58 自有 spawn 是否建成、`kernel.bootstrap` 条目是否被删、`kernel.expansion.state` 是否离开 `bootstrapping`，并把"进入下一态后第一道判据"在读完代码之后预先写下**
 
 > **为什么换目标**：上一条（核心房库存流失归因）**R142 当轮判完**——`ws` 视界累计给出"账面 −18.2/拍 vs 物理 −17.2/拍、残差 0.8%"⇒ 落在设计内消费（补员 30.6/拍 > 采集 19.0/拍），结案文与三条更正进 §3.5 #88。**照字面再读同一条就是空转**。
