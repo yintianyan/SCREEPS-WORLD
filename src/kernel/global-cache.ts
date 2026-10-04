@@ -942,6 +942,7 @@ export function roadBuildCounters(room: string): RoadBuildCounters {
     noEnergy: 0,
     noEnergyInRange: 0,
     noWork: 0,
+    noWorkInRange: 0,
     noSiteAtAll: 0,
     outOfRange: 0,
     outOfRangeNear: 0,

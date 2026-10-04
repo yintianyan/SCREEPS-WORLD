@@ -87,6 +87,7 @@ describe("road-build — classifyRoadBuildAttempt（唯一归因，按早退顺�
       noEnergy: 0,
       noEnergyInRange: 0,
       noWork: 0,
+      noWorkInRange: 0,
       noSiteAtAll: 0,
       outOfRange: 0,
       outOfRangeNear: 0,
@@ -144,6 +145,42 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     const counters = roadBuildCounters("W37S54");
     expect(counters.noEnergy).toBe(1);
     expect(counters.noEnergyInRange).toBe(0);
+    // 「又空手又无 WORK」故意也不记 noWorkInRange：两个动作都缺，留着能量或换 body
+    // 单独都不构成一次施工机会 —— 这一行是把那条口径钉住，不是顺带。
+    expect(counters.noWorkInRange).toBe(0);
+  });
+
+  it("有能但 body 无 WORK、脚下有格 → 记 noWorkInRange（0-WORK 走廊的唯一读数，(B) 之问的另一半）", () => {
+    // 线上实测 W38S56/W39S56 用 `[0W 16C 16M]` 档：那些房的 noEnergyInRange 恒 0 是仪器盲区，
+    // 这一列才是「补一个 WORK 就会真建上」的拍数。
+    const creep = hauler({ sites: [site(1, 1), site(9, 9)], energy: 800, work: 0 });
+    buildRoadSiteUnderfoot(creep);
+    expect(creep.build).not.toHaveBeenCalled();
+    const counters = roadBuildCounters("W37S54");
+    expect(counters.calls).toBe(1);
+    expect(counters.noWork).toBe(1);
+    expect(counters.noWorkInRange).toBe(1);
+    expect(counters.noEnergy).toBe(0);
+    expect(counters.noEnergyInRange).toBe(0);
+  });
+
+  it("有能且无 WORK 但最近 site 在射程外 → noWorkInRange 不记（无 WORK 时也要分清落点与时机）", () => {
+    const creep = hauler({ sites: [site(6, 6)], energy: 800, work: 0 });
+    buildRoadSiteUnderfoot(creep);
+    const counters = roadBuildCounters("W37S54");
+    expect(counters.noWork).toBe(1);
+    expect(counters.noWorkInRange).toBe(0);
+  });
+
+  it("两列新桶互斥、可相加：WORK 档与 0-WORK 档各记自己那一列，同拍不会两头记", () => {
+    // 同一房号连续两次调用（换 tick 避开缓存）：一次带 WORK 空手、一次无 WORK 满载。
+    buildRoadSiteUnderfoot(hauler({ sites: [site(1, 1)], energy: 0, work: 2 }));
+    buildRoadSiteUnderfoot(hauler({ sites: [site(1, 1)], energy: 800, work: 0 }));
+    const counters = roadBuildCounters("W37S54");
+    expect(counters.noEnergyInRange).toBe(1);
+    expect(counters.noWorkInRange).toBe(1);
+    // 可行动机会总数 = 两列之和（这是它们与父桶的唯一差别：父桶不可相加）。
+    expect(counters.noEnergyInRange + counters.noWorkInRange).toBe(2);
   });
 
   it("满载那一拍不落入新桶（控制组）：built 记 1、noEnergyInRange 恒 0", () => {
@@ -153,6 +190,7 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     expect(counters.built).toBe(1);
     expect(counters.noEnergy).toBe(0);
     expect(counters.noEnergyInRange).toBe(0);
+    expect(counters.noWorkInRange).toBe(0);
   });
 
   it("site 全在射程外：记 outOfRange 而不发 build（情形①的直接读数）", () => {

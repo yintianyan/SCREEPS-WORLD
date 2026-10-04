@@ -30,8 +30,29 @@ export interface RoadBuildCounters {
    * 不变式：`noEnergyInRange ≤ noEnergy`（它是子集，不是并列桶），所以两者**不可相加**。
    */
   noEnergyInRange: number;
-  /** 因 body 无 WORK 早退的次数（本次线上实测：应为 0 —— 该归因已被证伪）。 */
+  /**
+   * 因 body 无 WORK 早退的次数。
+   *
+   * ⚠️ 这一列在 2026-10-04 之前读到 0，本文件曾据此写「该归因已被证伪」——**那句话现在作废**：
+   * 只读探针（R316）普查 10 台 remoteHauler 的 body，W36S58/W37S57/W37S58 是 `[1W 20C 21M]`，
+   * 而 W38S56(3 台)/W39S56(1 台) 是 `[0W 16C 16M]` —— 0 WORK 是 `bodies.ts` 里按
+   * `energyCapacityAvailable`  affordable 出来的**合法档位**，不是坏 creep。首轮的 0 只说明
+   * **那两条走廊当时用的是带 WORK 的档**，不说明这条通道不存在。
+   */
   noWork: number;
+  /**
+   * `noWork` 那一拍射程（range≤3）内确实有自己的 site 的次数 —— 即「body 补一个 WORK 就会真建上」。
+   *
+   * 为什么必须有：`noEnergyInRange` 的前置是 `workParts > 0`（那一类的动作是留能量），于是
+   * 0-WORK 走廊里 `noEnergyInRange` **恒为 0** —— 那是仪器的结构性盲区，不是「这条线没机会」。
+   * 少了这一列，#111 的「远矿 hauler 要不要设 WORK 下限」只能靠推理（会错第四次的方向）。
+   *
+   * 两条不变式：`noWorkInRange ≤ noWork`（子集，**不可与父桶相加**）；
+   * 与 `noEnergyInRange` **互斥**（前置条件分别是 `workParts === 0` / `> 0`），所以两列**可以相加**，
+   * 和的含义是「这一拍有能、有人差其一，且脚下就有格」= 可行动机会总数。
+   * 「既无能量又无 WORK」的那一类故意不记 —— 两个动作都缺，留着能量或换 body 单独都不构成施工机会。
+   */
+  noWorkInRange: number;
   /** 本房一个自己的 site 都没有的次数（规划器没铺，或视野/缓存为空）。 */
   noSiteAtAll: number;
   /** 有 site 但射程（range≤3）内一个都不在的次数（情形①的直接证据）。 */

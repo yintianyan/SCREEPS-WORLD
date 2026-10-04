@@ -62,6 +62,16 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
   }
   if (workParts === 0) {
     counters.noWork++;
+    // 与上面同族、但补的是**仪器的盲区**：`noEnergyInRange` 前置 `workParts > 0`，所以 0-WORK
+    // 走廊（线上实测 W38S56/W39S56 用 `[0W 16C 16M]` 档）里那一列恒为 0，不能被读成「没机会」。
+    // 这一列量的正是「补一个 WORK 就会真建上」的拍数 —— #111 的 WORK 下限之问要有读数。
+    // 同样只遍历 room-scans 的按 tick 缓存，不发 find、不发寻路、不发 build。
+    for (const site of findMySitesCached(creep.room)) {
+      if (creep.pos.getRangeTo(site) < UNDERFOOT_BUILD_RANGE_LIMIT) {
+        counters.noWorkInRange++;
+        break;
+      }
+    }
     return;
   }
 
