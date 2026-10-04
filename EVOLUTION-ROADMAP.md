@@ -5707,3 +5707,27 @@ segment 6: len=    0
 这次再加一条：**判链路要看"写者 + 采用方 + 持久化"三段，缺一律不许说"整链不存在"**。
 **边界**：段 5 内容我只读了前 292 字节里的头部（键名与一个玩家条目），没有逐字段核 `playerEntries` 的完整结构；
 本轮零 console、零 src、零 push、零 build。
+
+### R306（10-04 12:4xZ，本会话）#100 卡住的真正原因是**侦察链自我不可见**：`observeRoom` 成功与否既没有事件也没有 gauge
+把"零 console 能不能判定核心房有没有 Observer"这条路走到尽头，结论是**不能**，而理由本身就是一条缺陷：
+- 段 4（prometheus，58,568 字节）里与 observer 有关的只有内核调度 histogram：
+  `screeps_kernel_process_execution_seconds_*{process_type="room-observer"}`（bucket 到 `le=0.5` 是 **4058**）
+  ⇒ 这**只证明这个系统被调度跑过**，不证明它真发出过 `observeRoom`，更不证明房里有那栋楼。
+- 段 2（事件环，本轮读到 41 条 `k=0` 等 13 个类目）里 **`observ` 文本命中 = 0**
+  ⇒ `room-observer.ts` 全程没有任何 `recordEvent`：`:140 if (!target) return;`、`:120 if (!exits) return;`、
+  `:142` 成功后也只是写 `pendingSlot().pending`（heap），**没有留痕**。
+- `Memory.rooms.W37S58.layout` 的键只有 `version/templateId/state/revision/nextPlanTick/anchor/anchorScore/planStage`
+  ⇒ 计划态不携带"某类结构是否已建成"，所以从 Memory 侧也**推不出**楼在不在。
+⇒ 三处都读空之后，**"这条侦察链是否在真产出视野"是一个无法从落盘数据回答的问题**，
+而它恰好卡住 #100 与 #109 尾巴的判决（段 5 只有 1 个玩家：是"没采集"还是"采到但没人"？现在两种解释都证不了）。
+这正是 §19「自度量器的诚实性」该收的一条：**能力存在 ≠ 能力被观测到在运行**。
+本会话我在这上面已经付过一次学费（`intelHandoff` 我一次读成"会丢"、一次读成"活着"），所以这次不落一个计数器就别再靠推断过案。
+
+**修法规格（三行，纯观测、零行为改动，与 `noEnergyInRange` 同族，可随下一批一起走）**
+1. `room-observer.ts:142` 分支上按返回码记两个桶：`ok / errBusy / errOther`（放 heap `globalCache().observeCounters`，随 telemetry 落 `Memory.kernel.stats.observe`）。
+2. `:140 if (!target) return;` 记一次 `noTarget` ⇒ 区分"没楼 / 有楼但无靶"，因为 `!observer` 与 `!target` 现在都静默。
+   （更干脆的做法：在系统入口区分三种早退 `noObserver / noExits / noTarget`，各一个计数。）
+3. telemetry 侧顺手出一个 gauge `screeps_observe_total{result="ok|busy|noObserver"}` ⇒ 段 4 里就能直接读到，巡检零 console。
+判据（上线后）：`observe{ok} > 0` ⇒ 楼在且能用，#100 就只剩"权重/半径"两件事；
+`noObserver` 占多数 ⇒ **楼没盖出来**，#100 的第一动作变成"让布局把 observer 排进建造队列"（那是 §15 的施工优先级，不是侦察逻辑）。
+**边界**：本轮零 console、零 src、零 push、零 build；`4058` 是 boot 以来的累计调度数，不代表成功观察数——这正是本案的要害。
