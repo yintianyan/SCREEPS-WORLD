@@ -313,7 +313,9 @@
 
 ## 4. 当前迭代（最近三轮）
 
-### 4.0（10-04 14:5xZ 改写，R158；**上一条（R143 立的 objective）当轮已收：①②③ 三读数全中 ＝ 第三次扩张的「承认链」第一次被直接验证**，原文保留在下面的 4.0-pre 作状态出处）下一轮主目标：**见证 W38S58 从 `economic_startup` 往 `integrating` 走的第一段：CP3 到手的时刻与形状（`checkpointsPassed` 2→3），并把「进入 `integrating` 后的第一道判据 = CP5 双条件」在 carrier 线仍在时究竟可达不可达预先判清（含 supply 线的退役条件与 #117 的账本侧后果）**
+### 4.0（10-04 15:3xZ 改写，R159；**上一条（R158 14:5xZ 立的 objective：见证 CP3 到手＋预先判清 CP5 双条件）当轮已收**：CP3 落在 pass `83425757`（`checkpointsPassed 2→3`、`state` 仍 `economic_startup`、`forcedAdvance=false`，由守望的"未变→变"沿读出），CP5 三段判据已按 `economic-activation.ts:91-134` 原文读全并判为"在 RCL/结构抬高三条路之前到不了"（⇒ 新立 §3.5 #120），原文保留在下面的 4.0-pre 作状态出处）下一轮主目标：**见证 CP4 到手（`extensions.length ≥ 5 && containers.length > 0` ⇒ `checkpointsPassed 3→4` 且 `state` 进 `integrating`）的时刻与形状，并在进入 `integrating` 的第一趟 pass 上读 `lastEconomicEvalTick` 这个新键是否出现、`consecutivePositiveTicks` 的第一个取值是多少（按原文它第一趟必为 0，因为 `elapsed = ctx.tick − (lastEconomicEvalTick ?? ctx.tick)`）；同轮给 #120 的自锁补一发复证：`reserve` 顶到该房现结构承载天花板（按实算 ≈4,000~4,300）而 `phase` 仍 `"crisis"` ⇒ 坐实"退出线高于天花板"，若 `ext` 数变了则要重算天花板**
+
+### 4.0-pre（10-04 14:5xZ 改写，R158；**上一条（R143 立的 objective）当轮已收：①②③ 三读数全中 ＝ 第三次扩张的「承认链」第一次被直接验证**，原文保留在下面的 4.0-pre 作状态出处）下一轮主目标：**见证 W38S58 从 `economic_startup` 往 `integrating` 走的第一段：CP3 到手的时刻与形状（`checkpointsPassed` 2→3），并把「进入 `integrating` 后的第一道判据 = CP5 双条件」在 carrier 线仍在时究竟可达不可达预先判清（含 supply 线的退役条件与 #117 的账本侧后果）**
 
 > ★★★★★**R158 结案：三读数全部到手（每条都有命令＋时刻＋读数），闭环承认链第一次被直接验证**
 > · **① 自有 spawn 建成 ＝ YES**：`83424480` 起 `Game.spawns` 含 **`Spawn7`** 且 `room.name === W38S58`；四把仪器同向（工地表空、`buildQueue` 里 spawn 条目消失、自孵 creep、`bootstrapDiag.hasSpawn 2→3`）。
