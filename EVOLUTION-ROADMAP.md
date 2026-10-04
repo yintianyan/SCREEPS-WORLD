@@ -5097,7 +5097,7 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 - 影响面：`ROLE_TASK_KINDS:75-83` ⇒ worker/harvester 只接 fill、upgrader 只接 upgrade，**只有 builder 接 build**；成熟房没有 spawn/tower 工地 ⇒ 改动按构造不进场。**不动 priority、maxWorkers、任何 CONFIG 阈值。**
 - **反向实验（自改自测也要）**：把豁免短路成 `false` ⇒ **恰好 1 例转红** `expected 'src-c' to be 'spawn'`（正是线上那次选择），其余 49 例含 D1 控制组（storage 30,000 vs 站桩 container 5,000）全绿。第二例新用例（tower 5,000 vs spawn 15,000 先做 tower）**两种代码下都绿 ⇒ 只算既有守卫，不算本次改动的证明力**。
 - 门禁：unit **389 files / 5,250 tests** 绿；integration **30 files / 239 tests** 绿；`npm run test:e2e`（含 `tsc --noEmit` + rollup）**退出码 0**。
-- ⚠️取证自记两条缺陷：①`test:e2e` 的输出被我 `| tail -30` 后转后台 ⇒ **只有退出码、没有 files/tests 计数**（要计数就别接管道、或直接落日志文件）；②console payload 我两发只看了开头就凭印象写数，改判为"重跑一发整块打印"，为此多花 2 发探针——**宁可重跑也不要把读数写错**。
+- ⚠️取证自记两条缺陷：①`test:e2e` 的输出被我 `| tail -30` 后转后台 ⇒ 当场只拿到退出码；**计数在后台任务落盘文件里事后捞回来了：e2e = 34 files / 72 tests 全绿，Duration 2,752s（≈46 分钟），退出码 0** ⇒ 与对端 R277 在旧码上测得的 34/34、72/72 **同计数**，"无回归"这句现在是有出处的，不是推的。教训改写成：长任务**别接 `| tail`**，直接落日志文件再读；②console payload 我两发只看了开头就凭印象写数，改判为"重跑一发整块打印"，为此多花 2 发探针——**宁可重跑也不要把读数写错**。
 - ⚠️**副作用要记账**：`test:e2e` 自带 build ⇒ 本地 `dist/main.js` 已在 08:53:50 重建，**"本地 dist==线上"这台免费仪器从现在起失效**（线上仍是旧码），下一轮第一件事是 `check-code` 认线上 sha。
 - **未推送的理由（属人决策点）**：这批 push 会连带对端两笔未推 src（#113 `27a8a51`、#103 `b20a67b`）一起上线，且一次部署 = 清堆 + ≈400 拍 G6 税。**门禁已全绿，随时可推**；修复的价值窗口在下面这条 wave3 之前（`kernel.bootstrap.W38S58.until=83414757`，≈2,600 拍）。
 
