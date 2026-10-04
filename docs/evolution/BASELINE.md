@@ -135,6 +135,6 @@ kernel.stats.cpuBySystem = {"terminal-manager":7.20,"remote-mining-manager":6.14
 
 - **拍长未在本快照同窗标定**：只有今天早些时候实测的约 3.9 秒/拍（历史值 2.32/3.77/4.52 都出现过）⇒ 任何"多少拍＝多少小时"的换算都要写成区间。
 - **防御工事与库存结构**：wall/rampart 血量、tower 存弹、storage 里非能量资源，都没采。
-- **`CPU_BENCHMARKS.md` 仍是缺件**：本节是**水位快照**，不是标定（标定要的是"动作数 vs CPU"的斜率，见记忆 `cpu-calibration-harness`）。
+- **`CPU_BENCHMARKS.md` 已另立成件**（门槛阶梯的四段区间、`usage/limit` 的算术、`tier` 与算式的闭合自检、`comfortable` 与"退出 constrained"是两个差 17 倍的目标位，以及 `cpuRate.*` 与 `stats.cpuBySystem` 不可互校）：本文件只留水位，标定与口径去那一份。
 - 因此 `BASELINE` 目前是**近全量但非完备**：领土/经济/扩张/贸易/远矿施工/调度/期望/CPU 八面有锚，防御面与资源面没有。
 

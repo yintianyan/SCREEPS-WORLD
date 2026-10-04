@@ -7110,3 +7110,20 @@ R330 把 #113 的严重度抬上去之后（`recent` 里真有一份 `count=2688
 **批次现状**：含 src 未推 **4** 笔（`c76aad4` #113 / `c2e3e30` noWorkInRange / `994bf54` observeCounters / 本笔 #119）。仍是 `behind=0`、origin 自 merge-base 起 `src/` 零改动 ⇒ 纯 fast-forward；一次部署=清堆+约 400 拍 G6 税，所以四笔一起走不多付代价。**e2e 仍未跑**（自带 build 会毁对端的"本地==线上"仪器；线上 sha 本轮复核仍是 `649eb94b9784`）。
 
 **边界**：零 push、零 build、零 npm install、零探针（本轮全是本地）；commit 前索引为空（共享索引检查过）；`.gitignore`(对端) 与两份未跟踪文档未 stage；`docs/evolution/BASELINE.md` 已于本轮补上（R329 三缺件之一）。goal active。
+
+---
+
+## 巡检 R332（20:1xZ）——第二件 L0 §7 缺件落地：`docs/evolution/CPU_BENCHMARKS.md`，并**把 #50 的问法拆成两个目标位**
+
+现读 `capacity.ts` 的阶梯（不是记忆）：`abundantRatio 0.35 / tightRatio 0.6 / constrainedRatio 0.8`、`limit = max(1, min(cpuLimit, tickLimit)) = 20`、`headroom = 1 − usage/limit` ⇒ 用率四段对应每拍 **≤7.00 / 7.00–12.00 / 12.00–16.00 / >16.00**。
+**闭合自检**：线上 `cpuRate.total=16.25` ⇒ `16.25/20 = 0.8125 > 0.8` ⇒ **应判 constrained**，实测 `kernel.capacity.tier="constrained"`（`since=83425106`，约 4,900 拍）⇒ **算式与状态机两个独立出口互证**。
+
+★ **这直接改掉 #50 的问法**（台账原来只给了一个目标位）：
+- 只要**退出 constrained**（回 tight，恢复常规雄心）：`usage ≤ 16.00` ⇒ **砍 0.25/拍**；
+- 要回 **comfortable**（扩张 G6 吃的那条线）：`usage ≤ 12.00` ⇒ **砍 4.25/拍**。
+⇒ 两个动作量差 **17 倍**。早前的"缺 2.44~2.48/拍"用的是当时 `total≈14.5`——**方法一样、输入变了** ⇒ 引用旧缺口前必须重采。
+
+**同时写进文档的三条读数纪律**：①`byPhase` 之和加三个残差 **不等于** `total`（15.23+2.98=18.21 vs 16.25）⇒ **这不是漏账**，是不同分母/归属规则的切法（"其余 4.4/t 未归因"那类减法产物的同族）；②`cpuRate.bySystem` 与 `stats.cpuBySystem` 是**两台仪器**（`traffic-manager` 3.48 vs 3.71）⇒ 不相加不互校；③夹具标定只能给"单价"不能给排序（第四次定标：变量项对到 4% 内，但夹具截距 2.94 vs 实测固定项 ≈6.7/t ⇒ **低估 2.3 倍**），排序只能在真负载上做差分。
+另记 `snapshots`+`traffic-manager ≈ 5.24/拍` 是已核过的**结构性成本**（五条"能省"嫌疑全被否），低于总负载 5% 的可省项不立案。
+
+**边界**：零 src、零 push、零 build、零 npm；探针 0 次（只读 API：`peek` 叶子 7 次 + `check-code`）；`docs/evolution/` 下两件（`BASELINE.md`、`CPU_BENCHMARKS.md`）为**本轮新建**，L0 §7 七件产物从"2 件有真身"变"4 件"（剩 `EXPERIMENT_LOG` 缺、`KNOWN_ISSUES` 半满足散在三处、`ITERATION_LOG` 由 roadmap 兼任）；commit 前索引为空；`.gitignore`(对端) 与两份未跟踪文档未 stage。goal active。
