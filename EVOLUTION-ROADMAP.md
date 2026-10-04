@@ -364,6 +364,13 @@
   · **★补25（17:2xZ）这条从推断升为直接观测**：`R160E6@83427541` 现读该房采集者 `col=[["0a",559],["0k",823]]` ⇒ **`collectorCount=2`（条件① 现场为假）**、**`min(TTL)=559 < 600` ⇒ 条件③ 现场为真** ⇒ 此刻非 P0 可用预算 = 100 ⇒ builder(250)/hauler(300) 不可孵，而 harvester 因角色豁免照走 —— **普查里"采集者在换、hauler/builder 挂 500+ 拍"由此得到机制级解释**。两点界限：**"占空比≈1"只有一条 TTL 快照 + "500 拍 0 次孵化"的间接一致 ⇒ 不写"恒为真"**（要钉死需一段 `min(TTL)`/`spawning` 时间序列）；且**这把锁只解释"第一个 builder 为什么来不了"**——任一 extension 一落成预算就从 100 抬到 300+，之后回到 #121 的名额/人力那两根杆。
   · 下面那段"仍未证两环"是本条立案时（补21/补22）的原始版本，保留作沿革，按上面两条读。
   · **仍未证两环（定罪前必读）**：①spawn 侧那个 `reserve` 的**真身数值**（`economy.cr` 是合同储备，不是它 ⇒ 先 grep `effectiveBudget`/`queryEconomy` 定字段，别猜）；②builder 请求的 **body 部件数**（决定 10× 阈值与 `cost` 是否 >300）——本轮为取它发的 console **超时 33 s**（今日第 2 次同形状），未重发、未捞旧键。
+  ★★★★★**R160 补30（17:4xZ）：本条从"一层"扩成"三层互相供能的环"，并撤销我此前给的 CP4 时间区间**
+  · **第 1 层 保级抢道**：`demand.ts:920-923` `hasDowngradeRisk || crisisNeedsGuard ⇒ upgraderTarget = maxCount(3)`。现场：`ttd=6,624`（RCL2 折带 enter=6,666/exit=10,000，刚跨过进入线）、`claimSecure=true`、`controllerDowngradeRisk=true`（16:1x 两把都还是 false），队列由 `builder:W38S58:1` 换成 **`upgrader:W38S58:0/1/2`**（P1、`survival:false`、body `1W1C2M`=250、`createdAt 83427756`）。⚠️**builder 请求"消失"的原因未证**（`frozenRoles`←`roomCtx.churnFreezeUntil` 被冻结 vs `dynamicBuilderTarget`/`economyCap=harvesters+workers+1` 被算式压住）⇒ 别写成结论。
+  · **第 2 层 保级拉闸建造**：heap `constructionSkips.rooms.W38S58` 本窗 = `{claim-secure:98, per-room-site-cap:extension:176, :container:88, lane:energy-floor:10, stale-evict:12}`（**这张表每 `skipReportInterval` 拍清零 ⇒ 与 16:1x 那发的 190/95/1520 不是同一窗，禁止比大小**）⇒ `claimSecure` 真会把非必要工地直接拒签，**extension 不只是缺名额，还被这道闸拦**。
+  · **第 3 层 孵化算术（补24/25 已证）**：`reserve=200` + `ec=300` ⇒ 非 P0 只剩 100；**upgrader 是 P1 且不豁免** ⇒ 250 body 一样孵不出；第 2 层降级虽允许 P1 在 recovery 出小 body，但"可动"的最小可用 body ≥ `WORK+MOVE`=150 > 100，真出 100 的是无 MOVE 的残废体 ⇒ 正是 `spawn-manager.ts:528-535` 注释警告过的死亡螺旋同构。
+  · **供能关系（为什么它不会自己松）**：`ttd` 只能靠升级回涨 ⇒ 升级要 upgrader ⇒ upgrader 孵不出 ⇒ `claimSecure` 恒真 ⇒ extension 恒被拒 ⇒ bay 恒 300 ⇒ reserve 200 恒吃掉 2/3 预算。**三层互锁，没有一层会被内部打断。**
+  · **ETA 撤销**：CP4 的时间尺度已不由建造斜率决定（**0.64/拍那个数在本窗失效**，因为 builder 不在道上），改由"哪一层先被外部打断"决定 ⇒ **补16/补24 给的 13,300~20,800 拍区间自本条起不再引用**（原文保留作沿革），P1 的名额释放判据也暂时不适用（没有 builder 在孵，工地不会落成）。
+  · **顺带补第三半一个样本**：`R160E8` 那一拍仍 `phase="crisis"` + `reserve 4,544` + `drainScore/liquidityScore/srcStallTicks/bootstrapTicks` 全 0 ⇒ **第 8 个"同拍只剩 `:528 bankrupt`"的分支排除样本**。
   **对扩张的意义（这才是要给人看的那一句）**：**扩张 CP4 现在不是"慢"，是"停"**——而停的位置在孵化口，能量充足、需求已投。⇒ 它把 #50（G6/CPU）与 #61（预留条件 3）从"影响新提案"升级为"**正在冻结一次已开工的扩张**"。两条修法都属阈值/预留语义 ⇒ **不自办，摆数给人**。
 
 ## 3.6 判等效外部事件（不是我的修没生效）
