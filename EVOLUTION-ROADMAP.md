@@ -7156,3 +7156,27 @@ R329 我给 §7 缺件开的两条路是"补件"或"写明映射"。对 `KNOWN_I
 表里另加了三条"该往哪儿写"的判据与两条纪律：**只有文件搬家才动这张表**；**在 ⚠️ 两项被补件或在 L0 里写明映射之前，任何文件都不许声称 §7 已完成**（后者属人——我不单方改 L0，且该文件来历未定、一直未 stage）。
 **§7 现状**：5 件真身（ROADMAP/CAPABILITY_MATRIX/BASELINE/CPU_BENCHMARKS/EXPERIMENT_LOG）+ 2 件明确由既有文件兼任并登记了代价。
 **边界**：零 src、零 push、零 build、零探针；含 src 未推仍 4 笔；commit 前索引为空；`.gitignore`(对端) 与两份未跟踪文档未 stage。goal active。
+
+---
+
+## 巡检 R335（20:2x–20:3xZ）——想验 #42/#48 的成对入账，结果**先撞到一个未定案的仪器异常**；本轮只立案不定罪
+
+**动机**：#48 的判据是"两侧在同一拍成对入账"，而其前提（幼房有 storage）今天已满足（W38S56 RCL5、`storage_se=123,548`）⇒ 这本该是一次零授权的线上验证。
+
+**先拿到的事实（可作为 #48 的部分判据）**：`kernel.stats.energyLedger`（boot 起累计，`tick=83422285`）
+```
+W38S56  imported 81,585   exported 0        W37S58  imported 136,885  exported 26,400  sold 26,000  tradeFee 17,653
+W38S58  imported 0（该房无 storage ⇒ carrier 分支按构造不记，结构控制组）
+```
+⇒ **两侧都有写者、且开过火**（收端 81,585 > 0），但**这还不足以判 #48 PASS**：判据要的是"一次交付事件上两键同拍同额"，累计值只能证明"都存在过非零"。⚠️另外 `exported 26,400 ≈ sold 26,000` ⇒ 发端这块**主要是 terminal 交易**（`terminal-selfaid.ts:68/133` 也写 `exported`），**别把 26,400 读成 carrier 线路的量** —— 一条 `exported` 混两个通道，这与 #76「`tradeFee` 有 11 个写者所以别当比率读」同族。
+
+**撞到的异常（本轮唯一新发现，未定罪）**：两次读数相隔 **154 秒 ≈ 40–67 拍**，`W38S56` 整行、`W38S58.imported`、`W37S58.exported` **逐字节相同**（含 `harvested 147,560`）。
+- 我先怀疑"是自己的采样跨度短于 flush 节拍"——**这条被代码否掉**：`telemetry-collector` 的 `interval = CONFIG.telemetry.cpuSampleInterval = 10`（`config:96`），40–67 拍理论上应跨 4–6 次 flush。
+- 也不该用 `tick` 判新鲜度：`global.d.ts:490` 明确 `energyLedger.tick` 是**"创建时赋一次"**（与 `warFunnel.tick` 那种"被计量的那一拍"不同类），`logisticsHealth` 才写 `Game.time` ⇒ **`tick` 不动是正常的，别拿它当"停止刷新"的证据**（我一开始就差点这么读）。
+⇒ 两个都还活着的假设，动作完全相反：
+ **H1 写入侧停了**：`globalCache().energyLedger` 的 mutator 不再被调（同 #104/#106 那一族：有建行处、没有稳定写者）。
+ **H2 落盘侧被闸住**：heap 在涨，但 `Memory.kernel.stats.*` 这段 flush 实际比 10 拍稀疏（我没读完 `run()` 顶部的提前返回/`safeRun` 边界，不能排除）。
+**判别式（一次即分，零改动）**：连读 **heap** 两次（`peek` 读不到 heap，走一次 console：`JSON.stringify(globalThis.energyLedger?.rooms?.W38S56)` 隔 ≥200 拍两发，mark 各自唯一）⇒ **heap 在涨而 Memory 不涨 = H2**；**heap 也不涨 = H1**。别先动代码。
+**为什么现在不动它**：这条真起来会影响**两件正在被引用的东西**——(a) 对端 #127 用过"`upgraded=2,500` 与更早一次逐字相同"作零升级的证据（那是 595 拍跨度，若 H1 成立则该证据的形状要重看）；(b) 我的 `#114` 用的是核算窗 `ws/bk`，**不是这台 ledger** ⇒ 本轮结论不波及 #114。定罪之前这两处都别改口径，也别据此说谁的证据作废。
+
+**边界**：零 src、零 push、零 build、零 npm；探针 0 次（全是 `peek` 单叶子 + 读码）；#48 状态由"待事件"改为**"部分到手、判据未满足"**（见任务条目）；`.gitignore`(对端) 与两份未跟踪文档未 stage、commit 前索引为空；含 src 未推 4 笔。goal active。
