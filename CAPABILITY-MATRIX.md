@@ -582,3 +582,25 @@ R318 的 `observeCounters`（未推）上线后，第一读要撞的是这个**�
 ### §3.8 八项记录的完成度（本轮动了哪几项）
 Observer 这一格的八项现在是：官方规则✔（docs：hits500/RCL8/造价8000/射程10房/返回码集）· 前置条件✔（RCL8 + 本帝国只有 1 座，实测）· 输入输出✔（靶子=describeExits 4 邻居；输出=intelHandoff→adoptHandoff→段5，链闭合）· 资源成本✔（造价 8,000，已建成⇒沉没）· **CPU 成本✘仍未记录**· 相关 API✔（`observeRoom(`，名字来自 docs/@types 不是猜的）· 失败条件✔（返回码集 + "视野只存续下一 tick" + `staleSlot/lostVision` 两桶已建）· 与现有模块关系✔（intelligence / segment-store / 扩张候选池 / 战争选靶）。
 ⇒ **八项里 7 项有据、1 项仍缺**；但 §3.1–3.8 的**机制覆盖面**仍远未完成（Observer 只是其中一格），`#97` 这条交付物继续挂着，不因本轮更正而宣布完成。
+
+---
+
+## §21 L0 §3.6「Safe Mode」的八项记录（R323，10-04）：唯一真出口在 `tower-defense.ts`，分层授权由架构守卫强制；**两处仍属未记录项**
+
+> 名字与字段一律取自本地 `node_modules/@types/screeps/index.d.ts`（行号随本轮），不靠记忆造名。
+
+| §3.8 要求 | 本轮记录 |
+|---|---|
+| **官方规则** | `Controller.activateSafeMode(): ScreepsReturnCode`（`@types:6025`）；相关属性 `safeMode?: number`（`:5993`，激活后的剩余生效拍数）、`safeModeAvailable: number`（`:5997`，可用次数）、`safeModeCooldown?: number`（`:6001`）。⚠️**本地 @types 不含数值规则**（造价、冷却时长、RCL 前置、每级可用次数）⇒ 这些仍是未记录项，**不许引用口头数**（与 §20 里 `observeRoom` 的 CPU 成本同一处理方式）。 |
+| **前置条件** | 代码侧 4 条齐（`tower-defense.ts:380-385`）：`controller?.my && !controller.safeMode && !controller.safeModeCooldown && controller.safeModeAvailable > 0`。引擎侧数值前置：未核。 |
+| **输入与输出** | 输入＝`RoomSnapshot.controller` + 三类触发场景（注释原文：①无塔且核心被突破；②有塔且核心结构正被拆毁／塔全空被突入；③**M11 舰队伤亡熔断**）+ 距离门 `CONFIG.defense.safeModeTriggerRange = 5`（`config/index.ts:599`，`tower-defense.ts:309/315/343` 用它挡掉无害过境 scout）。输出＝引擎返回码（**代码丢弃，见"失败条件"那行**）＋引擎侧状态变化（消耗 `safeModeAvailable`、置 `safeMode` 计时）。 |
+| **资源成本** | 引擎侧：未记录（@types 无）。可现场读的代理量＝`controller.safeModeAvailable`，已被 `room-state.ts:447` 落进快照（`safeModeTicks` 同，`:448`）。 |
+| **CPU 成本** | **未记录**（API 与本地类型都没给）。⇒ 若将来要把 safe mode 排进防御预算，这条得先补。 |
+| **相关 API** | 除上四则外，`@types:1314` 另有 `generateSafeMode(target: StructureController): CreepActionReturnCode`（**其所属 interface 与在本服是否可用，本轮未核** ⇒ 不据它立任何"能力存在/缺失"的结论，这正是 §20 那条纪律的用法）。 |
+| **失败条件** | 返回码是 `ScreepsReturnCode`，而 `tryActivateSafeMode()` **不读返回值** ⇒ `ERR_RCL_NOT_ENOUGH` / `ERR_BUSY` / 冷却未清之类失败**今天无处可计**：现象会是"防线被突破却什么都没发生"，事后读不出原因。这与 R318 给 `observeRoom` 建 `codes[String(code)]` 直方图是**同一个修法形状**（1 行计数，零行为改动），我没有顺手改码——本轮只做记录。 |
+| **与现有模块的关系** | ①**唯一真出口**＝`systems/military/tower-defense.ts:386`。②`recovery-execution-system.ts:873-894` 只写 `defenseState.safeModeRequested/…Tick/…Reason` 三字段并注释"由 kernel 层在下…"，而**这三字段全仓零读者**——这不是新发现：**已立案为 `audit/` 的 K6**（`audit/VERIFIED.md:23`「✅成立，且更糟」、`audit/units/W23.md` 六步判定、`audit/MANIFEST.md:82`、`W07.md:236/242`）。⇒ 本轮**不重复立案**，只在矩阵里把两条出口连起来（真出口在防御层，恢复层的标志是惰性的）。③**分层授权由测试强制**：`tests/unit/tactical/a5-4-4-architecture-guards.test.ts:149`（Guard 5）禁止 `domain/tactical/*.ts` 出现 `activateSafeMode(` 调用（同条还禁 `move/spawnCreep/submitRequest/recycle`）⇒ 这就是 L0 §3.6「不得让战术代码直接绕过战略授权」的机制化实现，不是口头约定。 |
+
+**为什么这条"最后防线"今天值得记**：扩张正在把幼房推到 RCL5/RCL2（`R318A2` 现场读数），而 safe mode 的可用次数与前置按引擎规则走 RCL 阶梯——**数值前置未核**就意味着：幼房挨打时这套机制会不会响，本矩阵答不了。补法两条都在记录里点名了（读返回码建计数；从 docs 核数值前置），都不属我这一轮能顺手做完的事。
+
+**§3.8 八项的完成度（把话说准）**：目前做成 **2 项**——Observer（§20，7/8 项有据、CPU 成本缺）与 Safe Mode（本节，6/8 项有据、资源成本与 CPU 成本缺）。
+`§3.1–3.8` 的**机制覆盖面**仍远未完成 ⇒ `#97` 继续挂着，本轮不宣布完成。
