@@ -440,6 +440,11 @@
 > · **降级二：`executionDashboard` 不在 Memory**：`state-machine.ts:129-141` 把它写进 **`globalCache()`（heap）** ⇒ `peek` 永远读不到，只能 console，且**换码即清**。⇒ 要 dashboard 里的 `progress`/`reservedEnergy` 就走 console，别拿 peek 的空结果当"dashboard 没了"。
 > · **对 ②③ 的影响**：两者在同一趟 pass 里顺序完成（车道 `delete` → `advanceBootstrapping` 评 CP2），所以 **②③ 到手那一拍只有两种形状**：`boot=0` 且 state 前进（CP2 过：`ea≥300` 或那拍正在孵）；`boot=0` 且 state 仍 `bootstrapping`（CP2 没过：`ea<300` 且没在孵）——**没有第三种**。若 pass 拖过 `83429857`，才会多出 `forcedAdvance=true` 那支（写者已验）。
 
+> ★★**R158 补17（14:1xZ，纯 peek）：我补14 那条预报的**锚点写错了**——孵化由 spawn-manager 每拍驱动，与 pass/③ 无关；按现场重锚并给出新算术**
+> · **新事实（`14:18:0xZ` 一发 peek）**：`--keys creeps` 现读 **两只**由新房自己孵出的 creep —— `harvester-W38S58-1-83424570-y7` 与 `harvester-W38S58-1-83424720-yd`（两次请求 `createdAt` 相差 **150 拍** ⇒ **实测孵化周期 ≈150 拍**，与补14 用 `200/1.69≈119 + 孵化 ~10` 估的量级相符但**偏慢 ~20%**）；同拍 `spawnQueue` 的角色构成已变成 **`hauler×4 + distributor×2`、`harvester` 与 `builder` 条目消失** ⇒ **该房自己的 spawn 已经满足完采集需求、整条队列现在排的就是物流角色**。
+> · **预报重锚（原写法作废，按此判）**：原文把首只物流 creep 锚在「③ 之后 240~480 拍」是**错的**——③ 只是 Memory 侧的承认，**孵化不依赖它**。正确锚点是「**spawn 建成（≈`83424,4xx`）之后**」：**首只 `hauler-W38S58-*` 或 `distributor-W38S58-*` 预计出现在 ≈`83424,9xx~83425,4xx`**（第 3~6 次孵化 ⇒ 2~4 个 150 拍周期）。**命中即预报有效；若建成 +900 拍（≈`83425,3xx`）仍只有 harvester ⇒ 走补14 的 D 支（自有 spawn 不服务 `survival:false` 的 priority-1 请求）并当场定罪**。
+> · **对 ②③ 的连带修正（重要）**：既然物流可能在 ③ 之前就位，**②③ 到手那一拍 CP3 的三个合取项可能已经全真** ⇒ 同一趟 pass 里 `checkpointsPassed` 可从 **1 直接跳 3**（车道 delete → `advanceBootstrapping` 评 CP2 过 → 下一趟 `advanceEconomicStartup` 评 CP3）。⇒ **不要把 `cp` 一次跳两格读成"计数坏了"**；补15 写的"只有两种形状"仍成立（形状指条目/state，不指 cp 的增量）。
+
 ### 4.0-pre（10-04 10:4xZ 由 R142 为 R143 立的预期；**R143 当轮已收：三读数全否、带因拍长估错失效、CP2/CP3 判据已从代码原文读出**，保留作状态出处）下一轮主目标：**见证第三次扩张的终态：W38S58 自有 spawn 是否建成、`kernel.bootstrap` 条目是否被删、`kernel.expansion.state` 是否离开 `bootstrapping`，并把"进入下一态后第一道判据"在读完代码之后预先写下**
 
 > **为什么换目标**：上一条（核心房库存流失归因）**R142 当轮判完**——`ws` 视界累计给出"账面 −18.2/拍 vs 物理 −17.2/拍、残差 0.8%"⇒ 落在设计内消费（补员 30.6/拍 > 采集 19.0/拍），结案文与三条更正进 §3.5 #88。**照字面再读同一条就是空转**。
