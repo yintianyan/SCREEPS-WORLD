@@ -473,6 +473,10 @@ function sampleMemorySize(_tick: number): void {
       // 与 roadBuild 同一条 flush 路，heap 累计值原样落一份，不参与任何决策。
       (Memory.kernel.stats as any).observe = { ...g.observeLedger };
     }
+    if (g.safeModeLedger && Object.keys(g.safeModeLedger).length > 0) {
+      // Safe mode 出口账本（#119）：判「该响没响」——`guardMiss>0 而 tried=0` 是唯一的正面读数。
+      (Memory.kernel.stats as any).safeMode = { ...g.safeModeLedger };
+    }
     if (g.tradeLedger) {
       // 贸易决策现场快照（heap 原样落一份）：判"被闸挡掉"还是"跑了但决定不交易"。
       (Memory.kernel.stats as any).trade = { ...g.tradeLedger };

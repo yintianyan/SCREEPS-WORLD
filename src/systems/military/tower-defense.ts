@@ -12,7 +12,7 @@ import {
   resolveUnderSiege,
   type FortificationContext,
 } from "../../domain/defense/fortification";
-import { globalCache, bumpEnergyCounter } from "../../kernel/global-cache";
+import { globalCache, bumpEnergyCounter, safeModeCounters } from "../../kernel/global-cache";
 
 /** P3 L1 核算：塔动作耗能按 intent 计（attack/heal/repair 每次 TOWER_ENERGY_COST）。
  * 不可用库存差值实测 — 引擎资源结算在 tick 末，同 tick 差值恒 0（官服实证）。 */
@@ -374,8 +374,17 @@ function reportThreatUnhandled(snapshot: RoomSnapshot): void {
  * 触发场景：① 无塔且核心被突破；② 有塔且核心结构正被拆毁 / 塔全空被突入；
  * ③ 舰队伤亡熔断。safe mode 是最后防线 — 校验 controller 归属 / 未激活 /
  * 无冷却 / 有可用次数。
+ *
+ * ⚠️ #119：这道判据原先**丢弃返回码、且前置不齐时静默跳过**，于是"核心被拆而什么都没发生"
+ * 这一现象不可归因（没次数？在冷却？引擎拒绝？三种要的动作互相矛盾）。现在两路都记：
+ * `tried` + `codes[String(原始返回码)]` / `guardMiss`。**判据是 `guardMiss>0 而 tried=0`
+ * 才叫"该响没响"** —— 和平期三列都该是初始值，那不是仪器坏了。
+ * 记数不改动作：这里既没加也没减任何触发条件。
+ *
+ * @internal 导出仅供单元测试 —— 业务入口是防御循环里的那一处调用。
  */
-function tryActivateSafeMode(snapshot: RoomSnapshot): void {
+export function tryActivateSafeMode(snapshot: RoomSnapshot): void {
+  const counters = safeModeCounters(snapshot.roomName);
   const controller = snapshot.controller;
   if (
     controller?.my &&
@@ -383,7 +392,11 @@ function tryActivateSafeMode(snapshot: RoomSnapshot): void {
     !controller.safeModeCooldown &&
     controller.safeModeAvailable > 0
   ) {
-    controller.activateSafeMode();
+    const code = controller.activateSafeMode();
+    counters.tried++;
+    if (code !== OK) counters.codes[String(code)] = (counters.codes[String(code)] ?? 0) + 1;
+  } else {
+    counters.guardMiss++;
   }
 }
 

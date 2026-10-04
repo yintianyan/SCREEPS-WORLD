@@ -4,6 +4,24 @@ import type { RoadBuildCounters } from "../domain/logistics/road-build";
 import type { ObserveCounters } from "../domain/intel";
 
 /**
+ * Safe mode 出口账本（#119）。为什么就地声明而不进 `domain/`：这三列只在
+ * 「系统侧写 → telemetry flush 读」之间流动，没有任何领域判据要吃它；放进 domain 反而
+ * 造出一个没人读的领域类型（#106/#107 那一族的教训）。
+ *
+ * 立案理由（线上）：`tryActivateSafeMode()` 丢弃 `activateSafeMode()` 的返回码，且四条前置
+ * 不齐时静默跳过 ⇒ 「最后防线该响没响」今天**不可归因**：现象是"核心被拆而什么都没发生"，
+ * 事后读不出是没次数、在冷却、还是引擎拒绝。三种形状要的动作不同（攒次数／等冷却／查 RCL）。
+ */
+export interface SafeModeCounters {
+  /** 四前置齐、真发出 `activateSafeMode()` 的次数。 */
+  tried: number;
+  /** 进了这道判据但前置不齐（**这一列 > 0 而 `tried` 为 0，才是"该响没响"**）。 */
+  guardMiss: number;
+  /** 非 OK 返回码直方图，键 = String(返回码)。不写枚举名——本服码集合按记忆造会错。 */
+  codes: Record<string, number>;
+}
+
+/**
  * per-tick 共享缓存槽的标准生命周期：同 tick 同 key 命中直接返回条目，
  * 未命中用 create 重建并写回。槽对象由调用方以 `??= {}` 就地创建，
  * 条目形状保持 GlobalCache 各槽声明不变，消除各处手写的 tick 守卫样板。
@@ -84,6 +102,8 @@ export interface GlobalCache {
   roadBuildLedger?: Record<string, import("../domain/logistics/road-build").RoadBuildCounters>;
   /** Observer 请求账本（写者 systems/room-observer.ts，读者 telemetry-collector 的 flush）。 */
   observeLedger?: Record<string, import("../domain/intel").ObserveCounters>;
+  /** Safe mode 出口账本（写者 systems/military/tower-defense.ts，读者 telemetry-collector 的 flush）。 */
+  safeModeLedger?: Record<string, SafeModeCounters>;
   /** per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，telemetry-collector flush。 */
   eventBuffer?: { events: import("./event-log").GameEvent[] };
   assignment?: AssignmentCache;
@@ -974,6 +994,18 @@ export function observeCounters(room: string): ObserveCounters {
     captured: 0,
     lostVision: 0,
     staleSlot: 0,
+  });
+}
+
+/** 取（或建行）某房的 Safe mode 出口账本（#119）。写者唯一：systems/military/tower-defense.ts；
+ * 读者：telemetry-collector flush ⇒ Memory.kernel.stats.safeMode。零值字面量全仓唯一建行处。 */
+export function safeModeCounters(room: string): SafeModeCounters {
+  const g = globalCache();
+  const ledger = (g.safeModeLedger ??= {});
+  return (ledger[room] ??= {
+    tried: 0,
+    guardMiss: 0,
+    codes: {},
   });
 }
 /** Screeps 沙箱 `global` 对象的类型安全访问器。
