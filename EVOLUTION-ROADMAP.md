@@ -5148,3 +5148,34 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 - 幼房花钱了：`W38S56 se 84,529→85,519`（+990/≈930 拍，比 R132 的 +6.3/拍 慢一个量级）、`ea 1800→1039`、`site 1`、`cte 2,340` ⇒ §3.5 一直缺的"盈余有没有去处"这一列现在有数了。
 - CPU：`window=5787t / total=15.88/拍` ⇒ 缺口 **3.88/拍**（R132 3.77，仍在涨）；榜上 remote 角色 1.99+0.85≈**2.84** ⇒ **A 路线杠杆追不上缺口**；每房 `{W38S58:0.362, W37S58:3.562, W38S56:3.422}`；人口 44（26/15/3）、`errorsPerTick 0`、`tier=tight@83387005`。
 - 边界：**零 src、零 push、零 build、零 npm**；探针 `check-code×1 + observe×1 + peek×1 + console-eval×1`（mark=B11；其 payload 的 `n`/`sk` 两列被显示截断 ⇒ **本轮不引用**，要用就拆小表达式）；读码 3 处；`.gitignore` 未 stage；git 领先 28 / behind 0。
+
+---
+
+### 巡检 R134（2026-10-04 02:4xZ，本会话）#115 第三次修订（最终措辞）：**不是死锁，也不是"一次 site 的量"——阻塞工地拿到工时靠的是"人数碰巧超过竞争工位的 maxWorkers"，实测冻结 3,695 拍**
+
+**一、自然实验的结（比预写的两个分支都拧）**
+- 读数：`container 2,197 → 3,029/5,000`（+832/≈902 拍 ≈0.92/拍）；**`spawn 0 → 64/15,000`**；房内 `worker×2 + builder×2`，两只 builder 分别绑 `…4c`(container，`assignedAt=83413331`) 与 **`…5a`(spawn，`assignedAt=83413556`)**。
+- 时间轴：site `queuedAt=83409861` ⇒ **恒 0 到 83413556 ≈ 3,695 拍 ≈ 2.7 小时**（拍长 2.62s），之后 466 拍只推进 64（≈**0.14/拍**）。
+- **解锁的因不是排序变对**：D1 下 container（剩 ≈2,400）仍然压 spawn（剩 14,936）；动是因为 container 的 `maxWorkers=2` 被占满，**新到的第三只 builder 只剩 spawn 可选**。⇒ R133 的降级方向对（撤"无界"），但"完工后场上只剩 spawn"说得太顺：那 11 条 queued 请求确实被 `p0-spawn` 挡着开不出 site，所以**编制 ≤2 时 spawn 只能等 container 完工；编制 =3 才提前解锁**。
+- **#115 定稿措辞**：`阻塞性工地能否拿到工时取决于随机到达的人数；实测冻结 3,695 拍；解锁后以 0.14/拍 爬行（15,000 ⇒ 单 builder ≈107,000 拍 ≈ 2.7 天）`。`c58ff9d` 去掉的是"等人数"那一段，并让 spawn 一开始就能拿到 2 个工位。**仍不催推**——理由见 §三。
+- ⚠️**撤回一条预注册判据**：`siteStaleWorkerIdle:W38S58:6ac17f2c…5a`（原预测 ≈83414861 起出现）**被它自己预测的事件打断**——spawn 的 `noProg` 在 83413556 归零 ⇒ 期望层不会再响。别再把它当"将来的独立定罪"。
+
+**二、第二段瓶颈（L2）现在是主限制，且量出来了**
+- spawn 上那只 builder 是 14W4C12M（**载重只有 200**）：`storage=23 < builderStorageLimit.low=2,000` ⇒ withdraw 按设计给 0；房里无已建成 container；源旁 container 还差 1,971。⇒ 交付侧就是新上界。**这是一个每环都有出口的串行链条，不是死锁**：源旁 container 完工（0.92/拍 ⇒ ≈2,140 拍）后取能不必再自采，spawn 建成后容量与编制一起解。
+- 与 `kernel.bootstrap={until:83414757, waves:2}` 对齐 ⇒ **下一件事是看 waves 是否 =3、spawn 工位是否 =2**（这是 L1 修复"本该起的作用"的自然对照，零改码）。
+
+**三、RCL8 迟滞带那条签名：判据本身坏掉（记进方法论）**
+- `controllerDowngradeRisk` true(≈83413055) → false(83414005) ⇒ 风险窗 **≈950 拍**自解（与 #52 [10000,>15000] 锯齿带一致）。
+- 但"≤600 拍出 upgrader"**无法证真也无法证假**：`bk` 本轮 `{harvested:1000, imported:2820}` 无 `upgraded` 键，而**这在 RCL8 按构造不可观测**（`upgraded`＝progress 差分、保级能量不入账——项目记忆第 5 类）；`controllerProgressChangedAt=83361266` ⇒ progress **52,739 拍未变**，同样测不到救援动作。
+- ⇒ **该签名作废并写清替代方案**：要证这类"短时窗内的编制响应"必须有**请求侧计数器/事件**，不能靠每小时采一发（950 拍的窗采不到），也不能拿标志回落当"已救援"。**不因此改任何阈值。**
+
+**四、读数方法论新增三条**
+- **`skip(500t)` 是滚动窗且会归零**：R133 `reserver 227/upgrader 225/builder 150` → 本轮 `12/12/8` **不是骤降**，是窗刚重启。跨轮比 skip 榜之前先确认窗位（旁证用 `tier=tight@83387005` 与 `cpuRate` 窗长）。
+- **Σ 与物理面这窗方向相反**：`gateNetFlow` 三房和 `4.210+4.007+(−0.150)=**8.067**`（R132 是 11.238，**在跌**），而帝国 storage 物理量 `972,318 → 990,594` = **+19.7/拍（在涨）**。⇒ **不做反解**（R132 已把"I 反解"撤出决策输入），只登记：**G4 吃的是 Σ，该盯的是 Σ 会不会跌破 5**；方向相反要同窗再取一次才谈机制。
+- **"单样本就改判"第三次现形**：R133 说 W38S56"开始花钱了"（`ea 1800→1039`），本轮它 `se 85,519→95,984`（**+11.3/拍**）、`ea 1800/1800`、`hc 2→3` ⇒ 又变回净攒。饱和同理：`storageNearFull` 仍 false 但 ratio 已 `0.8878 → 0.8946` **往回爬** ⇒ R133 的"episode 结束"不许读成"问题消失"。
+
+**五、其余（对端域只登记）**
+- E7/#111：`siteStaleWorkerIdle:W36S58:*` 仍 10 条，`noProg 5,868→6,786`（**每拍都加 ⇒ 真冻死**），`workers 5→3`（房内带 WORK 的我方 creep 在减）；`roadsBuilt W36S58 11→8、W37S57 32→28`；新车道 `W38S56→W37S56` 出现 `无site=94` 而 `sites=0`。⚠️不动 `roadHeat`/回收阈值，`e7-prefix-watch.sh`(PID 22299) 在跑同一件事。
+- W38S58 状态：`ColonyStateChange [0,1]`@83413965（bootstrap→recovery）、`PhaseTransition [0,3]` 同拍、`ea/ec=0`、`queue=5/13`、`roomTotal_rs 275→127`、home 人口 3→4（**wave3 还没发**）。
+- 闸与贸易：`G0+G2+G3+G6` 未变、`Readiness=NOT_READY`、`Budget=170,039/988,594`、`Candidates=11(Q=1,R=7,U=3)`；`demandsPublished=0/demandsComputed=0`（满仓入口条件本轮又是假 ⇒ #51"继续不发需求"仍是正确态）、`credits=14,505,346`。
+- 边界：**零 src、零 push、零 build、零 npm**；探针 `observe×1 + console-eval×1`（mark=B12，payload 刻意压到 2 列 ⇒ 无截断）`+ peek×1`；`.gitignore` 未 stage、`git stash list` 空、git 领先 29 / behind 0；`tier=tight@83387005`、`errorsPerTick 0`。
