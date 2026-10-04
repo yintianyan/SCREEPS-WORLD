@@ -7139,3 +7139,12 @@ R330 把 #113 的严重度抬上去之后（`recent` 里真有一份 `count=2688
 **末尾单列 4 条"挂着的 `未开始`"**（#100/#113/#111 完整价格/#119），每条都写清触发条件——**不为取证制造条件**（不动阈值、不发动战争、不销毁资产）。
 **L0 §7 七件产物的现状**：`ROADMAP`✅ `CAPABILITY_MATRIX`✅ `BASELINE`✅(R331) `CPU_BENCHMARKS`✅(R332) `EXPERIMENT_LOG`✅(本件) ⇒ **5/7 有真身**；剩 `KNOWN_ISSUES`（内容散在 `audit/`+roadmap #1xx+矩阵，无单一入口，半满足）与 `ITERATION_LOG`（由 roadmap 的 R### 序列兼任，已知一根时钟两用）。
 **边界**：零 src、零 push、零 build、零 npm、零探针（本件全部来自本会话已有出处）；commit 前索引为空；`.gitignore`(对端) 与两份未跟踪文档未 stage；含 src 未推仍 4 笔。goal active。
+
+---
+
+## 巡检 R334（20:1xZ）——§7 的另两件**刻意不补件**，改为一张坐标表（`docs/evolution/README.md`）
+
+R329 我给 §7 缺件开的两条路是"补件"或"写明映射"。对 `KNOWN_ISSUES` 与 `ITERATION_LOG` 选了后者，理由是**防漂移**：同一内容长两处必然过期（本仓已出现过同一缺口在 `audit/` 与 roadmap 各一份的情况），而这两个概念各自已有真身——`KNOWN_ISSUES` ＝ roadmap 的 #1xx 台账 + `audit/`（`FINDINGS.md` 唯一入口、`VERIFIED.md` 的 K 编号、`units/W**.md` 六步判定）；`ITERATION_LOG` ＝ 本文件的「巡检 R###」序列（**已知代价是一根时钟两用，我没掩饰，只把它写进表里**）。
+表里另加了三条"该往哪儿写"的判据与两条纪律：**只有文件搬家才动这张表**；**在 ⚠️ 两项被补件或在 L0 里写明映射之前，任何文件都不许声称 §7 已完成**（后者属人——我不单方改 L0，且该文件来历未定、一直未 stage）。
+**§7 现状**：5 件真身（ROADMAP/CAPABILITY_MATRIX/BASELINE/CPU_BENCHMARKS/EXPERIMENT_LOG）+ 2 件明确由既有文件兼任并登记了代价。
+**边界**：零 src、零 push、零 build、零探针；含 src 未推仍 4 笔；commit 前索引为空；`.gitignore`(对端) 与两份未跟踪文档未 stage。goal active。
