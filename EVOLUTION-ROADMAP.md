@@ -6510,7 +6510,7 @@ W37S58      994        0      0      0      0      0       0
 （两房的桶闭合：`882+465=1347=calls`、`0+488=488=calls` ⇒ 早退顺序读得通，没有第四种去向。）
 - 另一条照实记：**`built` 全帝国为 0**（本 boot 段一次被接受的 build() 都没有），而 `roadsBuilt` 有 13/4/2 ⇒ 存量路是更早建的，此后只进不出。**不据此定案**：boot 段短、且 pending 的 18/4 格进度在动（progSum 505/405），下一段要差分着读。
 
-### 三、L0 §3.4「失守房与资产损失」第一次有现场例证：W37S55 留着 2 只我方 spawn
+### 三、L0 §3.4「失守房与资产损失」第一次有现场例证：**#118** — W37S55 留着 2 只无人认领的我方 spawn
 两发独立读数（`R318A2` 与 `R318A4`，t 相差 20 拍）：
 `Memory.rooms` = `["W37S58","W38S56","W38S58"]`（自有房三口，`controller.my` 同集合）；而 **W37S55 不在 Memory、controller `my=false`/owner null/level 0，却仍有 2 只 `my===true`、owner=`yintianyan` 的 spawn**（Spawn4 内存能 300、Spawn3 0；`FIND_HOSTILE_SPAWNS=0`、我方 site=0）。
 ⇒ 这不是"读数怪"，是链的形状：**任何按 `Memory.rooms` / `ctx.snapshots()` 遍历的机制都天然看不见它** ⇒ 无人计账、无人使用、无人拆除。两只 spawn 的建造成本是 2×15,000 能量量级（口径：这是**造价推算**，不是现场读数，别当实测）。
