@@ -1,6 +1,7 @@
 import type { TaskPool } from "../domain/assignment/task-pool";
 import type { RemoteOpLedger, RemoteOpLedgerField } from "../domain/remote/op-ledger";
 import type { RoadBuildCounters } from "../domain/logistics/road-build";
+import type { ObserveCounters } from "../domain/intel";
 
 /**
  * per-tick 共享缓存槽的标准生命周期：同 tick 同 key 命中直接返回条目，
@@ -81,6 +82,8 @@ export interface GlobalCache {
    * **施工成没成**（build() 的返回值与投进去的能量）。不参与任何决策，只留证据。
    */
   roadBuildLedger?: Record<string, import("../domain/logistics/road-build").RoadBuildCounters>;
+  /** Observer 请求账本（写者 systems/room-observer.ts，读者 telemetry-collector 的 flush）。 */
+  observeLedger?: Record<string, import("../domain/intel").ObserveCounters>;
   /** per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，telemetry-collector flush。 */
   eventBuffer?: { events: import("./event-log").GameEvent[] };
   assignment?: AssignmentCache;
@@ -953,6 +956,24 @@ export function roadBuildCounters(room: string): RoadBuildCounters {
     roadProgressSum: 0,
     roadSitesPending: 0,
     roadsBuilt: 0,
+  });
+}
+
+/** 取（或建行）某自有房的 Observer 请求账本（#100 的仪器）。写者唯一：systems/room-observer.ts；
+ * 读者：telemetry-collector flush ⇒ Memory.kernel.stats.observe。零值字面量全仓唯一建行处 ——
+ * 类型契约在 domain/intel，内核不得值导入业务模块，所以零值在此就地构造。 */
+export function observeCounters(room: string): ObserveCounters {
+  const g = globalCache();
+  const ledger = (g.observeLedger ??= {});
+  return (ledger[room] ??= {
+    gate: 0,
+    noObserver: 0,
+    noTarget: 0,
+    ok: 0,
+    codes: {},
+    captured: 0,
+    lostVision: 0,
+    staleSlot: 0,
   });
 }
 /** Screeps 沙箱 `global` 对象的类型安全访问器。

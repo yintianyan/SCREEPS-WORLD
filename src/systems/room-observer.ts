@@ -8,7 +8,7 @@ import {
   type RoomObservation,
 } from "../domain/intel";
 import { getRoomIntel } from "./intelligence";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, observeCounters } from "../kernel/global-cache";
 import { log } from "../kernel/log";
 import { findSourcesCached } from "../creeps/support/room-scans";
 
@@ -75,8 +75,17 @@ export const roomObserverSystem: System = {
       }
 
       // Observer 视野调度：挑最陈旧的邻房请求视野，下一 tick 捕获。
-      if (snapshot.observer && ctx.tick % OBSERVE_INTERVAL === 0) {
-        requestObservation(snapshot.observer, snapshot.roomName, ctx.tick);
+      // ⚠️这里的顺序特意是「先判到点，再判有没有楼」：原先 `snapshot.observer &&` 挡在最外层，
+      // 于是 **#100 的三种形状在仪器上完全同形** —— 楼不存在 / 楼在但选不出目标 / 楼在但引擎
+      // 报错，全都表现为「什么都不发生」。到点判断只是取模，CPU 曲线不变（账本不许改曲线）。
+      if (ctx.tick % OBSERVE_INTERVAL === 0) {
+        const counters = observeCounters(snapshot.roomName);
+        counters.gate++;
+        if (snapshot.observer) {
+          requestObservation(snapshot.observer, snapshot.roomName, ctx.tick);
+        } else {
+          counters.noObserver++;
+        }
       }
     }
   },
@@ -116,8 +125,14 @@ function submitObservation(
  * 优先级：从未有过视野（sources 未知）> 视野数据最陈旧且超过阈值。
  */
 function requestObservation(observer: StructureObserver, homeRoom: string, tick: number): void {
+  const counters = observeCounters(homeRoom);
   const exits = Game.map.describeExits(homeRoom);
-  if (!exits) return;
+  if (!exits) {
+    // 本服实践中不发生（describeExits 对合法房名恒返回 4 出口）；归进 noTarget 而不是单独立列，
+    // 但记下来 —— 「一次都没请求」的归因必须完整，否则 noTarget 会莫名其妙少一截。
+    counters.noTarget++;
+    return;
+  }
 
   let target: string | undefined;
   let staleness = -1;
@@ -137,10 +152,19 @@ function requestObservation(observer: StructureObserver, homeRoom: string, tick:
       staleness = age;
     }
   }
-  if (!target) return;
+  if (!target) {
+    counters.noTarget++;
+    return;
+  }
 
-  if (observer.observeRoom(target) === OK) {
+  const code = observer.observeRoom(target);
+  if (code === OK) {
+    counters.ok++;
     pendingSlot().pending = { tick, targetRoom: target, homeRoom };
+  } else {
+    // 按原始返回码建直方图，不按名字枚举 —— 本服的码集合按记忆写会错。
+    // ERR_RCL_NOT_ENOUGH(-15) 与 ERR_NOT_IN_RANGE(-12) 是 #100 的两个候选答案（楼等级不够 vs 目标超出 10 房）。
+    counters.codes[String(code)] = (counters.codes[String(code)] ?? 0) + 1;
   }
 }
 
@@ -152,14 +176,21 @@ function captureObservedIntel(tick: number): void {
   const slot = pendingSlot();
   const pending = slot.pending;
   if (!pending) return;
+  const counters = observeCounters(pending.homeRoom);
   if (pending.tick !== tick - 1) {
     slot.pending = undefined;
+    // 请求成功过（ok++）但捕获那一拍没轮到 —— 系统被 CPU 档拒 / interval 错位。
+    // 单独立一列，是因为它和「视野真没来」是两种病（一种修调度，一种什么也不用修）。
+    counters.staleSlot++;
     return;
   }
   slot.pending = undefined;
 
   const room = Game.rooms[pending.targetRoom];
-  if (!room) return;
+  if (!room) {
+    counters.lostVision++;
+    return;
+  }
 
   const status = Game.map.getRoomStatus(pending.targetRoom).status;
   const payload = scanNeighborIntel(
@@ -170,6 +201,8 @@ function captureObservedIntel(tick: number): void {
     getRoomIntel(pending.targetRoom)?.payload, // prev — 保留 pathCost 等静态字段。
   );
   submitObservation(pending.targetRoom, pending.homeRoom, "observer", payload);
+  // 自洽式右端：ok === captured + lostVision + staleSlot。左端有数而右端全 0 ⇒ 捕获侧坏了。
+  counters.captured++;
 }
 
 /**

@@ -450,3 +450,41 @@ export function upsertPlayerObservation(
   if (tick > prevRoomTick) entry.rooms[roomName] = tick;
   players.set(owner, entry);
 }
+
+// ─── Observer 请求账本（#100 的仪器）──────────────────────────
+/**
+ * 「Observer 楼到底在不在、请求发没发、引擎怎么答、视野有没有真落下来」的落盘读数。
+ *
+ * 为什么必须有（线上）：#100 查「情报采集面窄」时发现，`room-observer` 的 observer 分支被
+ * `snapshot.observer &&` 挡在最外层 —— **楼不存在时整条链一声不响**，与「楼在但挑不出目标」
+ * 「楼在但引擎回 ERR_RCL_NOT_ENOUGH」三种情况在现有仪器上完全同形（四源全空，见 R307/R308）。
+ * 三种形状要的动作相反（盖楼 / 改选靶权重 / 改 RCL 前提），不能再靠推理挑。
+ *
+ * 本层只出类型：写者在 `systems/room-observer.ts`（heap 计数），读者是
+ * `systems/telemetry-collector.ts` 的 flush（`Memory.kernel.stats.observe`）与体检脚本。
+ *
+ * **自洽式（这台仪器自己的谎警器）**：`ok === captured + lostVision + staleSlot`。
+ * 左边有写者而右边三项全 0 ⇒ 捕获侧坏了；`ok` 恒 0 而 `gate>0` ⇒ 请求侧坏了或压根没有楼；
+ * `gate` 恒 0 ⇒ 本房从没轮到 OBSERVE_INTERVAL（interval/预算档问题，与楼无关）。
+ */
+export interface ObserveCounters {
+  /** 到点该发起观察的次数（分母；含没有 Observer 的房）。 */
+  gate: number;
+  /** 到点但本房没有 observer 结构 —— 这一列>0 就是 #100 的「楼不在」正面读数。 */
+  noObserver: number;
+  /** 有楼、到点，但一个邻房都没选中（全新鲜 / 全公路房）。 */
+  noTarget: number;
+  /** observeRoom 返回 OK 的次数。 */
+  ok: number;
+  /**
+   * 非 OK 返回码直方图，键 = String(返回码)。
+   * 故意不写死枚举名：本服返回码要按记忆造会错（R316 同族），原始码永远可读且可对照 @types。
+   */
+  codes: Record<string, number>;
+  /** OK 之后下一 tick 真拿到视野并入库的次数。 */
+  captured: number;
+  /** OK 之后下一 tick `Game.rooms` 里没有目标房（视野没来 / 被别处占用）。 */
+  lostVision: number;
+  /** 待捕获槽的 tick 不等于「上一 tick」—— 捕获机会被跳过（系统被拒 / interval 错位）。 */
+  staleSlot: number;
+}

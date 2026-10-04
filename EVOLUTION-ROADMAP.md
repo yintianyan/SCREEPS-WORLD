@@ -6447,3 +6447,28 @@ R316 普查 10 台 remoteHauler ⇒ W36S58/W37S57/W37S58 是 `[1W 20C 21M]`，W3
 
 ### 六、范围与边界
 只动 3 个 src 文件 + 1 个测试文件；**未改 `bodies.ts`、未改任何阈值/车道参数**（WORK 下限属人的决定，仍挂在 #111 待裁决）；`git status` 只有对端的 ` M .gitignore` 与两份未跟踪文档，一律未 stage；stash 空；本批含 `c76aad4`(#113) 共 **21 笔未推**（我的 R31x 与对端 R14x/R15x 两套编号交错、各自递增，已数过不撞号）；**未 push、未 build、未 npm、零 console 探针**（本轮全部结论来自代码与既有单测）。goal 保持 active。
+
+---
+
+## 巡检 R318（12:3xZ）——P1 观测补丁落地：`observeCounters` 把「Observer 楼在不在」从推理变成落盘读数（#100 的解锁件，未推）
+
+**为什么现在做**：#100 卡在四源全空（R307/R308 核过 intel 段、Memory、日志、代码，仍答不出「本帝国到底有没有 Observer 结构、请求发没发出去」）。根因是形状问题不是取证不够：`room-observer.ts` 原来写 `if (snapshot.observer && ctx.tick % OBSERVE_INTERVAL === 0)`——**楼不存在时整条分支一声不响**，与「楼在但选不出目标」「楼在但引擎回 ERR_RCL_NOT_ENOUGH」**三种形状同形**，而这三种要的动作互相矛盾（盖楼 / 改选靶权重 / 改 RCL 前提）。
+
+**改了什么（5 个文件，纯观测、零决策接入）**
+- `domain/intel.ts`：`ObserveCounters` 类型契约（含立案理由与自洽式）。
+- `kernel/global-cache.ts`：`observeCounters(room)` 唯一建行处 + `GlobalCache.observeLedger` 字段（照 `roadBuildLedger` 同一条路，不发明新机制）。
+- `systems/room-observer.ts`：把顺序改成**先判到点再判有没有楼**（到点判断只是取模，CPU 曲线不变），四个桶落盘：`gate`/`noObserver`/`noTarget`/`ok`/`codes[原始码]`/`captured`/`lostVision`/`staleSlot`。返回码**按 String(code) 建直方图、不写枚举名**——本服码集合按记忆造会错（R316 同族的第三次）。
+- `systems/telemetry-collector.ts`：flush 到 `Memory.kernel.stats.observe`（与 roadBuild 同一处、同一写法）。
+- `tests/unit/systems/room-observer-ledger.test.ts`：新文件 7 条，**跑真实 `roomObserverSystem.run(ctx)`**（不是测我自己手拼的形状），每个桶各由一条真实分支写出。
+
+**取证**：7/7 绿、`tsc --noEmit` 空。反向实验：把 `counters.noObserver++` 摘掉 ⇒ **恰好 2 红**（「没有楼」那条 + 「按房分桶」那条，两者都断言 noObserver），其余 5 条（gate 分母 / ok / codes / noTarget / staleSlot+lostVision 闭合）全绿 ⇒ 归因干净，不是"全摘全红"。复原后复跑 7 绿。
+
+**仪器自带的谎警器**：`ok === captured + lostVision + staleSlot`。有一条用例就在真实两次 run 序列上断这个闭合（第一拍 OK、第二拍无视野 ⇒ lostVision=1）——所以「左端有写者、右端全 0」这种 #106 型失效（计数器存在但从未被写）在本文件里当场可见。
+
+**★上线前的预报（先写死，再读数，不许事后解释）**
+1. `stats.observe.W37S58.noObserver === 0`（核心房 RCL8，楼应存在）。**若它 >0** ⇒ 不是"没有楼"，而是 `snapshot.observer` 这个字段没被快照填上 —— 那是另一个缺陷，且是这台仪器第一次读数就能区分的两种形状之一。
+2. `stats.observe.W38S56.noObserver > 0`（幼房 RCL<8，楼按构造不存在）。这一列第一次给"幼房没有楼"一个正面读数而不是推测。
+3. 核心房 `ok > 0` 且闭合式成立；若 `codes` 里出现 `-15`（RCL 不够）或 `-12`（超出 10 房）⇒ #100 的两个候选答案当场二选一，不必再猜。
+4. `gate === 0` 而房在自己手里 ⇒ 与本补丁无关的另一件事（系统被 CPU 档拒 / interval 没轮到），届时按 G6 那条线查，别算到这台仪器账上。
+
+**边界**：未推（`c76aad4`/`c2e3e30`/本笔共 **3 笔含 src 未推**，与对端的 R14x/R15x 文档批同在一个 `origin/dev..HEAD` 里 ⇒ 报"我未推几笔"时别把他们的算进来）；**没改 `bodies.ts`、没改 OBSERVE_INTERVAL、没接任何决策**；本笔只给 #100 提供读数入口，「加权重 vs 盖楼」仍属人；commit 前 `git diff --cached --name-only` 为空（共享索引检查过）；`.gitignore`(对端) 与两份未跟踪文档未 stage；零 console 探针、零 build、零 npm。goal active。
