@@ -7734,3 +7734,37 @@ mem  : stats.energyLedger.rooms.W38S56 = { harvested 149,460 , imported 81,585 }
 **这次自办为什么算推进而不算家务**：如果五件里任何一件的读法本身是坏的（路径写错、工具没跑通），部署后那一轮会把"仪器坏了"误读成"改动没生效"，
 而这两种情形的处置方向相反（前者要修仪器、后者要查上线）。对照已经取完 ⇒ 推之后**只需看键的出现与沿**，不需要临场猜。
 边界：零 src、零 push、零 build、零 npm install、零线上写动作（本轮全是只读 API）；`.gitignore` 与对方 R168 那行仍未 stage。
+
+## 巡检 R347（10-06 07:4xZ）——**#131 的两个读数已实现并带反向实验**（`07b38f92`，含 src 未推升到 7 笔）；顺带撤我自己一条被 #139 否证的旧说法
+
+**一、这一轮做了什么**：上一轮把 #131 立案到"只差一次形参读取"，本轮就把它读完了。
+零行为改动，两件仪器：
+- `stats.remainsLoot.<房>.buckets.<minAmount>` ＝ `seen/belowThreshold/eligible/resolved/executed/skippedMineralNoBank/skippedNoResource`。
+  分桶是因为要问的句子问不出来：`pickup.ts` 那句「零头由链尾无阈值实例顺手清理」是**设计意图不是执行证据**，
+  而引擎 `ceil(amount/1000)/拍` 让小堆**相对**衰减最快、排序键却是"最多者优先"——两档混一列时，
+  「阈值档什么都没筛掉」与「兜底档从没跑过」形状相同。闭合式三条（`seen === belowThreshold + eligible`、`resolved ≤ eligible`、
+  `executed + 两支放弃 === resolved`）让读侧能自证仪器没坏。成功侧**不另造仪器**（`pickedUp` 已在账本里），免得又欠一次对账。
+- `stats.remainsBlind.<房>` ＝ `snapshotTicks`(分母) + `inSnapshot` + `blindFiltered`。
+  `room-snapshot` 的 `store>0` 前置过滤 ⇒ 零容量遗留整个不进决策面，"选中后又空了/衰减殆尽"结构性看不见；
+  本轮**不改过滤口径**（那是另一笔权衡），只把被挡掉的量与分母记下来。
+
+**二、验收（含反向实验）**：新单测 8 例；把两处 `belowThreshold++` 摘掉 ⇒ **恰好 2 例转红**（正是钉这一列的那两例），其余 6 例与控制组全绿，文件 `cmp` 逐字节还原；
+全量 unit **393 文件 / 5,285 用例**、integration **30 / 239**、typecheck 退 0（prettier/eslint 在钩子里重排过一遍，重排后 8 例仍绿）。
+e2e **没跑＝不是失败**（`test:e2e` 自带 build，窗内跑就毁掉"本地 dist==线上"）。
+
+**三、撤我自己一条说法（#110 的第三支）**：我在 #110 里写的是「`Memory.kernel.escalations` **零读者**」。
+本轮读到对方的 **#139**：`RecoveryEscalation` 报表**第三列读的就是 `escalations[0].repeats`**——那是一个真读者，
+而且它的错正是"取了 `[0]`"（global 事件打 17、它自己那行 27，两列对不上）。
+⇒ **撤的是"零读者"这一支，不撤 #110 的其余两支**（不可行阈值按构造不可达、判定只落日志）。
+改判后的说法：台账**有一个读者，且读错了条目**——这条比"零读者"更值得修，因为读错的数会被人当证据引用。
+处置仍属人（与 #104/#106/#107 同一簇）。
+
+**四、上线后可判读的签名（零改动，已按"缺键＝未部署"的口径预写）**：
+`stats.remainsLoot` 与 `stats.remainsBlind` **出现**＝`07b38f92` 真上线；
+出现之后才谈读数——**正面读数形状**：阈值档 `belowThreshold>0 而 resolved=0`（＝零头不是它清的），
+同时兜底档（键 `"0"`）`resolved>0`（＝链尾确实在干活）。若两档 `resolved` 全 0 而 `seen>0`，
+那才是"注释骗人"——缓解不存在，排序问题升级为真问题。
+`remainsBlind.blindFiltered / snapshotTicks` 给出盲点率，>0 就说明"选中后落空"这一类确有体量、值得单独归因。
+
+**五、边界**：本轮零决策改动、零阈值改动、零 push、零 build、零 npm install、零线上写动作；`.gitignore` 未 stage。
+`ahead/behind` 与 7 笔待推的清单见交接文件。**唯一恢复动作仍是一个字：「推」**。
