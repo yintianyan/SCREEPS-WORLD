@@ -480,6 +480,14 @@ function sampleMemorySize(_tick: number): void {
       // Safe mode 出口账本（#119）：判「该响没响」——`guardMiss>0 而 tried=0` 是唯一的正面读数。
       (Memory.kernel.stats as any).safeMode = { ...g.safeModeLedger };
     }
+    if (g.remainsLootLedger && Object.keys(g.remainsLootLedger).length > 0) {
+      // 遗留物回收漏斗（#131 C1）：分桶才能回答"零头那一支到底跑没跑"。
+      (Memory.kernel.stats as any).remainsLoot = { ...g.remainsLootLedger };
+    }
+    if (g.remainsBlindLedger && Object.keys(g.remainsBlindLedger).length > 0) {
+      // 零容量遗留的盲点体量（#131 C2）：`blindFiltered / snapshotTicks` 才是它的率。
+      (Memory.kernel.stats as any).remainsBlind = { ...g.remainsBlindLedger };
+    }
     if (g.tradeLedger) {
       // 贸易决策现场快照（heap 原样落一份）：判"被闸挡掉"还是"跑了但决定不交易"。
       (Memory.kernel.stats as any).trade = { ...g.tradeLedger };

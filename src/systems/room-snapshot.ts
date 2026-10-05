@@ -2,6 +2,7 @@ import type { RoomSnapshot } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { classifyThreats, isSquadThreatCreeps } from "../domain/defense/threat";
 import { preloadStructureCache, preloadStaticBlockers } from "../creeps/movement";
+import { remainsBlindCounters } from "../kernel/global-cache";
 
 /**
  * 为单个自有房间构建 RoomSnapshot — 每 tick 唯一调用 room.find() 的地方，
@@ -93,8 +94,18 @@ export function buildRoomSnapshot(
   let tombstones: Tombstone[] = [];
   let ruins: Ruin[] = [];
   try {
-    tombstones = room.find(FIND_TOMBSTONES).filter(t => t.store.getUsedCapacity() > 0);
-    ruins = room.find(FIND_RUINS).filter(r => r.store.getUsedCapacity() > 0);
+    const allTombstones = room.find(FIND_TOMBSTONES);
+    tombstones = allTombstones.filter(t => t.store.getUsedCapacity() > 0);
+    const allRuins = room.find(FIND_RUINS);
+    ruins = allRuins.filter(r => r.store.getUsedCapacity() > 0);
+    // 盲点体量（#131 C2，heap，不参与任何决策）：上面的 `store>0` 过滤把零容量遗留
+    // 整个挡在决策面之外 ⇒ "被选中后又空了"这类竞态今天不可见。这里不改过滤口径，
+    // 只把被挡掉的个数与分母一起记下来——先定分子再定分母，率才能被读出来。
+    const blind = remainsBlindCounters(room.name);
+    blind.snapshotTicks++;
+    blind.inSnapshot += tombstones.length + ruins.length;
+    blind.blindFiltered +=
+      allTombstones.length - tombstones.length + (allRuins.length - ruins.length);
   } catch {
     // 常量未定义的环境（旧测试 mock）— 视为无遗留资源。
   }

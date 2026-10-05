@@ -2,6 +2,7 @@
 import type { ActionCandidate } from "../action-types";
 import { ACTION_RANGE_NEAR, runCountedAction } from "./helpers";
 import { selectDroppedEnergy } from "../../support/targeting";
+import { remainsLootBucket } from "../../../kernel/global-cache";
 
 /**
  * 拾取地上掉落的能量（来源：creep 死亡掉落、harvester 溢出、container 被毁残留）。
@@ -51,13 +52,22 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
     resolve: ac => {
       // 遗留物按「任意资源总量」筛选（不限能量）— 只装矿物的坟墓同样值得回收，
       // 否则满载矿物的 mineralMiner 死后，其矿物随尸体灭失（线上实证）。
+      // 实测漏斗（#131 C1，heap，不参与任何决策）：桶按 minAmount 分开，因为
+      // 「零头由链尾无阈值实例顺手清理」是下面注释里的**设计意图**，不是执行证据；
+      // 两档混在一列，"阈值档什么都没筛掉"与"兜底档从没跑过"长得一模一样。
+      const bucket = remainsLootBucket(ac.creep.room.name, minAmount);
       const candidates: (Tombstone | Ruin)[] = [];
       for (const t of ac.snapshot.tombstones) {
+        bucket.seen++;
         if (t.store.getUsedCapacity() >= Math.max(1, minAmount)) candidates.push(t);
+        else bucket.belowThreshold++;
       }
       for (const r of ac.snapshot.ruins) {
+        bucket.seen++;
         if (r.store.getUsedCapacity() >= Math.max(1, minAmount)) candidates.push(r);
+        else bucket.belowThreshold++;
       }
+      bucket.eligible += candidates.length;
       if (candidates.length === 0) return undefined;
 
       // 身边总量最多的优先。
@@ -71,13 +81,15 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
           richestAdjacent = c;
         }
       }
-      if (richestAdjacent) return richestAdjacent;
-
-      return ac.creep.pos.findClosestByRange(candidates) ?? candidates[0];
+      const picked =
+        richestAdjacent ?? ac.creep.pos.findClosestByRange(candidates) ?? candidates[0];
+      bucket.resolved++;
+      return picked;
     },
     execute: (ac, remains) => {
       // 取货：能量优先（多数场景），无能量则取尸体内最多的一种资源（矿物）。
       // 限量取：min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES 竞态置 idle。
+      const bucket = remainsLootBucket(ac.creep.room.name, minAmount);
       const carryFree = ac.creep.store.getFreeCapacity();
       let resource: ResourceConstant = RESOURCE_ENERGY;
       let available = remains.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -86,7 +98,10 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
         // 门禁：无 storage 且无 terminal 时不取矿物——矿物唯一卸货出口 haulMineralsToStorage
         // 需 storage/terminal，否则捡了无处倒，配 updateMode 总量口径 hauler 会冻结
         // （RCL1-3/新占房常有含矿 ruins）。
-        if (!ac.snapshot.storage && !ac.snapshot.terminal) return;
+        if (!ac.snapshot.storage && !ac.snapshot.terminal) {
+          bucket.skippedMineralNoBank++;
+          return;
+        }
         let best: ResourceConstant | undefined;
         let bestAmt = 0;
         for (const res of Object.keys(remains.store) as ResourceConstant[]) {
@@ -96,11 +111,15 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
             best = res;
           }
         }
-        if (!best) return;
+        if (!best) {
+          bucket.skippedNoResource++;
+          return;
+        }
         resource = best;
         available = bestAmt;
       }
       const amount = Math.min(available, carryFree);
+      bucket.executed++;
       // 墓碑/废墟取能＝散落资产回收，是真实经济流入（pickedUp），非搬运。
       // 注意矿物捡拾不计量（账本是能量口径）— intentAmount 只在能量分支对齐。
       runCountedAction(

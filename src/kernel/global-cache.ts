@@ -22,6 +22,50 @@ export interface SafeModeCounters {
 }
 
 /**
+ * 单个链位实例（按 `minAmount` 分桶）的回收漏斗。#131 的 C1。
+ * 自洽式（读侧可用来自证仪器没坏）：
+ *   `seen === belowThreshold + eligible`、`resolved ≤ eligible`、
+ *   `executed + skippedMineralNoBank + skippedNoResource === resolved`。
+ * 成功侧**不另造仪器**：`runCountedAction` 已把能量回收计入能量账本 `pickedUp`，
+ * 这里只补它给不出的一半——"有没有东西被阈值/门禁挡住"。
+ */
+export interface RemainsLootBucket {
+  /** 进入 resolve 的遗留候选数（阈值过滤**前**）。 */
+  seen: number;
+  /** 被本实例 minAmount 筛掉的候选数＝"零头"的流量。 */
+  belowThreshold: number;
+  /** 过阈可取的候选数。 */
+  eligible: number;
+  /** 真选出了一个目标（含随后被门禁放弃的）。 */
+  resolved: number;
+  /** 真发出了 `withdraw`。 */
+  executed: number;
+  /** 有意放弃：无 storage 且无 terminal 时不取矿物（`pickup.ts` 的文件头安全政策）。 */
+  skippedMineralNoBank: number;
+  /** 有意放弃：选出的目标里取不出任何资源（存量与背包口径竞态）。 */
+  skippedNoResource: number;
+}
+
+/** 遗留物回收账本（#131 C1）。桶键 = String(minAmount)，"0" 即链尾无阈值兜底档。 */
+export interface RemainsLootCounters {
+  buckets: Record<string, RemainsLootBucket>;
+}
+
+/**
+ * 快照侧盲点体量（#131 的 C2）：`room-snapshot` 先按 `store>0` 过滤，零容量遗留
+ * 根本不进决策面 ⇒ "被选中后又被取空/衰减殆尽"这类竞态今天**不可见**。
+ * 本计数器量的就是这个不可见面的体量，`snapshotTicks` 是它的分母（先定分子再定分母）。
+ */
+export interface RemainsBlindCounters {
+  /** 本房被采样过的拍数（分母）。 */
+  snapshotTicks: number;
+  /** 进了快照的非零遗留个数（分子之一）。 */
+  inSnapshot: number;
+  /** 被 `store>0` 挡在快照之外的零容量遗留个数（分子之二＝盲点体量）。 */
+  blindFiltered: number;
+}
+
+/**
  * per-tick 共享缓存槽的标准生命周期：同 tick 同 key 命中直接返回条目，
  * 未命中用 create 重建并写回。槽对象由调用方以 `??= {}` 就地创建，
  * 条目形状保持 GlobalCache 各槽声明不变，消除各处手写的 tick 守卫样板。
@@ -104,6 +148,10 @@ export interface GlobalCache {
   observeLedger?: Record<string, import("../domain/intel").ObserveCounters>;
   /** Safe mode 出口账本（写者 systems/military/tower-defense.ts，读者 telemetry-collector 的 flush）。 */
   safeModeLedger?: Record<string, SafeModeCounters>;
+  /** 遗留物回收账本（写者 creeps/engine/actions/pickup.ts，读者 telemetry-collector 的 flush）。 */
+  remainsLootLedger?: Record<string, RemainsLootCounters>;
+  /** 零容量遗留的盲点体量（写者 systems/room-snapshot.ts，读者同上）。 */
+  remainsBlindLedger?: Record<string, RemainsBlindCounters>;
   /** per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，telemetry-collector flush。 */
   eventBuffer?: { events: import("./event-log").GameEvent[] };
   assignment?: AssignmentCache;
@@ -1006,6 +1054,42 @@ export function safeModeCounters(room: string): SafeModeCounters {
     tried: 0,
     guardMiss: 0,
     codes: {},
+  });
+}
+
+/** 取（或建行）某房的遗留物回收账本（#131 C1）。写者唯一：creeps/engine/actions/pickup.ts。 */
+export function remainsLootCounters(room: string): RemainsLootCounters {
+  const g = globalCache();
+  const ledger = (g.remainsLootLedger ??= {});
+  return (ledger[room] ??= { buckets: {} });
+}
+
+/**
+ * 取（或建行）某房某链位的漏斗（桶键 = String(minAmount)）。
+ * 零值字面量全仓唯一建行处——新增列只改这里，否则旧条目缺键会被 `+=` 写成 NaN。
+ */
+export function remainsLootBucket(room: string, minAmount: number): RemainsLootBucket {
+  const counters = remainsLootCounters(room);
+  const key = String(minAmount);
+  return (counters.buckets[key] ??= {
+    seen: 0,
+    belowThreshold: 0,
+    eligible: 0,
+    resolved: 0,
+    executed: 0,
+    skippedMineralNoBank: 0,
+    skippedNoResource: 0,
+  });
+}
+
+/** 取（或建行）某房的零容量遗留盲点（#131 C2）。写者唯一：systems/room-snapshot.ts。 */
+export function remainsBlindCounters(room: string): RemainsBlindCounters {
+  const g = globalCache();
+  const ledger = (g.remainsBlindLedger ??= {});
+  return (ledger[room] ??= {
+    snapshotTicks: 0,
+    inSnapshot: 0,
+    blindFiltered: 0,
   });
 }
 /** Screeps 沙箱 `global` 对象的类型安全访问器。
