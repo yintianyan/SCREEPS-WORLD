@@ -702,3 +702,29 @@ contract:W37S58:W38S58:energy  st=A  td=0  cs=0  ca=ua=ac=83,410,216  ⇒ 冻结
 补写回（让 carrier 的实交付回流到 `td`）会第一次产生数、并使 `consecutiveShortfall→degraded→终态` 那套状态机有意义；
 不补则这层连同它的三个兄弟模块是**只有单测在跑的平行宇宙**（同 `#107` 的 domain 层 33/225 零导入者那一族）。
 两个方向都改变代码规模，都不该我代做；本轮把证据与判据摆齐。
+
+---
+
+## §25 L0 §3.4「扩张与帝国管理」八项记录（R349，10-06 07:5xZ）：**三枚引擎 API 都真在产线，而"扩张"这一层的仪表盘整簇无人调用**
+
+> 名字一律取自本轮 `node_modules/@types/screeps/index.d.ts`（行号现读）。
+> **计数以 §25 为准**：§3.8 八项记录已完成 **6 项**（§20 Observer／§21 Safe Mode／§22 Power-PC／§23 衰减与遗留物／§24 供给合同层／§25 扩张层）；§24 里那句"5 项"自本节起作废（撤的只有计数）。
+
+| §3.8 要求 | 本轮记录 |
+|---|---|
+| **官方规则** | `Creep.claimController(target): CreepActionReturnCode \| ERR_FULL \| ERR_GCL_NOT_ENOUGH \| ERR_ACCESS_DENIED`（`@types:1269`）；`Creep.reserveController(target): CreepActionReturnCode \| ERR_ACCESS_DENIED`（`:1531`）；`StructureController.unclaim(): ScreepsReturnCode`（`:6032`，**没有专用错误码族**，与 claim 不对称）。相关常数族存在但**类型只声明为 `number`**：`CONTROLLER_CLAIM_DOWNGRADE`（`:325`）、`CONTROLLER_RESERVE`/`CONTROLLER_RESERVE_MAX`（`:326-327`）、`CONTROLLER_DOWNGRADE`（`:322`，是 level→数值 的映射）、`GCL_POW`/`GCL_MULTIPLY`（`:372-373`）。⇒ **本服取值一律记"未标定"**，不许引用成已知数（§20 那次错案就是把口头数当事实）。 |
+| **前置条件** | 引擎侧：GCL 决定可 claim 数、`ERR_GCL_NOT_ENOUGH` 是硬失败。本仓侧四道（读码＋现场）：①候选池（intel 驱动的 `discovery`/`candidate`）；②执行门禁 `expansionAllowed`（G0 类，`#34` 已核其口径＝RCL/核心房）；③CPU 档（**现场＝`kernel.capacity.tier="constrained"`，`since=83,425,106`**）；④姿态（war/fortify 期关扩张，`#7`/`#92`）。 |
+| **输入与输出** | 输入＝`domain/intel` 的邻房载荷（sources/owner/towers/enemySpawns，见 §20 更正后的口径）＋房级净流与储备。输出＝三条真动作：`claimer.ts:24` 发 claim、`reserver.ts:47` 发 reserve、`territory-manager.ts:161` 发 unclaim（释放链已线上判效）。中间态写 `Memory.kernel.expansion.*`（6 处引用点）。 |
+| **资源成本** | **未标定**：`CLAIM` 零件造价、claim/reserve 的每次能量扣减（引擎按 body part 扣）本轮没读现场值。已知的只有一条**实测**事实：扩张的代价以"拍"计而非能量——历史上两次自然扩张各耗 ~13,300 拍量级（`#32` 端到端判效记录）。 |
+| **CPU 成本** | **未记录**（没做标定）。但**档位是决策面读数**：现读 `constrained` 已持续 `83,455,501 − 83,425,106 = 30,395` 拍（按实测拍长 3.92 s/拍 ≈ **33 小时**）⇒ 扩张今天是被 CPU 档按住的，不是被候选按住。 |
+| **相关 API** | `attackController`（`:1223`，本仓**未用**：本轮 `grep` 无调用点——记为能力未用，不记为缺陷）；`Controller` 上的 `safeMode*` 见 §21；`GCL` 相关只声明未消费。 |
+| **失败条件** | 三条动作里只有 `claimController` 有专用码（`ERR_GCL_NOT_ENOUGH` 等），`unclaim()` 返回通用 `ScreepsReturnCode` ⇒ **释放失败的归因面比 claim 窄**（历史上确实踩过，见"释放已线上走完"那条判效）。层内更大的失败是**结构性的**：见下行。 |
+| **与现有模块的关系**（本节的实质发现） | **`domain/expansion` 32 个模块中 8 个"层外零导入者"**（口径＝只算 `src/domain/expansion/` 之外的引用者，层内互引**不算**接进产线——这条口径是本节自抓的，第一遍我按 `expansion/<名>` 搜，`from "./autonomy"` 这类同目录引用被漏成假零）。其中：<br>· **一簇 4 个模块整体死着**：`colony-dashboard`（层外 0 个导入者）是 `autonomy`、`colony-failure`、`stability-score` 的**唯一**引用者 ⇒ 这四个互为孤儿。<br>· **4 个彻底零引用**：`evaluator`、`execution-dashboard`、`execution-operation`、`roi-tracker`（连层内都没人 import）。<br>· ⚠️ **命名陷阱（当场登记）**：`evaluator.ts` 零导入，但注释里"扩张评估器"确实在消费情报——那指的是 `discovery`/`candidate` 一侧。**别按注释去找 `evaluator.ts`，会去改一个死文件**（本仓老错：注释里的数据源只当线索）。 |
+
+**现场读数（含控制组，先证同形状可读才承认"不存在"）**：`kernel.capacity={"tier":"constrained","since":83425106,"upgradeTicks":0}`、`kernel.situation.tick=83,455,501`（`adversaries={}`，与 #108 的"按人敌意恒 0"一致）、`kernel.expansion` **不存在**、`kernel.claims` 不存在。
+⇒ 关于 `kernel.expansion` 缺席**本轮不下结论**：历史上扩张端到端跑通过两次（键应是阶段性的），而"谁在什么条件下创建它"我没读完 ⇒ 记 **待查**，不推成"扩张链没跑"。这正是 §20 错案换来的规矩：**读不到痕迹 ≠ 不存在**。
+
+**分档**：`WIRED`＝三条引擎动作（claim/reserve/unclaim 都有生产调用点）＋门禁链。`EXERCISED`＝claim 路径**有过线上成功**（两次自然扩张，`#32` 判效）；`reserve` 在远矿场景真发过（reserver 角色在线）；`unclaim` 已线上判效（释放链）。**8 个层外零导入模块＝NOT WIRED**，与 #107（domain 33/225 零导入）同一族，且本节给出该层的**精确分母 32/8**。
+
+**对属人决定的意义**：#107 现在多了一个具体抓手——`domain/expansion` 里**先处理那 4 个彻底零引用的模块**（`evaluator`/`execution-dashboard`/`execution-operation`/`roi-tracker`）与**那簇 4 个互为孤儿的仪表盘**（`colony-dashboard`+3）。
+删除还是接线，仍属人：接线的代价是给"扩张仪表盘"补一条产线读者，而扩张当下被 CPU 档按住（`constrained` 33 小时）——**先解 CPU 还是先修可见性，是取舍不是 bug**。

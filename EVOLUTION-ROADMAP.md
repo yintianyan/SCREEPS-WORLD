@@ -7783,3 +7783,17 @@ e2e **没跑＝不是失败**（`test:e2e` 自带 build，窗内跑就毁掉"本
 不补＝它与三个兄弟模块构成"只有单测在跑的平行宇宙"（同 **#107** 的 domain 33/225 零导入者一族）。两个方向都改变代码规模，**属人**。
 **#97 计数**：5/8（§20/§21/§22/§23/§24），§23 里那句"4 项"自 §24 起作废。
 边界：本轮零 src、零 push、零 build、零 npm install、零阈值改动、零线上写动作（取数全走只读 API）；`.gitignore` 与对方未提交物不 stage；`git stash` 里那条 lint-staged 自动备份不属于我，未动。
+
+## 巡检 R349（10-06 07:5xZ）——矩阵 **§25** 做成（#97 → **6/8**）：扩张层三枚引擎 API 全在产线，但 `domain/expansion` 32 个模块里 **8 个层外零导入者**（含一簇 4 个互为孤儿）
+**引擎面（名字取自 @types 现读）**：`claimController` 返回码含专用 `ERR_GCL_NOT_ENOUGH`（`:1269`）、`reserveController` 只有 `ERR_ACCESS_DENIED`（`:1531`）、`unclaim()` 只有通用 `ScreepsReturnCode`（`:6032`）⇒ **释放的归因面天生比 claim 窄**，这与当年释放链踩过的坑同向。`CONTROLLER_CLAIM_DOWNGRADE`/`CONTROLLER_RESERVE(_MAX)`/`GCL_POW`/`GCL_MULTIPLY` 全被声明成裸 `number` ⇒ **本服未标定**，一律不许引用成已知数（§20 的错案就是这么来的）。`attackController`（`:1223`）无调用点＝能力未用，不是缺陷。
+
+**这层的实质发现（口径先说清，因为它差点是假阳性）**：`domain/expansion` 共 **32** 个模块，**8 个在层外零导入者**。
+第一遍我按 `expansion/<名>` 搜 ⇒ 同目录的 `from "./autonomy"` 一类引用被漏掉、把活的报成死的；改成"层外引用者"口径后才成立。**层内互引不算接进产线**——这是本节的关键判据。
+· **一簇 4 个整体死着**：`colony-dashboard`（层外 0 引用）是 `autonomy`、`colony-failure`、`stability-score` 的唯一引用者 ⇒ 四者互为孤儿。
+· **4 个彻底零引用**：`evaluator`、`execution-dashboard`、`execution-operation`、`roi-tracker`。
+· ⚠️ 命名陷阱登记：注释里的"扩张评估器"活在 `discovery`/`candidate` 一侧，**不是** `evaluator.ts`；照注释去改就是改一个死文件。
+
+**现场（含控制组）**：`kernel.capacity={"tier":"constrained","since":83,425,106}`、`kernel.situation.tick=83,455,501`（`adversaries={}`，与 #108 一致）⇒ **扩张今天被 CPU 档按住 30,395 拍 ≈ 33 小时**（按实测拍长 3.92 s/拍），不是被候选池按住。`kernel.expansion` 不存在——**但本轮不据此下结论**：历史上扩张端到端跑通过两次（键应是阶段性的），"谁在什么条件下创建它"我没读完 ⇒ 记 **待查**（§20 换来的规矩：读不到痕迹 ≠ 不存在）。
+
+**属人意义**：#107 现在有精确抓手（该层 32/8 分母 + 上面 8 个名字）。"先解 CPU 还是先修可见性"是取舍不是 bug；删除或接线都不该我代做。
+**#97 计数**：6/8（§20–§25），§24 的"5 项"自本节起作废。边界：零 src、零 push、零 build、零 npm install、零线上写动作；`.gitignore` 与对方未提交物不 stage；`git stash` 里那条 lint-staged 自动备份不属于我。
