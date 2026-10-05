@@ -632,7 +632,7 @@ Observer 这一格的八项现在是：官方规则✔（docs：hits500/RCL8/造
 ## §23 L0 §3.1/§3.2 交点「衰减与遗留物回收」八项记录（**标题经 R345 更正，原判归属见本节末**）（R345，10-05 05:1xZ）：**回收链四段齐全，但整条链不知道"寿命"这个量存在**
 
 > 名字与常数一律取自本轮 `node_modules/@types/screeps/index.d.ts`（行号为现读），不靠记忆造名。
-> 本节 **计数以 §23 为准**：§3.8 的八项记录已完成 **4 项**（§20 Observer／§21 Safe Mode／§22 Power-PC／§23 本节）；
+> 本节 **计数已由 §24 取代（5 项）**，原文保留：本节 **计数以 §23 为准**：§3.8 的八项记录已完成 **4 项**（§20 Observer／§21 Safe Mode／§22 Power-PC／§23 本节）；
 > §21 末那句「目前做成 2 项」**自本节起作废**（它写在 §22 之前，属陈旧行而非我新造的结论）。撤的只有"计数"，§21 的八项内容不动。
 
 | §3.8 要求 | 本轮记录 |
@@ -670,3 +670,35 @@ Observer 这一格的八项现在是：官方规则✔（docs：hits500/RCL8/造
 **成因值得记**："§3.4 掉落物与衰减"是我自己在交接文件里给选题起的**内部标签**，下一轮把它当成 L0 的正式编号引用，于是**我自己造的名字反过来给我自己的记录归了档**——与 §20 那三条假缺口（我按脑内方法名去搜）是同族错误，只是这次发生在**编号**而不是方法名上。
 ⇒ 规矩追加一条：**引用任何外部文档的编号前，回到那份文档把那一节标题读一遍**；自拟标签一律加"（自拟）"前缀。
 **本节的证据、内容、计数（4/8）与两条负向结论都不因这次更正而改变**——错的只有归属标签。
+
+---
+
+## §24 L0 §3.3「跨房资源网络 / 供给合同层」八项记录（R348，10-06 07:4xZ）：**创建链活着、记账链整条死着——合同台账的 0 不是"没交付"，是"没人写"**
+
+> 本节记录的是**本仓自研机制**（不是引擎 API）。引擎侧字段一律标"无引擎规则项"或"未记录"，
+> 不许把口头数写进成本列。线上数字全部现读（`peek.mjs`，控制组同工具同形状先读通）。
+
+| §3.8 要求 | 本轮记录 |
+|---|---|
+| **官方规则** | **无引擎规则项**——`SupplyContract` 是领域层自定义对象（`src/domain/economy/supply-contract.ts:60+` 的字段设计原则自述：瘦快照、只存 ID+数字+枚举、终态后归档）。物理交付靠 carrier/terminal，引擎侧对应关系见 §3.3 的搬运记录（`#42/#48` 已线上判效：两侧同窗等量入账）。 |
+| **前置条件** | 文件头写明：`Contract 的 source 房每周期通过 **contract-node-bridge** 适配器注入为 SupplyNode、target 房注入为 DemandNode`；`recordDelivery` 的注释写明：`每周期由**系统侧薄壳**调用——传入本周期 deliveredAmount 之和`。⇒ **这两句都是"设计承诺"，本轮现读结论是：承诺的两个调用方在 `src/` 里都不存在**（见"失败条件"）。 |
+| **输入与输出** | 输入＝房级净流/储备评选（创建者两处：`systems/room/logistics-planner.ts`、`systems/empire/specialization-planner.ts`，均真导入）。输出＝`Memory.kernel.supplyContracts`（缩写列 `i/s/t/r/tr/mr/p/st/ca/ua/ac/td/cs/dm/rs`，读侧 `logistics-planner.ts:263 collectContracts()`）。 |
+| **资源成本** | 内存：每条 14 键、当前 2 条 ⇒ 可忽略。能量：本合同层本身不消耗。**CPU：未记录**（本轮没做标定，`route-efficiency.ts` 里 PathFinder 相关开销未测）。 |
+| **相关 API** | 领域纯函数六枚：`isContractActive` / `isContractTerminal` / `recordDelivery` / `findActiveContract` / `computeCycleAmount` / 快照编解码；兄弟模块 `contract-node-bridge.ts`、`contract-lifecycle.ts`、`route-efficiency.ts`。 |
+| **失败条件** | **三处零生产导入者**（本轮现跑 `grep -rln 'from "...<模块>"' src/`）：`contract-node-bridge` **0**、`contract-lifecycle` **0**、`route-efficiency` **0**。`recordDelivery` 的调用点只有 `tests/unit/economy/supply-contract.test.ts`（3 处），**`src/` 内 0 个写者**。⇒ 状态机（`active/degraded/completed/cancelled`）无人推进、交付字段无人累加。**这不是缺一次调用，是整条写回链从未接线**（`#106` 的重述）。 |
+| **与现有模块的关系** | ①**同一名字两种语义（登记）**：`recordDelivery` 在 `domain/economy/supply-contract.ts:291` 与 `domain/operation/remote-mining-op.ts:342` **各定义一次**，签名不同、口径不同——以后 grep 这个词必须分两处读。②物理流另有其账：真实跨房交付由 carrier 完成并落进能量账本（`#42/#48` PASS），**与合同台账并行存在、互不相通**。③读侧存在但拿到的是零值输入 ⇒ 任何"按合同收紧供给"的下游今天拿到的都是创建时快照。 |
+
+**线上读数（现读，`t≈83,455,155`；控制组＝同工具同形状先读到 `rooms.W37S58.phase = steady / reserve=854,002` 才承认下面的"零"有意义）**
+```
+contract:W37S58:W38S56:energy  st=A  td=0  cs=0  ca=ua=ac=83,316,316  ⇒ 冻结 138,839 拍（≈150 小时）
+contract:W37S58:W38S58:energy  st=A  td=0  cs=0  ca=ua=ac=83,410,216  ⇒ 冻结  44,939 拍（≈49 小时）
+```
+`tr=180/340`、`mr=200,000`、`rs=network-surplus-deficit-pair`。⇒ **创建活着（第二条只有 4.5 万拍的年龄，说明今天还在生成新合同），台账死着（三条时间戳恒等、`td` 恒 0）**。
+读侧要防的错：`td=0` 同时兼容"从没交付"和"交付了没人记"两种世界——**本次是靠两条独立证据把它判成后者**：`#42/#48` 的现场 `+1,200/+1,200` 同窗等量入账 + `recordDelivery` 零 src 写者。单看 `td=0` 会定成前者。
+
+**分档**：`WIRED` ＝ 创建（两系统）、持久化（Memory 快照）、读侧（planner 消费）。`NOT WIRED` ＝ node 注入、交付写回、生命周期推进、route-efficiency。`EXERCISED` ＝ "合同被创建并落盘"为**真**（上表读数）；"合同台账反映真实交付"为**假**（结构性不可能，无写者）。
+
+**对 #106 的意义（属人决定的证据版）**：这层的处境不是"补一行接线"，而是**"要不要留着它"**——
+补写回（让 carrier 的实交付回流到 `td`）会第一次产生数、并使 `consecutiveShortfall→degraded→终态` 那套状态机有意义；
+不补则这层连同它的三个兄弟模块是**只有单测在跑的平行宇宙**（同 `#107` 的 domain 层 33/225 零导入者那一族）。
+两个方向都改变代码规模，都不该我代做；本轮把证据与判据摆齐。
