@@ -155,3 +155,32 @@ node tmp/tools/official/check-code.mjs                          # 先确认二�
 **(b) 抬 `limit`**（`Game.cpu.limit` 是 20 而 `tickLimit` 已到 500 ⇒ 借 bucket 不改变档位算法里的 `min(limit,tickLimit)=20`，所以这条只能靠订阅/算力来源，不是代码能改的）；
 **(c) 降"固定项"**（§4 标定过：固定项实测 ≈6.7/t，与 `cpuSystemTotal 6.03` 同量级 ⇒ 所谓"固定"基本就是系统榜本身，回到 (a)）。
 **这一节没有改任何代码、没有动任何阈值**；它只是把一个看起来"还有一条路"的问题算成"只剩一个真选择"。
+
+---
+
+## 9. 段 1 读法与人口普查的覆盖率陷阱（10-06 08:4xZ，R356）——**同一份 CPU 数，除以 11 还是除以 42，差 4 倍**
+
+**读法（纯只读、一次 GET、不打 console）**：`GET /api/user/memory-segment?segment=1&shard=shard3`，**头必须是 `X-Token`**（我第一次用 `Cookie: auth_token=` 拿到的是 `{error}`，那是我的请求形状错，不是数据缺失）。
+段 1 顶层三通道：`cpu`（300 样本环，每 10 拍一条，跨 2,990 拍）、**`population`（单一最新快照，不是环）**、`heap`（`t/used/total/limit`，IVM 256MB 风险通道）。
+
+**现读快照**（`t=83,456,205`）：`hv=4, ha=5, up=2, bd=0, wk=0` ⇒ **普查合计 11 只**；而同一时刻 `console` 样本 `Game.creeps` 共 **42 只**。
+写者证据：`telemetry-collector.ts:287-291` 只统计 `harvester/hauler/upgrader/builder/worker` 五个角色 ⇒ **remote 系、carrier、distributor、attacker、reserver、healer、labTender 全部不进普查**（覆盖率 26%）。
+交叉验证（这把"窄"与"错"分开了）：普查的 `hv/ha/up` 与 console 逐角色计数 **4/5/2 完全相等** ⇒ 仪器在它数的范围内是准的，问题只是范围。
+⇒ **硬后果**：任何"每只 creep 多少 CPU"若用普查总数当分母，会把单价**高估约 4 倍**（11 vs 42）。§8 的 0.171 用的是 console 的 42，是对的；
+而"读段就能算斜率"这条路在普查被扩到全角色之前**不成立**——这是一条**可一行修好的观测缺口**（把角色枚举换成 `Object.keys(计数)`），但它属于 src 改动，本轮没做。
+
+**同一次读到的两个直接结论**：
+1. `avg10 < 12` 的**最长连续驻留 = 0 tick**（300/291 个采样步全不达标），单样本 cpu 分布 `min=14.6 p10=17.1 p50=19.2 p90=22.1 max=24.5`
+   ⇒ comfortable 档在这 2,990 拍（≈3.1 小时）里**一次都没接近过**，#50 的"接受 constrained"因此不是"再等等看"，而是**判据与现实是否匹配**的问题。
+2. `mi=6`（idle 模式 creep）/`ma=28`/`mw=9`/`mf=0`：闲置占 counted 模式的六分之一，但这三个数只覆盖被普查的那 11 只口径 ⇒ **不许**把它当全帝国的闲置率读（同一覆盖率陷阱）。
+
+**自我更正（三分钟前我自己写错的一条）**：我在交接里写"普查不在 Memory、peek 读不到 ⇒ 只能发 console 探针"。**后半句是错的**——
+`capacity-reach.mjs`/`econ-ring.mjs`/`death-count.mjs` 早就在用 `memory-segment` 端点读段 1/2/3。撤的是"只能 console"这一支；
+"peek.mjs 读不到段"这一支仍然成立（它只走 Memory 端点）。
+CAL
+git add docs/evolution/CPU_BENCHMARKS.md && git commit -q -m 'docs(cpu): 段1读法＋人口普查覆盖率陷阱（普查只数 5 个角色＝11/42 只，用它当分母会把 creep 单价高估约 4 倍）＋avg10<12 在 2,990 拍里驻留 0 tick
+
+读法：GET /api/user/memory-segment?segment=1&shard=shard3，头必须 X-Token（我用 Cookie: auth_token 试过，拿到 {error} —— 那是我的请求形状错，不是数据缺失）。段 1 有 cpu(300 样本环)/population(单快照)/heap 三通道。
+交叉验证把"窄"与"错"分开：普查 hv4/ha5/up2 与 console 逐角色计数完全相等 ⇒ 仪器在它数的范围内是准的，只是 :287-291 只枚举五个角色、覆盖 26%。修法是一行（换成全角色计数），但那是 src 改动，本轮没做。
+两个直接结论：comfortable 在这段窗口里一次都没接近（min 单样本 14.6、p50 19.2），所以 #50 的"接受 constrained"是判据与现实是否匹配的问题而不是再等等；mi=6 这类模式数同样只覆盖 11 只口径，不许当全帝国闲置率读。
+自我更正：我三分钟前写的"只能发 console 探针"是错的——capacity-reach/econ-ring/death-count 一直在用 memory-segment 端点；撤"只能 console"这一支，"peek 读不到段"仍成立。' && echo HEAD=$(git log --format=%h -1)
