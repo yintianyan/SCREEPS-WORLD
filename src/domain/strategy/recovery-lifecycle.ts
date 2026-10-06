@@ -909,6 +909,13 @@ export interface EscalationUpsertResult {
   list: EscalationEntry[];
   /** 是否值得记一条事件：新案例，或同一案例跨过心跳窗。 */
   shouldEmit: boolean;
+  /**
+   * **本次被 upsert 那一条**的 repeats（不是 `list[0]` 的）。
+   * 为什么由函数给而不是调用方自己查：清单的身份判据是 `(room, domain, actionType)`，
+   * 而新条目 `unshift`、旧条目原地更新不移位 ⇒ `list[0]` 只代表"最近新建的那条"，
+   * 更新非队首条目时它属于**另一个房/另一个域**（#139 的错因就在调用方读了 `list[0].repeats`）。
+   */
+  repeats: number;
 }
 
 /**
@@ -932,14 +939,15 @@ export function upsertEscalation(
     const shouldEmit =
       existing.terminal !== input.terminal ||
       input.tick - existing.lastAt >= ESCALATION_EVENT_HEARTBEAT_TICKS;
+    const repeats = existing.repeats + 1;
     list[idx] = {
       ...existing,
       lastAt: input.tick,
-      repeats: existing.repeats + 1,
+      repeats,
       attempts: input.attempts,
       terminal: input.terminal,
     };
-    return { list, shouldEmit };
+    return { list, shouldEmit, repeats };
   }
 
   list.unshift({
@@ -952,5 +960,5 @@ export function upsertEscalation(
     attempts: input.attempts,
     terminal: input.terminal,
   });
-  return { list: list.slice(0, ESCALATIONS_CAP), shouldEmit: true };
+  return { list: list.slice(0, ESCALATIONS_CAP), shouldEmit: true, repeats: 1 };
 }

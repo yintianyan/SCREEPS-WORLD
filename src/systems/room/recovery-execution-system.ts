@@ -1105,14 +1105,14 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
               recordEvent(EventKind.RecoveryEscalation, escRoom, [
                 newRecord.attempts,
                 newRecord.state === "terminal" ? 1 : 0,
-                esc.list[0]?.repeats ?? 1,
+                esc.repeats,
               ]);
             }
             log.info(
               "recovery",
               `[${tick}] recovery: ESCALATION ${record.type}` +
                 ` domain=${record.domain} reason="${escalation.reason}"` +
-                ` corr=${record.correlationId} repeats=${esc.list[0]?.repeats ?? 1}`,
+                ` corr=${record.correlationId} repeats=${esc.repeats}`,
             );
           }
 

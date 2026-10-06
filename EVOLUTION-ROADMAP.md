@@ -7813,3 +7813,16 @@ e2e **没跑＝不是失败**（`test:e2e` 自带 build，窗内跑就毁掉"本
   ⇒ **把 main 相位那 2.76 全砍光也够不到 4.14**。差额只可能来自 `creeps 7.18`（动作数/编制）或 `post`，或接受档位。
 - 所以 #50 的真实形状不是"找一个大户"，是**"要不要缩活动量"**。取舍仍属人，但选项集现在是量出来的。
 边界：零 src、零 push、零 build、零 npm install、零阈值改动、零线上写动作（全只读 API；含一次 40 秒的拍长标定等待）；`.gitignore` 与对方未提交物不 stage。
+
+## 巡检 R351（10-06 08:1xZ）——**把 #139 修掉了**（对方定案、我这轮落地）：`RecoveryEscalation` 的第三列不再读 `escalations[0]`
+**错因（读码闭合，不是推断）**：`upsertEscalation` 对**已存在**条目是原地更新、不移位，而新条目走 `unshift` ⇒ `list[0]` 只代表"最近**新建**的那条"。
+调用方两处（事件 payload 与日志）都读 `esc.list[0]?.repeats ?? 1` ⇒ **升级非队首条目时报的是别房/别域的次数**。对方的天然实验读数（`d=[3,1,17]`，global 那条自己 27）与此完全吻合。
+**修法放在函数侧而不是调用侧**：结果里新增 `repeats`（两个分支各自本来就知道该给什么），调用方改读 `esc.repeats`。
+理由：清单身份判据是 `(room, domain, actionType)`，让调用方自己找回"刚更新那条"就是**重述一遍判据**——那正是本次出错的地方；取一次、两处用。
+**回归用例**（`recovery-escalation-list.test.ts`）：建 A、建 B（B 抢到队首）、再连升 A 三次 ⇒ `A.repeats=4`、`list[0].repeats=1`（B，无关条目）、`result.repeats=4`。
+**反向实验**：把 `repeats` 改回旧来源 `list[0]?.repeats ?? 1` ⇒ **恰好 1 例转红**，且报错就是 `expected 1 to be 4`（这个 bug 的签名），其余 6 例绿；还原后 `grep list\[0\]?.repeats src/` ＝ **0 处**。
+**我自己这轮也红过一次，且是好事**：新用例第一次跑失败在 `shouldEmit`——我**猜**了 100 拍的间隔，而它落在心跳窗内。
+改成用导入的常数 `ESCALATION_EVENT_HEARTBEAT_TICKS` 推间隔后全绿。⇒ 写判据不许硬猜节拍常数，能 import 就 import。
+**影响面（照对方口径压住，不夸大）**：这条只改**观测通道**（事件第三列＋日志一列），不改任何决策；`EventKind.RecoveryEscalation` 在 `src/` 仍零消费者 ⇒ 今天受益的是事后复盘读得对不对，不是行为。
+门禁：unit **393 文件 / 5,286 用例**、integration **30 / 239**、typecheck 退 0。**含 src 未推升到 8 笔**。
+边界：零 push、零 build、零阈值改动、零线上写动作；`.gitignore` 与对方未提交物不 stage。
