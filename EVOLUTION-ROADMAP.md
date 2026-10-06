@@ -7826,3 +7826,23 @@ e2e **没跑＝不是失败**（`test:e2e` 自带 build，窗内跑就毁掉"本
 **影响面（照对方口径压住，不夸大）**：这条只改**观测通道**（事件第三列＋日志一列），不改任何决策；`EventKind.RecoveryEscalation` 在 `src/` 仍零消费者 ⇒ 今天受益的是事后复盘读得对不对，不是行为。
 门禁：unit **393 文件 / 5,286 用例**、integration **30 / 239**、typecheck 退 0。**含 src 未推升到 8 笔**。
 边界：零 push、零 build、零阈值改动、零线上写动作；`.gitignore` 与对方未提交物不 stage。
+
+## 巡检 R352（10-06 08:2xZ）——**#140 落地**：姿态转换那一拍现在自带"走了哪条分支"；顺手抓到一个更硬的第二缺陷
+**做了什么**：`posture.ts` 的 `finalize` 新增 `reason: PostureBranch`（8 枚字面量，**命名对齐分支条件而非注释意图**），八个 return 各自标注；
+结果与 `Memory.kernel.strategy.branch` 一起落盘，并在**转换那一拍**写 `Memory.kernel.postureTransition={from,to,reason,tick}`。零决策改动——只加可读性。
+
+**★顺手抓到的第二缺陷（比 #140 原报的更硬）**：`empire-strategy.ts` 里原先有
+```
+if (Memory.kernel.strategy?.posture !== undefined) { Memory.kernel.postureChangedAt = Game.time; }
+```
+而 `Memory.kernel.strategy` 在**同一次 run 的更早处**（`:113`）已被覆写成当前姿态 ⇒ 这个条件**恒真**，
+`postureChangedAt` **每拍被覆写**——它从来就不是"变更时刻"，而是"本拍时刻"。
+⇒ 这解释了对方为什么只能靠 console 考古：**不是缺列，是那列一直在撒谎**。修法＝把写戳移进真正的转换分支（`:101` 那个 `prev?.posture !== result.posture`），并删掉每拍覆写。
+
+**验收**：新增 8 例分支标签用例（和平/威胁内未达止损/止损到顶/危机撤资/进攻授权/驻留未到/静默期满/威胁内维持），
+全部从 `DEFAULT_POSTURE_OPTIONS` 推节拍、**不写死数字**（#139 那轮我刚为猜常数红过一次）。
+**反向实验**：把止损分支错标成 `war-sustain` ⇒ **恰好 1 例转红**、错文正是 `expected 'war-sustain' to be 'war-exit-patience'`，其余 44 例绿；文件还原。
+全量 unit **393 文件 / 5,294 用例**（+8）、typecheck 退 0；integration 待下轮随批复跑（本改动纯观测面，未触碰引擎调用）。
+**上线后的免费复证（不制造条件）**：`kernel.strategy.branch` 应每拍有值、`kernel.postureTransition.tick` 应**只在姿态变化时跳变**
+——后者就是"那列不再撒谎"的直接证明；下一次自然进/出 war 时一并复证 #92/#101 的推断。
+边界：零 push、零 build、零阈值/决策改动、零线上写动作；`.gitignore` 与对方未提交物不 stage。**含 src 未推 9 笔。**

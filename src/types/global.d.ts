@@ -409,8 +409,18 @@ declare global {
     tier?: CpuTier;
     /** 最近一次 CpuTier 变更 tick（驻留时长观测）。 */
     tierChangedAt?: number;
-    /** 最近一次 posture 变更 tick（决策质量观测）。 */
+    /** 最近一次 posture 变更 tick（决策质量观测）。#140：只在变更那一拍写。 */
     postureChangedAt?: number;
+    /**
+     * 最近一次 posture 变更的现场（#140）：`reason` 是判定走的那条分支，
+     * 复盘 war 进/出时不再需要 console 考古（原先只有日志＋每拍被覆写的 changedAt）。
+     */
+    postureTransition?: {
+      from: string;
+      to: string;
+      reason: string;
+      tick: number;
+    };
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
     /** B3-F09: 上一 500-tick 窗口的 skipReasons 快照（滑动窗口保留）。 */
@@ -573,6 +583,8 @@ declare global {
     strategy?: {
       /** 当前姿态：develop 固本 / expand 扩张 / fortify 设防 / war 战争。 */
       posture: "develop" | "expand" | "fortify" | "war";
+      /** 当前姿态由哪条分支维持（#140；变更那一拍另见 kernel.postureTransition）。 */
+      branch?: string;
       /** 当前姿态的起始 tick（滞回与耐心窗口的基准）。 */
       since: number;
       /** 指令：是否允许启动新的扩张行动。 */

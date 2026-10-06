@@ -411,3 +411,76 @@ describe("empire posture — 能量危机≠战争（recovery/bootstrap 经济�
     expect(r.posture).toBe("war");
   });
 });
+
+describe("empire posture — #140 分支标签（转换那一拍走了哪条 return）", () => {
+  const o = DEFAULT_POSTURE_OPTIONS;
+  // 节拍常数一律从导出的默认值推，不写死数字（同批 #139 的教训：猜常数会让判据红在测试自己身上）。
+  const hit = (over: Partial<PostureInput> = {}) => evaluateEmpirePosture(input(over));
+
+  it("和平路径 → peace", () => {
+    expect(hit().reason).toBe("peace");
+  });
+
+  it("威胁窗口内 + prev=develop → threat-hold-fortify", () => {
+    const r = hit({
+      rooms: [room({ lastHostileAt: tick - 1 })],
+      prev: { posture: "develop", since: tick - 9999 },
+    });
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("threat-hold-fortify");
+  });
+
+  it("威胁窗口内 + prev=war + 未达止损 → war-sustain", () => {
+    const r = hit({
+      rooms: [room({ lastHostileAt: tick - 1 })],
+      prev: { posture: "war", since: tick - 50 },
+      warPressureTicks: 0,
+    });
+    expect(r.posture).toBe("war");
+    expect(r.reason).toBe("war-sustain");
+  });
+
+  it("威胁窗口内 + prev=war + 压力计满 → war-exit-patience（R4 止损）", () => {
+    const r = hit({
+      rooms: [room({ lastHostileAt: tick - 1, economyPressure: o.warMaxPressure + 0.01 })],
+      prev: { posture: "war", since: tick - 50 },
+      warPressureTicks: o.warExitPatienceTicks - 1,
+    });
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("war-exit-patience");
+  });
+
+  it("prev=war + 危机房在场 + 无活敌 → war-divest-crisis（危机撤资先于止损判据）", () => {
+    const r = hit({
+      rooms: [room({ colonyState: "recovery" })],
+      prev: { posture: "war", since: tick - 50 },
+    });
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("war-divest-crisis");
+  });
+
+  it("prev=fortify + 驻留够 + 打得起 → war-enter-patience（进攻授权）", () => {
+    const r = hit({
+      rooms: [room({ lastHostileAt: tick - 1 })],
+      prev: { posture: "fortify", since: tick - (o.warPatience + 1) },
+    });
+    expect(r.posture).toBe("war");
+    expect(r.reason).toBe("war-enter-patience");
+  });
+
+  it("威胁消退 + 最短驻留未到 → hold-min-dwell（姿态不变但原因可读）", () => {
+    const r = hit({
+      prev: { posture: "war", since: tick - (o.minDwell - 1) },
+    });
+    expect(r.posture).toBe("war");
+    expect(r.reason).toBe("hold-min-dwell");
+  });
+
+  it("威胁消退 + 静默期满 → silence-elapsed 回 develop", () => {
+    const r = hit({
+      prev: { posture: "war", since: tick - o.minDwell },
+    });
+    expect(r.posture).toBe("develop");
+    expect(r.reason).toBe("silence-elapsed");
+  });
+});

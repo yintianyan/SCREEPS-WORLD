@@ -87,7 +87,34 @@ export interface PostureInput {
 }
 
 /** 姿态评估结果 — 姿态 + 各域指令（执行系统只消费指令）。 */
+/**
+ * 本次姿态由哪条分支产生（#140）。
+ *
+ * 立案理由（线上实测）：`finalize` 原先不带"走了哪个 return"的信息，而 war 进/出的候选分支有六条，
+ * 每次复盘都要现场考古——对方量过代价：console 2 发＋`econ-ring` 1 发＋读码 5 处，
+ * 最后仍只能说「起点夹在 (355,365]」。命名一律对齐**分支条件**，不对齐注释里的意图。
+ */
+export type PostureBranch =
+  /** prev=war 且任一房 recovery/bootstrap 且无活敌 ⇒ fortify（危机撤资，经济前置）。 */
+  | "war-divest-crisis"
+  /** 威胁窗口内、prev=war、压力计数到达 warExitPatienceTicks ⇒ fortify（R4 止损）。 */
+  | "war-exit-patience"
+  /** 威胁窗口内、prev=war、未达止损 ⇒ 继续 war（压力计数累加或清零）。 */
+  | "war-sustain"
+  /** 威胁窗口内、prev=fortify、驻留≥warPatience 且打得起且非危机 ⇒ war（进攻授权）。 */
+  | "war-enter-patience"
+  /** 威胁窗口内的其余情形 ⇒ fortify（含驻留未到、危机下不开战）。 */
+  | "threat-hold-fortify"
+  /** 威胁已消退但最短驻留未到 ⇒ 保持原姿态（滞回防抖）。 */
+  | "hold-min-dwell"
+  /** 威胁已消退且静默期满 ⇒ develop。 */
+  | "silence-elapsed"
+  /** 无威胁记忆路径 ⇒ expand/develop 由 expandHealth 决定。 */
+  | "peace";
+
 export interface PostureResult {
+  /** 本次判定走的分支（#140）。 */
+  reason: PostureBranch;
   posture: EmpirePosture;
   /** 当前姿态的起始 tick。 */
   since: number;
@@ -160,7 +187,16 @@ export function evaluateEmpirePosture(
   // fortify —— recovery/bootstrap 是比威胁记忆更强的经济信号，战争机器烧的是存活所需的
   // 经济。统一覆盖「威胁仍在窗口」与「威胁已消退」两条路径（早于此处分流）。
   if (prevPosture === "war" && anyRecovery && !liveThreat) {
-    return finalize("fortify", prevPosture, since, tick, 0, liveThreat, expandHealth);
+    return finalize(
+      "fortify",
+      prevPosture,
+      since,
+      tick,
+      0,
+      liveThreat,
+      expandHealth,
+      "war-divest-crisis",
+    );
   }
 
   // ── 威胁升级：立即生效（紧急旁路，不等驻留期）──
@@ -173,9 +209,27 @@ export function evaluateEmpirePosture(
       const nextCounter =
         avgPressure > options.warMaxPressure ? (input.warPressureTicks ?? 0) + 1 : 0;
       if (nextCounter >= options.warExitPatienceTicks) {
-        return finalize("fortify", prevPosture, since, tick, 0, liveThreat, expandHealth);
+        return finalize(
+          "fortify",
+          prevPosture,
+          since,
+          tick,
+          0,
+          liveThreat,
+          expandHealth,
+          "war-exit-patience",
+        );
       }
-      return finalize("war", prevPosture, since, tick, nextCounter, liveThreat, expandHealth);
+      return finalize(
+        "war",
+        prevPosture,
+        since,
+        tick,
+        nextCounter,
+        liveThreat,
+        expandHealth,
+        "war-sustain",
+      );
     }
     // war 授权来自「持续被打 + 打得起」的证据链，与是否存在进攻代码无关 —
     // 执行器必须听姿态的，反之不成立。
@@ -186,18 +240,54 @@ export function evaluateEmpirePosture(
       avgPressure <= options.warMaxPressure &&
       !anyRecovery
     ) {
-      return finalize("war", prevPosture, since, tick, 0, liveThreat, expandHealth);
+      return finalize(
+        "war",
+        prevPosture,
+        since,
+        tick,
+        0,
+        liveThreat,
+        expandHealth,
+        "war-enter-patience",
+      );
     }
-    return finalize("fortify", prevPosture, since, tick, 0, liveThreat, expandHealth);
+    return finalize(
+      "fortify",
+      prevPosture,
+      since,
+      tick,
+      0,
+      liveThreat,
+      expandHealth,
+      "threat-hold-fortify",
+    );
   }
 
   // ── 威胁消退：降级需要最短驻留期（滞回防抖）──
   if (prevPosture === "fortify" || prevPosture === "war") {
     if (dwellElapsed < options.minDwell) {
-      return finalize(prevPosture, prevPosture, since, tick, 0, liveThreat, expandHealth);
+      return finalize(
+        prevPosture,
+        prevPosture,
+        since,
+        tick,
+        0,
+        liveThreat,
+        expandHealth,
+        "hold-min-dwell",
+      );
     }
     // 静默期满回 develop（不直接跳 expand，先确认经济恢复节奏）。
-    return finalize("develop", prevPosture, since, tick, 0, liveThreat, expandHealth);
+    return finalize(
+      "develop",
+      prevPosture,
+      since,
+      tick,
+      0,
+      liveThreat,
+      expandHealth,
+      "silence-elapsed",
+    );
   }
 
   // ── 和平姿态选择：expand（授权殖民）需要全面健康 + 核心成熟 ──
@@ -212,6 +302,7 @@ export function evaluateEmpirePosture(
     0,
     liveThreat,
     expandHealth,
+    "peace",
   );
 }
 
@@ -238,10 +329,12 @@ function finalize(
   warPressureTicks: number = 0,
   liveThreat: boolean = false,
   expandHealth: boolean = false,
+  reason: PostureBranch = "peace",
 ): PostureResult {
   const since = posture === prevPosture ? prevSince : tick;
   const freeze = liveThreat;
   return {
+    reason,
     posture,
     since,
     expansionAllowed: expandHealth && !freeze && posture !== "war",

@@ -102,8 +102,18 @@ export const empireStrategySystem: System = {
       log.info(
         "empire-strategy",
         `strategy: posture ${prev?.posture ?? "(none)"} → ${result.posture}` +
-          ` (rooms=${rooms.length}, gcl=${Game.gcl?.level ?? 1}, bucket=${Game.cpu.bucket ?? "?"})`,
+          ` (rooms=${rooms.length}, gcl=${Game.gcl?.level ?? 1}, bucket=${Game.cpu.bucket ?? "?"})` +
+          ` branch=${result.reason}`,
       );
+      // #140：转换那一拍落盘「从哪条分支走到的」。此前只有日志（人读），复盘时要么靠
+      // 日志翻页、要么靠 console 现场考古（实测 2 发＋1 发环＋5 处读码仍留 ±5 拍）。
+      Memory.kernel.postureChangedAt = Game.time;
+      Memory.kernel.postureTransition = {
+        from: prev?.posture ?? "(none)",
+        to: result.posture,
+        reason: result.reason,
+        tick: Game.time,
+      };
       recordPlanningDecision("empire", true);
     } else {
       recordPlanningDecision("empire", false);
@@ -112,6 +122,7 @@ export const empireStrategySystem: System = {
 
     Memory.kernel.strategy = {
       posture: result.posture,
+      branch: result.reason,
       since: result.since,
       expansionAllowed: result.expansionAllowed,
       newRemoteOpsAllowed: result.newRemoteOpsAllowed,
@@ -234,9 +245,9 @@ export const empireStrategySystem: System = {
           ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${Math.min(Game.cpu.limit, Game.cpu.tickLimit)})`,
       );
     }
-    if (Memory.kernel.strategy?.posture !== undefined) {
-      Memory.kernel.postureChangedAt = Game.time;
-    }
+    // #140：原先这里有 `if (strategy?.posture !== undefined) postureChangedAt = Game.time`，
+    // 而 `strategy` 在本 tick 早已被覆写成当前姿态 ⇒ 该条件恒真、戳记每拍刷新，
+    // 于是"变更发生在哪一拍"永久读不出来。变更戳与分支改到上面真正的转换分支里写。
     Memory.kernel.capacity = {
       tier: capacity.tier,
       since: capacity.since,
