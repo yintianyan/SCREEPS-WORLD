@@ -59,12 +59,21 @@
    `Memory.rooms.W38S58` 仍按自有房维护（`colonyState=recovery` ≈27,351 拍、孵化队列 3 条）。
    机制两条都有出处：收支循环按 `economy.ts:62-63` 的 `controller.my===true` 过滤 ⇒ **丢房瞬间该房对自己的账本隐形**；
    领土侧 `releaseAt` 只由主动释放写（`territory-manager.ts:112-114`）⇒ **没有"意外丢房"这条分支**。
-   且 `ticksToDecay` 现读 undefined ⇒ 这两枚建筑不会自己消失，长期占 `gcl.usedSpaces`（我方 spawn 7 枚 vs `gcl.level=5`）。
+   且 `ticksToDecay` 现读 undefined ⇒ 这两枚建筑不会自己消失。
+   ⚠️**R373 就地撤一句**：我原文写"长期占 `gcl.usedSpaces`（我方 spawn 7 枚 vs `gcl.level=5`）"——**那句不成立**：
+   7 是我探针里 `Object.keys(Game.spawns).length`（**spawn 普查数**），我把它命名成 `gclUsed` 后就当"GCL 名额被占"来引，
+   而 `Game.gcl.usedSpaces` 是**在建工地数**、本会话**从未读过** ⇒ 变量的名字替我做了我没做的测量（同族错：名与量不符）。
+   要判"它是否还挤建造名额"，下一发现读 `Game.gcl.usedSpaces` 与 `Game.gcl.level` 再说。
    **处置属人**（reclaim / 清算 / 补一条丢房检测），我不代做也不拆。
 2. **【已点名，等拍板】扩张的唯一失败门是 G6（#50 / R370）**：`expansionDashboard.failedGates` 现读只有
    `["G6: CPU tier(v=constrained|tier ≤ comfortable)"]`；传导是 G6 ⇒ `isReady=false` ⇒ `readySince` 从不累计（4 张 Plan 停 `EVALUATED`）
    ⇒ 无 `WAITING_EXECUTION` ⇒ 无第四房。现读 `cpuAvg10=19.5/20`、`constrained` 已 ≈33,900 拍 ⇒ 进 comfortable 需 −7.5/t，
-   而系统侧整榜砍光 ≈−2.9/t。**排序与第 1 条互相咬**：丢掉的房还在收结构性 CPU 税，而这项税正是扩张的闸。
+   而系统侧整榜砍光 ≈−2.9/t。**⚠️R373 撤掉我原文与第 1 条的那句因果**（"丢掉的房还在收结构性 CPU 税，而这项税正是扩张的闸"）：
+   现读该房 **0 creep**、`cpuByHome` **不记它**、`economy.ts:62-63` 的收支循环**跳过它**
+   ⇒ 它能加的每拍成本只剩"8 处**无条件**遍历 `Memory.rooms` 的循环多一个条目"
+   （清单：`war-planning-system`、`war-planner`、`remote-mining-manager`、`prospect-manager`、`power-farm-manager`、
+   `expansion/bootstrap-lane`、`telemetry-collector`、`telemetry/metrics/SpawnMetrics`）——**量级未测，且几乎不可能填上 −7.5/t 的缺口**
+   ⇒ 所以第 1 条与第 2 条**不构成因果**，只是两件事都该修；把它们排在一起的理由是"生存级优先于发展级"，不是"修了丢房就能扩张"。
 3. **【解锁件，仍然卡在授权】把 11 笔未推 src 上线**：八条边沿签名的预部署对照已全部取完（R358/R346 两套），
    其中 `stats.observe`（`994bf542`）是 **战争线唯一能由帝国自己买到的直接视野**的判读前提——
    现读情报池 7～11 个房**全为无主**（`mine=0`、`unowned=7`），三趟 war 期 pass 全 `candidates=0/plans=0`（#114）。
