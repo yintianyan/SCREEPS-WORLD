@@ -8313,3 +8313,45 @@ heap 复位的见证器是 `kernel.stats.energyLedger.tick`——现读 **834318
 **四、两条留给下一发的自核项（都别当已证）**：
 ①`summary` 说 `Candidates=13(Q=4,R=8,U=1)`，而 `kernel.expansionCandidates.length=10`——两个数不同刻、且 dashboard 的 13 可能含别的桶 ⇒ **先读 `Candidates` 的分桶口径再判是不是仪表说谎**（本仓这类"同一屏两个数"错过两次）。
 ②`Pressure=HIGH(0.69)`：压力高与我今天读到的 recovery 房（W38S58）是否同源，未读 `pressure.dimensions` ⇒ 不下结论。
+
+## 巡检 R371（10-06 11:5xZ / 03:5xZ UTC）——**本会话第一条生存级读数：W38S58 已经不再是我们owned的房了，而领土机器从头到尾没参与**
+**起点是一个"仪表停了"的旁证**：R369 读到 `cpuByHome` 只剩 `{W37S58, W38S56}`，W38S58 掉榜。当时我写下"不读写者就不下结论"。这一轮按纪律把它查到底。
+
+**一、Memory 侧（只读 peek，控制组同批）**：
+`rooms.W38S58.colonyState="recovery"`、`colonyStateSince=`**`83431754`**（⇒ 已 **≈27,351 拍**）；
+`rooms.W38S58.economy.t=`**`83444420`**（⇒ 经济快照**已 14,685 拍没被写过**）；`spawnQueue.length=3`（首条是 `upgrader/priority=1/home=W38S58`）。
+**控制组**（同工具同形状）：`W37S58.economy.t=83459079`、`W38S56.economy.t=83459068`（都只落后二三十拍、`colonyState="normal"`）
+⇒ **仪器在全帝国范围内是活的，只有 W38S58 这一路停了**——不是 `energyLedger` 那种"创建戳被误读成新鲜度"的假案。
+
+**二、线上侧（一发只读 console 探针，两次独立表达式互证）**：
+`Game.rooms.W38S58.controller` → **`my:false`、`level:0`、`owner:false`**（第一次探针 `ctrlOwner="undefined"` 同向）；
+`spawnsInW38S58=1`（**我们的 spawn 还在里面**）、`creepsHomeW38S58=`**`0`**、全局 `creepsTotal=33`；
+`Memory.rooms` 只有 **`W37S58,W38S56,W38S58`** 三枚；`Game.gcl.level=5`、我方 spawn 总数 7。
+⇒ **这个房现在无主**：控制器掉到 RCL0、没有 owner，而我方建筑还留在场内。
+
+**三、"是不是我们主动放弃的"——已否证**：`releaseAt` 这个标记**只有领土机器主动释放时才写**
+（`src/systems/empire/territory-manager.ts:112-114`：`releaseAt` 是下游"别再为这房花钱"的标记；`migrations/late.ts:430` 只清洗非有限值）。
+现读 **`rooms.W38S58.releaseAt` 不存在** ⇒ **不是一次有记录的释放**。
+对照 W37S55（那是走完释放链、房已从 Memory 摘掉的形态）。
+⇒ 所以形状是：**claim 掉了，而帝国的"哪些房归我"模型仍然把 W38S58 当自有房在维护**（recovery 态、孵化队列都还挂着）。
+
+**四、与恢复链对上（这条把 #139/#110 从"读数形状"接到了一个真实结局上）**：
+本会话早些时候读到的 `kernel.escalations[0]` = `{room:W38S58, actionType:population_rebuild, repeats:17, terminal:true}`（另一条 global 的 `repeats=27`）
+⇒ **恢复系统为这个房反复补员 17 次、最终判 terminal**。今天看到的 `creepsHomeW38S58=0` 就是那个 terminal 之后的稳态：
+没有 creep、没有经济写入、房无主、spawn 留下。
+
+**五、能证明的与不能证明的，分开写**：
+✔ 已证：**此刻** W38S58 无主（两次探针同向）；Memory 仍把它当自有房（无 `releaseAt`、队列在跑、recovery 态）。
+✔ 已证：经济仪器对这一路已停 14,685 拍，而全局仪器正常（控制组）。
+✘ **未证**：claim **具体何时**丢的。`economy.t` 停在 83444420 只给一个上界假设（"写入停是因为不再 owned"），
+  两者相关性合理但没独立证据；`colonyStateSince=83431754` 是"进入 recovery"的时刻，不是"丢房"的时刻。
+✘ **未证**：`cpuByHome` 掉榜的确切口径（EMA 只计有 creep 的房？还是 recovery 期不计？）——现在有了自然解释候选（0 creep ⇒ 无归属 CPU），
+  但我仍没读写者那一行，不当结论。
+
+**六、下一轮该问的问题（属人，我不代答）**：领土机器只处理"主动释放指令"，**没有任何一条路径处理"claim 意外消失"**
+⇒ 后果是三件：①留在无主房的 spawn 是死资产（还占 `Game.gcl.usedSpaces`）；②`Memory.rooms` 里挂着一个永不满足的 recovery/孵化队列；
+③它同时还在给扩张让路（G6 因为 CPU 被这些结构性开销占住而判 `constrained`，见 R370/#50）。
+要不要现在回收这枚 spawn、要不要给"丢房"补一条检测与清算路径，属 L0 的资产处置与领土政策——**我只把形状与账目摆出来**。
+
+边界：本轮**零改码、零 push、零 build、零拆除动作**（探针是纯读表达式；未对任何结构做 destroy/dismantle）；
+`.gitignore` 与两份未跟踪文档仍未 stage。
