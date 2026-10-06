@@ -7913,3 +7913,36 @@ creep 相位 `7.18 ÷ 42 ≈ **0.171 CPU/只·拍**`。口径限制写在数字�
 **但没有专项单测**：`samplePopulationData` 是模块私有函数，为它开测试口需要新导出一个仅供测试的符号，不值这一轮的钱。
 ⇒ 真实证明押在上线后的两行读法上：`population.n` **出现**＝这批真上线；且 `n ≥ hv+ha+up+bd+wk`、`n` 与 `Object.keys(Game.creeps).length` 同量级（现场基准 42 vs 11）。若 `n` 出现而 `rl` 缺，说明我只改了一半——那是我自己的错，不是世界的错。
 含 src 未推升到 **10 笔**。边界：零 push、零 build、零阈值/决策改动、零线上写动作；`.gitignore` 与对方未提交物不 stage。
+
+## 巡检 R358（10-06 08:5xZ / 00:5xZ UTC）——**war 在预报那一拍复发**；#140 的第二缺陷拿到三发现场直证；五件新签名的预部署对照全部取完
+（取号说明：现 grep 到的最大号是 R357，本节取 R358；若与并行会话撞号，以本文件行序为准。）
+
+**一、一条预报命中（本会话第一次"先写进文件、再读回来"）**：R191 补52 写的可否证预报是「war 最早 ≈83,456,360 复发」。
+现读 `kernel.strategy` = `{"posture":"war","since":83456360,"warPressureTicks":0,"expansionAllowed":false,"gclLevel":5}` ⇒
+**`since` 恰为 83,456,360**。命中就记命中，但它只证明"威胁窗+驻留闸的算术"对得上，不证明 war 里的执行链能出兵（见第二节）。
+
+**二、#140 的第二缺陷（`postureChangedAt` 每拍被覆写、从来不是"变更时刻"）拿到三发直证**：
+同一叶子连续三次读＝`83456491 → 83456502 → 83456503`（间隔几秒的三次只读请求），而 `strategy.since=83456360` 一动不动。
+⇒ 这不是推断，是"读数每拍 +1、而真转换时刻固定"的形状。**上线判据因此是一条沿**：换码后 `postureChangedAt` 在姿态稳定期**不再推进**，
+且 `kernel.postureTransition` 从"不存在"变为"存在且 `tick==strategy.since`"。当前基线（08:5xZ 现读）：`kernel.postureTransition` **不存在**。
+
+**三、#138 的复验条件现在满足了，但读数还没满足**——这一条必须写清，否则下轮会把它读成否证：
+- 现读 `kernel.stats.warFunnel` = `{"tick":83456294,"intelEntries":11,"notFact":2,"unowned":9,"mine":0,"noThreats":1,"candidates":0,"plans":0,"noSponsor":0}`，
+  三房 `rooms.*.warPlan` 全部**不存在**。
+- 但 `tick=83456294` **早于 war 起点 83456360**（差 66 拍）⇒ 这枚漏斗是 war **之前**那趟 pass 的快照（#99 已定案：桶是每 pass 从零计，不可跨拍差分）。
+- ⇒ 今天的这批读数**既不能证也不能否** #138，只能记"尚未在 war 期内采到 pass"。**下一次采到 `warFunnel.tick > 83456360` 才算复验开始**；
+  读法固定为 `node tmp/tools/official/peek.mjs kernel.stats.warFunnel`（Node 24、只读、本会话端到端跑通）。
+  战争窗已开（且 `warPressureTicks=0`＝打得起），这一发不需要人为制造条件。
+
+**四、五件新签名的预部署对照取完了**（沿 R346 的规矩：先把读法本身跑通，免得部署后把"仪器坏了"读成"改动没生效"）。08:5xZ 现读，全部**不存在**＝"缺键＝未上线"签名：
+`kernel.stats.remainsLoot`（#131 回收漏斗）、`kernel.stats.remainsBlind`（#131 零容量盲点）、`kernel.stats.observe`（#100）、
+`kernel.stats.safeMode`（#119）、`kernel.stats.strayAssets`（§3.4 残留资产）；另加 `population.n`（#141，段 1 走 memory-segment API，peek 读不到段）。
+R346 表里那五件的预部署对照（含 `stats.roadBuild.W39S56` 无 `noWorkInRange`、`expectations.recent` 非空基线）仍在原处有效，本节不覆写。
+
+**五、本轮唯一代码动作**：`0e435d32` 给 #141 的**汇总算术**补了单测（抽出纯函数 `summarizeRoles`）。两处第一次跑就红都已归因，
+且**写快照那一半仍无测试**（要动 RawMemory 段与 Game.creeps，手拼假夹具测到的是夹具）。⚠ 记一名同类的坑：
+`tests/unit/systems/telemetry-tier-recovery.test.ts` / `telemetry-recovery-flush.test.ts` 也整体 `vi.mock` 了 `kernel/timeseries`，
+今天只是没走到普查分支才没炸——下次往 timeseries 加**值**导出会同样集体报错，改法照 `0e435d32` 的 `importOriginal` 透传。
+
+**门与边界**：`tsc` 退出 0／unit 394 files·5298 tests 全绿／integration 30·239 全绿；**e2e 没跑**（script 自带 build，会毁"本地 dist==线上"这台免费仪器）＝没跑，不是失败。
+含 src 未推 **11 笔 / 16 个文件**（`git rev-list --count origin/dev..HEAD`=210，其余是文档批）——**唯一恢复动作仍是一个字：「推」**，本轮零 push、零 build、零线上写动作（全部只读 API）。
