@@ -8574,3 +8574,32 @@ extension `60+30+50+3 = 143` ✓（**R375 那 3 枚未归位的 extension 全部
 本轮起我给的每一份数（345/74/21.4%/143/69/3）都是这样读来的，都带票号。
 
 边界：零改码、零 push、零 build、全只读；未 destroy / 未 re-claim / 未清 Memory（三枚 spawn 与 69＋3 枚建筑的处置仍属人）。
+
+## 巡检 R378（10-06 12:1xZ / 04:1xZ UTC）——**#51 的前提被 @types 掀掉**：`factory.level`  undefined 不是引擎异常，是契约里的可选字段，语义是"这台工厂从未被 `PWR_OPERATE_FACTORY` 操作过"
+**一、逐字读到的契约**（`node_modules/@types/screeps/index.d.ts:6698-6712`，`interface StructureFactory extends OwnedStructure<STRUCTURE_FACTORY>`）：
+`level?: number` ——**可选**；注释原文："*The level of the factory. Can be set by applying the `PWR_OPERATE_FACTORY` power to a newly built factory. Once set, the level cannot be changed.*"
+同接口的 `produce(...)` 返回码表里明写 **`ERR_BUSY: The factory is not operated by the PWR_OPERATE_FACTORY power.`**
+（另注：我前两发 grep 用了 `class StructureFactory` 去打，所以打空——**这个类型是 `interface` 不是 `class`**，同族"形状错"第四次，记进探针纪律。）
+
+**二、这条为什么把两票接上了**：项目记忆与本表 §3.7/#130 都记着 **`gpl=0`**（全球功率为零，"机器全在、缺的是第一次跑通"）。
+按上面的契约，`gpl=0` 不只是"Power 那一柱没成绩"——**它把工业柱的一条具体路径直接锁死**：
+没有 `PWR_OPERATE_FACTORY` 操作过的工厂**永远没有 level、`produce()` 永远 `ERR_BUSY`**。
+⇒ 于是 R377 那条"自有房 factory 只有 energy、`process=null`、1/10 lab 有内容"的现场读数，**至少有一个不依赖市场行情的解释**：
+不是"行情不合闸所以不产"，而是**引擎层面就不可能产**（除非先有 GPL）。
+⇒ **#51 的原判语要改**：它当年把"私服 `level` undefined"当成待修异常并判"已修（`c6cceb2`/`7274bb4`）"。
+`level` 可缺是契约态；代码能修的只是"别把缺 level 当成可生产"，**修不出 level 本身**。
+本轮**不重开 #51 的结论**（要重开得先读那两笔改动到底改了什么），只把"undefined 属正常态"这一条钉在这里，
+防止下一次有人拿 `level` 当回归判据。
+
+**三、跨柱依赖（这条最该进 L1 的排序）**：`#130 Power（gpl=0）` → `#44/#51 工业商品线` → `#111(B)/#130 变现与留能`。
+⇒ 若确实如此，**"要不要打 Power Bank / 开 POWER"就不再是 §3.7 一柱的独立选项，而是工业线的前置**。
+这条我**没有**用现场证据证明"我们从没操作过工厂"（那要读 `Game.powerCreeps`/历史事件环），
+下一发该做的：现读 `Object.keys(Game.powerCreeps)` 与其 level/ops，和 `#130` 的"第一次跑通"判据对上；对不上就撤本条第三节。
+
+**四、#115 的判据本身被我这轮证伪了一半（方法论，不是读数）**：
+`intelCoverage.tick` 现读 **83459503**（上一发 R367 是 83457203，`lastSample=83459505` ⇒ 距沿仅 2 拍）。
+跨度 +2300＝23 个周期，但**这个仪器只存最后一次落盘值** ⇒ **+2300 既可能是 23 发全中、也可能是前 22 发全丢、只有最后一发落地——两者读数完全相同**。
+⇒ 我用"两次读数之差是 100 的几倍"数丢沿的方法，**只在跨度小于一个周期时成立**；跨度一大就瞎。
+所以今天所有"+400＝丢三批"这类话只能算**下界**（丢的次数 ≥ 可见跨度/周期 − 1），不能当计数。修法（补跑式）不变，立案强度按这个下界读。
+
+边界：零改码、零 push、零 build；线上动作只有只读 API 与两发纯读表达式。
