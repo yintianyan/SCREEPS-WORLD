@@ -8634,3 +8634,28 @@ extension `60+30+50+3 = 143` ✓（**R375 那 3 枚未归位的 extension 全部
 下一发（零部署）：读 `@types` 与官方文档里 GPL 的产生条件，再判这 0/1000 是"从未有来源"还是"有来源但被闸停"。
 
 边界：零改码、零 push、零 build、线上动作只有只读 API 与纯读表达式；未 destroy / 未 re-claim / 未清 Memory。
+
+## 巡检 R380（10-06 12:2xZ / 04:2xZ UTC）——"工厂为什么不出商品"的**完整依赖链**，其中最后一段是代码缺口、与 GPL 无关
+R379 把"Power 是工业前置"升成了读数。这一轮把这条链逐环核完，结果是：**链上有三环，前两环等外部条件，第三环是我们自己没写。**
+
+1. **GPL > 0** —— 现读 `Game.gpl = {level:0, progress:0, progressTotal:1000}`（R379）。外部/账号态，非代码可控。
+2. **造出一枚 power creep 并把 `OPERATE_FACTORY` 升到可用** —— **代码已有**：
+   `systems/empire/power-creep-manager.ts:34` 读 `Game.gpl?.level ?? 0` 交给 `planGplSpending(...)`，
+   规划到 `action==="create"` 时执行 `PowerCreep.create(name, "operator")`（`:35-40`）；
+   `domain/strategy/power-creeps.ts:11-16` 的功率表里 **`OPERATE_FACTORY: 14`** 在册（含各级所需点数的表 `:22-23`）。
+   ⇒ 这一环是 `WIRED`（调用点在），`EXERCISED` 不成立（GPL=0 ⇒ `freeLevels=0`，规划不会给 create）。
+3. **真的去操作工厂** —— **全仓零调用者**：`git grep operateStruct -- src` **0 命中**。
+   （按本仓三次踩过的形状规矩：这里搜的是裸标识符 `operateStruct`，`x(`／`x?.(`／`x!(` 三种写法都包含在内，
+   所以"0 命中"覆盖全部调用形状，不是漏搜。）
+
+**⇒ 结论（这条改变 #130 的问法）**：即便主人决定投入 Power（打 Power Bank / 攒 GPL），
+**工业商品线仍然不会通**——因为第 3 环没人写：有了能操作的 power creep，也没有任何代码去 `pc.operateStruct(factory)`。
+⇒ #130 那句"缺的是第一次跑通"要补一半：**跑通需要三环全闭，前两环是条件、第三环是代码**。
+这条不是我该顺手补的第 12 笔（补它要先定"哪个工厂、何时操作、操作冷却怎么排"——那是工业策略，属人），
+但**它使得"要不要上 Power"这个决策必须知道：单上 Power 不够**。
+
+**没解释的（照 R379 的界线）**：`@types` 只声明 `Game.gpl`（注释还把 global 拼成 "clobal"），**不写产生条件**；
+本服的 GPL 从哪些结构/等级按什么速率累计，我**没有权威出处**，所以"W37S58 是 RCL8 而 progress=0/1000"这对读数**保持不解释**。
+要查得读官方手册的 Power 章节（不在本仓内），不是我该猜的引擎事实——这条留作下一轮的一件事。
+
+边界：零改码、零 push、零 build；线上只有只读 API 与纯读表达式；未 destroy / 未 re-claim / 未清 Memory。
