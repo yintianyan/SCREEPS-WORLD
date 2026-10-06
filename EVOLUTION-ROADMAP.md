@@ -51,6 +51,34 @@
 
 ## 3. 优先级队列（数周 → 数月）
 
+### 3.0 重排（10-06 03:5xZ，R358–R372 之后；本节覆盖下面 P0/P1 的**排序**，不覆写它们的历史正文）
+今天这一批读数把两件事从"推测的卡点"变成了"点名的卡点"，也掀掉了几条我自己反复引用的前提。排序按"哪个先决定帝国还在不在"来：
+
+1. **【新·生存级，排在所有发展项之前】丢房无检测路径（#116 / R371-R372）**：W38S58 的 claim 已消失
+   （`controller.my=false / level=0 / owner=false`，两发探针同向），而我方 `Spawn7`＋`storage` 满血留在场内、
+   `Memory.rooms.W38S58` 仍按自有房维护（`colonyState=recovery` ≈27,351 拍、孵化队列 3 条）。
+   机制两条都有出处：收支循环按 `economy.ts:62-63` 的 `controller.my===true` 过滤 ⇒ **丢房瞬间该房对自己的账本隐形**；
+   领土侧 `releaseAt` 只由主动释放写（`territory-manager.ts:112-114`）⇒ **没有"意外丢房"这条分支**。
+   且 `ticksToDecay` 现读 undefined ⇒ 这两枚建筑不会自己消失，长期占 `gcl.usedSpaces`（我方 spawn 7 枚 vs `gcl.level=5`）。
+   **处置属人**（reclaim / 清算 / 补一条丢房检测），我不代做也不拆。
+2. **【已点名，等拍板】扩张的唯一失败门是 G6（#50 / R370）**：`expansionDashboard.failedGates` 现读只有
+   `["G6: CPU tier(v=constrained|tier ≤ comfortable)"]`；传导是 G6 ⇒ `isReady=false` ⇒ `readySince` 从不累计（4 张 Plan 停 `EVALUATED`）
+   ⇒ 无 `WAITING_EXECUTION` ⇒ 无第四房。现读 `cpuAvg10=19.5/20`、`constrained` 已 ≈33,900 拍 ⇒ 进 comfortable 需 −7.5/t，
+   而系统侧整榜砍光 ≈−2.9/t。**排序与第 1 条互相咬**：丢掉的房还在收结构性 CPU 税，而这项税正是扩张的闸。
+3. **【解锁件，仍然卡在授权】把 11 笔未推 src 上线**：八条边沿签名的预部署对照已全部取完（R358/R346 两套），
+   其中 `stats.observe`（`994bf542`）是 **战争线唯一能由帝国自己买到的直接视野**的判读前提——
+   现读情报池 7～11 个房**全为无主**（`mine=0`、`unowned=7`），三趟 war 期 pass 全 `candidates=0/plans=0`（#114）。
+4. **【仪器档，低】老化批取模门间歇整批丢沿（#115 / R364-R367）**：`intelCoverage.tick` 现读序列 +200/+400 后回到 +100
+   ⇒ 间歇性、非系统性；影响是两列读数新鲜度与段 5 玩家情报晚落盘（部署清 heap ⇒ 真实丢失窗口），不改决策。
+
+**今天被否证、不许再当前提引用的四条**（都还能在下面 P0/P1 的旧正文里读到，故在此立此存照）：
+①"退出 war 要吃 ≥5,000 拍扩张尾税"（R368：`expansionPreserve` 短路，794 拍即 `expansionAllowed=true`）；
+②"扩张唯一阻塞是 `posture!==war`"（同上，task #7 已结案）；
+③"war 里出不了兵是计划→兵那一环坏了"（R359-R366：`kernel.warPlan` 从未生成，那一环**未开始验证**）；
+④"人口普查覆盖 5 个角色可以当人均分母"（#141：五列 11 vs 实数 42，虚高 ~4 倍）。
+**方法论一条**：本会话我三次凭记忆造名（引擎 API 名 / 调用形状 / **Memory 键名**），第三次最危险因为"我记得那行代码"——
+所以上面每条都标了位点或读数，凡未标的都写明"未证"。
+
 **P0 — 让"发展"这件事不再静默失败**（依赖：无）
 1. ~~幼房升级道被相位抖动掐断~~ → `f28bbf5` **已线上判效**（18:24Z mark=C3：`colonyState=recovery` 的同一拍
    `spawnQueue` 里出现 `upgrader:2`，`economyPressure=0`、`spawnBlacklist={}`、controller.progress 在动 29,334/405,000）。
