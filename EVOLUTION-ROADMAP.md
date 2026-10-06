@@ -8355,3 +8355,36 @@ heap 复位的见证器是 `kernel.stats.energyLedger.tick`——现读 **834318
 
 边界：本轮**零改码、零 push、零 build、零拆除动作**（探针是纯读表达式；未对任何结构做 destroy/dismantle）；
 `.gitignore` 与两份未跟踪文档仍未 stage。
+
+## 巡检 R372（10-06 11:5xZ / 03:5xZ UTC）——把 R371 那笔"死资产"换成清单，并**把因果从假设升成代码行**：丢 claim 会让这个房对自己的收支仪器当场隐形
+**一、清单（一发纯读探针，全 `FIND_MY_STRUCTURES`，未做任何拆除）**：
+`W38S58` 里我方建筑 = **`{storage:1, spawn:1}`**；
+`Spawn7`：**`busy:false`（闲置）**、背包/`store[RESOURCE_ENERGY]=292`（连一次像样的孵化都凑不齐）、`hits 5000/5000`；
+`storage`：**`store[RESOURCE_ENERGY]=0`（空）**、`hits 10000/10000`；`mySites=0`（无在建）；`controller.level=0 / my=false`；
+`Game.creeps` 在该房：**两次探针分别 1 只与 0 只** ⇒ 那是路过，不是驻守（与 `creepsHomeW38S58=0` 一致）。
+⇒ 满血＋无在建 ⇒ **不是被打掉的痕迹**（PvP 拆毁这条今天没有证据），形状更像"没人升级控制器 ⇒ 降级到无主"。
+
+**二、我自己两条没撑住的话，当场撤**：
+①我上一轮写完清单立刻推了一句"RCL0 ⇒ storage 该开始 decay"——**读回来是 `ticksToDecay = undefined`（两枚都是 null）** ⇒ **当前没有任何衰变计时**，那句撤。
+（顺带说明我为什么会推错：这是 `#131` 那族"寿命量不在决策面"的镜像——**我自己也没读那个属性就下了结论**。）
+②"该房有 1 只我方 creep"在下一发探针里变成 0 只 ⇒ 路过不是驻守；引它当"驻守证据"不成立。
+
+**三、★因果闭合（这条是本轮真正的收获，且它是"自遮蔽"的形状）**：
+`src/systems/room/economy.ts:62-63` 逐字为
+`const owned = room.controller?.my === true; if (!owned && !remoteTargets?.has(room.name)) continue;`
+⇒ W38S58 现在 `controller.my=false` 且不是远矿目标 ⇒ **收支采样循环直接跳过它** ⇒ `roomMem.economy` 不再被写。
+这正是 R371 里我标为"相关性合理但没独立证据"的那一环——**现在它有了出处**：
+`economy.t` 停在 83444420 与"claim 消失"不是巧合，而是**同一个条件成立的两面**。
+⇒ 系统性的说法：**帝国的资产观察口径挂在"控制器归我"上，所以 claim 一消失，这个房立刻对自己的收支仪器隐形**——
+仪器停写的时刻恰好是异常开始的时刻，**这条路径天生不会报警**。
+领土侧也没有"意外丢房"分支（R371：`releaseAt` 只由主动释放写，`territory-manager.ts:112-114`）。
+两处合成一个缺口：**丢房这个事件在机器内部既不被检测、也不被记账，只表现为"某房的仪器安静了"**。
+
+**四、这改变了 #116 那笔账的形状（但我不改处置建议——那属人）**：
+既然无衰变计时，那枚 spawn＋storage 目前**不会自己消失**，会长期占着 `Game.gcl.usedSpaces`（现读我方 spawn 共 7 枚 vs `gcl.level=5`）；
+而它的收支、孵化队列（`Memory.rooms.W38S58.spawnQueue.length=3`，首条 `upgrader/p1/home=W38S58`）与 `colonyState=recovery`
+都还留在 Memory 里被"自有房"口径处理 ⇒ **模型把它当房，仪器已经不当它算账**。
+下一发要补的读数（零部署）：①`Spawn7` 是否仍在被 `spawn-manager` 派单（读该房队列条目的 `createdAt` 式字段是否推进）；
+②`remoteTargetRooms` 里有没有 W38S58（决定它是否还能被任何循环看见）；③`storage` 空＋满血——它归谁维护。
+
+边界：零改码、零 push、零 build、零拆除动作；探针全是纯读表达式；`.gitignore` 与两份未跟踪文档未 stage。
