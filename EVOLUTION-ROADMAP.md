@@ -8017,3 +8017,26 @@ war 姿态开着（`warPressureTicks=0`＝打得起），而事实级敌情为 *
 
 **净结论（本轮零改码）**：R360 第二节不变——战争门槛是属人安全设计，要动只能动采集侧；
 而 R361 把"动采集侧"具体到了一句话：**要有 scout/observer 把直接视野落到有主敌房上**，其中 Observer 那条正是 #100 等 `stats.observe` 上线才能分清"楼不在"与"楼在没请求"的那一支。
+
+## 巡检 R362（10-06 09:0xZ / 01:0xZ UTC）——把 R361 那句"要动只能动采集侧"落到**哪一侧、有几条路、各堵在什么上**（纯读码，零改码）
+R361 的结论是"过去 200 拍没有任何有主敌房被直接来源看见"。这一轮回答：直接来源一共三条，逐条查它**写者是谁、任务从哪来、今天为什么不覆盖敌房**。
+
+**一、三条直接来源全部有活写者（WIRED 全成立；EXERCISED 只有一条半）**——`git grep -n -E '"(passive|scout|observer)"'`：
+1. **`"observer"`**：`src/systems/room-observer.ts:203`（对一个 `pending.targetRoom` 发请求）、`:228` 与 `:360`（**对 homeRoom 的邻居房**发请求）。
+   ⇒ 覆盖面天然等于"各自住房的八邻域"。它能不能真发出去，取决于 Observer 楼在不在、以及有没有被排进 pending——
+   **这正是 #100 卡住的那一点**（"楼在不在"当前无落盘答案），而那把钥匙就是本批未推的 `994bf542`（`stats.observe`，含 `noTarget`/`gate` 两列）。
+2. **`"scout"`**：`src/systems/room-observer.ts:322`（收 scout creeps 的观测）。scout 的**任务来源**是
+   `src/systems/empire/prospect-manager.ts:108/142/148`（扩张探矿 mission），而扩张候选**按定义是无主房** ⇒
+   这条车道产出的正是战争漏斗里 `unowned` 那一桶（现读 6 条）。**它不是"漏了敌房"，是它的使命就不是敌房。**
+3. **`"passive"`**：`src/systems/intelligence.ts:59` `upsertRoomEntry(roomEntries, adoptRoomIntel(obs))`，喂入口按 `:172` 的注释是
+   「观察交接采用 + 被动威胁信号」⇒ 我方视野/敌方入侵经过时**会**留下直接来源条目。漏斗里 `notFact=5` 最可能就是这类条目过了 200 拍（威胁字段 TTL）后落到 stale。
+   ⚠ 这条我**没定罪**：`notFact` 的分桶只告诉我"不是 fact"，没告诉我是 `inferred`（来源不直接）还是 `stale`（来源直接但过期）——
+   两者处置完全不同（前者要加采集面，后者只要把 observer 刷新上）。**要区分就得上账**：`war-planning-system.ts:310` 那一支现在只 `funnel.notFact++`，
+   没记 `confidenceAt` 的原值。这是一个**新增列就够**的观测补丁，但它属于采集侧决策，我不在授权之外顺手改码。
+
+**二、依赖关系写死成一句**：作战能力（L0 §3.6/§2.3 的"竞争/作战"那一柱）当前**唯一能由帝国自己买到的直接视野是 Observer**；
+scout 那条买的是扩张，passive 那条是运气。而"能不能确认 Observer 该买不该买"这件事的前置，就是 `stats.observe` 上线——
+**本会话攒的 11 笔未推 src 里就有这一笔**（`994bf542`）。⇒ 推这一批不再只是"多几个读数"，它直接决定 #100/#138 与战争线能不能从"不可判"变成"可判"。
+
+**三、本轮明确不做**（免得下轮误读成我在选路）：不改 `isActionUsable` 的门槛、不给 `notFact` 顺手加列、不派 scout 去敌房、不盖楼——
+四件都属人。边界照旧：零 src、零 push、零 build、全只读；`.gitignore` 与两份未跟踪文档未 stage。
