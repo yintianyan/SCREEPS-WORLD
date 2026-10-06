@@ -8786,3 +8786,32 @@ R368 否证了"退出 war 还要吃 ≥5,000 拍 fortify 尾税才放行扩张"�
 `实际 war 时长 / 生效 threatWindow`，只有接近 1 才是"记忆税"，接近 0 是"经济撤资"——**这一格正是 #97 说的"机制补深"该有的形状**。
 
 边界：零改码、零 push、零 build；线上只有只读 API 与纯读表达式；未开任何开关、未下单、未战斗。
+
+## 巡检 R385（10-06 12:5xZ / 04:5xZ UTC）——R384 留的两个未知都读到了，而且**#89 那条"单向棘轮"第一次拿到现行犯**
+**一、生效环境档（`kernel.environment` 现读，写者 `domain/strategy/environment.ts:66-86`）**：
+`{"marketActivity":"active","neighborPressure":"low","gclProgressRate":7.65,"tick":83460000}`
+⇒ 分级条件是读码得到的：`ownedRatio>0.5→high / >0.2→medium / 其余→low`，`marketActivity` 按 `totalOrders>100 && credits>1M → active`。
+⇒ **生效 `threatWindow` = 5,000（low 档）**，所以 #90 的比值分母定了：**今天 war 时长 1,691 / 5,000 ⇒ r ≈ 0.34 ⇒ 这一例属经济撤资，不是记忆税吃满**。
+
+**二、★`kernel.tuning.strategyOverrides` 不是空的——里面有两条，且其中一条已经生效 ≈20 天**
+（键是**扁平的**字面名 `"posture.minDwell"`，不是嵌套路径；我第一次按 `kernel.tuning.strategyOverrides.posture.minDwell` 去走，读到"不存在"——**那是路径形状错，不是数据缺失**，同族第六次。）
+- **`posture.minDwell = 1400`**，`adjustedAt = 82,993,339` ⇒ 距今 **≈466,761 拍 ≈ 20.9 天**（按 3.85 s/拍）；
+  `reason` 原文：**"Posture oscillation: 4 switches in 1000t → raise minDwell"**。
+- **`posture.warPatience = 10000`**，`adjustedAt = 83,419,739` ⇒ 距今 **≈40,361 拍 ≈ 42 小时**（reason 以 "Thr…" 开头，被截断）。
+- **没有 `threatWindow` 覆盖** ⇒ 生效值就是 R384 表里的档位值。
+⇒ **合并链的顶盖层今天有货**：`DEFAULT(1000) → CONFIG.posture(minDwell 1000) → env low(不改 minDwell) → strategyOverrides(1400)`；
+  `warPatience` 更是 **CONFIG 5,000 → low 档 3,000 → 覆盖 10,000**（比默认值高出一倍、比 low 档高 3.3 倍）。
+  ⇒ **R384 那张表如果不接这一层就是错的**：我在同一节里已写"strategyOverrides 层今天没读"是未核项，这轮补上了。
+
+**三、这就是 #89 立案的那台棘轮的现行犯**（项目记忆：条目无到期字段、运行期无撤销路径、合并链最顶 ⇒ 自改必须被持续重新争取）：
+一条 20.9 天前因"1000 拍内抖 4 次"而抬上去的 `minDwell`，**至今仍在改变姿态机的退出行为**，
+而它服务的是一次**早已过去的抖动事件**。#89 的修复（读时过期 TTL=15,000 拍）**已实现但未部署** ⇒
+⇒ **本条把 #89 从"已实现·未部署"升成"有现行犯在跑"**：20 天 ≫ 15,000 拍 TTL，上线即过期，这条覆盖当场失效——
+这是今天最有分量的一条"该推"的理由（另一条是 `postureTransition.reason` 能确证 R383/R384 那次 war 到底走哪条退出分支）。
+
+**四、顺带把 #90 结了半个案**：它的机制（"振荡→抬门槛"的被动反馈）**不必再等预测兑现——它已经发生过并且留在 Memory 里**，
+连 `reason` 字符串都带着一手判据（4 switches in 1000t）。
+剩下未决的是**价值判断**而非存在判断：抬 `minDwell`/`warPatience` 到底让帝国变稳了还是变得更不抵抗（今天 r≈0.34 那次早退属经济撤资，说明战争决策主要由经济门决定，
+门槛这条腿可能根本没在关键路径上）——**改哪个值属人**。
+
+边界：零改码、零 push、零 build、全只读；未清任何 override（**删覆盖＝改行为，属人**）；不为造证据而开战。
