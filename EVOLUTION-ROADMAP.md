@@ -8239,10 +8239,45 @@ heap 复位的见证器是 `kernel.stats.energyLedger.tick`——现读 **834318
 而漏斗三趟都 `noThreats=1`（`threatAssessments` 为空）。两把条件都对得上，**但这是推断不是读数**——
 上线后同一问直接读 `kernel.postureTransition.reason` 即可，这也是本批 11 笔未推码最具体的价值之一。
 **四、我自己的两次路径错，当场纠正、绝不当数据用**：
-①我读 `kernel.stats.lastExpansionAttemptTick` 得"不存在"——**正确键是 `kernel.lastExpansionAttemptTick`**（`expansion-manager.ts:65` 读的就是这个形状）；
+①我读 `kernel.stats.lastExpansionAttemptTick` 得"不存在"——**【R369 更正：这句也是错的，见 R369 第一节】**
+我当时断言"正确键是 `kernel.lastExpansionAttemptTick`"，而 `git grep lastExpansionAttemptTick` 在**全仓只命中我这一行路线图文字**、`src/` 里 0 处
+⇒ 那个键名压根不存在，真实存在的只有 `kernel.lastExpansionCompletedTick`（写者 `expansion/state-machine.ts:598`、读者 `expansion-manager.ts:65`、类型 `global.d.ts:820`）；
 ②我读 `rooms.W38S58.rcl` 得"不存在"，而同批 `rooms.W38S58.colonyState` 非空 ⇒ 是**我在猜 `Memory.rooms.X` 的字段名**，不是这房没了。
 ③`kernel.expansion` 的"不存在"倒是有真实代码解释：`expansion-manager.ts:39-45` 会把 state 不在 `EXECUTION_STATES` 里的旧版残留记录整枚置 `undefined`（防 `hasOtherExpansion` 恒真钉死管道）。⇒ 这条**留一次复判**：`kernel.expansion` 会在下一回 intel 刷新重建队列时重新出现；若长期不出现，再回来读这个清理闸。
 **五、一个新事实（对本轮的两条线都关键）**：`cpuByHome` 现读只剩两枚 `{W37S58:4.416, W38S56:2.832}`，**W38S58 不在榜上**，
 而 W38S58 的 Memory 条目与孵化请求都活着 ⇒ **不是丢房**。为什么它掉出按房 CPU 榜（EMA 只计有 assignment 的房？recovery 期不计？）**我没读写者就不下结论**，记为待判读。
 另记一条对称：**同一个 10 房池子对 war 是全空（0 个有主房），对 expansion 却是全可用（扩张只要无主房）**
 ⇒ 池子的问题不是"小"，是**只朝一个方向有用**。
+
+## 巡检 R369（10-06 11:3xZ / 03:3xZ UTC）——**撤我 R368 里那条"更正"**（它自己更错）；同时到手一条真正的生存级读数：**CPU 已经贴顶 ~33,700 拍**
+**一、撤证（本会话第三次同族错，这次撤的是我用来撤别人的那条）**：R368 第四节①我写"正确键是 `kernel.lastExpansionAttemptTick`（`expansion-manager.ts:65` 读的就是这个形状）"。
+现 grep：**`lastExpansionAttemptTick` 这个标识符全仓只命中我自己那行路线图文字，`src/` 里 0 处** ⇒ 那个键名从来不存在。
+真实存在的只有 **`kernel.lastExpansionCompletedTick`**（写者 `expansion/state-machine.ts:598`、读者 `expansion-manager.ts:65`、类型声明 `global.d.ts:820`），现读 **83,328,457**（第三次扩张 W38S58 完成那一拍）。
+**错法有名**：我是**凭半记忆的代码行**去"纠正"一个路径错，而不是先 grep 那个标识符。同族三错分别是
+「猜引擎 API 名」「猜 `name(` 调用形状」「**猜 Memory 键名**」——第三种最阴，因为它由"我记得那行代码"支撑，读起来比猜更像读过。
+已在原行就地标注（不覆写演变过程）。
+
+**二、生存级读数（这条是本会话第一次读到 CPU 贴顶）**：
+`kernel.capacity` = **`{"tier":"constrained","since":83425106,"upgradeTicks":0}`**，`lastSample≈83458845`
+⇒ **`constrained` 档已持续 ≈33,739 拍**；同窗 `kernel.stats.cpuAvg10` = **19.5**（`limit=20` ⇒ **贴到 97.5%**），
+而我 20 分钟前读到的是 15.5、R350 的切面总耗是 16.14。
+**更要紧的是时序**：这个读数是 **war 结束后 ≈800 拍**取的（war 于 83458051 退场）——
+不是战争期间的临时挤压，**仗打完了 CPU 反而更高**。⇒ 我上一轮那句"war 结束会松开约束"的隐含预期，被这一发否证了一半：
+松开的只有扩张授权（`expansionAllowed=true`），**约束本身没松**。
+（口径纪律照做：`cpuAvg10` 是每 10 拍采一次的滚动均值，`constrained` 是档位不是速率，两把都不当"每秒"引。）
+
+**三、扩张今天为什么没动，仍然**不可归因**——而且现在能说清"为什么不可归因"）**：
+候选供给不是问题（池子 10 个房、`warFunnel.unowned=9`，扩张只要无主房）；`expansionAllowed` 已是 true；`kernel.expansion` 不存在（`expansion-manager.ts:39-45` 会清理旧残留记录）。
+闸的正文是 `expansion-manager.ts:56`：`if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;`
+⇒ 但它吃的是 **`ctx.budget.tier`（词表 healthy/guarded/conserve/recovery）**，**与 `kernel.capacity.tier`（abundant/comfortable/tight/constrained）是两套轴**——
+我**没定位到 `ctx.budget.tier` 的生产者**（两次 grep 都打空），所以**不能说"因为 constrained 所以扩张被挡"**，只能说两把都在收紧的方向上。
+而且 :56 这一支的早退**在 Memory 里不留拒因**（同族问题＝#64"第 6 档拒因无处可计"、R341"六个拒因计数器是 heap-only"）：
+⇒ 今天"扩张没发生"在 **(a) budget 档 (b) 队列重建还没跑 (c) 旧残留清理闸 (d) 别的合取项** 之间**四者都能吃下这个读数**。
+这就是 #94（`994bf542`，未推）与 #97 那条"标定/拒因列"要买的东西——**它不是加分，是把这四选一变成读数**。
+
+**四、下一读（零部署、有名字、别再凭记忆）**：
+1. 先 grep 生产者再读数：`git grep -nE "budget\.tier *=|tier: (\"|')" -- src/kernel src/systems/kernel`（把 `ctx.budget.tier` 的**来源文件**钉住，然后看它有没有落 Memory/段）；
+2. `peek kernel.expansion` 复判：`expansionAllowed=true` 之后它会不会在下一次 intel 刷新时重新长出记录（长期不出现→回去读 :39-45 那把清理闸是否误杀活记录）；
+3. `cpuAvg10` 与 `capacity.since` 各再取两发，看 19.5 是 war 尾波还是稳态（**没两发同形之前不做趋势**，`capacity.since` 是档位沿、可直接判"何时进入 constrained"）。
+
+边界：本轮**不改任何阈值**（贴顶不是降闸的理由，恰恰是 #50 那条属人选择被现场量实了）；零 src、零 push、零 build、全只读 API。
