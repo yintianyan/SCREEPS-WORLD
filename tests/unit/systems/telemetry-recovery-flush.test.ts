@@ -34,10 +34,11 @@ vi.mock("../../../src/kernel/segment-store", () => ({
   markEventLogDirty: mocks.markEventLogDirty,
 }));
 
-vi.mock("../../../src/kernel/timeseries", () => ({
-  sampleCpu: vi.fn(),
-  sampleEconomy: vi.fn(),
-}));
+// 只 stub 两个采样器，纯函数走真实实现（整体 stub 会让 summarizeRoles 等未来导出变成 undefined）。
+vi.mock("../../../src/kernel/timeseries", async importOriginal => {
+  const real = await importOriginal<typeof import("../../../src/kernel/timeseries")>();
+  return { ...real, sampleCpu: vi.fn(), sampleEconomy: vi.fn() };
+});
 
 vi.mock("../../../src/kernel/event-log", () => ({
   drainEventBuffer: mocks.drainEventBuffer,
