@@ -8217,3 +8217,32 @@ heap 复位的见证器是 `kernel.stats.energyLedger.tick`——现读 **834318
 所以"observer 产 0"是从总数与形状反推的，可能被 `ageRooms` 的淘汰节奏影响。
 ⇒ 这正是 #100 要的那枚仪表该长的形状：`stats.observe` 上线后按 `ok/noTarget/gate/lostVision/staleSlot` 直读，
 再加一列"按 source 分桶的池子增量"就能把这条推断升成读数。**记为可还项，本轮不动码。**
+
+## 巡检 R368（10-06 11:3xZ / 03:3xZ UTC）——**war 自己退场了，而且退场方式否证了一条我引过很多次的"尾税"说法**
+03:32–03:34Z 只读现读（同工具、同批，控制读数 `kernel.strategy`/`kernel.stats.*` 均非空）：
+`kernel.strategy` = **posture=fortify、`since=83458051`、`expansionAllowed=true`**、`warPressureTicks=0`、`bucket=10000`、`gclLevel=5`；
+`warFunnel.tick=83458794`（`intelEntries 11 = notFact 2 + unowned 9`、`mine=0`、`candidates=0`、`plans=0`、`noThreats=1`）；
+`intelCoverage` = `{"rooms":10,"players":3,"tick":83458803}`；`lastSample=83458845`。
+
+**一、war 结束于 `83,458,051`，全程 `1,691 拍`**（起于 83456360，即 R191 补52 那发预报的拍）。
+**二、★"退出 war 还要吃 ≥5,000 拍 fortify 尾税"这条被现场否证**：退出后仅 **794 拍**，`expansionAllowed` 就已经是 `true`。
+读码给出机制（不是巧合）：`posture.ts:440-446` 的 `expansionPreserve = (prevPosture !== "war") || (warExitTicks ?? 0) >= minDwell`
+——**前一拍不是 war 就短路为真**；而 war→fortify 那一拍本身走 `finalize(..., true, "war-*-exit")`，`expansionAllowed` 直接给真。
+⇒ `minDwell=5000` 只把**姿态标签**按在 fortify（要 5,000 拍静默才回 develop），**不锁扩张授权**。
+连带否证 task #7 那句"扩张今天的唯一阻塞是 war 尾税（`posture!==war` 这一项）"：**`posture` 现在就不是 war 了**，
+所以如果扩张仍不推进，卡点在别处（G4/G6/队列重建），不在这条尾税上。
+（诚实边界：这条"尾税"说法是我自己从 09-30 起反复引用的，包括 R345 那句"到 ≈83,422,856 才可能开工"。它当时被当成退出侧的算术，
+而算术里我把 `minDwell` 用错了地方——`minDwell` 在退出侧管的是**姿态显示**，不是 `expansionAllowed`。）
+**三、war 是怎么退的，今天只能推、不能读**——因为**能回答它的 `a2e90f02`（#140 分支标签）还没上线**。
+首要嫌疑是**危机撤资**分支（`posture.ts:452`：`prevPosture==="war" && anyRecovery && !liveThreat → fortify`）：
+`rooms.W38S58.colonyState="recovery"` 此刻在场（同批读到，且该房 `spawnQueue` 里有 upgrader 请求），
+而漏斗三趟都 `noThreats=1`（`threatAssessments` 为空）。两把条件都对得上，**但这是推断不是读数**——
+上线后同一问直接读 `kernel.postureTransition.reason` 即可，这也是本批 11 笔未推码最具体的价值之一。
+**四、我自己的两次路径错，当场纠正、绝不当数据用**：
+①我读 `kernel.stats.lastExpansionAttemptTick` 得"不存在"——**正确键是 `kernel.lastExpansionAttemptTick`**（`expansion-manager.ts:65` 读的就是这个形状）；
+②我读 `rooms.W38S58.rcl` 得"不存在"，而同批 `rooms.W38S58.colonyState` 非空 ⇒ 是**我在猜 `Memory.rooms.X` 的字段名**，不是这房没了。
+③`kernel.expansion` 的"不存在"倒是有真实代码解释：`expansion-manager.ts:39-45` 会把 state 不在 `EXECUTION_STATES` 里的旧版残留记录整枚置 `undefined`（防 `hasOtherExpansion` 恒真钉死管道）。⇒ 这条**留一次复判**：`kernel.expansion` 会在下一回 intel 刷新重建队列时重新出现；若长期不出现，再回来读这个清理闸。
+**五、一个新事实（对本轮的两条线都关键）**：`cpuByHome` 现读只剩两枚 `{W37S58:4.416, W38S56:2.832}`，**W38S58 不在榜上**，
+而 W38S58 的 Memory 条目与孵化请求都活着 ⇒ **不是丢房**。为什么它掉出按房 CPU 榜（EMA 只计有 assignment 的房？recovery 期不计？）**我没读写者就不下结论**，记为待判读。
+另记一条对称：**同一个 10 房池子对 war 是全空（0 个有主房），对 expansion 却是全可用（扩张只要无主房）**
+⇒ 池子的问题不是"小"，是**只朝一个方向有用**。
