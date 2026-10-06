@@ -9372,3 +9372,15 @@ R406 结案 #129 时读到 `room/economy.ts:206`：`if (st.lastTick === undefine
 且 #50 的两个属人选项要重写成"要么接受 constrained 并接受测量被饿,要么降载"。⚠ 不许反过来用：拿这一列去论证"该放宽 G6"。
 
 边界：src 改动仅此一行（＋一条 import）；零 push、零部署、线上只读;不碰任何阈值。
+
+### 巡检 R408（10-06 16:0xZ / 08:0xZ UTC）**#114 的措辞要收窄一半：那趟 pass 的终局原因不是"池里没靶",而是"根本没有威胁评估"**
+R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `candidates=0` **不是筛得严,是池子里没有可打对象**"。入口那条等式仍然成立,但我把**终局**也一并归给了它 —— 读码纠正：
+- `war-planning-system.ts:53`：`if (input.threatAssessments.length === 0) funnel.noThreats = 1;` ⇒ **`noThreats` 不挂在 candidates 下游,是一根独立轴**（本 pass 有没有任何威胁评估）。
+- `domain/military/war-planning.ts:153-154`：**终局四项 `noInput | noThreats | noPlan | plans` 恰有一项为 1**。
+- 对上 R399 那发读数（`noInput=0, noThreats=1, noPlan=0, plans=0`）⇒ **那趟 pass 的终局位是 `noThreats`**，也就是：**即使候选池里出现有主的敌房，只要本 pass 没有活威胁评估，战争链仍然不会立项**。
+⇒ 所以 #114 的正确措辞是**两层独立阻塞**：①池子里没有可打对象（候选层）＋ ②当下没有活威胁评估（触发层）。
+②与 #95「只防不攻」是同一件事的两面：`threatAssessments` 由 `adoptPassiveThreats` 从**当前视野内真实在房敌人**产出（`lastHostileAt` 是记忆、不是评估），而 invader 早已离场 ⇒ **`noThreats=1` 是正确行为，不是缺陷**。
+⇒ 我**没有**为此改任何代码（不制造缺陷来修）；改的是**结论的边界**：以后引 #114 说"缺靶"时，必须同时说明"也缺触发",否则会把一个"设计上只在被打了才还手"的系统，读成"再宽一点筛子就有仗打"。
+⚠ 这条同时给 #140 留一个可核对点：上线后同形状 pass 的 `postureTransition.reason` 会是 `threat-hold-fortify`/`hold-min-dwell` 一类，而 `warFunnel.noThreats` 仍应为 1 ⇒ **两者同时成立才叫"授权链按设计停摆"**。
+
+边界：零改码、零 push、线上只读（本轮纯读码）。
