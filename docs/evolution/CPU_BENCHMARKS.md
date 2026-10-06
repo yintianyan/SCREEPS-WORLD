@@ -131,3 +131,27 @@ node tmp/tools/official/check-code.mjs                          # 先确认二�
 - 系统侧天花板：`cpuSystemTotal` 全量只有 **6.03**，其中 traffic-manager 2.81 已被判为**结构性成本**（#45：五条"能省"嫌疑全部被实读否掉），snapshots 1.56 同理。
   ⇒ **就算把 main 相位那 2.76 全砍光，也够不到 4.14**；差额必须来自 `creeps 7.18`（动作数/编制）或 `post`，或接受档位 stays。
 - 这就是 #50 的实际形状：**这不是"找一个大户"的问题，是"要不要缩活动量"的问题**。属人不变，但现在有数了。
+
+---
+
+## 8. creep 侧单价标定（10-06 08:3xZ，R355）——**这一条把 #50 的一个选项算掉了**
+
+一次性现场样本（`console-eval`，mark=`R355P2` 回读一致 ⇒ 不是撞键取回别人的结果）：
+`t=83,456,134`、`Game.cpu.getUsed()=18.55`、`limit=20`、`tickLimit=500`、`bucket=9982`、**人口 `n=42`**，
+角色前十二：`remoteHauler 6 / remoteHarvester 5 / hauler 5 / harvester 4 / distributor 4 / carrier 4 / attacker 4 / reserver 3 / upgrader 2 / healer 2 / remoteDefender 1 / labTender 1`（合计 40，另 2 只在长尾）。
+
+**算法与口径限制（先说限制再给数）**：分母是**瞬时快照**，分子 `byPhase.creeps=7.18` 是**窗口均值**——两条采样时间不同、
+而编制会随 respawn 波动 ⇒ 下面所有"每只"的数只能当 **数量级**，不能当报价。
+- 帝国级：**7.18 ÷ 42 ≈ 0.171 CPU/只·拍**（creep 相位全部摊到每只）。
+- 与历史夹具价对照：夹具是 **≈0.21 CPU/一次签发**（单位=动作，不是creep）。两者同数量级 ⇒ **相互印证但不是同一口径**，别写成"复现了 0.21"。
+- 分角色（同样受上面的时间错位限制）：`harvester 2.07÷4≈0.52`、`remoteHarvester 1.58÷5≈0.32`、`remoteHauler 0.71÷6≈0.12`、`hauler 0.59÷5≈0.12`、`reserver 0.53÷3≈0.18`。
+  ⇒ **采集端（harvester 系）每只贵 3–4 倍于搬运端**：要省 CPU，动采集端的收益最高，但采集端就是收入的来源。
+
+**对 #50 的硬结论（这是本节的全部目的）**：目标是 `comfortable ≤12.00`，现值 `16.14` ⇒ 需 **−4.14/t**。
+- 系统侧天花板：`cpuSystemTotal=6.03`，其中 traffic-manager 2.81 与 snapshots 1.56 已判结构性（§G6）⇒ **整榜砍光也不够**（§7 已算）。
+- creep 侧：按 0.171 CPU/只·拍，−4.14/t ≈ **削掉 24 只 = 现编制的 57%**。
+⇒ **两个名义上"可做"的杠杆都被算掉了**：一个不够，一个要先砍一半产能。所以 #50 的真实选项不是"调哪个参数"，
+而是三选一：**(a) 接受 constrained 档**（并把扩张闸的 CPU 判据从 comfortable 改成 constrained-exit——注意这是**改判据不是降门槛**，需要 owner 明确认）；
+**(b) 抬 `limit`**（`Game.cpu.limit` 是 20 而 `tickLimit` 已到 500 ⇒ 借 bucket 不改变档位算法里的 `min(limit,tickLimit)=20`，所以这条只能靠订阅/算力来源，不是代码能改的）；
+**(c) 降"固定项"**（§4 标定过：固定项实测 ≈6.7/t，与 `cpuSystemTotal 6.03` 同量级 ⇒ 所谓"固定"基本就是系统榜本身，回到 (a)）。
+**这一节没有改任何代码、没有动任何阈值**；它只是把一个看起来"还有一条路"的问题算成"只剩一个真选择"。
