@@ -8425,3 +8425,28 @@ heap 复位的见证器是 `kernel.stats.energyLedger.tick`——现读 **834318
 ②`remoteTargetRooms` 里有没有 W38S58（决定它是否还能被任何循环看见）；③`storage` 空＋满血——它归谁维护。
 
 边界：零改码、零 push、零 build、零拆除动作；探针全是纯读表达式；`.gitignore` 与两份未跟踪文档未 stage。
+
+### 3.0 附表（R373 续，04:03Z）——**孤儿建筑普查：我方 7 枚 spawn 里有 3 枚在"控制器不归我"的房**，顺带把我自己两个仪器错一次修掉
+**★一发纯读探针（`orphanSpawns` 直接按 `s.room.controller.my!==true` 过滤算出）**：
+`orphanSpawns = **Spawn4@W37S55, Spawn3@W37S55, Spawn7@W38S58**`；`spawnsTotal=7`、`gclLevel=5`。
+⇒ **帝国 43% 的 spawn 产能在不属于自己的房里**。两种丢法各占一半：
+W37S55 那两枚是**主动释放**留下的（项目记忆 `territory-release-single-room-core` 记那次释放线上验证过，本会话未重读——按"文档记着"引，不按"我今天读到"引），
+W38S58 这枚是 R371-R372 证的**非主动丢 claim**。
+⇒ 系统性说法（比 #116 原文更准）：**两种"房不再归我"的路径都不带资产清算**——一条走完释放链仍把 spawn 留在场内，另一条连释放都没发生。
+`#118`（W37S55 那 2 枚无人认领的 spawn，pending 属人）今天拿到的不是新证据而是**同一件事的第二例＋一份带名字的普查**：
+现在可以一次决定"这三枚怎么办"，不必分两次。
+
+**★两个我自己的仪器错，同轮修掉（这正是我上一节撤证要买的账）**：
+①上一发我写 `Game.ConstructionSite` 取到 **0**——**那是名字错的产物**：正确全局名是 `Game.constructionSites`
+（本轮 `typeof` 出 `"object"`、`Object.keys(...).length=`**`21`**）。我把 `||{}` 写进探针让它"不报错"，
+于是**一个错名被涂成了可信的 0**——这类"防御性写法把名字错降级成读数"的shape，比抛异常更危险，记进方法论。
+⇒ 真实值：**帝国在建工地 21 个**（这与 G6 挡扩张并不矛盾：工地消耗能量与 CPU，是"发展"侧的活账）。
+②`Game.gcl.usedSpaces` 本服**不存在**：`Object.keys(Game.gcl)` = **`level,progress,progressTotal`**。
+⇒ 我上一轮那句"占 `gcl.usedSpaces`"不只是没测，是**引了这台机器上没有的属性名**；
+要算"建造名额"得换量（工地数 21 / `gcl.level` 5），不能用 `usedSpaces`。
+③再自纠一发：本轮探针里我把字段命名成 `orphanStructs` 而表达式其实是 `Object.keys(Game.structures).length`＝**我方全部建筑 345 枚**（不是孤儿数）。
+名字又不等于量——**同一族错我在 60 秒内犯了第三次**，所以这条一律写"名与量必须逐条对"，不靠自觉。
+
+**边界**：全只读表达式（未 destroy/dismantle/reclaim/改 Memory）；零 src、零 push、零 build。
+**下一发（若仍零部署）**：给这三枚 spawn 出一份资产账（`hits`、`store` 能量、是否仍被派单、其房内我方建筑清单），
+把"43% 产能搁浅"从计数变成可拍板的处置清单——仍**不代做处置决定**。
