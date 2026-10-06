@@ -8881,3 +8881,26 @@ R384/R385 的判据写的是 `r = 实际 war 时长 / 生效 threatWindow`（目
 handoff 部署清单第 10 条**从签名池移出** ⇒ **部署签名由 10 条降为 9 条**（第 10 条的问题不推就能答，且"键应消失"那句也作废：读时过期不删条目，只是不采用）。
 
 边界：零改码、零 push、零 build、线上只读（本轮没发任何 console 探针）；动的是三份我自己在写的台账/工件。
+
+### 巡检 R388（10-06 13:1xZ / 05:1xZ UTC）**#90 的分母由假设转为实读 ⇒ 今天这一例判为"经济撤资"**
+R387 留下的唯一未知是"当前生效哪一档 `neighborPressure`"。写者核到 `empire-strategy.ts:320-326`（**落 Memory，字段精简**），
+⇒ 一次只读 API peek 就能答（**不是 console 探针**）：
+`Memory.kernel.environment = {marketActivity:"active", neighborPressure:"low", gclProgressRate:19.5, tick:83,460,400, gclProgress:6,701,943}`
+—— 拍号与当下同量级 ⇒ **写者活着、读数新鲜**（这条判断必须先做，否则"键有值"可能只是化石）。
+
+**一、分母定死**：low 档 ⇒ 生效 `threatWindow` = **5,000**（`posture-baseline.ts:46`，medium 会保 CONFIG 3,000、high 会收到 1,500）。
+⇒ 今天那一发 war 1,691 拍 ÷ 5,000 ＝ **r ≈ 0.34** ⇒ **判为经济分支提前放血**（`warExitPatienceTicks=1000` 或危机撤资 `posture.ts:452`），
+**不是**记忆税吃满 ⇒ **#90 的"脉冲骚扰驯化宣战闸"在这一例上不被支持**；同一把力度的问题归到 #50/#137 的经济承受力线上。
+⚠ 这是**一例**判读，不是本条结案：观察项的定罪要**多次目击事件凑齐 r 的分布**，而反例只能等不能造。
+
+**二、同一份 env 输入顺带定死三个生效值**（今后引用 posture 直接从这读，别再逐层推）：
+`warPatience` = **3,000**（low 覆盖 CONFIG 5,000；那条 10,000 的旧 override 惰性）、
+`expandMinBucket` = **5,500**（low 先给 6,000，再被 `gclProgressRate=19.5 > 0.0001` 那一支减 500，`posture-baseline.ts:74-79`）、
+`expandMaxCpuRatio` = **0.65**（market `active`）。
+
+**三、一条防混淆**：`posture.expandMinBucket`（姿态层，现算 5,500）与 `expansion-manager.ts:57` 的硬编码 `bucket ≥ 5,000`（执行层）是**两处两个值**，
+名字相近而不同源 ⇒ 扩张的 CPU 门槛被两道门分别管着，**别把"5,500"当成执行层那道门的数**。
+
+已落地：tracker **#83** 标题与描述按本节重写（含作废引用清单）。
+
+边界：零改码、零 push、零 build、线上只读（一次 memory-segment/`peek` 只读请求，无探针、无写操作）；不改任何阈值。
