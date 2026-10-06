@@ -9456,3 +9456,19 @@ R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `ca
 - 三门在本 HEAD 复跑记录：typecheck 0 / 单测 395 files·5303 tests / 集成 30·239 全绿（R403 起有效，#142 之后由 batch15 门②½ 全量 e2e 覆盖）。
 
 **下一步（不变，且只有一个字）**：授权跑 `bash tmp/tools/official/batch15-gate-and-push.sh`（对当前 18 文件树现 build、现跑全量 e2e、现算 `$DIST_SHA`；任一不过即不推）⇒ 上线后读 9 条边沿签名 + #115 的 aging 间隔 `[100,110]` + #142 的 `Memory.kernel.skipReasons["economy/window-slip"]`。在此之前，扩张／作战／竞争·工业／恢复四根柱子都没有线上闭合，**目标未完成**。
+
+### 巡检 R412（2026-10-06 08:3xZ）—— 第二次全量 e2e 收工绿；门集闪动的三条假说被读码削掉一条，剩下交给已武装的差分快读器
+
+**① 全量 e2e 判决到手（后台等待器 `b8khja186` 退出码 0）**
+- `tmp/observe/e2e-full-r404.log`：`Test Files 34 passed (34)`、`Tests 72 passed (72)`、**`E2E_RC=0`**、`restored_sha=649eb94b9784`（跑中态 `5ce4bbb01168` 已还原，判据没被弄脏）。
+- **覆盖率口径要写死**：这一跑的 build 早于 #142 落盘，所以它绿只背书到 **#115 那棵树**；#142（`economy/window-slip` 留痕）与两份新文件的权威覆盖是 batch15 的门②½（对当前 18 文件树现 build 再跑）。别把这次绿读成"整批都被 e2e 覆盖过"。
+
+**② 读码削掉 R411 三假说里的一条（(a) 读侧半更新）**
+`Memory.kernel.expansionDashboard` 确实有**两个写点**（`expansion-planner.ts:77` 低压早退支 / `:284` 全量支），但早退支在 `:105` 就 `return` ⇒ **一趟 pass 只可能有一个写者**，同拍被写两次不成立。两条的**内容形状**不同：早退支的 summary 是固定串 `Pressure=LOW(early-exit) | no candidates, no active plans`，**不含 `Blocked=`**；全量支才有门集。⇒ 派生出一条读数规则并已写进快读器：**`blk=EMPTY` 是"那趟 pass 走了低压早退"的签名，不是"闸门全过"**（脚本里单独一行、不参与 FLAP 判定）。
+剩下能判开的只有：**(b) 门本身一周期抖动 / (c) 各门 cadence 不同**——两者都要求"跨 pass 存活"这一可观测量，正是快读器在量的。
+
+**③ 差分快读器已武装（`tmp/tools/official/gate-flap-watch-r412.sh`，pid 见 lock，ROUNDS=18 GAP=15s）**
+- round=1/2 @ tick **83463384**：`posture=war blk=G0+G6`，两次读到的 dashboard tick **相同（refresh 差 0 拍）** ⇒ 生产者的刷新周期 > 18 秒，于是"某个门集存活了几个计算拍"是可测的而不是恒 1。
+- 同时给出一条增量事实：R411 那三把门（G2/G3/G5）到 83,463,384 **没有复发**，门集已回到 `G0+G6`——即"持续 100+ 拍的红色"这一形状在当前锚下不成立，与 ② 里"早退/全量两形"一起，把这件事归到"一次性、跨 pass"那一类。
+
+**状态**：`E2E_RC=0` 且 dist 已还原基线；三门在本 HEAD 记录不变（typecheck 0 / 单测 395 files·5303 / 集成 30·239）；待推 **18 src + 15 test** 全部已提交、工作区 0 脏；两个预报监视器（清退 83,464,423／war 退出锚 83,468,108）+ 快读器在档。**下一步仍只有那一次授权**：`bash tmp/tools/official/batch15-gate-and-push.sh`。四根柱子（扩张／作战／竞争·工业／恢复）无线上闭合 ⇒ 目标未完成。
