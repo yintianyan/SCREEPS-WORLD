@@ -788,3 +788,27 @@ contract:W37S58:W38S58:energy  st=A  td=0  cs=0  ca=ua=ac=83,410,216  ⇒ 冻结
 仍欠的两类是具体的：①**§3.1 的 13 个机制**、**§3.2 的 9 个**、**§3.3 的 11 个**各自没有独立八项记录（我只做了其中相交的几块：Observer／Safe Mode／Power／decay／供给合同／扩张／市场／军事）；
 ②本节与 §26 都出现同一形状的欠账——**"资源成本/CPU 成本"两列大量是"未标定/未核实"**。一份八项里有三列空着的记录，是**地图**不是**收据**。
 所以 `#97` 继续挂着，判据换成可核的：**每个 §3.x 列出的机制都要有一条含"标定过的成本列"的记录**。
+
+## §27 增补（R362，10-06 01:0xZ）——战争"输入与输出"那一行的**采集面**补深一层；顺带摘掉本节一条"键名是我猜的"欠账
+本节原有两处在 R359–R362 之后需要更正/加深，逐条给位：
+
+**① 「前置条件」里 `kernel.warPlan` 不存在——现在这条是**已核**而不是猜**（旧文里同形状的键名怀疑只适用于 `nukeLedger`）。
+读据：写者两处、同一个全局键 `Memory.kernel.warPlan`（`src/systems/military/war-planning-system.ts:525`、`src/systems/military/war-planner.ts:99`）；
+现读用**同一工具、同批、带已知非空控制**（`kernel.strategy` 非空、`kernel.warBlacklist` 同形读到不存在）⇒ 这个"不存在"是数据缺失。
+（对照记录：我自己先在 `rooms.*.warPlan` 上错过三发，那个键在 `src/` 从未存在，已在 R359 当场撤。）
+
+**② 「输入与输出」的敌情那一侧，按 §3.6 的机制补深为"三条直接来源各自覆盖什么"**（`DIRECT_SOURCES={"passive","scout","observer"}`，`domain/intel.ts:249`；非直接来源**永远**是 inferred，`intel.ts:315-321` 先问来源再问龄）：
+
+| 直接来源 | 写者（位点） | 任务/覆盖面从哪来 | 今天能不能喂出战争候选 |
+|---|---|---|---|
+| `observer` | `systems/room-observer.ts:203`（pending 目标房）、`:228`+`:360`（**住房八邻域**） | 需 Observer 楼 + 排进 pending | **不可判**——"楼在不在"无落盘答案（#100）。钥匙是本批未推的 `994bf542`（`stats.observe` 的 `noTarget`/`gate` 两列） |
+| `scout` | `systems/room-observer.ts:322` | `systems/empire/prospect-manager.ts:108/142/148` 的**扩张探矿** mission | **不覆盖敌房**：扩张候选按定义无主 ⇒ 它产的就是漏斗里 `unowned` 那一桶。不是漏了，是使命不同 |
+| `passive` | `systems/intelligence.ts:59`（`adoptRoomIntel`），喂入口见 `:172` 注释「观察交接采用 + 被动威胁信号」 | 我方视野恰好看见、敌方路过 | 理论上会留 fact 条目，但威胁字段只活 `ROOM_THREAT_TTL=200` 拍（`intel.ts:255`）⇒ 必须是**持续**视野 |
+
+**③ 本节「失败条件」那条观测缺口，现在有了一个具体形状**（比"拒因不留存"更窄、也更好还）：
+`war-planning-system.ts:310` 筛掉候选时只 `funnel.notFact++`，**不落 `confidenceAt` 的原值** ⇒ 现读 `notFact=5` 分不清两支：
+`inferred`（来源不直接 ⇒ 要加采集面）与 `stale`（来源直接但过了 200 拍 ⇒ 只要把 observer 刷新上）。**两者处置相反。**
+⇒ 记为 #97 的一条**可还项**：一个新增列的量级、零决策接入。本轮不改码（属采集侧决策），也不据此调任何门槛。
+
+**④ 分档更正**：`observer` 这条车道今天只能标 **WIRED（调用点在）+ UNOBSERVABLE（有没有真发过请求，无落盘答案）**；
+不要因为它出现在上表就把它读成 EXERCISED。`#97` 继续挂着，欠的两类（逐机制八项记录、标定过的成本列）一条没少。
