@@ -8944,3 +8944,26 @@ R387 留下的唯一未知是"当前生效哪一档 `neighborPressure`"。写者
 ⇒ 姿态层的门**是全开的**，扩张仍未推进的瓶颈**不在 posture 层**（与 tracker #7 的"唯一失败门是 G6"一致，本轮不复测 G6）。
 
 边界：零改码、零 push、零 build；两次只读 API 请求（`peek`），无 console 探针、无写操作；不改任何阈值、不清 override。
+
+### 巡检 R390（10-06 13:2xZ / 05:2xZ UTC）**#116 是一条假缺口：意外丢房的检测路径存在、且已经打过 W38S58 的卡**
+本想做"让丢房可检测"的观测补丁（#116 的原文是"领土机器无『意外丢房』路径"）。搜代码前我先假设自己可能错——**这一假设有救**：
+
+**一、写者与数据都在**：`src/kernel/memory.ts:82-105` 就是意外失守通道（`Memory.rooms` 里的条目不在"当前拥有集合"即记 `lostRooms[name] ??= Game.time`，宽限 `LOST_ROOM_GRACE=20,000` 拍，届满 `recordLostRoomPurge` + 连 `tuning` 一起抹）。
+线上实读 **`kernel.lostRooms = {"W38S58": 83,444,422}`** ⇒ **它不但存在，而且真的为 W38S58 触发过**。
+更硬的交叉：83,444,422 与 roadmap 里我早前算出的"RCL1 降级容忍走完、progress 归零那一拍"**逐字相同** ⇒ 失守由**降级到 0**（无主）造成，机器在同一拍记下了它。
+⇒ **#116 那句"无路径"作废**（这是本会话第 ~7 次假缺口，同族教训见 `diplomacy-hostile-attribution-gap`/`contract-layer-dead-2026-10-04`）。
+我 R3xx 那句"丢房瞬间对自己账本隐形"只对了一半：隐形的是**收支账本**（`economy.ts:62-63` 按 `controller.my` 过滤），**kernel 的内存维护道不隐形**。
+
+**二、真缺口比原命题窄、也不同**：`lostRooms` 的**读者是零**（全仓搜：只有自己的写者、`territory-manager.ts:194` 的清账、两处文档注释）。
+⇒ 宽限期内没有任何决策系统把该房当"已失守"：实读 `rooms.W38S58.colonyState="recovery"`（冻在失守那一刻的状态）、
+`spawnQueue` 里 `createdAt=83,444,337 / expiresAt=83,445,337` 的条目**过期已 ≈1,000 拍仍躺在数组里**（TTL 摘除由该房自己的 spawn 道驱动，而那道已不认它）、
+`buildQueue` 还留着 `constraint.extension.29.27`（`state:"site"`）⇒ 幻影房**占着未完成的工单**，但**没在孵兵**（队列无人消费）。
+⇒ 所以欠的是"**把 lostRooms 接进决策面**（谁该停止为它排产/计数）"，**不是**"建一台检测器"。修法属人（这会直接改变 W38S58 的处置），本轮**只立案不改**。
+
+**三、写死一条可否证预报（约 3,900 拍后到场，≈2.5 小时）**：判定式是 `Game.time - lostAt > 20,000` ⇒ 最早在 **tick 83,464,423**（+ 该维护道的下一拍）应同时看到：
+①`rooms.W38S58` **消失**；②`kernel.lostRooms` 变 **`{}`**；③`kernel.tuning.rooms.W38S58` 与 `kernel.tuning.lastEval.W38S58` 消失；
+④段 2 事件环出现 `LostRoomPurge`，`r="W38S58"`，载荷按现读结构应为 **`[0, 0,0,0,0, ≈20,001]`**（reasonCode=0 唯一出口；`roleBounds={}`⇒0；无 `pendingValidation`/`frozenParams`⇒0/0；无 `remoteOps`⇒0）。
+**否证条件**：若 83,464,423 之后条目仍在 ⇒ 说明维护道没跑或 `lostAt` 被改写（那就是缺陷，且这条预报直接把它钉出来）。
+⚠ 早退分支已排除：`:140` 的"三本账全空就不发事件"要求 `state || lastEval || remoteOps` 至少一本在场，而 `tuning.rooms.W38S58` 与 `lastEval.W38S58` **都实读到有值** ⇒ 事件应当发出。
+
+边界：零改码、零 push、零 build、线上只读（本轮 3 次 `peek`，无探针）；#116 的修法（接决策面 / 是否重占 / 是否拆房）一律属人。
