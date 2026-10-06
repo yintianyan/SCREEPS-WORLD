@@ -9112,3 +9112,28 @@ b) 线上仍是 `649eb94b9784` ⇒ 没上线（CI 未完或 push 未成功）,**
 ⚠ 与部署的相互影响要说清：**这批上线后 `postureTransition.reason` 会直接给出走的哪一支**（`war-enter-patience` vs `threat-hold-fortify`）⇒ **本发的 NO-ENTRY 归因在推完之后才完整**；推之前只能靠 `colonyState`/`warPressureTicks` 反推，措辞上限是"指认候选项"。
 
 边界：零改码、零 push、零 build、线上只读（4 次 `peek`）；不动任何阈值、不主动开战（本发是**观察**，不是制造证据）。
+
+### 巡检 R398（10-06 14:0xZ / 06:0xZ UTC）**★预报兑现：war 于 83,461,051 复发（与预写同拍）⇒ #89 的 TTL 过滤第一次拿到行为级正证**
+`warpatience-watch.sh` 第 7 轮（05:58:45Z）抓到：
+`posture=war`、**`since=83,461,051`**、dwell=20、`hostileAt(W37S58)=83,459,330`（**未变**）⇒ 日志行 `★WAR-ENTER-ON-TIME`。
+预写的是 `83,458,051 + warPatience(3,000) = 83,461,051` —— **实际翻转拍与它逐字相同**。
+
+**一、这一发为什么是 #89 的"行为级"正证（不是 grep 产物那种结构证据）**：
+若那条旧覆盖 `posture.warPatience=10000` 仍生效，翻转要等到 `83,468,051` —— **差 7,000 拍 ≈ 7.7 小时**，
+所以"恰好在 dwell=3,000 那一拍翻"只有一个读法：**生效值就是 low 档的 3,000,`strategyOverrides` 层被读时过滤掉了**。
+⇒ 自进化侧的这条结论**不依赖部署**就拿到了（本会话第一次）；tracker #89 的判效状态因此从"缺判据可执行性"转为**已到手**。
+
+**二、分支归因（读码对齐,不是猜）**：`prevPosture=fortify` ＋ `threatRecent` 仍真（目击拍未刷新 ⇒ **不是新目击触发**）＋ dwell 恰好越过 patience ＋ `warPressureTicks=0`
+⇒ 走的是 `posture.ts` 的 **`war-enter-patience`** 支。⇒ 留下一条可核对映射：**#140 上线后,下一次同形翻转应被 `postureTransition.reason` 直接标成 `war-enter-patience`**（今天的这次发生在上线前,`postureTransition` 尚未在线上,不能回填）。
+
+**三、我 R397 自己预写的"首查项"当场被否证（该撤就撤）**：R397 说"若不翻,首查 `anyRecovery`,而幻影房 W38S58 的 `colonyState='recovery'` 可能就是那把闸"。
+现实是**翻了** ⇒ **幻影房那份冻结的 recovery 态没有挡住宣战** ⇒ 它此刻**不在** `anyRecovery` 的输入里（两种可能：该房不进 `rooms[]` 快照输入 / `colonyState` 根本不是那条合取项的读法,**本轮不指认哪一种**,指认要读 `empire-strategy` 的 `rooms` 构造）。
+⇒ **#116"零读者"的后果范围因此缩小**：留在 Memory 字节与聚合口径,**不含战争决策**。
+⇒ 纪律侧记一句：**我在预写里写下的"首查 X"本身也是一种预报**,同样要接受被打脸,不能只留对的半边。
+
+**四、仪器的独立复证**：轮询器 round1→round4 为 **118 拍 / 469 s = 3.97 s/拍**,与 R391 现测的 4.07 一致 ⇒ R391 那条"拍长正常、是我把 batched 键当钟用"的更正**第二次站住**（两个不同仪器同值）。
+
+**五、下一问（不在本轮,归 R198/#90 轨）**：war 复发后 ①扩张闸是否重新被钉（`kernel.strategy.expansionAllowed` 本读**未取**,不作声明）；
+②退出走哪支 ⇒ 那是 **#90 的 r 分布第二个样本**（分母已定死 5,000）；③这次有没有真实战损（`deathByCause.combat`,#96 的键,未推⇒线上无处读）。
+
+边界：零改码、零 push、零 build、线上只读；**没有制造战争证据**（这一发是被动的既有目击＋耐心窗口,我没有下任何攻击指令）。
