@@ -728,3 +728,34 @@ contract:W37S58:W38S58:energy  st=A  td=0  cs=0  ca=ua=ac=83,410,216  ⇒ 冻结
 
 **对属人决定的意义**：#107 现在多了一个具体抓手——`domain/expansion` 里**先处理那 4 个彻底零引用的模块**（`evaluator`/`execution-dashboard`/`execution-operation`/`roi-tracker`）与**那簇 4 个互为孤儿的仪表盘**（`colony-dashboard`+3）。
 删除还是接线，仍属人：接线的代价是给"扩张仪表盘"补一条产线读者，而扩张当下被 CPU 档按住（`constrained` 33 小时）——**先解 CPU 还是先修可见性，是取舍不是 bug**。
+
+---
+
+## §26 L0 §3.5「市场、资源与高级经济」八项记录（R353，10-06 08:2xZ）：**市场不是"只读"——线上有我们自己的挂单；资本也不是约束（credits ≈19.83M）**
+
+> 名字取自本轮 `node_modules/@types/screeps/index.d.ts`（行号现读）。
+> **计数以 §26 为准**：§3.8 八项记录 **7/8**（§20/§21/§22/§23/§24/§25/§26）；§25 里那句"6 项"自本节起作废（撤的只有计数）。
+
+| §3.8 要求 | 本轮记录 |
+|---|---|
+| **官方规则** | 本版本 `interface Market` 声明的成员只有这些：`credits / orders / incomingTransactions / outgoingTransactions / calcTransactionCost / cancelOrder / changeOrderPrice / createOrder / deal / extendOrder / getAllOrders / getHistory / getOrderById`。⇒ **没有 `calcCommission`/`calcPrice`/`estimateOrder`/`bestOrders`/`skills`** ⇒ 那些"引擎后来加的"名字在本仓**不可引用**（引了就又是 §20 族错案）。常数：`MARKET_FEE: 0.05`（`:759`，字面量、可信）、`MARKET_MAX_ORDERS: 300`（`:760`）、`TERMINAL_COOLDOWN: number`（`:418`）、`TERMINAL_SEND_COST: number`（`:420`）⇒ 后两枚**本服未标定**。 |
+| **前置条件** | 有 terminal（现场 `roomsWithTerminal=1`）、terminal 不在冷却才可 `deal`（现场 `roomsOnCooldown=0`）；`createOrder` 前有引擎能力守卫（`terminal-manager.ts:265` `if (typeof market.createOrder !== "function") return;`）；挂单条件写在 `:254`——**自有大宗盈余且无在途挂单**才 `createOrder`。 |
+| **输入与输出** | 输入＝`getAllOrders`（**18 处调用**，分布 `terminal-manager`/`terminal-market`/`domain/strategy/environment`）＋库存与价格环境（`kernel.environment.marketActivity`）。输出＝`deal`（2 处：`:77` 带 `roomName`、`:586` 不带 ⇒ 两个入口，一个跨房收货一个本房）、`createOrder`（1 处）、`changeOrderPrice`（1 处，`:322` 注释"改价成功—不撤单，等新价成交"）、`cancelOrder`（1 处 `:328`）、pixel 变现（`:245` 吃最优 buy 单）。 |
+| **资源成本** | 现场：`stats.trade.credits ≈ **19,833,159**`、`storageEnergy 827,428`、`terminalEnergy 10,139`。⚠️ 口径：**两次读数逐字相同**，那是同一个 flush 窗的同一份快照 ⇒ 记 **一个样本**，不记"两次一致"。 |
+| **CPU 成本** | **未标定**。已知的只是代码自己的认定与规避动作：`empire-strategy.ts:246` 「环境画像低频采样（每 100 tick），`getAllOrders` 是 CPU 大户」⇒ 承认贵、给了采样间隔，但**没有数值**，不许写成"便宜/已优化完"。 |
+| **相关 API** | 用了的：`getAllOrders/deal/createOrder/changeOrderPrice/cancelOrder/calcTransactionCost(5 处)/orders(读 `Object.keys(...).length` 做 myOrders)`。**本仓零调用的**：`extendOrder`、`getHistory`、`getOrderById`（后两枚只在类型里存在）。 |
+| **失败条件** | `createOrder`/`deal`/`cancelOrder` 都返回 `ScreepsReturnCode`；现场仪器 `gatedBy=""`（没有闸挡住交易）、`demandsPublished=0` 且 `demandsLive=0` ⇒ **工业需求从未发布过一条**（这与 #44/#51 一致：发布以正 ROI 为闸，当前行情合闸 ⇒ 行为零变化，不是崩）。 |
+| **与现有模块的关系** | ①运费口径：`#71/#43` 的 `tradeFee*` 桶记的是成交侧成本，与 `MARKET_FEE 0.05` 不是同一个数（一个是引擎手续费、一个含 `calcTransactionCost` 的跨房运费）⇒ 别把两列相加。②`#130`（Power 线）：买 `POWER` 与打 Power Bank 是两条入口，**资本不构成约束**（credits 近两千万），所以那条属人决定真正在权衡的是"要不要开买入这条链"，不是"买不买得起"。③`#44/#51`：`demandsPublished=0` 就是那把 ROI 闸的现场证据。 |
+
+**⚠️ 本节自抓的一次"我自己造的假缺口"（务必留着，这是 §20 那族错误的第三次复现，而且这次是当场抓住）**
+我第一轮用 `grep -rn "\.cancelOrder("` 得到 **0 命中**，于是写下"注释说超龄撤单、代码从不撤单 ⇒ 生命周期注释与代码不符"。
+真相是 `terminal-manager.ts:328` 写的是 **`market.cancelOrder?.(order.id) === OK`**——**可选调用形状 `name?.(` 不含 `.name(`**。
+⇒ 规矩升级：**判"某 API 没接线"之前，搜索形状必须同时覆盖 `name(`、`name?.(`、`name!(` 三种**；
+只搜一种得到的 0，只能记成"我没搜到"，不能记成"不存在"。本节因此把这条能力记为 **WIRED**，而我的第一版结论是 ZERO——差一点又是一个假缺口。
+
+**分档**：`WIRED` ＝ 市场六枚 API 全有调用点（上表逐行给位，含 `:328` 的可选调用）。`EXERCISED` ＝ **有线上自证**：
+`stats.trade.myOrders = 1` ⇒ 我们的挂单此刻真在市场里；`deal` 的成交在 `tradeFee*` 桶里有非零历史（#43 判效）。
+`NOT WIRED` ＝ `extendOrder`/`getHistory`/`getOrderById`（未使用；这是**选择**，不是缺口——挂单维护用改价代替撤单重挂，见 `:322`）。
+
+**这一节没有裁决任何事**：买不买 POWER、要不要开工业需求、卖能量是否净亏，仍全部属人（#130/#44/#51/#71）。
+本节只把"它到底是只读还是双向"、"资本是不是约束"、"哪条闸在合着"三件事变成有出处的读数。

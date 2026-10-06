@@ -7860,3 +7860,20 @@ if (Memory.kernel.strategy?.posture !== undefined) { Memory.kernel.postureChange
 **上线后的免费复证（不制造条件）**：`kernel.strategy.branch` 应每拍有值、`kernel.postureTransition.tick` 应**只在姿态变化时跳变**
 ——后者就是"那列不再撒谎"的直接证明；下一次自然进/出 war 时一并复证 #92/#101 的推断。
 边界：零 push、零 build、零阈值/决策改动、零线上写动作；`.gitignore` 与对方未提交物不 stage。**含 src 未推 9 笔。**
+
+## 巡检 R353（10-06 08:2xZ）——矩阵 **§26** 做成（#97 → **7/8**）：市场不是只读，资本也不是约束；外加**我自己差点第三次造出假缺口**
+**读到的三件事实（都有出处）**：
+1. **`stats.trade.myOrders = 1`** ⇒ 我们此刻在市场上有**自己的挂单**——这条线是**双向**的（`createOrder` `:382`、`changeOrderPrice` `:322`、`cancelOrder` `:328`、`deal` `:77/:586`），不是"只读行情"。
+2. **credits ≈ 19,833,159**（同 flush 窗两次读数逐字相同 ⇒ 只算**一个样本**，不写成"两次一致"）。⇒ **#130（要不要买 POWER）的权衡里，"买不买得起"不是变量**；真正在称的是要不要开这条链。
+3. **`demandsLive=0 / demandsPublished=0 / gatedBy=""`** ⇒ 工业需求从未发布过一条，且**不是被闸挡住的**——是正 ROI 条件本身没满足（与 #44/#51 同向，行为零变化不是故障）。
+本版本 `@types` 的 `Market` 只有 13 枚成员、**没有** `calcCommission/calcPrice/estimateOrder/bestOrders/skills` ⇒ 那些名字不可引用；`MARKET_FEE=0.05`、`MARKET_MAX_ORDERS=300` 是字面量可信，`TERMINAL_COOLDOWN/SEND_COST` 声明为裸 `number` ⇒ **本服未标定**。CPU 只有代码自陈"`getAllOrders` 是 CPU 大户"＋每 100 拍低频采样，**没有数值**。
+
+**★自抓的第三次假缺口（这条比上面三件更重要，因为它是方法论）**
+我第一轮搜 `\.cancelOrder(` 得 **0 命中**，于是写下"注释说超龄撤单、代码从不撤单 ⇒ 注释与代码不符"。
+真相：`terminal-manager.ts:328` 是 **`market.cancelOrder?.(order.id) === OK`**——**可选调用 `name?.(` 不含子串 `name(`**。
+⇒ **规矩升级（写进矩阵与记忆）：判"某 API 没接线"之前，调用形状必须同时搜 `name(`、`name?.(`、`name!(` 三种；
+只搜一种得到的 0，只能记成"我没搜到"，永远不能记成"不存在"。** 本仓 `src/` 里 `name?.(` 形状有 **9 处**，不是罕见写法。
+（同族前两次：`.observe(` 漏 `observeRoom(`、`.extract(` 根本没有这个方法。三次同一个根：**用脑内的搜索形状去裁决外部世界的存在性**。）
+
+**边界**：零 src、零 push、零 build、零 npm install、零阈值改动、零线上写动作；**市场仍是只读取证**——我没有、也不会下任何单。
+`.gitignore` 与对方未提交物不 stage。含 src 未推仍是 **9 笔**，`behind=0`；唯一恢复动作仍是一个字「推」。
