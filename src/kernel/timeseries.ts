@@ -96,6 +96,14 @@ export interface EconomySample {
 export interface PopulationSnapshot {
   /** 采样 tick。 */
   t: number;
+  /**
+   * 全体存活 creep 数（#141）。
+   * 下面五列只是五个角色的子集——线上实测某刻 `hv+ha+up+bd+wk = 11` 而真实人口 42，
+   * 因此**任何"人均"（每只 CPU、闲置率等）必须除以 `n`，不是五列之和**。
+   */
+  n?: number;
+  /** 角色 → 存活数，按数量降序截前 10（段体积有界；#141 的覆盖面补齐）。 */
+  rl?: Record<string, number>;
   // 各角色存活数量
   hv: number; // harvester
   ha: number; // hauler
