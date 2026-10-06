@@ -8000,3 +8000,20 @@ war 姿态开着（`warPressureTicks=0`＝打得起），而事实级敌情为 *
 3. 反向边界（写明不做的处置）：**不降低 `isActionUsable` 这道门来让 war 能出兵**——它是不可逆行动的属人安全闸；要动只能动"采集侧"（scout/observer），且属扩张/侦察政策，不属本轮。
 
 边界：零 src、零 push、零 build、全只读；`.gitignore` 与两份未跟踪文档仍未 stage。
+
+## 巡检 R361（10-06 09:0xZ / 01:0xZ UTC）——把 R360 留的那个数读到：**`CONFIG.war.interval = 10`**，我上一条 knife-edge 假设因此自撤
+数出处：`src/config/index.ts:694` 起 `war: { … interval: 10 }`（`git grep -n -A 10 "war: {"`；R360 里我 `grep src/config.ts` 打空是**路径猜错**，配置在 `src/config/index.ts`——不是数据缺失，别把工具的错读成世界没有）。
+
+**自撤的内容（撤的只有 R360 第三节那一条假设）**：我写过"若 `interval ≥ 200`，pass 与 fact 窗会撞成 knife-edge，`notFact` 会按构造接近全数"。
+实测 `interval=10` 远小于 `ROOM_THREAT_TTL=200` ⇒ **一次直接目击能给 20 趟 pass 用**，门根本不会自己饿死。
+⇒ `candidates=0` 的解释随之收紧为一句可引的话：**过去 200 拍内，没有任何一个"有主非我方"的房被直接来源（passive/scout/observer）看见过。**
+`notFact=5` 不是采样节奏问题，是采集**落点**问题（我们的直接视野只落在远矿/NPC 房——与漏斗里 `unowned=6` 同源）。
+
+**同一次读到的、要提防的第二形状**：`warFunnel.tick` 两次现读相差正好 200（00:58:52Z 的 83456294 → 01:01:18Z 的 83456494），
+而 `kernel.postureChangedAt` 同窗推进 12 拍/44 秒（≈3.7 s/拍，与既有拍长标定一致）⇒ 若 pass 真按 10 拍跑，漏斗戳理应只落后个位数拍，
+却落后了约 50 拍。**最可能是仪器延迟**（`stats.*` 是 heap 账本经 telemetry flush 落 Memory，落盘节拍≠写节拍），
+但这条我这轮**没验**：它是"读数滞后"还是"pass 被档位闸跳过"两种解释都吃得下，处置方向不同。
+下一读：同批取 `kernel.stats.lastSample` 与 `kernel.stats.warFunnel.tick` 的差，再与 flush 间隔对比——**别拿这个差去动 `CONFIG.war.interval`**。
+
+**净结论（本轮零改码）**：R360 第二节不变——战争门槛是属人安全设计，要动只能动采集侧；
+而 R361 把"动采集侧"具体到了一句话：**要有 scout/observer 把直接视野落到有主敌房上**，其中 Observer 那条正是 #100 等 `stats.observe` 上线才能分清"楼不在"与"楼在没请求"的那一支。
