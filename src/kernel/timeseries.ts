@@ -93,6 +93,31 @@ export interface EconomySample {
 /**
  * 人口普查快照（全局，仅保留最新一份）。
  */
+/**
+ * 把「角色 → 存活数」汇总成普查用的两列（#141 的纯函数部分）。
+ *
+ * 存在的理由只有一个：让"总人数"这件事**可被单测钉住**。
+ * `samplePopulationData` 本身要动 `RawMemory` 段与 `Game.creeps`，
+ * 为测它而手拼一套假引擎夹具，测到的只会是我的夹具（本仓有过这类假绿）。
+ *
+ * 不变式：`n === Σcounts`（含未列名角色）；`rl` 是按数量降序、至多 `topN` 条，
+ * 因此**旧的五列 `hv/ha/up/bd/wk` 与本函数无关**，语义与历史读数一律不动。
+ */
+export function summarizeRoles(
+  counts: Readonly<Record<string, number>>,
+  topN = 10,
+): { n: number; rl: Record<string, number> } {
+  let n = 0;
+  for (const c of Object.values(counts)) n += c;
+  const rl: Record<string, number> = {};
+  for (const [role, c] of Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)) {
+    rl[role] = c;
+  }
+  return { n, rl };
+}
+
 export interface PopulationSnapshot {
   /** 采样 tick。 */
   t: number;

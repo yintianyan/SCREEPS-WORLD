@@ -15,6 +15,7 @@ import {
 import {
   sampleCpu,
   sampleEconomy,
+  summarizeRoles,
   type PopulationSnapshot,
   type HeapSample,
 } from "../kernel/timeseries";
@@ -282,17 +283,15 @@ function samplePopulationData(tick: number): void {
     return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
   };
 
+  const roleSummary = summarizeRoles(counts);
+
   const snapshot: PopulationSnapshot = {
     t: tick,
     // #141：`counts` 本就枚举了全部角色，此前只把其中 5 个写进快照 ⇒ 覆盖率 11/42，
     // 而"人均 CPU/闲置率"的分母正是它。加 `n`/`rl` 是**只增不改**——
     // hv/ha/up/bd/wk 的语义与既有读数全部保持可比。
-    n: Object.values(counts).reduce((a, b) => a + b, 0),
-    rl: Object.fromEntries(
-      Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10),
-    ),
+    n: roleSummary.n,
+    rl: roleSummary.rl,
     hv: counts["harvester"] ?? 0,
     ha: counts["hauler"] ?? 0,
     up: counts["upgrader"] ?? 0,

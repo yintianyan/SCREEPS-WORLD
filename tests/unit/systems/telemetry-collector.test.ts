@@ -28,10 +28,11 @@ vi.mock("../../../src/kernel/segment-store", () => ({
   markEventLogDirty: vi.fn(),
 }));
 
-vi.mock("../../../src/kernel/timeseries", () => ({
-  sampleCpu: vi.fn(),
-  sampleEconomy: vi.fn(),
-}));
+// summarizeRoles 走真实实现（纯算术、无引擎依赖）；只 stub 两个采样器。
+vi.mock("../../../src/kernel/timeseries", async importOriginal => {
+  const real = await importOriginal<typeof import("../../../src/kernel/timeseries")>();
+  return { ...real, sampleCpu: vi.fn(), sampleEconomy: vi.fn() };
+});
 
 vi.mock("../../../src/kernel/event-log", () => ({
   EventKind: {
