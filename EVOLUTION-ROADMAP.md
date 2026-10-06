@@ -8659,3 +8659,35 @@ R379 把"Power 是工业前置"升成了读数。这一轮把这条链逐环核�
 要查得读官方手册的 Power 章节（不在本仓内），不是我该猜的引擎事实——这条留作下一轮的一件事。
 
 边界：零改码、零 push、零 build；线上只有只读 API 与纯读表达式；未 destroy / 未 re-claim / 未清 Memory。
+
+## 巡检 R381（10-06 12:2xZ / 04:2xZ UTC）——**GPL 到底卡在哪一环：不是钱、不是代码、不是 RCL，而是本服市场上"功率"这件商品零供给**
+R379/R380 把链条画到"第三环没写"，本轮核完前两环与真实卡点，**结论比那条更具体也更硬**（五发只读探针＋官方文档一句）。
+
+**逐环核（每环给出处）**：
+1. **RCL8 前提满足**：W37S58 `controller.level=8`（R376 表）。官方文档原文：*"An 8-level room is required to access a Power Spawn."*
+2. **功率孵化场在场且是我的**：`{room:W37S58, my:true, energy:1300, power:0}`，`typeof s.processPower === "function"`。
+3. **`processPower` 的调度代码存在**：纯函数 `src/domain/economy/power-processing.ts`（含单次耗能量注释＝引擎 `POWER_SPAWN_ENERGY_RATIO`），
+   执行层在 `systems/factory-manager.ts`（该文件自述注释），搬运路径的来历写在 `creeps/engine/actions/industry.ts:720`
+   （原文："processPower 消耗 1 power + 50 energy/次，**此前两样都无搬运通道**"）；
+   配置侧 `CONFIG` 有 `powerSpawnEnergyTarget:1000`、`powerSpawnPowerTarget:100`（注明＝**市场买入目标量**）与一条 storage 地板注释
+   （"GPL 是投资不是生存，余裕不足时暂停烧"）。⇒ **这一环不是零调用者**（我 R380 对"第三环"的判断只适用于 `operateStruct`，不适用于 `processPower`）。
+4. **★真实卡点＝没有 RESOURCE_POWER 可用**：功率孵化场 `store[RESOURCE_POWER]=0`，而文档写明 GPL 进度来自 *"Merging 1 power with 50 energy"*
+   ⇒ 没功率就一次也合不了，`gpl={level:0,progress:0,progressTotal:1000}` 因此**与代码无关**。
+5. **★市场买不到（这条否证掉 #130 里"买"这条路的当下可行性）**：
+   `Game.market.getAllOrders` 两种过滤形状都跑通并各自返回 **0 条卖单**——
+   `{type:"sell",resourceSymbol:RESOURCE_POWER}` → `ok, sellCount=0`；`{type:"sell",resourceAsset:RESOURCE_POWER}` → `ok n=0`。
+   同拍 `Game.market.credits = 20,342,247.575`（比 §26 记的 19.83M 还多）。
+   ⇒ **20.34M 信用买不到功率，不是买不起，是本服此刻没人挂卖单**——
+   这同时把 #130 那句"缺的是第一次跑通（打 Power Bank／开 POWER 买入口）"里**"买"这一支按现场行情判为当前不可行**，
+   并且再次坐实我记忆里那条：**credits 从来不是变量**（且我的"市场只读"是自我约束，不是引擎限制）。
+
+**六、于是 #130 的真实选择收窄成一条**：在本服此刻，通往 GPL>0 的**唯一可行动路径是 Power Bank（战斗获取功率）**，
+而 Power Bank 位于无主房——**恰好落在我们情报池唯一有的那一类房里**（R366：池子里 7～11 个房全是 unowned、`intelCoverage` 现读 9）。
+⇒ 两条线在这里合成一条：**同一个"只认得无主房"的情报面，既让战争选不出靶（#114），也仍是功率唯一可能的来源。**
+**我不会去打 Power Bank**：L0 §1.5 把主动战斗列为须授权项，且"为造证据而开战"是本仓明令禁止的回路。
+
+**七、诚实边界**：①`getAllOrders` 只反映**这一拍**的挂单，功率市场供需会变 ⇒ 判语要带"此刻"，下一轮若要引用必须重读；
+②官方文档那句"Set the level of the factory to the level of the power"我只取到摘要，**没核**它对 R380 第 3 环（`operateStruct` 零调用者）有无影响——
+那条结论不受本节影响，但真要补第 3 环前得先把原文读全。
+
+边界：零改码、零 push、零 build、线上只有只读 API／纯读表达式／公开文档；未 destroy、未 re-claim、未清 Memory、未下任何市场单。
