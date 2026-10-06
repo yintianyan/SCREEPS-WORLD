@@ -812,3 +812,14 @@ contract:W37S58:W38S58:energy  st=A  td=0  cs=0  ca=ua=ac=83,410,216  ⇒ 冻结
 
 **④ 分档更正**：`observer` 这条车道今天只能标 **WIRED（调用点在）+ UNOBSERVABLE（有没有真发过请求，无落盘答案）**；
 不要因为它出现在上表就把它读成 EXERCISED。`#97` 继续挂着，欠的两类（逐机制八项记录、标定过的成本列）一条没少。
+
+## §22 增补（R382，10-06 04:4xZ）——两格更新：`1 power + 50 energy` 从"口头数未核"升为**已核**；并把"买不到功率"的两因写全
+1. **配比已核**：官方文档原文 *"Merging 1 power with 50 energy increases GPL progress"*（与 `@types` 的 `POWER_SPAWN_ENERGY_RATIO` 常量名同向）。
+   本节原表中"未经 docs 复核 ⇒ 记为未核"这一格**就此了结**。同页另一句可用于**未来动作的前置**：
+   *"An 8-level room is required to access a Power Spawn"* —— 现读 W37S58 RCL8 且 powerSpawn 在场 ⇒ **该前提已满足，不是瓶颈**。
+2. **"功率买不到"是两因叠加，原文只写清了一因的风险**：①市场零卖单（04:2xZ 与 04:4xZ 两发，`sell`/`buy` 双向均 0 条）；
+   ②**本仓自己把入口关着**（`:85` 优先级 `return 0`、`:445` 自采 `continue`）。
+   ⇒ 读 §22 的人（含我今早）容易只看 ①就得出"只能打 Power Bank"，**而打开 ②是不必等待、不必战斗的另一条**（仍要市场有货、仍要花信用）。
+   本增补把它写进"前置条件/资源成本"两行之间的缺口：**开关状态属人，不由本文件代开。**
+3. **签名以本节原有三条为准**（`gpl.level>0`／`PowerCreepMilestone` 事件编码／三处 POWER 库存由 0 变正），
+   今早我在巡检里另写的那套不另立标准——同一现象不留两种说法。
