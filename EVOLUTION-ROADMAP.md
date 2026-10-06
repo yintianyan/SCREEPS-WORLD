@@ -8846,3 +8846,38 @@ R368 否证了"退出 war 还要吃 ≥5,000 拍 fortify 尾税才放行扩张"�
 若哪天"sha 相同而字节不同"再出现，先怀疑仪器口径而不是世界变了。
 
 边界：零改码、零 push、零 build、线上只读；**没有清那两条 override**（删覆盖＝改行为，虽然推断上惰性，仍属人）。
+
+### 巡检 R387（10-06 13:1xZ / 05:1xZ UTC）**把 R386 的更正落进两份下游工件，结果在落的过程中抓到 R386 自己又错了一处**
+本轮只做"传播更正"这一件事（tracker #83＝roadmap #90、handoff 部署清单第 10 条），**但传播要求我先读懂被我传播的那句话** ⇒ 现读 `CONFIG.posture` 与 `selectEnvBaseline`，于是发现：
+
+**一、R386 末节那句"#90 的分母也要按这个改：`warPatience` 生效是 low 档 3,000"是错的——#90 的分母从来不是 `warPatience`。**
+R384/R385 的判据写的是 `r = 实际 war 时长 / 生效 threatWindow`（目击税＝姿态被按在 war 的最长时间），分母属 `threatWindow`；
+`warPatience` 是**另一条腿**（fortify→war 的**进入**耐心，`config/index.ts:1166`），那条 10,000 的旧覆盖改的是它，与"税吃满没有"无关。
+⇒ 我把两件事叠在了一句话里。**数值本身没错，错的是它挂在哪一问上。**
+
+**二、现读到的 posture 参数表（写死在此，后续引用以此为准）：**
+
+| 键 | CONFIG（`config/index.ts`） | env `high` | env `medium` | env `low` | `strategyOverrides` 残留 |
+| --- | --- | --- | --- | --- | --- |
+| `threatWindow`（#90 分母） | 3,000（:1164） | 1,500 | 不覆盖⇒3,000 | **5,000** | — |
+| `warPatience`（进入 war 的耐心） | 5,000（:1166） | 7,000 | 不覆盖⇒5,000 | 3,000 | 10,000（**已被读时 TTL 过滤**） |
+| `warExitPatienceTicks` | 1,000（:1168） | — | — | — | — |
+| `minDwell` | 1,000（:1170） | — | — | — | 1,400（**同上，已惰性**） |
+
+**三、第二处命名错（R384 留下的，本轮一并改）**：旧文写"`neighborPressure` high→1500 / medium→3000 / low→5000 拍"——
+`neighborPressure` 是 `selectEnvBaseline` 里 **switch 的输入**（`posture-baseline.ts:32`），不是被覆盖的键；那三个数属于 `threatWindow`。
+⇒ **"输入名当输出名"是我这轮抓到的第 N 次变量名替我做了我没做的测量**（同一族：`orphanStructs`、`Game.ConstructionSite`、`kernel.lastExpansionAttemptTick`）。
+
+**四、这条更正的实际收益**：既然 `strategyOverrides` 层整层被过滤（R386 的产物 grep 自证），**#90 的分母就降为一个可确定性读码的量**，
+不再是"要现场读 Memory 才知道"的量。唯一剩下的未知只有一个：**当前生效的是哪一档 `neighborPressure`** ⇒ 分母取 1,500 / 3,000 / 5,000。
+读它的**写者**（环境画像落盘处），**不要**从"今天被打了几次"反推——那正是把仪器读数当原因。
+
+**五、教训（要留在台账上，因为它打在我自己刚写下的纪律上）**：handoff 第 364 行是我 R386 亲手写的
+"引用任何 posture 参数前先现读 `CONFIG.posture` + `kernel.environment` + `kernel.tuning.strategyOverrides` 三层"，
+而同一轮末尾我就把 R384 散文里的"分母＝warPatience"照抄了一次 ⇒ **写纪律不能防住"引 inherited prose 的数"**，
+只有"落笔前重新读码"能防住。**判据句里的每一个键名都应当场对一次代码**，尤其是从上一轮散文里继承来的那一个。
+
+已落地：tracker **#83**（roadmap #90）描述按本节重写（含两处作废说明）、tracker **#82** 标题从"未部署"改"已部署·缺判效"、
+handoff 部署清单第 10 条**从签名池移出** ⇒ **部署签名由 10 条降为 9 条**（第 10 条的问题不推就能答，且"键应消失"那句也作废：读时过期不删条目，只是不采用）。
+
+边界：零改码、零 push、零 build、线上只读（本轮没发任何 console 探针）；动的是三份我自己在写的台账/工件。
