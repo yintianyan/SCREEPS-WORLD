@@ -8281,3 +8281,35 @@ heap 复位的见证器是 `kernel.stats.energyLedger.tick`——现读 **834318
 3. `cpuAvg10` 与 `capacity.since` 各再取两发，看 19.5 是 war 尾波还是稳态（**没两发同形之前不做趋势**，`capacity.since` 是档位沿、可直接判"何时进入 constrained"）。
 
 边界：本轮**不改任何阈值**（贴顶不是降闸的理由，恰恰是 #50 那条属人选择被现场量实了）；零 src、零 push、零 build、全只读 API。
+
+## 巡检 R370（10-06 11:4xZ / 03:4xZ UTC）——**扩张为什么不推进，第一次有读数而不是推断**：唯一失败的门是 **G6（CPU 档位）**，全链逐环核完
+03:45Z 只读现读（同工具、同批）：
+`kernel.expansionDashboard.failedGates` = **`["G6: CPU tier(v=constrained|tier ≤ comfortable)"]`**
+`kernel.expansionDashboard.summary` = `"Expansion Dashboard @83458984 | Pressure=HIGH(0.69) | Readiness=NOT_READY | Blocked=G6 | Budget=372183/1005900 | Candidates=13(Q=4,R=8,U=1) | Plans=4 active, 0 waiting | Top=W39S56(EVALUATED)"`
+`kernel.expansionPlans.length=5`（1 张 `CANCELLED`＋**4 张 `EVALUATED`**，`rd`（=`readySince`）**四张全部不存在**）、`kernel.expansionCandidates.length=10`、`kernel.capacity={"tier":"constrained","since":83425106}`。
+
+**一、逐环闭合的因果链（每一环都有位点或读数，不再有任何"我猜"）**
+1. `expansion-manager.ts:56/57/59/62/63` **五把早退闸今天全开**：`CpuTier` 是 **bucket 阈值表**（`config/index.ts:121-124`：healthy≥7000 / guarded≥3000 / conserve≥1000），现读 bucket=**10000** ⇒ 档 = `healthy` ⇒ :56 通过、:57（bucket≥5000）通过；
+   `expansionPausedUntil=83341372`（已过期 ≈117,700 拍）⇒ :59 通过；`strategy.expansionAllowed=true`（R368）⇒ :62 通过；
+   冷却 `cooldownTicks=10000`、`lastExpansionCompletedTick=83,328,457`（早 ≈130,500 拍）、`activeExpansionCount=0`（`kernel.expansion` 不存在）⇒ :63 通过。
+2. 于是执行侧唯一该干活的是 `tryConsumePlan`（`plan-adapter.ts:33`），它只消费 **`WAITING_EXECUTION`** 的 Plan ⇒ **现读 `0 waiting`，队列里没有任何可消费的 Plan** ⇒ 阻塞点根本不在执行侧。
+3. 往上：`WAITING_EXECUTION` 只由 `expansion-planner.ts:218-230` 从 **`READY`** 晋升（`explainDecision` 判 APPROVE），而我那 4 张 Plan 停在 **`EVALUATED`**。
+4. 再往上：`EVALUATED → READY` 由 `applyHysteresis(p, isReady, tick)`（`plan-lifecycle.ts:132-141`）驱动，需要 `isReady` 连续攒够 **`upgradeTicks=500`**（`:39-44`）。
+   **`rd`（=`readySince`，序列化位 `expansion-planner.ts:318`）四张全不存在 ⇒ `isReady` 此刻为假、且每趟 pass 都从零重来**（累计从未开始，不是"攒到一半"）。
+   同一条也解释了那行"ready 已累计 …t/500t"的停摆可见性日志为何沉默：它的过滤条件正是 `readySince !== undefined`。
+5. `isReady = extendedReadiness.allPassed && readiness.readiness !== "NOT_READY"`（`:200`）⇒ 读数直接点名：**`Readiness=NOT_READY`、`Blocked=G6`**，且 `failedGates` 数组里**只有 G6 一枚**。
+
+**二、今天的读数同时纠正我这两天两次说法（两个方向都错了一点，分开记）**
+- R368 说"war 尾税不是阻塞" ⇒ **成立**（五把早退闸全开、`expansionAllowed=true`），但当时我只证到"授权没被锁"，没找到真闸在哪。
+- R369 说"不能说 constrained 挡扩张，因为 `ctx.budget.tier` 与 `capacity.tier` 是两套轴" ⇒ **那句 hedge 是对的、结论却是低的**：挡扩张的确实**不是** :56 那把 bucket 档闸，
+  而是**就绪度里的 G6 直接吃 `capacity.tier`**（`tier ≤ comfortable`）。⇒ 同一个 `constrained` 走的是**另一扇门**进决策。
+  这正是本仓反复出现的那族错：**一名两义/一量多门**——我按"哪把闸用哪个词表"去排除，排得对，但据此把 CPU 这条因排除掉了，就是过头了。
+
+**三、可执行的含义（属人，我不选路，但把数算出来）**：G6 要 `tier ≤ comfortable`（`avg10 ≤ 12` 那档），现读 `cpuAvg10=19.5`、`capacity.since=83425106`（constrained 已 ≈33,900 拍）。
+⇒ 以 `cpuAvg10` 为口径，进入 comfortable 需 **−7.5/t**；而 R350 量过的系统侧**整榜砍光**才 ≈−2.9/t（traffic-manager 那 5.62/t 是 G6 定案的结构性成本）。
+**缺口比最大可得节省大 ~2.6 倍** ⇒ 这不是"再省一点"能过的门，是 #50 那条属人选择（接受长期 constrained 并换判据 / 或买 CPU 槽、或结构性缩编制）。
+**我不会为了过 G6 去降任何闸**（自败回路）。
+
+**四、两条留给下一发的自核项（都别当已证）**：
+①`summary` 说 `Candidates=13(Q=4,R=8,U=1)`，而 `kernel.expansionCandidates.length=10`——两个数不同刻、且 dashboard 的 13 可能含别的桶 ⇒ **先读 `Candidates` 的分桶口径再判是不是仪表说谎**（本仓这类"同一屏两个数"错过两次）。
+②`Pressure=HIGH(0.69)`：压力高与我今天读到的 recovery 房（W38S58）是否同源，未读 `pressure.dimensions` ⇒ 不下结论。
