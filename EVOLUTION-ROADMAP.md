@@ -8997,7 +8997,8 @@ R387 留下的唯一未知是"当前生效哪一档 `neighborPressure`"。写者
 ### 巡检 R392（10-06 13:3xZ / 05:3xZ UTC）**推前审计：这一批 12 笔 src 里唯一改语义的那一笔，消费者是零**
 「推」是下一道闸,所以我把"批内是否夹带未申报的行为改动"当作本轮主目标审了一遍（看 diff,不靠提交信息）。
 
-**一、清单对得上号**（`git diff --stat origin/dev..HEAD -- src tests`：**13 个 src 文件 + 14 个测试文件,1,246 增 / 53 删,14 笔提交**）：
+**一、清单对得上号（本行的数字已在 R393 更正过：`13/14/14` 是**截断产物**，真值 **16 src / 11 test / 12 笔**）**
+（`git diff --name-only origin/dev..HEAD -- src tests` 不带 `tail` 重取：**27 文件、1,246 增 / 53 删**，与同一命令的 `--shortstat` 自洽）：
 `road-build.ts`(111) `posture.ts`(140) `recovery-lifecycle.ts`+`recovery-execution-system.ts`(139) `global-cache.ts`+`kernel.ts`(注册/暂存结构)
 `timeseries.ts`+`telemetry-collector.ts`(141) `empire-strategy.ts`(140 消费侧) `tower-defense.ts`(131/119 侧) `room-observer.ts`(100) `room-snapshot.ts`(§3.4 残留普查)
 `types/global.d.ts`(声明) ⇒ **每笔都能落到一张票上,没有"顺手改"的孤儿文件**。
@@ -9020,3 +9021,28 @@ R387 留下的唯一未知是"当前生效哪一档 `neighborPressure`"。写者
 ③推 = 部署 = L0 §1.5 属人授权类,**我不自作**。
 
 边界：零改码（本轮只读 diff 与源码）、零 push、零 build、线上只读。
+
+### 巡检 R393（10-06 13:3xZ / 05:3xZ UTC）**我自己写的闸门把我的审计数字打回来了：16 个 src 文件，不是 13**
+为了把「推」变成一条有依据的命令，我从 batch14 那套闸门派生了 `tmp/tools/official/batch15-gate-and-push.sh`（**只写不跑**），
+并把"批内 src 文件数"做成闸门①¾（对不上就**拒绝推**）。基线我填了 R392 的 **13** ⇒ 脚本先自检时跑出 **`src 文件数=16`、`src+tests 提交数=12`**。
+
+**错因（这条比数字值钱）**：R392 我用的是 `git diff --stat … -- src tests | tail -25`——**27 个文件被 `tail` 吃了头两行**，
+而我把截断后的清单当成了全部，**同一命令的 `--shortstat` 明明就写着 `27 files changed`**，我没对那次闭合式。
+⇒ 同族第 N 次：**我的命令形状本身就是读数的一部分**；清单类结论要么用不带截断的 `--name-only`，要么把 `--shortstat` 同批读回来做闭合式（**这次是"名数 ≠ 文件数"没对上**）。
+⇒ **派生脚本里的"审计基线"必须由脚本自己现取，不能由我抄散文里的数**——这条闸门存在的意义正是拦我这种抄数。
+
+**补审那三个没看过的 src**（`pickup.ts` / `remote-hauler.ts` / `intel.ts`，都是 R392 漏列的）：
+①`pickup.ts`（#131）：加 heap 计数。**唯一一处结构改写**是把 `if (richestAdjacent) return…; return findClosest??[0]` 合成
+`const picked = richestAdjacent ?? findClosestByRange(candidates) ?? candidates[0]` ⇒ `??` 链与原两支**同 precedence、同语义**，逐字核过。
+⚠ 但 `bucket.executed++` 落在 `runCountedAction` **之前** ⇒ **`executed` 数的是"发起"不是"成功"** ⇒
+闭合式 `executed + skips === resolved` 会**把 ERR_* 失败也算进 executed**（判读 #131 时不许把它当战果率）。
+②`remote-hauler.ts`（#111）：0-WORK 支新增一次 `findMySitesCached` 遍历 ⇒ 纯计数，不动动作；成本上界＝每房每拍 1 次 `find`（缓存按房共享，不随 creep 数放大）。
+③`intel.ts`（#100）：**纯 `interface`，零运行时**。
+⇒ 结论仍成立但**措辞要收窄**：这批**不改任何决策**（除 postureChangedAt 的语义、其读者为 0），
+**不是**"零成本"——两处新增遍历/计数是真增量，推后要看 CPU 档位是否跟着动（判档只看 `tier`+`since`）。
+
+**脚本状态**：`bash -n` 语法通过（**未运行**）；闸门含①无在飞 e2e/build/push、①½ src/tests 工作树干净、①¾ src 文件数＝16、
+②typecheck+unit+integration+build、③快进＋推送前现取线上 sha 作基线（取不到就停，"读失败"≠"没上线"）；红线沿用 batch14：不 `--no-verify`、不 force、不 reset。
+**跑不跑它 = 「推」的授权决定，仍属人。**
+
+边界：零改码（只写 `tmp/` 下未跟踪的工具）、零 push、零 build、线上只读。
