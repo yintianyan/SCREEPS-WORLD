@@ -8912,3 +8912,35 @@ R387 留下的唯一未知是"当前生效哪一档 `neighborPressure`"。写者
 已落地：tracker **#83** 标题与描述按本节重写（含作废引用清单）。
 
 边界：零改码、零 push、零 build、线上只读（一次 memory-segment/`peek` 只读请求，无探针、无写操作）；不改任何阈值。
+
+### 巡检 R389（10-06 13:1xZ / 05:1xZ UTC）**我 R386 给 #89 写的"行为判效"判据对自己要测的东西失明 ⇒ 现场否证并改成判别条件式**
+想做一次**不依赖部署**的 #89 行为判效（量 fortify→develop 的静默拍数是 ≈1,000 还是 ≈1,400），一次只读 peek 就把它否了：
+
+**读数**：`kernel.strategy = {posture:"fortify", since:83,458,051, expansionAllowed:true, newRemoteOpsAllowed:true, warPressureTicks:0, gclLevel:5, bucket:10,000}`、
+`kernel.postureChangedAt = 83,460,448`、`kernel.lastExpansionCompletedTick = 83,328,457`、`kernel.expansion` **不存在**（旧键确认已摘，`expansion-manager.ts:39-45`）。
+⇒ fortify 已驻留 **2,397 拍**（83,460,448 − 83,458,051）。
+
+**一、2,397 落在 1,400 之外 ⇒ 这一发对 1,000/1,400 没有任何判别力。** 写死在判据里的"静默拍数 ≈1,000 而不是 ≈1,400"要成立，
+退出必须**恰好**发生在 `[1000, 1400)` 这 400 拍带里；而读码（`posture.ts:266-272`）表明回落要**同时**满足
+①`!threatRecent`（`posture.ts:144-146`：所有房的 `lastHostileAt` 距今 ≥ `threatWindow`＝实读 5,000）与 ②`dwellElapsed ≥ minDwell`。
+⇒ **只要 war 退出时威胁记忆还没过期（今天正是这支：经济分支 `warExitPatienceTicks=1000` 先触发、威胁窗 5,000 还没走完），
+①就比②晚得多，minDwell 永远不是绑定约束** ⇒ 我那条判据测的是"多数场合根本不起作用的那个参数"。⇒ **属"判据对自己要测的东西失明"这一族，本轮第 N 次犯在同一处。**
+
+**二、但 minDwell 并非永不可观——把唯一能分辨的场合写死（这才是可执行的判别条件）**：
+**war 因经济分支退出、且退出那一拍威胁记忆已经过期**（`lastHostileAt ≤ 退出拍 − 5,000`）⇒ 下一拍①即满足、②挡住 ⇒
+**fortify 会被钉整整 `minDwell` 拍再落 develop ⇒ 观测值直接等于生效值（1,000 或 1,400），一次即判。**
+今天的形状不是这一支（dwell 2,397 且仍未落 ⇒ 把 fortify 钉住的不是 minDwell，而是①或危机早退支，**本轮不指认哪一支**，指认要 `postureTransition.reason`＝未推的 #140）。
+⇒ 判据改法：**等这个沿**，而不是"多取几次切换样本求均值"（取多少次都落在同一段，因为约束不是它）。
+
+**三、实践结论（对"该不该清那两条 override"）**：override 改的 `minDwell` **本身在常见形状下就不 binding**，
+叠加 R386 的"读时 TTL 已把它过滤"⇒ **那条 20.9 天前的旧覆盖是双重无害**；`warPatience=10000` 那条则不同——它管 war 的**进入**，
+`warPatience` 生效 3,000（low 档）与 10,000 差 7,000 拍，一旦 live 就会实打实推迟宣战 ⇒ **惰性化它的正是同一个 TTL**。
+（删条目仍属人：直接改行为，且此刻删与不删观测上等价。）
+
+**四、顺带第 4 发确认 #140 的缺陷形状**：姿态稳定期 `postureChangedAt` 仍在每拍推进（83,460,448）而 `strategy.since` 固定（83,458,051）
+⇒ 上线后"changedAt 不再每拍推进"这条签名**基线成立且仍未被满足**（这正是 #140 该随批推的理由之一）。
+
+**五、扩张侧同拍读数**：`expansionAllowed=true`、`newRemoteOpsAllowed=true`、`bucket=10,000`、`warPressureTicks=0`
+⇒ 姿态层的门**是全开的**，扩张仍未推进的瓶颈**不在 posture 层**（与 tracker #7 的"唯一失败门是 G6"一致，本轮不复测 G6）。
+
+边界：零改码、零 push、零 build；两次只读 API 请求（`peek`），无 console 探针、无写操作；不改任何阈值、不清 override。
