@@ -2,6 +2,7 @@
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { globalCache, bumpEnergyCounter, type RoomEnergyCounters } from "../../kernel/global-cache";
 import { EventKind, recordEvent } from "../../kernel/event-log";
+import { recordSkip } from "../../kernel/memory";
 import {
   INITIAL_EFFICIENCY_FACTOR,
   emptyLedger,
@@ -204,6 +205,11 @@ export const economySystem: System = {
       // 无基线或断档（reset/跳窗）→ 只播种窗口起点，不结算（防跨断口假漂移）。
       // 基线必须是**拷贝**：cum 是全局累计账的活引用，别名会让窗口差值恒为 0。
       if (st.lastTick === undefined || ctx.tick - st.lastTick !== acc.windowTicks) {
+        // 断档时留一个拒因计数（#142）：丢掉一个结算窗**此前完全无痕**。
+        // 净流 EMA 是 G4/G6 的输入，而 CPU 挤满时对齐拍会被 canStart 拒 ⇒ 该房整窗被扔;
+        // 没有这一列，"扩张被 CPU 档卡住"与"扩张被一个被饿着的仪器卡住"在读数上完全同形。
+        // 首见播种（lastTick undefined）不算丢窗。
+        if (st.lastTick !== undefined) recordSkip("economy/window-slip");
         st.lastTick = ctx.tick;
         st.lastLedger = { ...cum };
         st.lastPools = { ...pools };
