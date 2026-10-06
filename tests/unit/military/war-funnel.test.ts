@@ -15,7 +15,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { warPlanningSystem } from "../../../src/systems/military/war-planning-system";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
-import { systemPhase } from "../../../src/kernel/phase";
 import { globalCache } from "../../../src/kernel/global-cache";
 import type { ThreatAssessment } from "../../../src/domain/defense/threat-assessment";
 import type { EmpireHealthResult } from "../../../src/domain/strategy/empire-health";
@@ -43,10 +42,25 @@ const SNAP = () =>
   });
 const CTX = () => mockRoomStateCtx([SNAP()], TICK);
 
-/** 老化门触发 tick：与 intelligence.test.ts 同一条判据。 */
-const PARENT_PHASE = systemPhase("intelligence", 10);
-function agingTick(base: number): number {
-  return base + ((((PARENT_PHASE - base) % 100) + 100) % 100);
+/**
+ * #115 换门后的驱动方式：老化批不再对齐到某个固定相位拍，而是"距上次跑够 100 拍即开"，
+ * 到期拍若被跳过则下一个可用拍（+10）必开 ⇒ 延后上界 110 拍。
+ * 这里按系统自身 interval 前进，直到快照真的落在这一拍上；跑不到就把最后拍的 tick 交回，
+ * 让下面的断言把它钉成失败（而不是静默通过）。
+ */
+const SYS_INTERVAL = 10;
+function runUntilAged(from: number): number {
+  let t = from;
+  // 界取 24 步（240 拍）：门的状态是模块级 heap，同文件内前一个用例可能已经把
+  // lastAgingTick 推到更高的拍 ⇒ "从本用例的 TICK 起算"可能要跨一整个额外周期。
+  // 延后上界那条契约由第一个用例（跑完 setup、last-run 已知）钉，这里只求"必会开"。
+  for (let i = 0; i < 24; i++) {
+    t += SYS_INTERVAL;
+    G().Game.time = t;
+    intelligenceSystem.run(mockContext(SNAP()));
+    if (G().Memory.kernel?.stats?.intelCoverage?.tick === t) return t;
+  }
+  return t;
 }
 
 function threat(intent: string): ThreatAssessment {
@@ -288,12 +302,11 @@ describe("#99 落盘：intelligence 老化批与 intelCoverage 同拍快照", ()
     warPlanningSystem.run(CTX());
     G().Memory.kernel.stats = {};
 
-    const at = agingTick(TICK);
-    G().Game.time = at;
-    intelligenceSystem.run(mockContext(SNAP()));
+    const at = runUntilAged(TICK);
 
     const stats = G().Memory.kernel.stats;
     expect(stats.intelCoverage.tick).toBe(at);
+    expect(at - TICK).toBeLessThanOrEqual(110); // #115：延后上界 = 100 + 一个系统 interval
     expect(stats.warFunnel).toEqual({ ...funnel()! });
     expect(stats.warFunnel.tick).toBe(TICK);
     expect(stats.warFunnel).not.toBe(funnel());
@@ -301,9 +314,7 @@ describe("#99 落盘：intelligence 老化批与 intelCoverage 同拍快照", ()
 
   it("war-planning 自 boot 没跑过 ⇒ 键缺失（「未上线」这一态），不写成全零", () => {
     G().Memory.kernel.stats = {};
-    G().Game.time = agingTick(TICK);
-
-    intelligenceSystem.run(mockContext(SNAP()));
+    runUntilAged(TICK);
 
     const stats = G().Memory.kernel.stats;
     expect(stats.intelCoverage).toBeDefined();

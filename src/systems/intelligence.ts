@@ -1,6 +1,5 @@
 /** Intelligence 系统 — IntelState 唯一写者（完整版情报架构） */
 import type { Priority, System, TickContext } from "../kernel/contracts";
-import { systemPhase } from "../kernel/phase";
 import { safeRun } from "../kernel/safe-run";
 import { globalCache } from "../kernel/global-cache";
 import {
@@ -37,9 +36,19 @@ const playerEntries = new Map<string, PlayerIntelEntry>();
 
 /** 老化周期（低频批处理；写事件式采集每 interval 都跑，老化 100t 一次）。 */
 const AGING_INTERVAL = 100;
-/** 老化门相位（phase.ts 内部门规范：相对父系统相位取模，避免绝对对齐无交集）。 */
 const PARENT_INTERVAL = 10;
-const PARENT_PHASE = systemPhase("intelligence", PARENT_INTERVAL);
+
+/** 老化批上一次真正跑起来的 tick（heap：换码后首拍即跑，与 ageRooms/capRooms 的幂等性一致）。 */
+let lastAgingTick: number | undefined;
+
+/**
+ * 老化批的到期判定（#115）—— 从「相位取模」改成「距上次运行够久」。
+ * 导出只为让这条算术落在单测里：老化块要吃 Memory/RawMemory 段与 Game，
+ * 为它手拼一套假引擎夹具，测到的是夹具而不是行为。
+ */
+export function agingDue(tick: number, lastRunTick: number | undefined): boolean {
+  return lastRunTick === undefined || tick - lastRunTick >= AGING_INTERVAL;
+}
 
 /** 敌对信号判定：房名命中战争黑名单（止损链冷却期内）→ 该房观测到的 owner 记敌对。 */
 function isBlacklistedRoom(roomName: string, tick: number): boolean {
@@ -179,30 +188,29 @@ export const intelligenceSystem: System = {
       false,
     );
 
-    // 老化批处理（低频相对相位门）：超期清理 + 容量覆盖 + 玩家域冷存落地。
-    if ((ctx.tick - PARENT_PHASE) % AGING_INTERVAL === 0) {
+    // 老化批处理（#115）—— 两处一起改：**elapsed 到期门** + **三段隔离**。
+    //
+    // 换门的理由（线上实测）：原先是单拍模门 `(tick - PARENT_PHASE) % AGING_INTERVAL === 0`，
+    // 而本系统每 PARENT_INTERVAL=10 拍才跑一次 ⇒ 到期那一拍若被调度器跳过（CPU 紧张时 kernel
+    // 跳过低优先级系统），整批延后一整个 10 拍；实测本窗 3 次延后、最长 +400 拍，
+    // 于是 `intelCoverage.tick` 会滞后到把"仪器丢沿"照成"服务器变慢"（R391 就被它骗过）。
+    // elapsed 式把延后上界钉死为一个 PARENT_INTERVAL：到点没跑，下一个可用拍一定跑。
+    //
+    // 拆段的理由（一次真实的红，不是假想）：单段 safeRun 里 **段 IO 抛错会吃掉观测本身**——
+    // `restorePlayersFromSegment()` 一抛，其后的 `capRooms`、`intelCoverage` 同拍快照、
+    // `warFunnel` 落盘全部连带不执行。本仓纪律是"观测失败不阻塞清理"（`kernel/memory.ts:133`
+    // 同族），所以这里把三件事各留一段：**A 房级老化 → B 玩家段冷存 → C 同拍快照落盘**，
+    // 任一段炸只丢自己；B 仍在 C 之前 ⇒ `players` 读数含义与改前一致（先恢复再快照）。
+    if (agingDue(ctx.tick, lastAgingTick)) {
+      // 时间戳先行落盘：safeRun 会吞异常，若"失败就 10 拍后重试"，一个持续性错误
+      // 会把低频批变成每 10 拍撞一次，代价远大于晚 100 拍。
+      lastAgingTick = ctx.tick;
+
       safeRun(
         "intelligence/aging",
         () => {
           const removed = ageRooms(roomEntries, ctx.tick);
           capRooms(roomEntries, INTEL_ROOMS_CAP);
-          restorePlayersFromSegment();
-          persistPlayersToSegment();
-          const statsAny = (Memory as any).kernel?.stats as any;
-          if (statsAny) {
-            statsAny.intelCoverage = {
-              rooms: roomEntries.size,
-              players: playerEntries.size,
-              tick: ctx.tick,
-            };
-            // #99：战争候选漏斗（war-planning 每 pass 写 heap scratch）。落在这里的理由：
-            // 它与 intelCoverage 是同一个问题的两半（"池子里有房，为什么选不出靶"），
-            // 同拍写入 ⇒ 两份读数永远同时刻，不必猜谁更旧。
-            // scratch 为 undefined = war-planning 自 boot 起还没跑过 ⇒ **不写**（缺键是
-            // "未上线"这一态，写成全零会被读成"跑过且每道筛子都空"）。
-            const funnel = globalCache().warFunnelScratch;
-            if (funnel) statsAny.warFunnel = { ...funnel };
-          }
           if (removed > 0) {
             log.info(
               "intelligence",
@@ -210,6 +218,36 @@ export const intelligenceSystem: System = {
                 `(active=${roomEntries.size}, players=${playerEntries.size})`,
             );
           }
+        },
+        false,
+      );
+
+      safeRun(
+        "intelligence/aging-players",
+        () => {
+          restorePlayersFromSegment();
+          persistPlayersToSegment();
+        },
+        false,
+      );
+
+      safeRun(
+        "intelligence/coverage-snapshot",
+        () => {
+          const statsAny = (Memory as any).kernel?.stats as any;
+          if (!statsAny) return;
+          statsAny.intelCoverage = {
+            rooms: roomEntries.size,
+            players: playerEntries.size,
+            tick: ctx.tick,
+          };
+          // #99：战争候选漏斗（war-planning 每 pass 写 heap scratch）。落在这里的理由：
+          // 它与 intelCoverage 是同一个问题的两半（"池子里有房，为什么选不出靶"），
+          // 同拍写入 ⇒ 两份读数永远同时刻，不必猜谁更旧。
+          // scratch 为 undefined = war-planning 自 boot 起还没跑过 ⇒ **不写**（缺键是
+          // "未上线"这一态，写成全零会被读成"跑过且每道筛子都空"）。
+          const funnel = globalCache().warFunnelScratch;
+          if (funnel) statsAny.warFunnel = { ...funnel };
         },
         false,
       );

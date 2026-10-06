@@ -1,7 +1,6 @@
 /** Intelligence 系统（IntelState 唯一写者）：观察交接采用 / 被动威胁 / 老化 / 查询 API。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
-import { systemPhase } from "../../../src/kernel/phase";
 import { globalCache } from "../../../src/kernel/global-cache";
 import {
   intelligenceSystem,
@@ -14,11 +13,8 @@ import {
 } from "../../../src/systems/intelligence";
 import { ROOM_DYNAMIC_TTL, ROOM_THREAT_TTL, type RoomIntel } from "../../../src/domain/intel";
 
-/** 老化门触发 tick：(tick - PARENT_PHASE) % 100 === 0。 */
-const PARENT_PHASE = systemPhase("intelligence", 10);
-function agingTick(base: number): number {
-  return base + ((((PARENT_PHASE - base) % 100) + 100) % 100);
-}
+/** 本系统的运行节拍（#115 后老化门不再对齐固定相位，测试按 interval 前进找开门拍）。 */
+const SYS_INTERVAL = 10;
 
 /** 观察交接播种：向 globalCache.intelHandoff 推一条观测（home = 归属房）。 */
 function submitObs(home: string, subject: string, payload: Partial<RoomIntel>): void {
@@ -105,10 +101,17 @@ describe("Intelligence — 低频老化与容量", () => {
     submitObs("W7N4", "W3N3", { lastSeen: adoptedAt });
     intelligenceSystem.run(mockContext(mockSnapshot()));
     expect(getRoomIntel("W3N3")).toBeDefined(); // 采用即写入（虽已超期）
-    const atAging = agingTick(base);
-    (globalThis as any).Game.time = atAging;
-    intelligenceSystem.run(mockContext(mockSnapshot()));
+    // #115 换门后的契约：老化批在"上一次运行 + 100 拍"后开门；到期拍被跳过则下一个可用拍必开
+    // ⇒ 延后上界 110 拍。测试不再猜固定相位拍，而是按 interval 前进直到条目真被清掉。
+    let atAging = base;
+    for (let i = 0; i < 12; i++) {
+      atAging += SYS_INTERVAL;
+      (globalThis as any).Game.time = atAging;
+      intelligenceSystem.run(mockContext(mockSnapshot()));
+      if (getRoomIntel("W3N3") === undefined) break;
+    }
     expect(getRoomIntel("W3N3")).toBeUndefined(); // 老化清理为未知
+    expect(atAging - base).toBeLessThanOrEqual(110); // ★延后上界（旧门的延后是无上界的随机漂）
     expect(getRoomIntel("W5N7")).toBeDefined(); // 未超期条目不受影响（文件内模块态跨用例保留）
   });
 

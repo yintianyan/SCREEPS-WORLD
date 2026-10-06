@@ -414,7 +414,7 @@ describe("remote-mining-manager — Invader 预定闭环（线上 W37S57 复现�
         [targetRoom]: {
           state: "abandoned",
           createdAt: now - 15000,
-          lastSeen: now - 15000,
+          lastSeen: now - 5000,
           sources: 2,
         },
       },
@@ -429,7 +429,7 @@ describe("remote-mining-manager — Invader 预定闭环（线上 W37S57 复现�
         payload: {
           kind: "normal",
           status: "normal",
-          lastSeen: now - 15000,
+          lastSeen: now - 5000,
           sources: 2,
           reservedBy: "Invader",
           pathCost: 36,
