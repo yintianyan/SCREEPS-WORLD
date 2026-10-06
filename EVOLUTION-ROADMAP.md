@@ -8815,3 +8815,34 @@ R368 否证了"退出 war 还要吃 ≥5,000 拍 fortify 尾税才放行扩张"�
 门槛这条腿可能根本没在关键路径上）——**改哪个值属人**。
 
 边界：零改码、零 push、零 build、全只读；未清任何 override（**删覆盖＝改行为，属人**）；不为造证据而开战。
+
+## 巡检 R386（10-06 13:0xZ / 05:0xZ UTC）——**撤 R385 的第③点：那条"棘轮现行犯"根本不在跑**（用线上产物自证，不是用推断）
+**先说结论**：R385 我写"20.9 天 ≫ TTL ⇒ 上线即过期，这是今天最有分量的'该推'理由"——**错在两处**：
+①**TTL 过滤器早就在线上**，不存在"等这次部署才生效"；②因此那两条覆盖**此刻已经是惰性数据**，没有在约束今天的宣战与扩张节奏。
+
+**证据链（本轮现取，全只读）**：
+- 引入 TTL 的提交是 **`1bc67c9c`（2026-10-03，"#89 给 strategyOverrides 加读时过期 TTL=3×复盘冷却=15,000 拍"）**，
+  且 `git grep isStrategyOverrideLive origin/dev` **命中**（`strategy-reviewer.ts` 1 处、`empire-strategy.ts` 2 处）⇒ **已在已推基线里**，不在我那 11 笔未推 src 中（我没碰过这文件）。
+- 消费点也是现成的：`empire-strategy.ts:96` `...resolveStrategyOverrides(Memory.kernel?.tuning?.strategyOverrides, ctx.tick)`，
+  `resolveStrategyOverrides`（`:356-369`）内 `:364` 用 `isStrategyOverrideLive(entry, currentTick)` 过滤；TTL = `STRATEGY_COOLDOWN_TICKS(5000) × 3 = 15,000`（`strategy-reviewer.ts:59/81`）。
+- **决定性一步是查线上产物而不是读代码**：`dist/main.js` 与线上 `GET /api/user/code` 的 **sha 同为 `649eb94b9784`**（本地 dist mtime 仍是 Oct 4 19:21，**没有发生过部署**），
+  而在这份产物里 grep：`isStrategyOverrideLive` **命中 1**、`resolveStrategyOverrides` **命中 1**、`selectEnvBaseline` **命中 1**、`summarizeRoles` **命中 0**
+  ⇒ 线上跑的代码**含 TTL 过滤与 env 基线**、**不含**我今天写的 `#141` 重构 —— 一台仪器同时答了两问（这正是"本地 dist == 线上 sha"这台免费仪器的用处）。
+
+**算术**：`posture.minDwell` 的 `adjustedAt=82,993,339`，距 `Game.time≈83,460,1xx` 已 **≈467,000 拍 ≫ 15,000**；
+`posture.warPatience` 的 `adjustedAt=83,419,739`，距 约 **40,400 拍，也 >15,000**
+⇒ **两条都被读时过滤掉**，生效值回到 `minDwell=1000` 与 low 档 `warPatience=3000`。
+⇒ **R385 的"现行犯"作废**；`kernel.tuning.strategyOverrides` 里那两条只是**未清理的残留记录**（占字节、不占行为）。
+⇒ 连带动 **R384 的表**：我当时把"生效值"写成覆盖后的 1400/10000——**那是"如果没过期才成立"的值**；真正生效的仍是 R384 表里的 CONFIG/env 层。
+⇒ **#90 的分母**也要按这个改：`warPatience` 生效是 low 档 **3,000**（不是被覆盖的 10,000）。
+
+**为什么这仍然支持"该推"，但理由换了一条**：#89 的修复**已实现且已部署**（状态应从"已实现·未部署"改成"已上线"），
+它缺的是**判效**——判据现成：`minDwell` 覆盖被过滤后，行为侧回到默认 1000；但**这条不需要等我那 11 笔**，
+它今天就可以判。⇒ 我从 R385 收回"该推的最强理由"这个说法；**该推的理由仍是那 10 条边沿签名**（`stats.observe`/`population.n`/`remainsLoot`/…），
+不包括这条。顺带 #141 的 `summarizeRoles` 在产物里缺失＝**"缺键＝未部署"形状的又一发基线**。
+
+**一条没查清的（不当已知）**：`ls -l` 报 `dist/main.js` 789,579 字节，而 check-code 两次都报 787,752（sha 一致）。
+差 1,827 字节**我没能解释**——不影响本轮结论（sha 相同、mtime 未变、无部署），但记下来：
+若哪天"sha 相同而字节不同"再出现，先怀疑仪器口径而不是世界变了。
+
+边界：零改码、零 push、零 build、线上只读；**没有清那两条 override**（删覆盖＝改行为，虽然推断上惰性，仍属人）。
