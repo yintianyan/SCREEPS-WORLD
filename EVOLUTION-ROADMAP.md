@@ -9137,3 +9137,25 @@ b) 线上仍是 `649eb94b9784` ⇒ 没上线（CI 未完或 push 未成功）,**
 ②退出走哪支 ⇒ 那是 **#90 的 r 分布第二个样本**（分母已定死 5,000）；③这次有没有真实战损（`deathByCause.combat`,#96 的键,未推⇒线上无处读）。
 
 边界：零改码、零 push、零 build、线上只读；**没有制造战争证据**（这一发是被动的既有目击＋耐心窗口,我没有下任何攻击指令）。
+
+### 巡检 R399（10-06 14:0xZ / 06:0xZ UTC）**war 复发后 43 拍的两条补读：目击税是真的,而战争漏斗把账算平了**
+R398 我明写过"`expansionAllowed` 本读未取,不作声明"。这一发把它取回来：
+
+**一、目击税到手（机制第一次有前后对照）**：
+`kernel.strategy={posture:"war", since:83,461,051, **expansionAllowed:false**, newRemoteOpsAllowed:true, warPressureTicks:0, gclLevel:5, bucket:10,000}`
+⇒ 同一把 `strategy` 在 fortify 期读到的是 **`expansionAllowed:true`**（R397/R398 三次都 true）,**进入 war 那一拍起翻 false**
+⇒ **#90/#92 说的"被目击钉在战态 ⇒ 期间不许扩张"不是纸面推断,是有前后差的实测**。
+⇒ 这次的税**已经在缴**：从 83,461,051 起,扩张再被冻结,最短到"威胁过期 83,464,330 之后且驻留够"才可能解（分母 `threatWindow=5,000` 已在 R388 定死）。
+⇒ 但**归因要说全**：扩张此刻同时被 **两道**门挡（姿态层 `expansionAllowed=false` ＋ 就绪层 G6），**不许把它单写成 G6 的锅**（#7 那条是和平期的读数）。
+
+**二、漏斗账闭合（这是 #114 的第四次复证,形状完全可算）**：
+`kernel.stats.warFunnel@83,461,094 = {intelEntries:11, notFact:5, unowned:6, mine:0, notNormal:0, candidates:0, noThreats:1, plans:0, noSponsor:0, noInput:0}`
+**闭合式**:11 = 5 + 6 + 0 + 0 ⇒ **无残差**（差值为 0,不是"我暂时没解释"）。
+⇒ `candidates=0` 与 `plans=0` **不是筛得严,是池子里没有可打对象**（11 条情报里 5 条不是 fact 级、6 条无主房）。`kernel.warPlan` 同拍**不存在**（键名按 R359 更正后的 `kernel.warPlan`）⇒ 三条互洽。
+⚠ 口径沿用 #99 的结论:这些桶是**每次 pass 从零计的标志/快照**,不可跨拍差分。
+
+**三、一条要把我旧推断改窄的读数**：`kernel.stats.intelCoverage@83,461,103={rooms:9, players:3}` 与同批 `warFunnel.intelEntries=11` **相差 2**（相隔仅 9 拍）。
+⇒ R364 我曾拿"`intelCoverage.rooms=11` 恰等 `warFunnel.intelEntries=11`"当**数值自洽**证据来确认"漏斗入口就是那个池子"——**那个等式现在不成立** ⇒ 正确措辞是**两者高度重叠但不是同一个集合**（老化/新鲜度口径不同：`rooms` 像是在算"覆盖到的房",漏斗算"池内条目")。
+⇒ 这不是新缺陷,而是**我那条"数值一致 ⇒ 同物"的旁证法本身的可失效性**：它只在两个量真同构时成立;不一致时**先降级结论而不是先立案平台异常**。要不要接成可判定的口径,属 #114/#107 的取证范围。
+
+边界：零改码、零 push、零 build、线上只读（4 次 `peek`）；不干预 war 的进/出（缩短 threatWindow 或调 warPatience 都属人）。
