@@ -7971,3 +7971,32 @@ war 姿态开着（`warPressureTicks=0`＝打得起），而事实级敌情为 *
 `node tmp/tools/official/peek.mjs kernel.warPlan`（正确路径，配 `kernel.strategy` 当控制）；
 `node tmp/tools/official/peek.mjs kernel.stats.warFunnel`（要看 `notFact` 是否随侦察刷新下降——那是覆盖面改善的直接签名）。
 边界：本轮零 src、零 push、零 build、全只读 API；`.gitignore` 与两份未跟踪文档仍未 stage。
+
+## 巡检 R360（10-06 09:0xZ / 01:0xZ UTC）——`notFact` 读到根：**"fact 级"对战争候选来说是物理量，不是数据量**（本轮纯读码，零改码）
+接 R359 的立案（task #114：war 开着、`intelEntries 11 === notFact 5 + unowned 6`、`kernel.warPlan` 不存在）。这一轮把那条授权门读到底。
+
+**一、门的确切形状（逐行读到，非推断）**
+- `src/systems/military/war-planning-system.ts:310` 用 `intelActionUsable(entry.subject, tick)` 筛候选，注释自陈是"授权硬门槛：非 fact 级情报不进入战争目标候选"。
+- `src/domain/intel.ts:328-336` → `isActionUsable`：`if (confidenceAt(entry, tick) !== "fact") return false;`（外加可选 `maxAge`）。
+- `src/domain/intel.ts:315-321` → `confidenceAt`：**先问来源**`if (!isDirectSource(entry.source)) return "inferred";` 再按龄判 `fact/stale/unknown`。
+- `src/domain/intel.ts:249` → `DIRECT_SOURCES = {"passive", "scout", "observer"}` ⇒ **ally/derived 来源永远是 inferred，永远不会成为打击候选**（这是设计，不是缺陷：`intel.ts:323-327` 写明"不可逆行动只接受 fact 级"）。
+- `src/domain/intel.ts:303-308` → `ttlForPayload`：payload 只要带 `towers` 或 `enemySpawns`，TTL 取 `ROOM_THREAT_TTL`；
+  `src/domain/intel.ts:255` → **`ROOM_THREAT_TTL = 200`**（动态字段才是 `ROOM_DYNAMIC_TTL = 10_000`）。
+
+**二、由此得到的结论（比"侦察覆盖面不足"更硬）**：一次敌方房的"威胁级"情报，fact 期只有 **200 拍**。
+所以战争候选**不是靠攒情报攒出来的**，而是要求**过去 200 拍内持续有直接视野落在同一个有主敌房上**
+（passive=恰好看见、scout=专门去看、observer=Observer 楼）。这三条现在都不在场：漏斗里 6 条是 unowned（远矿/NPC），
+5 条非 fact ⇒ `candidates=0`。**"war 姿态 + 打得起 + 0 候选"是同一套安全设计的必然产物**，不是某个 bug 的症状。
+
+**三、本轮没读到的那一个数（不许含糊过去）**：`war-planning-system.ts:32` 的 `interval: CONFIG.war.interval` ——
+配置文件不叫 `src/config.ts`（`grep` 打空是我路径猜错，不是数据缺失），我没读到它到底是多少。
+它重要是因为：若 `CONFIG.war.interval` ≥ 200，则 pass 与 fact 窗会撞成 knife-edge（`age <= 200` 恰好压线），
+`notFact` 会**按构造**接近全数；若远小于 200，则 5 条非 fact 更多反映"真的没看见过"。
+⇒ 下一轮第一读：`grep -rn -A 6 "war:" src/config/*.ts`（或 `git grep -n "interval" src/config/`），拿到数之后再谈要不要动采集侧。
+
+**四、可现在验证、不需要改码的判据**（都不许人为制造条件）：
+1. `warFunnel.notFact` 随敌情新鲜度变化：若某趟 pass 前正好有 creep 路过有主敌房，`notFact` 应下降、`candidates` 应 >0。命中即证第二节的机制在跑，也顺手给 #138 的"计划→兵"那一支拿到第一个计划。
+2. `kernel.stats.observe`（#100，未上线）上线后读 `noTarget` vs `gate`：分清"Observer 楼不在"与"楼在但没请求"——这正是第三节那三条直接来源里唯一帝国能主动买的一条。
+3. 反向边界（写明不做的处置）：**不降低 `isActionUsable` 这道门来让 war 能出兵**——它是不可逆行动的属人安全闸；要动只能动"采集侧"（scout/observer），且属扩张/侦察政策，不属本轮。
+
+边界：零 src、零 push、零 build、全只读；`.gitignore` 与两份未跟踪文档仍未 stage。
