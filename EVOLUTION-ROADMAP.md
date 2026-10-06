@@ -9090,3 +9090,25 @@ R394 说"e2e 从未跑过本批"——这一格现在有了第一发,但我**先
 b) 线上仍是 `649eb94b9784` ⇒ 没上线（CI 未完或 push 未成功）,**绝不能读成"上线了但代码没生效"**。
 
 边界：线上零写操作、零探针；唯一的本地副作用是 build 重写 `dist/main.js` 后**已还原到基线 sha**（还原证据见上)。
+
+### 巡检 R397（10-06 13:4xZ / 05:4xZ UTC）**一次读数同时办成两件事：否证我 R389 的"唯一可判的沿"，并抓到 #89 的行为级正证机会（约 15 分钟后到场）**
+读数（全只读 `peek`）：`kernel.strategy={posture:"fortify", since:83,458,051, expansionAllowed:true, warPressureTicks:0, gclLevel:5, bucket:10,000}`、
+`kernel.postureChangedAt=83,460,832`（每拍钟）、**`rooms.W37S58.lastHostileAt=83,459,330`**、`rooms.W38S56.lastHostileAt=83,454,198`、
+`kernel.environment={market:active, neighborPressure:low, gclRate:9.15, tick:83,460,800}`。
+
+**一、算术闭合（这一步就把现场与并行轨的数对上）**：新目击落在 **war 退出之后**（83,459,330 > 83,458,051）⇒ `threatRecent` 为真直到
+`83,459,330 + threatWindow(5,000) = 83,464,330`；进入 war 还要 `dwell ≥ warPatience` ⇒ **生效 warPatience=3,000（low 档）** ⇒
+最早进入拍 = `83,458,051 + 3,000 = `**`83,461,051`** —— 与对端 R197/R198 预写的复发点**逐字相同** ⇒ **两条独立轨道用同一把算式收敛**（这是"参数底已被产物自证"的正面确认，不是我引他自己的数）。
+本读 dwell=2,781（还差 219 拍 ≈15 分钟）。
+
+**二、我 R389 那句"唯一能分辨 minDwell 的沿"被自己扩窄了**：R389 说 fortify 静默拍数落在 `[1000,1400)` 才有判别力、而该带常被 threatWindow 掩住——**这句只覆盖了 `minDwell`，我把"#89 的行为判效"整体当成了它**。
+`warPatience` 这条沿**现在就到场**，且**旧覆盖 10,000 与生效 3,000 差 7,000 拍** ⇒ 判别力强一个量级：
+**若 ≈83,461,051 翻 war ⇒ 读时 TTL 过滤器第一次拿到行为级正证**（覆盖若仍生效，此刻根本不该翻）；
+**若不翻**：`tick ≥ 83,462,251` 仍 fortify 且 dwell 已过 3,000 ⇒ **合取项里有假**（首查 `anyRecovery`——`posture.ts` 危机早退支把 recovery/bootstrap 当"不开战"的闸；本轮 `rooms.W38S58.colonyState="recovery"` 是**幻影房的冻结态**，若它仍进 `rooms[]` 输入，就是 **#116"零读者"的第一个行为后果**）。
+⇒ **这条把 #116 从"账面残留"接到"决策后果"上——两个观察项在此交汇，无论翻转与否都有产出。**
+
+**三、已交给可存续的只读轮询器**：`tmp/tools/official/warpatience-watch.sh`，**pid 38511**，`GAP=150s × 60 轮`（≈2.5 小时覆盖，跨过 83,464,330 那条 threat 过期线），
+判据 `★WAR-ENTER-ON-TIME / ★WAR-ENTER-EARLY / ★NO-ENTRY / ★EARLY-RELEASE` 行首锚定，已登记 `AGENT.lock`；首读正常（`round=1 dwell=2781 entry=83461051`）。
+⚠ 与部署的相互影响要说清：**这批上线后 `postureTransition.reason` 会直接给出走的哪一支**（`war-enter-patience` vs `threat-hold-fortify`）⇒ **本发的 NO-ENTRY 归因在推完之后才完整**；推之前只能靠 `colonyState`/`warPressureTicks` 反推，措辞上限是"指认候选项"。
+
+边界：零改码、零 push、零 build、线上只读（4 次 `peek`）；不动任何阈值、不主动开战（本发是**观察**，不是制造证据）。
