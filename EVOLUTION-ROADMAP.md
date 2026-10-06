@@ -8040,3 +8040,30 @@ scout 那条买的是扩张，passive 那条是运气。而"能不能确认 Obse
 
 **三、本轮明确不做**（免得下轮误读成我在选路）：不改 `isActionUsable` 的门槛、不给 `notFact` 顺手加列、不派 scout 去敌房、不盖楼——
 四件都属人。边界照旧：零 src、零 push、零 build、全只读；`.gitignore` 与两份未跟踪文档未 stage。
+
+## 巡检 R363（10-06 09:0xZ / 01:0xZ UTC）——**R361 那条"未验的第二形状"就地结案**：漏斗落后是**兄弟采样器的节拍**，不是 pass 被跳过；同时给今天所有漏斗结论加一条时效性上限
+**为什么会去追这条**：同一叶子里连着三读 `warFunnel.tick` 全等于 `83456494`，而 `kernel.stats.lastSample=83456645`、`kernel.postureChangedAt=83456652` 都在往前走 ⇒ 看上去像"仪器或 pass 死了"。R361 我把它写成"最可能是 flush 延迟、但也可能是档位闸跳过 pass"，两解处置相反，于是按规矩去读写者那一行。
+
+**读到的机制（`src/systems/military/war-planning-system.ts:42-46`，是 #99 自己留的注释，不是我的推测）**：
+每趟 pass 都 `newWarFunnel(tick)` **换一个 heap scratch 对象**，`Memory.kernel.stats.warFunnel` 里那份快照**不由 pass 改写**，
+而是「**由 intelligence 的老化批（每 100 拍）与 `intelCoverage` 同拍快照进 Memory**」。
+⇒ 落盘节拍是 **100 拍的兄弟采样器**，与 `CONFIG.war.interval=10` 无关。R361 里"落后约 50 拍"因此不是异常：
+按 100 拍采样 + 记录的是 pass 戳（不是采样戳），落后量天然在 0～~110 拍之间。**"pass 被档位闸跳过"这一支可以撤**——
+它需要一个"100 拍采样器也没跑"的额外假设，而 `lastSample` 正好往前走、没有任何独立证据支持第二个假设。
+
+**残留没扫干净的那一格（写清，别读成已全部结案）**：现读落后 **158 拍**（83456494 vs 83456652），比"一个采样周期 + pass 戳误差"略超；
+可能的解释是老化批自身被门挡住（它的 phase/条件我没读）。**一发的判别读**就够：
+`node tmp/tools/official/peek.mjs kernel.stats.intelCoverage` —— 同一批写入的兄弟键若已越过 83456494，则批在跑、漏斗那条是有条件写；
+若同样冻在 83,456,4xx，则要去看 intelligence 老化批的 due-tick 条件。**不许**由此去动 `CONFIG.war.interval`（今天两次独立否证都指向"节拍不是问题"）。
+
+**⇒ 对今天全部战争结论加一条时效上限（这是本节的实际用处）**：R359/R360/R362 用的 `candidates=0 / notFact=5 / unowned=6 / plans=0`
+是「**截至 tick 83456494 那次快照**」的读数，不是"planner 此刻的判定"。三条推论的强度因此分开计：
+- **不依赖漏斗新鲜度**的：授权门的形状（`DIRECT_SOURCES`、`isActionUsable`、`ROOM_THREAT_TTL=200`、`interval=10`）——纯读码，结论不受影响。
+- **依赖一次快照**的：「过去 200 拍没有有主敌房被直接看见」。快照最坏可落后 ~110 拍，所以这句话实际覆盖的是
+  "截至 83456494 的那趟 pass"。⇒ 它**足以立案**（#114 已立）但**不足以定罪成"永久无候选"**；定罪要第二发快照落在战争窗内更晚的拍上。
+- 三度强调过的禁忌再记一次：桶是每 pass 从零计，**不可跨拍差分**（#99 定案）。
+
+**顺带一条与恢复链有关的现读**（同一批发到，不当判据只当基线）：`kernel.escalations` 三条**全部 `terminal:true`**，
+`repeats` 分别是 W38S58=17、W38S56=1、global/mineral/terminal_trade=27，且 global 那条 `firstAt=83363952 / lastAt=83453052`（跨 89,100 拍）。
+⇒ 这正是 #139 定罪用的那个天然实验的**原始形状**：条目顺序与各自 `repeats` 已在此留档，上线后按 `esc.repeats` 读，
+若事件里的数字与"被升级的那一条"对上（而不是恒等于第 0 条的 17），#139 即为命中。**这是基线，不是判效**（修复未推）。
