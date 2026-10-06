@@ -63,7 +63,7 @@
 
 **一、【唯一解锁动作·属人】把批次推上去**（L0 §1.5 生产代码部署）
 载体：`tmp/tools/official/batch15-gate-and-push.sh`（五道闸门 + 全量 e2e 默认开，任一不过即不推）。
-**验收**：① CI 绿；② 线上 sha ＝ **`13d231390f62`**（R396 预判；不等就按"工作树又变了 / rollup 不确定"两支分查，仍是旧 sha ＝ 根本没上线）；
+**验收**：① CI 绿；② **线上 sha ＝ 闸门②现算出的 `$DIST_SHA`**（R404 起不再写死数字——曾预判 `13d231390f62`，批次 16→17 文件后立刻作废；含 #115 的那次现算是 **`5ce4bbb01168`**，产物内可 grep 到 `agingDue`。不等就按"工作树又变了 / rollup 不确定"两支分查，仍是旧 sha ＝ 根本没上线）；
 ③ **9 条边沿签名**逐条读：`stats.observe`(100) / `stats.safeMode`(119) / `stats.strayAssets`(§3.4) / `stats.remainsLoot`(131) / `stats.remainsBlind`(131) /
 `roadBuild.<房>.noWorkInRange`(111) / `expectations.recent` 的**沿**(113) / `postureTransition` + `postureChangedAt` 成对(140) / 段 1 `population.n`(141)。
 ⚠ 第 8 条要反向读：**`postureChangedAt` 停止每拍推进是到手、不是回归**（旧行为基线已由 R389/R391/R399 三次量到）。
