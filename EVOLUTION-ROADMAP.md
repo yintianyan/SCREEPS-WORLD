@@ -8993,3 +8993,30 @@ R387 留下的唯一未知是"当前生效哪一档 `neighborPressure`"。写者
 ⇒ "不存在"是证据不是工具形状，与 **#114**（war 姿态下零候选）一致；`bucket` 由 10,000 → **9,999**（单拍借用 1）⇒ **不构成档位变化**，判档只看 `tier`+`since`。
 
 边界：零改码、零 push、零 build、线上只读（5 次 `peek` + 1 次 `ring-dump` 就绪后由轮询器自行调用）；新增的只有 `tmp/` 下一支只读脚本与一行锁记录。
+
+### 巡检 R392（10-06 13:3xZ / 05:3xZ UTC）**推前审计：这一批 12 笔 src 里唯一改语义的那一笔，消费者是零**
+「推」是下一道闸,所以我把"批内是否夹带未申报的行为改动"当作本轮主目标审了一遍（看 diff,不靠提交信息）。
+
+**一、清单对得上号**（`git diff --stat origin/dev..HEAD -- src tests`：**13 个 src 文件 + 14 个测试文件,1,246 增 / 53 删,14 笔提交**）：
+`road-build.ts`(111) `posture.ts`(140) `recovery-lifecycle.ts`+`recovery-execution-system.ts`(139) `global-cache.ts`+`kernel.ts`(注册/暂存结构)
+`timeseries.ts`+`telemetry-collector.ts`(141) `empire-strategy.ts`(140 消费侧) `tower-defense.ts`(131/119 侧) `room-observer.ts`(100) `room-snapshot.ts`(§3.4 残留普查)
+`types/global.d.ts`(声明) ⇒ **每笔都能落到一张票上,没有"顺手改"的孤儿文件**。
+
+**二、最大的一块（`posture.ts` +107）逐行看完是纯加法**：八个 `finalize(...)` 调用各多带一个 `reason` 字面量,分支条件、返回值、顺序一字未动
+⇒ 姿态判定结果与批前**逐支同形**。`empire-strategy.ts` 只加了两处：日志尾部 `branch=${result.reason}`,与把戳记写进真正的转换支。
+
+**三、批内唯一"改语义"的一笔（也是我最初怀疑会牵动行为的那一笔）**：`postureChangedAt`
+旧 `if (Memory.kernel.strategy?.posture !== undefined) postureChangedAt = Game.time`（`strategy` 本拍已被覆写 ⇒ 条件恒真 ⇒ 每拍刷）
+新：只在转换那一拍写。**安全性论证不靠"看起来无害",靠消费者计数**：全仓搜 `postureChangedAt|postureTransition` ⇒
+命中只有 **写者 `empire-strategy.ts:110-111`、类型 `global.d.ts:413/418`、一条注释 `:248`** ⇒ **读者 0 个** ⇒ 改语义不可能改变任何一拍的实际行为。
+⇒ 顺带得到 #140 判效的形状学：**上线后 `postureChangedAt` 会"停止每拍推进",这本身就是签名**（R389 已量到基线 83,460,448/83,460,639 每拍动）。
+
+**四、审计中我差点误判的一处**：过滤后的 diff 里 `export type PostureBranch` 前出现一行裸 `/**`,像未闭合注释 ⇒ 直接看 `sed -n '86,94p'` 才知是**我的 `grep -v '^ \*'` 把注释正文吃了**,原文是完整的一段 `/** … */`。
+⇒ 教训同族：**被我自己过滤过的 diff 不能当原文引用**,凡"看起来坏了"的第一反应是去看未过滤的那几行（tsc 全绿当时已经是反证,但我没先想到）。
+
+**五、批的剩余前置（诚实清单,不在我权限内）**：
+①本窗只重跑过 `tsc`(0) + unit(5298) + integration(239)，**e2e 没跑**（它自带 build，且此刻有判效窗在跑 ⇒ 不许 build）；
+②`dist/main.js` 仍是 Oct 4 那份（sha 与线上一致 ⇒ **本地 dist 里没有这批新代码**）,推之前必须 rebuild——走仓里既有 `tmp/tools/official/batchNN-gate-and-push.sh` 那条路（下一支应编号 **15**）,别裸推；
+③推 = 部署 = L0 §1.5 属人授权类,**我不自作**。
+
+边界：零改码（本轮只读 diff 与源码）、零 push、零 build、线上只读。
