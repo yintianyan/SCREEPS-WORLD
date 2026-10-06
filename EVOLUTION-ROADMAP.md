@@ -7946,3 +7946,28 @@ R346 表里那五件的预部署对照（含 `stats.roadBuild.W39S56` 无 `noWor
 
 **门与边界**：`tsc` 退出 0／unit 394 files·5298 tests 全绿／integration 30·239 全绿；**e2e 没跑**（script 自带 build，会毁"本地 dist==线上"这台免费仪器）＝没跑，不是失败。
 含 src 未推 **11 笔 / 16 个文件**（`git rev-list --count origin/dev..HEAD`=210，其余是文档批）——**唯一恢复动作仍是一个字：「推」**，本轮零 push、零 build、零线上写动作（全部只读 API）。
+
+## 巡检 R359（10-06 09:0xZ / 01:0xZ UTC）——**先撤我自己上一轮的一条"事实"**：warPlan 的键路径写错了；用正确路径重读，#138 的定性反而更硬（且拿到了零残差的算术解释）
+
+**一、撤证（撤的是"事实"不是"解释"，所以按规矩要更强证据）**：R358 第三节写「三房 `rooms.*.warPlan` 全部不存在」。
+现读码：写者是 `src/systems/military/war-planning-system.ts:525` 与 `src/systems/military/war-planner.ts:99`，两处都写 **`Memory.kernel.warPlan`（全局、单数）**，
+`Memory.rooms.<房>.warPlan` 这个键**在 src 里从未存在** ⇒ 我那三发读的是错路径，其"不存在"是**工具形状**不是数据缺失。
+同形重读（同一工具、同一批、并带一个已知非空的邻居做控制）：`kernel.warPlan` **不存在** ＋ `kernel.warBlacklist` 不存在 ＋ 控制 `kernel.strategy` 非空（posture=war）。
+⇒ 上一条作废，替换为下面这条更硬的读法。规矩我早写过（猜键名的恒 undefined 会把仪器坏了读成数据为空），这次是自己踩回去的。
+
+**二、war 期内的漏斗第一发到手，且算术闭合到零残差**：`kernel.stats.warFunnel` 现读 `{"tick":83456494,"intelEntries":11,"notFact":5,"unowned":6,"mine":0,"notNormal":0,"candidates":0,"noThreats":1,"plans":0,"noSponsor":0}`。
+`tick=83456494` 在 war 起点 83456360 **之后 134 拍** ⇒ 这才是"war 期内的计划"那一发（R358 里我说 83456294 早于 war、既不能证也不能否，那句话本身是对的，只是我当时还没等到 pass）。
+闭合式对得上：`intelEntries 11 === notFact 5 + unowned 6`，`mine/notNormal/candidates` 皆 0 ⇒ **没有残差**，零计划完全由上游筛除解释：
+- `notFact=5`：`war-planning-system.ts:310` 的授权硬门槛 `intelActionUsable(entry.subject, tick)`（非 fact 级情报不得进候选）；
+- `unowned=6`：`payload.owner` 为空（NPC/无主房），本就不该是打击目标。
+
+**三、#138 的定性由此改写（不是撤销）**：今天线上真正发生的不是"计划生成了却没变成兵"，而是**"根本没有任何一个可打的候选房"**——
+war 姿态开着（`warPressureTicks=0`＝打得起），而事实级敌情为 **0 条**。所以：
+- 「spawned=0 / 计划没变成兵」这一支：本轮**未开始验证**（没有计划可跟，物理上证不了也否不了）。
+- 新立的问题（更上游、可现在动手）：**侦察覆盖面**不足以满足战争授权门 ⇒ 与 #100（Observer 账本，`stats.observe` 尚未上线）、
+  §25 扩张层的 `intelActionUsable` 是同一条链的两端。这条我不在本轮改码：判据要等 `stats.observe` 上线后按 `noTarget/gate` 读，才能分清"没盖楼"与"盖了没请求"。
+
+**四、留给下一轮的读法（已端到端跑通、形状已核）**：
+`node tmp/tools/official/peek.mjs kernel.warPlan`（正确路径，配 `kernel.strategy` 当控制）；
+`node tmp/tools/official/peek.mjs kernel.stats.warFunnel`（要看 `notFact` 是否随侦察刷新下降——那是覆盖面改善的直接签名）。
+边界：本轮零 src、零 push、零 build、全只读 API；`.gitignore` 与两份未跟踪文档仍未 stage。
