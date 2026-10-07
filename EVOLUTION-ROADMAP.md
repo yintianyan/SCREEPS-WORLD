@@ -10072,3 +10072,11 @@ C. 承认某些车道不值得有路（例如 W36S58 的 `射程外` 占 63%、�
 `ActionContext.snapshot` **永远是 `creep.memory.home` 那一房的快照**，与 creep 此刻站在哪个房无关（`:54-57` 的注释同样自陈"外部房（远矿房/过境中间房）无 snapshot，直接扫当前房"，并且 `:72/:77/:82` 三处都用 `inForeignRoom` 绕开 snapshot 依赖）。
 ⇒ R426 的推论**成立且比我写的更糟**：把 `repairRoads()` 挂进 remoteHauler 链，它拿到的道路集合是**主房的**，而人站在远矿房 —— 结果不是"空动作"，而是**可能把远矿编队往 home 方向拽**（`runCountedAction` 带 `ACTION_RANGE_FAR` 会走向目标）。这条要作为反面教材留着：`#150` 的正确实现必须是**脚下直扫 `creep.room`**，不能复用任何 snapshot 绑定的动作。
 （同族记录：这是"判据读对了、输入域读漏了"的第二次；第一次是本会话 #116 那条"检测存在但没人读"。）
+
+### 巡检 R428（2026-10-07 23:3xZ，短）—— 工业线那条 `demandsLive=0` 用**账本自己的判据**归到生产侧，不欠消费侧的账
+
+现读（同一次体检）：`demandsPublished=2`（`publishedAt=83,491,368`）、`demandsComputed=0`、`demandsLive=0`、`buyNoMatch=6`、`buyTried=0`、`buyBestAsk=0`、`demandTop=GH2O:140/p20/lab-reaction`。
+`trade-ledger.ts:54-62` 已经把这三列的读法写成判据：**`terminal-manager.ts:205` 是"最近一次计算的条数"（赋值，不是累计）**，而注释给的分岔是「`computed>0` ⇒ 必然已发布，此时 `demandsLive` 仍 0 才是信道/消费侧问题」。它的**逆否**正好落在我这发读数上：`computed=0` ⇒ **生产侧这一轮就算不出需求**，消费侧（下单/成交链路）没有被牵连。
+再往下只有一格：为什么算不出？`lab-system.ts:441` 那条注释自陈的失败形状就是"reactionPlan 明明在账上而 `demandsLive=0`"——而本会话的现场是**买不到矿**（`buyBestAsk=0`＝市场零卖单，与 R381 同值；credits 27.68M 说明不是钱），所以 labs 无计划可挂 ⇒ 需求算不出来是**上游外因**，不是新的代码缺口。
+⇒ 结论：工业柱的卡点仍是"原料无供给"这条外部事实（#9/#44/#51/#106 那条链的第 N 次确认），本轮**不立工单**；但记下这条读法，免得下一轮把 `computed=0` 又当成"信道坏了"去修写回链。
+**体检后另核两件**：`dist/main.js` 仍是基线 `649eb94b9784/787,752B`（本会话只跑过测试，没有 build 污染线上比对）；`origin/dev..HEAD` 的 src 数仍是 **21**（对端未把我的批改小或改大）。
