@@ -9887,3 +9887,17 @@ R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `ca
 **④ 一处口径旁注（登记不改码）**：`empire-economy.ts:277-293` 的注释称慢视图 `gateView` 让"deficit·struggling 分类 / core 判定整体按长视界算"——但分类输入里没有 netFlow（② 的 `classifyRoomEconomic`），所以那句话对**分类位是空话**：慢与快两视图在 G2/G5 上逐字相同，慢视界只影响 netFlow 派生量（G4 与 health 里的 netFlow/selfSufficiency）。引用 `G3/G4` 时别以为分类也变慢了。
 
 **状态**：`HEAD` 见本条提交；`origin/dev..HEAD` 仍是 **18 src + 15 test**（325 笔未推，线上产物 `649eb94b9784/787,752B` 未变，#139 至今未部署）；三个只读器都已自然收工，无在途。下一步优先级：①那一次部署授权（解锁 #115/#142 与 9 条边沿签名）；②`tmp/observe/` 里 `?? 0` 这个来历不明的文件请主人确认后再处置，我没动它。
+
+### 巡检 R416（2026-10-07 22:5xZ）—— R415 的机制拿到数值闭合：`minCoreRooms=1` 而帝国只有 1 房可当 core ⇒ G5 **余量为零**
+
+**新证据（判据器 round=1，22:57:19Z，tick=83,497,884）**
+- 四房里只有 **W37S58、W38S56 存在于 `Memory.rooms`**（W37S57/W36S58 是远矿车道不是房）⇒ 自有房 2。
+- 两房 `colonyState` 同时 `normal`，`blk=G0+G6` ⇒ 与"没房进困难态 ⇒ G2/G3/G5 全绿"同向（正分支，非新样本、只算第 1 发）。
+- 部署仍未发生：`GET /api/user/code?shard=shard3` 现读 `main: 787,752B sha=649eb94b9784` ＝ 本地基线逐字同值 ⇒ **线上产物 38 小时未变，18 src/15 test 依旧未推**。
+
+**数值闭合（读码）**：`DEFAULT_READINESS_OPTIONS`（`readiness.ts:79-94`）= `minCoreRooms: 1`、`minHealth: "growing"`、`blockOnStruggling: true`、`minNetFlow: 5`、`minCpuTier: "comfortable"`。
+⇒ 常态下 `coreRooms=1`（W37S58 RCL8+storage）恰好等于阈值：**G5 的余量是 0**。于是 W37S58 一旦进 `defense/recovery`，`economicClass` core→struggling 就同时给出 `struggling=1`（G2 红）与 `coreRooms=0`（G5 红，且 health 的 core 输入归零 ⇒ G3 红）。**一发 5 门、下一发 2 门，全部由这一枚状态位解释，netFlow 侧一个输入都没动。**
+⚠ 一处没核完：CONFIG 侧是否覆盖过这几个阈值，我那条 grep 形状不可靠（管道里再 grep），**不许当"无覆盖"的结论**；要判就直读 `CONFIG.readiness`／`selectEnvBaseline` 的合并结果。
+
+**派生的战略读法（属人的 #50/#73 都受影响）**：在这个两房形态下，扩张就绪度对"核心房被打"是**结构敏感**而不是经济敏感——只要敌人进 W37S58 一次，G2/G3/G5 三把门立刻同红，且红的时间＝该房 `colonyState` 离开 defense 的时间（几十拍量级），与 threatWindow(5,000) 无关。这解释了 R410→R411 两次"归因于目击"为何都失败：**相关是真的，但因果链上多了一层（目击→房间状态位→分类位→三门），而中间那层比 threatWindow 短两个数量级**。
+判据器 `gate-coupling-watch.sh` 已武装（pid 68,182，60 轮 × 300 s，每轮记 `dashboard.tick` 防同 pass 重复计样本），正/否三条分支都在脚本里；`minCoreRooms` 那条合并值待核。
