@@ -10146,3 +10146,11 @@ G5: core rooms            (v=0 | coreRooms ≥ 1)
 | 判据器一次武装的成本 | 每轮 5 次只读 peek、GAP 300 s、60 轮 ≈ 5 小时墙钟，零 console 副作用 | gate-coupling / posture-exit3 / lostroom-purge 实测 | — |
 
 **读法约定**：这张表只给"动作值多少钱"，不给"该不该做"。属人决策（#50/#73/#111/#150/#107/Power）都各引用其中一行或数行。
+
+### 巡检 R436（2026-10-07 23:5xZ）—— 重新挂上战争退出预报（watch3 收工后这条预报**无人观察**了 4 天）
+
+现读锚：`W37S58.lastHostileAt=83,498,248`（正是 gate-coupling round6 那发 `defense` 的源头目击）、`W38S56=83,494,897`、`posture=war since 83,471,047`、`warPressureTicks=0`。
+⇒ **EXIT_TICK = max(...) + threatWindow(5,000) = 83,503,248**，距当拍（83,498,684）**≈4,560 拍 ≈ 3.4~4.2 小时**（拍长按实测区间 2.65~3.3 s 两向给，不给点值）。
+新挂 `posture-exit-watch4.sh`（pid 78,619；ROUNDS=70 × GAP=300 s ≈ 5.8 小时，**覆盖预报点还留余量**），判点四支全按拍号写：`EXIT-ON-TIME`（anchor±600 ⇒ threatWindow 可当结构常数引用）／`EARLY`（早于下界 ⇒ 有我未读的早退分支）／`EXIT-LATE`（先查同拍 `newSighting`，锚被抢跑不算失败）／`STUCK`（anchor+1,200 仍 war 且锚未动 ⇒ 真未知分支）。
+**这条预报本轮只押一支**：`warPressureTicks=0` 从 83,471,047 起一直为零 ⇒ 经济放血那支（`warExitPatienceTicks`）不会触发，所以 EXIT-ON-TIME 是预期支、**不兑现才是信息**。dwell 已 **27,637 拍**，是"打仗把扩张关掉多久"的现行量级（#92 的属人修法讨论要用这个数，不是用比值）。
+两处小登记：①`tmp/observe/posture-exit4.log` 里有 2026-10-03 的 `watch3` 旧行（前一会话曾把 watch3 指到这个文件名），行首的 `watch3`/`watch4` 是区分依据，引用时按行内标签取；②这是"续接另起一支"，**没有**编辑运行中的脚本（与 R433 那次的侥幸做法相对照）。
