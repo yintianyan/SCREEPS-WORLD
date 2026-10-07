@@ -715,6 +715,7 @@
   · **★R236 给那条 1,517 的律加上适用条件（第八枚预报按"前提被抢跑"记，不按命中记）**：`warPlan(W37S58, since 493,914)` 活了 **990 拍**（非 1,517）就收摊，`WarOutcome d=[2,0,5]`＝outcome unknown／spawned 0／**reason 5＝`REASON_TARGET_SWITCH`**（`war-planner.ts:43-47`：A5 改判新目标、在覆写兼容计划前调用；与断供同类＝主动撤换、不拉黑），而**同拍** `WarPlanCreated r=W38S56 d=[0,53.5]`。时序咬合＝目击 494,897 → 换目标 494,904（**7 拍**，且 494,904 ≡ 4 mod 10＝planner pass 相位 ✓）⇒ 律的正确表述：**"自有房 DEFEND 计划在无人改判时活 1,517 拍、以 `INTEL_STALE`(4) 自灭（7/7 命中到拍）；期间冒出新目标，就在下一个 planner pass 被 `TARGET_SWITCH`(5) 收掉"** ⇒ 以后引用这条律排 ETA，必须先问"这段时间有没有新进犯"。
   · **R236 把 `EnemyInvasion` 的列序核到写者并第一次读到实值**：`telemetry-collector.ts:634-639` ⇒ `d=[敌体数, HEAL 部件数, RANGED_ATTACK 部件数, ATTACK 部件数]`，本轮读到 `[1,0,3,2]`＝一只 3 远程＋2 近战的体型；`EnemyCleared` 无列（`d=[]`）。写者是**沿触发**（`hasThreats && !prevRoom.hadThreats`）⇒ 首发（TowerVolley 494,897）到事件（494,905）差 **8 拍＝采集器自身相位**，这正是 #144 分母里"敌体在世拍数"与"事件可见时刻"之间的固有滞后。⚠️同一发也是 R235 那条"环被挤短"判点的**阴性复测**：本次环跨度 1,639 拍、覆盖住了 ⇒ "看不见"的三种成因要**按发判**，不能当成环的固有属性。
   · **★R237 那条律的两支各拿到一发实例（带条件式的版本现在可以当结构常数引用）**：无人改判支＝事前预报 `d=[2,0,4]@496,421`（＝494,904＋1,517，第 5 枚零误差命中）；被抢跑支＝R236 的 `d=[2,0,5]@494,904`（目击 494,897 后 7 拍、落在 planner pass 相位 ≡4 mod 10）。⇒ 引用口径固化成两句：**"活满 1,517 拍的前提＝这段没有新进犯"**＋**"有新进犯就在下一个 planner pass 被 `TARGET_SWITCH` 收掉"**；判点要分两支写，别把抢跑记成否证、也别把两支混回"应当 1,517"。另本轮 `wp=null`＋`wf.plans=0`＋`noThreats=1` 连读三轮 ⇒ 撤军后**不会**自动续计划（"事件数≠计划数"第三次生效）。
+  · **★R238 自纠一条编号漂移（会影响未来任何"簇计数"的引用）**：远矿清场的**耐久身份只能是 combat 跳增值＋死亡窗口**，而我一路把"实例"和"簇"混着数——`39→41`（R224，首次）／`41→45`（R232，我当时写"第二次现场实例"）／`45→49`（R234，我当时写"清场第二簇"）⇒ **同一件事在我账里有两套序号**，而从 R235 起我预写的"第三簇"按实例数其实是**第四个实例**。⇒ 现在定死：**已观测到的损耗实例＝3（跨 490,9xx／492,7xx-492,9xx 两段窗口，第三段没有）**，"第四实例"＝我一直在等的下一个（R235–R238 四轮三把尺全阴性）；以后引用一律写"第 N 个实例（combat a→b，窗口＝拍号区间）"，**不再用裸的"簇"**。顺带一句教训：**我 R236/R237/R238 写的"簇计数停在 2"是跟着错标签走的**（数值上没错＝没新实例，但计数偏低一档）⇒ 计数型标签也要过"唯一出处"这一关（见用户档 `feedback-engine-name-and-chain-audits.md`：键名/序号的唯一出处是写者，这里"写者"＝combat 差分本身）。
 - **#145 agenda 的 `rcl-push` 档要求"所有自有房 rcl<8"，在有任一 RCL8 房的帝国里按构造不可达（10-07 R229 代码级判定＋现场同向）**
   · **判据原文**：`domain/strategy/agenda.ts:59-72` ⇒ `canPushRcl = !threatRecent && rooms.length>0 && rooms.every(r => r.rcl < 8) && rooms.some(r => r.storageEnergy >= options.rclPushStorage) && avgPressure <= options.rclPushMaxPressure`；参数 `agenda.threatWindow 3,000／rclPushStorage 20,000／rclPushMaxPressure 0.3／minDwell 200`（`config/index.ts:1149-1157`）。`rooms` 来自 `ctx.snapshots()`＝**只遍历自有房**（`empire-strategy.ts:47-52`；快照只对 `controller.my` 构建，`kernel.ts:443-444`）⇒ **`every(rcl<8)` 是硬合取：任何一间房爬到 RCL8 就把这一档永久关掉**。
   · **现场（同向佐证，不是唯一证据）**：`AgendaChange d=[3]@83,489,086` ＝ 敌情 486,086 ＋ **3,000** 那一拍回 develop；同一拍其余三项全满足（`threatRecent` 已假、`storage` 906,098／254,666 ≥ 20,000、两房 `pressure=0` ≤ 0.3）⇒ 唯一挡住 rcl-push 的是 **W37S58 `rcl=8`**。⇒ 议程阶梯在本帝国实际只剩 recovery／defense-readiness／develop 三档可用。
@@ -10030,3 +10031,24 @@ R419 我把"planner 整趟 pass 被 `budget.canStart(1)` 拒"记成 tick 不动�
 - 若 W36S58 有路但 `hits` 落在 3~10% ⇒ 修路根本没拿到 CPU/编制（另一支：`conserve/recovery` 早退或角色链排不上），动作是排维护者而不是别施工；
 - 两读之间 `threatCreeps>0` 的拍数占比也要记，否则第一条判据会被"这拍恰好没敌人"骗过（`threatCreeps` 是瞬量）。
 **同族提醒**：`roadRepairAction` 里 `const ceiling = urgent ? ROAD_REPAIR_THRESHOLD : ROAD_REPAIR_CEILING;`（`:331`）**看着像写反**，对照 `:342` 的注释（急救到 40% 放手、常规到 90% 消抖）才是对的——引用前先看注释，别去"修"它。
+
+### 巡检 R425（2026-10-07 23:3xZ）—— R424 那一读做了：**远矿路没有任何角色挂着修路动作**，W37S57 的 12 根路正挂在 7~19% 血量上
+
+一发只读探针（mark `R425b9f1` 已回读核对，`Game.time=83,498,388`）：
+```
+W36S58  rd=0   sites=6   host=0
+W37S57  rd=12  hm=5000  low(hits)=360,400,850,950   sites=2  host=0
+W38S55  rd=0   sites=12  host=0
+```
+配合逐行读码（`grep repairRoads` ⇒ 全仓**只有 `src/creeps/roles/builder.ts:107`** 挂这个动作）：
+- 修路的动作只在 **builder** 的链上，而 builder 不通勤到远矿房 ⇒ 远矿路**按构造进不了任何目标集**（`ac.snapshot` 是 creep 所在房的快照）。
+- `ROAD_REPAIR_THRESHOLD=40%`（=2,000 hits），而现读最低 360 hits＝**7.2%** —— 这些路早就在"该修"的窗口里，只是没有人有这个动作。W36S58/W38S55 的 `rd=0` 与它们的 6/12 格 pending site 是同一件事的终局形态：**塌完了，又在热度线上重铺，再塌**。
+- 算术（用 `repair.ts:302-305` 自己引用的常数）：plain 路 100 hits/1000t ⇒ 12 根路的维持费＝**1.2 hits/拍 ≈ 1.2 能量/拍**，60,000 拍才 72,000 能量；相对 storage 895,715 是可忽略量。**"留不住路"不是钱的问题，是没接线。**
+- `host=0` 只是当拍瞬量，不能据此说"威胁闸不是原因"——但既然**动作压根不在任何通勤角色上**，威胁闸在这一读里还不是主因。
+
+**候选处置（都要属人拍板，因为都花运力或改编制）**：
+A. 把 `repairRoads()` 加进 **remoteHauler** 的链（它已经在 `buildRoadSiteUnderfoot` 里做射程内选择，射程判定现成）——代价＝背包里被修路花掉的那部分能量，与 #111(B) 的"留能"是**同一笔钱**，但用途从"新建"换成"维持"（维持便宜得多，见上面 1.2/t）。
+B. 让 builder 定期出境专修（要占 builder 编制、走远程 CPU，最差的一档）。
+C. 承认某些车道不值得有路（例如 W36S58 的 `射程外` 占 63%、通勤腿本就不从这些格走）⇒ 收摊车道而不是修路。
+**判据（A 上线后）**：同一条腿的 `low(hits)` 序列从单调下降转为在 40~90% 之间锯齿（hysteresis 的放手线就是 90%），且 `roadsBuilt` 不再归零。
+**顺带记两条防误读**：①`roadRepairAction` 的 `:331` 那行三元看着写反，对照 `:342` 注释是对的，别去"修"它；②`observe.mjs` 打的 `roadsBuilt` 是**现存路数**（R222 已核口径），不是累计建成数。
