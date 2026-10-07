@@ -9968,3 +9968,18 @@ R419 我把"planner 整趟 pass 被 `budget.canStart(1)` 拒"记成 tick 不动�
 顺带给 #136 的间歇态台账添一发（第 11 类口径照旧）：`cur=0 个 budget 键 / prev=6 个且全为 creep/*`，两把尺成对写。
 
 **⑤ 预检（不 build、不 push）**：`src/tests 脏=0`、`origin/dev..HEAD` src 文件=20 ＝ 脚本 `EXPECT_SRCF` 默认值、无在跑的验证窗（`vitest run tests/e2e|npm run build|git push` 计数=0）。判据器 round=3 `SAME-PASS blk=G0+G6` 与 ④ 同向。
+
+### 巡检 R422（2026-10-07 23:2xZ）—— R421 那条停摆顺手挖出并修掉一个真缺陷（#149），带反向实验
+
+**从读数到缺陷**：R421 量到 W36S58 四格 road site 冻 66,249 拍。顺著"回收器为什么没动手"读下去，先否掉两个猜测，再撞到一个真 bug：
+1. **无热度 ⇒ 既不建也不扫**（`road-planner.ts:193-194` 那条支）⇒ 我第一版用例就是栽在这里（红得没有意义），给 B 车道补一份 `roadHeat` 才走到清扫支。**"看不见"的第一成因仍然是通道形状，不是数据缺失。**
+2. 线上那四格**不是**被"线外冻满"那支漏掉的——它们在热度线上，而回收器只收**线外**格（`offCorridor`），所以按构造碰不到它们（这条已记在 R421 ②，卡点是 #111(B) 的留能定价，属人）。
+3. 但读的过程中发现**另一扇门真的关着**：循环头写着 `if (created >= CONFIG.remote.roadSitesPerRun) return;` —— 本轮只要前一条车道铺满 3 格，**后面所有车道**连残骸回收和 `roadSiteCount`/`roadBuildCounters` 校正都不执行。而它紧邻的下一行注释自己写着"车道已满不是跳过本房的理由 —— 越满越要先扫"。同族形状＝#78（清理写在提前返回之后）。
+
+**修法与验证**：闸从循环头挪到"清扫与账本校正之后、铺路之前"；回收规则一个字没动。
+- 反向实验（决定性那一发）：临时把旧 `return` 加回去 ⇒ 新用例红 `1 failed / 19 passed`；撤掉 ⇒ `20 passed`，且过程中用 sha 证过 src 无残留（`sha_match=yes`）。第一次做这个实验时锚点不唯一 ⇒ 脚本 ABORT、什么都没改（**"没跑成"和"跑了是绿的"必须分开读**，这次靠 `apply_rc` 与 sha 对比分开了）。
+- 三道门全绿：`tsc 0` ／ `tests/unit 395 files · 5308 tests`（+1＝新用例）／ `tests/integration 30 · 239`。
+- 提交 `9e1a3a9c`；批大小因此变 **21 src + 18 test**，`batch15` 的 `EXPECT_SRCF` 同步改到 21（闸门①¾ 的注释也更新了来历）。
+
+**上线判据（#149）**：找一次"某轮新建触顶（`roadSitesPerRun=3`）"的 pass，看**其它**车道的 `remoteOps[*].roadReaped`／`roadSiteCount` 是否被写入本轮的值——修前那些车道这一轮根本不会被读到，读数会停在上一轮。
+**代价**：触顶的那一轮，每条后续车道多 2 次 `room.find`（只在走廊生长期发生）。
