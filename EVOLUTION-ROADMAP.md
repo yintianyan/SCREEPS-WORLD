@@ -10096,3 +10096,22 @@ C. 承认某些车道不值得有路（例如 W36S58 的 `射程外` 占 63%、�
 - 新工具 `tmp/tools/official/post-deploy-readout-batch15.sh`（语法过、守卫过：不给 `EXPECT_SHA` 就 rc=1 拒绝跑，因为"写死上线 sha"在本仓已作废两次）。它按判据分六段：① 等 live sha==闸门②现算值；② #115 连读三回算 `intelCoverage.tick` 相邻差（判据 ∈[100,110]，Δ=0 记"同批不另计样本"）；③ #142 的 `economy/window-slip` **强制 cur/prev 成对读**（skipReasons 是 500 拍滚动窗）；④ #148/#94 直接打 `failedGates` 的 `value=`（G2 应带 `[房名]`）；⑤ #149 打两条主房 `remoteOps.*.road*`；⑥ 其余边沿签名交给 observe.mjs。头部注释里把三条读数纪律写死，省得下一轮再推导一遍口径。
 - **边界重核**（L0 §1.5 原文，101-113 行）：自主范围＝代码分析/修改/测试/模拟/**开发环境部署**；官服侧只读观察与经授权诊断自主；`生产代码部署、重置 Memory、删除资产、主动战争、核弹发射、改变外交关系` 必须走授权。⇒ 本会话全部动作（改 src、跑三门、本地全量 e2e、只读探针、挂判据器）都在自主侧；唯一等授权的就是那一次 push，我没有代签。
 - 顺手一条现读：e2e 窗内 dist 已被重建为 `82f77b1474ac`（跑完会还原基线 `649eb94b9784`）。这条只能当"当前树的构建预览"，**不是**上线判据——闸门②仍要自己现算。窗口已登记 `AGENT.lock`，期间 build/push 都会被闸门①拒。
+
+### 巡检 R432（2026-10-07 23:4xZ）—— ★事前预报命中：**一枚 `colonyState` 分类位同时关掉 G2/G3/G5，字段级读数逐字兑现**
+
+判据器 `gate-coupling` round=6（tick 83,498,284，`new-pass`）现场：
+```
+W37S58="defense"  W38S56="normal"      blk=G0+G2+G3+G5+G6
+G2: no struggling rooms   (v=struggling=1 | hasStruggling === false)
+G3: economic health       (v=critical(netFlow=9.8,core=0) | health ≥ growing)
+G5: core rooms            (v=0 | coreRooms ≥ 1)
+```
+这正是 R415（静态链条）＋R416/R417（`minCoreRooms=1` 无覆盖、G5 余量为 0）预写的形状，三个 `value=` 一个不差：
+- 核心房进 `defense` ⇒ `economicClass` core→struggling ⇒ **`struggling=1`（G2 红）**；
+- 同一枚翻转把 `coreRooms` 从 1 打到 0 ⇒ **G5 红（阈值 1，余量 0）**；
+- 而 **净流是 +9.8（健康）却仍判 `critical`**，因为 health 的折叠输入含 `core` ⇒ **G3 红**。
+⇒ 结论钉死：**扩张就绪度里 G2/G3/G5 不是三个独立观测，是一枚状态标签的三个下游**；且红时长＝该房离开 `defense` 的时间（这一发：round6 亮、round8/9（新 pass）已灭，**约 100~200 拍量级**），与 `threatWindow=5,000` 无关。这也解释了为什么历史上 `fg` 读数会周期性地从 `G0+G6` 变成五把门（对端巡检记过多次）——不是五个原因，是一个。
+
+**round=7 那条 `⚠ 反常` 是我自己脚本的标签错，不是世界反常**：它读到 `W37S58="normal"` 却仍见 G2 红——但那一行同时写着 `SAME-PASS(不另计样本)`，即 `dashboard.tick` 未变 ⇒ 门集是**上一趟 pass（当时确实是 defense）** 的快照，而 `colonyState` 是 live 读数。两个读数的**时标不同**，正是 R414c/R419 那条"跨 pass 比较前必须先证 tick 变了"的适用场景。⇒ 脚本里这一支的措辞要从"有我没在读的房进了 profiles"改成"colonyState 比 dashboard 快照新 ⇒ 不算反常"（tmp 工具，下次改，**不在 e2e 窗内动**）。
+
+**这给属人项添了一条硬数据**：#73 的问题不再是"要不要把瞬时 recovery 当困难房"，而是**已被证实现场每被打一次就连关三把门**；而 #111/#150 那条远矿路线与它无关（G2 的 struggling 来自自有房的 defense 态，不是远矿）。
