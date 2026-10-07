@@ -9939,3 +9939,10 @@ R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `ca
 **派生读数规则**（引用 `expansionDashboard` 时）：判"门集变了"必须先证 `tick` 变了；`tick` 不动的两读＝同一趟 pass，不计新样本；而**连续两读 tick 差 >100 ＝ 中间有 pass 被整趟跳过**，此时不得把"门没变"读成"决策稳定"。
 
 **③ 本批新增一笔待推代码（#148）**：`EmpireResourceView.strugglingRoomNames` + G2 的 `value` 由 `struggling=N` 变 `struggling=N[房名]`（无困难房时逐字保持旧形状，控制组写进单测）。动机就是本轮绕的那一圈——三门同出一枚 `economicClass`，只报计数就得回源码重算才知道是谁关了扩张。tsc 0、受影响两文件 108/108；全量 unit+integration 后台在跑（任务 `bcitab8o1`），绿之前不随批 push。
+
+### 巡检 R420（2026-10-07 23:0xZ）—— #148 已提交：批大小 18→**20 src / 17 test**，闸门①¾ 改成可改的期望值
+
+- `448f0de5`：`strugglingRoomNames` 进视图与 G2 门值。判效前的三道门：**tsc 0**、`tests/unit 395 files / 5307 tests`（比 R403 基线 +4＝#148 的四个用例）、`tests/integration 30 / 239`。lint-staged 自己建 stash 并跑 prettier/eslint/tsc，未被我绕过。
+- **一处会把部署卡死的旧数**：`batch15-gate-and-push.sh` 的闸门①¾ 原来写死 `!= 18` ⇒ 批一变大就自动拒绝推送（这正是它该做的事，但会伪装成"脚本坏了"）。已改成 `EXPECT_SRCF`（默认 20）并把 **src 名单直接打进日志**，复审时对着名单改数就行，不用猜。
+- 更正 §3.0-v3 表①：待推为 **20 src + 17 test**（原写 18/15）。含 #148 的两件：`src/domain/strategy/resource-view.ts`、`src/domain/strategy/readiness.ts`。
+- 登记一条我自己的澄清：根目录那个未跟踪的 `?? 0` **不是本会话造的** —— 本轮第一次 `git status` 的快照里它就已经在了（我当时怀疑是 R414b 那次裸 heredoc 的副作用，现由行级证据否证）。仍按属人处置，我没删。
