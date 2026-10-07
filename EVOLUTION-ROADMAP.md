@@ -9901,3 +9901,10 @@ R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `ca
 
 **派生的战略读法（属人的 #50/#73 都受影响）**：在这个两房形态下，扩张就绪度对"核心房被打"是**结构敏感**而不是经济敏感——只要敌人进 W37S58 一次，G2/G3/G5 三把门立刻同红，且红的时间＝该房 `colonyState` 离开 defense 的时间（几十拍量级），与 threatWindow(5,000) 无关。这解释了 R410→R411 两次"归因于目击"为何都失败：**相关是真的，但因果链上多了一层（目击→房间状态位→分类位→三门），而中间那层比 threatWindow 短两个数量级**。
 判据器 `gate-coupling-watch.sh` 已武装（pid 68,182，60 轮 × 300 s，每轮记 `dashboard.tick` 防同 pass 重复计样本），正/否三条分支都在脚本里；`minCoreRooms` 那条合并值待核。
+
+### 巡检 R417（2026-10-07 22:5xZ）—— 补掉 R416 自己留的那个"没核完"：`minCoreRooms=1` 无覆盖，且就绪度吃的是**慢视图**
+
+- `minCoreRooms` 全仓只出现在 `readiness.ts`（类型 `:55`／默认 `:82`／判据 `:201,206`），**配置文件里一次都没有**；生产调用点唯一＝`empire-economy.ts:314-321`，**只传 6 个实参、第 7 个 `options` 省略** ⇒ 走 `DEFAULT_READINESS_OPTIONS`。于是生效阈值定死：`minCoreRooms=1`、`minHealth="growing"`、`minNetFlow=5`、`minCpuTier="comfortable"`、`blockOnStruggling=true`。（R416 那条"不许当无覆盖"的保留已兑现并撤销。）
+- 同一处顺带核到一个此前没写清的口径：`evaluateExpansionReadiness(gateView, gateHealth.health, …)` —— **扩张就绪度整体吃慢视图 `gateView`/`gateHealth`**（步 4b 的长视界 EMA），而 dashboard/safety-margin 那边用快的 `resourceView`。与 R415 ④ 合起来读就完整了：慢视图只对 netFlow 系派生量真正变慢；**G2/G5 的分类计数在快慢两视图里逐字相同**（分类输入只有 `rcl/hasStorage/colonyState`）。
+- 由此把结构结论钉死：两自有房、仅 W37S58 算 core、`minCoreRooms=1` ⇒ **G5 余量恒为 0**，任何一次核心房进 `defense/recovery/bootstrap` 必连带 G2+G5（边界上的 G3）同红。可执行后果（属人）：帝国要长出第二间 RCL≥6+storage 的房，G5 才有多余的 1 格余量——这是"扩张被扩张本身卡住"的形状，与 #34 那条"healthy 闸要 coreRooms≥2"是同一族。
+- 判据器状态：round=1 `tick=83,497,884 blk=G0+G6`，两房 `normal` ⇒ 正分支，无新样本；60 轮 × 300 s 在跑。线上产物仍 `649eb94b9784/787,752B`＝基线（38 小时未换码），18 src/15 test 未推。
