@@ -10052,3 +10052,17 @@ B. 让 builder 定期出境专修（要占 builder 编制、走远程 CPU，最�
 C. 承认某些车道不值得有路（例如 W36S58 的 `射程外` 占 63%、通勤腿本就不从这些格走）⇒ 收摊车道而不是修路。
 **判据（A 上线后）**：同一条腿的 `low(hits)` 序列从单调下降转为在 40~90% 之间锯齿（hysteresis 的放手线就是 90%），且 `roadsBuilt` 不再归零。
 **顺带记两条防误读**：①`roadRepairAction` 的 `:331` 那行三元看着写反，对照 `:342` 注释是对的，别去"修"它；②`observe.mjs` 打的 `roadsBuilt` 是**现存路数**（R222 已核口径），不是累计建成数。
+
+### 巡检 R426（2026-10-07 23:3xZ）—— 撤掉我自己在 R425 写的处置 A：**`repairRoads()` 加不进远矿角色，因为远矿房根本没有 snapshot**
+
+读 `src/creeps/engine/lifecycle.ts:68-82`：注释自陈「远矿房/中间房**无 snapshot**，最快逃生路径是回 home 塔防范围」，并且 flee 侧对这点是专门分叉处理的（`shouldFlee` 用 home snapshot，外部房另走 `Game.rooms` 直扫）。
+而 `repairRoads()` 的整条实现是 snapshot 绑定的：`roadRepairAction.resolve` 读的是 `ac.snapshot`（`repair.ts:334-370`，阈值 40%／急救线 2%／hysteresis 到 90%）。
+⇒ R425 的"A：把 `repairRoads()` 加进 remoteHauler 的链"**照字面做会得到一个空动作**——远矿房里 `ac.snapshot` 不是那个房的道路集合，加了也不修任何东西，反而把"已经接线了"这笔账记成已办。这是**第十一型（能力主张会被机制自己写出的数据否证）**的一个正面教材：主张来自读码，但读码只读了动作的**判据**，没读它的**输入域**。
+
+**正确的形状**（仍然属人，但这次给的是可实现的）：远矿路的维护要复用 `buildRoadSiteUnderfoot` 那条**已经在做"脚下射程内选择"**的链（`remote-hauler.ts:38-114`，它用 `findMySitesCached(creep.room)`＋`UNDERFOOT_BUILD_RANGE_LIMIT`，完全不依赖 snapshot），加一个"脚下危路优先于危 site"的兄弟分支：
+- 判据与主房一致（血量 < 40% 才动，修到 90% 放手），但**不读 snapshot**、读 `creep.room` 的 road 直扫（沿用 room-scans 的按房按 tick 缓存，增量上界＝每房每拍 1 次 find）；
+- 优先级：先修**已在建 site**（否则 300 点永远凑不齐，R421 那个 66,249 拍的形状）还是先救**快塌的存量路**？我倾向后者（存量塌了是把已有 5x/2x 移动代价还回去，而新 site 塌了只是回到原状），**但这一条是价值排序，属人**；
+- 记账：新增一列 `repairedUnderfoot`（与 `built` 同处，heap、不参与决策），上线判据是 W37S57 那 12 根路的 `low(hits)` 由单调下降转为 40~90% 锯齿、且 `roadsBuilt` 不再归零。
+**代价口径不变**：维持 12 根路 ≈ 1.2 能量/拍；被花掉的是通勤腿背包里的能量，即 #111(B) 那笔"20-30% 该腿运力"的同一账户——只是用途从新建换成维护。
+
+**留下的开放项**：`remoteHauler` 出境时 `ac.snapshot` 到底是哪个房（home 还是 undefined）我没逐行核完 —— 上面引的是 lifecycle.ts 的注释与 flee 的分叉，**要落码前必须先看 `role-runner.ts` 里 snapshot 的解析行**，否则这条更正本身也可能是错的。
