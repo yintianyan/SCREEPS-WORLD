@@ -9908,3 +9908,21 @@ R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `ca
 - 同一处顺带核到一个此前没写清的口径：`evaluateExpansionReadiness(gateView, gateHealth.health, …)` —— **扩张就绪度整体吃慢视图 `gateView`/`gateHealth`**（步 4b 的长视界 EMA），而 dashboard/safety-margin 那边用快的 `resourceView`。与 R415 ④ 合起来读就完整了：慢视图只对 netFlow 系派生量真正变慢；**G2/G5 的分类计数在快慢两视图里逐字相同**（分类输入只有 `rcl/hasStorage/colonyState`）。
 - 由此把结构结论钉死：两自有房、仅 W37S58 算 core、`minCoreRooms=1` ⇒ **G5 余量恒为 0**，任何一次核心房进 `defense/recovery/bootstrap` 必连带 G2+G5（边界上的 G3）同红。可执行后果（属人）：帝国要长出第二间 RCL≥6+storage 的房，G5 才有多余的 1 格余量——这是"扩张被扩张本身卡住"的形状，与 #34 那条"healthy 闸要 coreRooms≥2"是同一族。
 - 判据器状态：round=1 `tick=83,497,884 blk=G0+G6`，两房 `normal` ⇒ 正分支，无新样本；60 轮 × 300 s 在跑。线上产物仍 `649eb94b9784/787,752B`＝基线（38 小时未换码），18 src/15 test 未推。
+
+---
+
+## §3.0-v3 优先队列（2026-10-07 22:5xZ 重排，覆盖 §3.0-v2；编号一律用 R 号＋拍号，不用"第几轮"）
+
+**前置事实（本轮新钉）**：扩张就绪度的七把门里 **G2/G3/G5 不是三个独立观测**，而是同一枚 `economicClass` 分类位的三个下游（`minCoreRooms=1` 无覆盖、仅 W37S58 算 core ⇒ **G5 余量恒 0**）。真正的恒红只有 **G0（posture=war）与 G6（tier=tight）**。⇒ 过去两周把"门集来去"当成三件事分别归因，是同一枚位的三次记账。
+
+| 序 | 事项 | 状态 | 解锁条件 / 判据 |
+|---|---|---|---|
+| ① | **部署 batch15**（18 src + 15 test，含 #115 `f6beef69`、#142 `55cf0d24`） | 待授权，线上仍 `649eb94b9784/787,752B`（38 h 未换码） | 授权 `bash tmp/tools/official/batch15-gate-and-push.sh` ⇒ 读 9 条边沿签名 + `intelCoverage.tick` 间隔 ∈[100,110] + `skipReasons["economy/window-slip"]` |
+| ② | **#73 属人裁决**（新机制）：`defense` 也算 struggling ⇒ 核心房被打几十拍连关 G2/G3/G5 | 机制已结案，无代码改动 | 三个选项：摘掉 `defense`／让 G2/G5 吃经济量／维持（打仗时本就不扩张）。判据器 `gate-coupling-watch.sh` 已挂，正/否分支写死 |
+| ③ | **结构性后果**：G5 要有余量，需要第二间 RCL≥6+storage 的自有房——而它本身被 G0/G5 卡着 | 登记为战略前提 | 与 #34"healthy 闸要 coreRooms≥2"同族；退出 war 后自动可判 |
+| ④ | #50 CPU 缺口 | 属人（−7.5/t vs 最多省 −2.9/t） | 现读 `tier`+`since` 才许判档 |
+| ⑤ | 搁浅资产 74 枚 / 3 个非自有房 | 待属人处置；W38S58 的 Memory 侧已随 #116 清退闭合 | 不许拆自有楼（无授权动作） |
+| ⑥ | Power 三环（`operateStruct` 零调用者）＋市场零功率供给 | 跨柱前置 | 属人开关 |
+| ⑦ | `LostRoomPurge` 事件 `d` 第 6 列=20,001 的语义 | 小项，回写者核 | 纯读码 |
+
+**作废清单（引用旧文档时的排除项）**：①"G2/G3/G5 是三把独立门各自抖"（R415 推翻）；②"门集多出可归因于目击/threatWindow"（R411 否证，R416-417 给出真链条）；③"lostRooms 零读者所以幻影房永久占工单"（R415 清退命中到拍）；④"CONFIG 可能覆盖 readiness 阈值"（R417 核完：无覆盖）；⑤"gateView 慢视图也平滑 struggling/core 分类"（R415 ④：分类输入无 netFlow，两视图逐字相同）。
