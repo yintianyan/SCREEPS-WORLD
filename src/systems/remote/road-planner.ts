@@ -210,7 +210,8 @@ export function planRemotePathRoads(
   // 刚 remove 的残骸会让「被自己的残骸锁死」这条路径多等一个 manager 间隔才解开。
   let released = 0;
   for (const [rn, op] of Object.entries(remoteOps)) {
-    if (created >= CONFIG.remote.roadSitesPerRun) return;
+    // 循环头**不设**「本轮新建已触顶就 return」：那会把后面所有车道的残骸回收与账本校正一起吞掉
+    // （#149，反向实验见 tests/unit/remote/road-site-reaper.test.ts）。新建上限的闸挪到铺路之前。
     // 车道已满不是跳过本房的理由 —— 残骸正占着车道，越满越要先扫。预算判定挪到清扫之后。
     if (op.state === "abandoned") {
       // 废弃房的 site 由 construction-manager 孤儿清扫收走，计数立即归零释放车道。
@@ -341,6 +342,8 @@ export function planRemotePathRoads(
     if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) continue;
     // 单 op 挂起 road site 数（含在建）超上限则跳过 —— 铺完自然回落。
     if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) continue;
+    // 每轮新建限速（#149：这条必须在清扫与账本校正**之后**）。
+    if (created >= CONFIG.remote.roadSitesPerRun) continue;
     const sources = room.find(FIND_SOURCES);
 
     // 铺路只沿着被走过的格子生长：热度高的格先铺（同分按坐标定序，保证同一输入同一结果）。

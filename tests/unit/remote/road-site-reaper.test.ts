@@ -397,3 +397,53 @@ describe("mergeWalkHeat（纯函数）", () => {
     expect(prev.a).toBe(10);
   });
 });
+
+/**
+ * #149：`roadSitesPerRun` 是**每轮新建**的限速，不该顺手关掉后面车道的清扫。
+ *
+ * 线上形状（R421 体检）：W36S58 四格 road site 冻了 66,249 拍、`workers=4`、`无WORK=0`，
+ * 而 `roadsBuilt=0`。这条用例量的是同一族里的另一扇门：规划器在循环头 `return`，于是
+ * 本轮只要前一条车道铺满了 3 格，**后面所有车道连"残骸回收"和账本校正都不会执行**。
+ * 而紧挨着它下面那行注释自己写着「车道已满不是跳过本房的理由 —— 越满越要先扫」。
+ */
+describe("planRemotePathRoads — 每轮新建上限不得吞掉后续车道的清扫（#149）", () => {
+  const T2 = "W8N5";
+
+  it("第一条车道铺满 roadSitesPerRun 后，第二条车道的冻死残骸本轮仍要被收", () => {
+    // 第一条车道：没有现存 site，热度线合格格 ≥ roadSitesPerRun ⇒ 本轮 created 触顶。
+    const roomA = targetRoomMock([], [container(CONTAINER.x, CONTAINER.y)]);
+    const opA = activeOp({
+      roadHeat: { [packed(20, 21)]: 40, [packed(20, 22)]: 40, [packed(20, 40)]: 40 },
+      roadHeatAt: 5001, // 窗口未满 ⇒ 本轮不合并 heap（本用例不测合并）
+    });
+
+    // 第二条车道：一格线外残骸（该房没有热度账 ⇒ 一切格都算线外），已冻满回收窗口。
+    const deadSite = roadSite(30, 40, 150);
+    const roomB: any = {
+      name: T2,
+      find: vi.fn((flag: number) => {
+        if (flag === FIND_MY_CONSTRUCTION_SITES) return [deadSite];
+        if (flag === FIND_STRUCTURES) return [];
+        if (flag === FIND_SOURCES) return [{ id: "src_W8N5_a", pos: pos(20, 19, T2) }];
+        return [];
+      }),
+      createConstructionSite: vi.fn(() => OK),
+    };
+    const opB = activeOp({
+      roadHeat: { [packed(20, 22)]: 40 },
+      roadHeatAt: 5001,
+      ...frozen(150, 5001),
+    });
+
+    const ops: Record<string, any> = { [T]: opA, [T2]: opB };
+    seed(5001, ops, { [T]: roomA, [T2]: roomB });
+
+    planRemotePathRoads(HOME, ops, mockContext());
+
+    // 前置成立性检查：第一条车道确实把本轮新建额度用光（否则这条用例是空跑）。
+    expect(roomA.createConstructionSite.mock.calls.length).toBe(CONFIG.remote.roadSitesPerRun);
+    // 判据：第二条车道的残骸本轮被收，且它的账本被校正（不是"下一轮再看"）。
+    expect(deadSite.remove).toHaveBeenCalledTimes(1);
+    expect(opB.roadSiteCount).toBe(0);
+  });
+});
