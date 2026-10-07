@@ -9946,3 +9946,25 @@ R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `ca
 - **一处会把部署卡死的旧数**：`batch15-gate-and-push.sh` 的闸门①¾ 原来写死 `!= 18` ⇒ 批一变大就自动拒绝推送（这正是它该做的事，但会伪装成"脚本坏了"）。已改成 `EXPECT_SRCF`（默认 20）并把 **src 名单直接打进日志**，复审时对着名单改数就行，不用猜。
 - 更正 §3.0-v3 表①：待推为 **20 src + 17 test**（原写 18/15）。含 #148 的两件：`src/domain/strategy/resource-view.ts`、`src/domain/strategy/readiness.ts`。
 - 登记一条我自己的澄清：根目录那个未跟踪的 `?? 0` **不是本会话造的** —— 本轮第一次 `git status` 的快照里它就已经在了（我当时怀疑是 R414b 那次裸 heredoc 的副作用，现由行级证据否证）。仍按属人处置，我没删。
+
+### 巡检 R421（2026-10-07 23:1xZ）—— 一次全新线上体检：W36S58 有两格**冻了 66,249 拍**的路 site，而 E7 那条报警**没有任何读者**
+
+**① 现场（`observe.mjs`，tick 83,498,055→65，2.65 s/拍）**
+`tier=tight@83,465,905`（＝**42,150 拍没换档**）、`姿态=war agenda=develop`、`Blocked=G0+G6`、`Budget=435,539/1,177,129`、人口 35（W37S58 22／W38S56 13）、两房 `state=normal`、`失守待清=[]`（与 #116 的清退一致）、credits 27.68M、`myOrders=1`、`buyBestAsk=0`（市场上仍无货可买）。
+CPU 结账：实测 19/t ＝ 角色 6.5 ＋ 系统 5.9 ＋ **其余 6.6**（榜外剩余 1.38/t）；`remote-mining-manager=4.7/次`、`traffic-manager=3.0/t`、`terminal-manager=8.4/次`。
+
+**② 本轮最值钱的一条：停滞是真的，而且没人管**
+`期望自检` 里 W36S58 有四格 road site，`noProg = 66,249 / 66,249 / 37,779 / 5,001`（`expectations.ts:497` 定义 `noProg = tick - lastProgressTick`，而 `lastProgressTick` 在 `kernel.ts:735` **boot 时重播种** ⇒ 66,249 是"距上次施工"的真实下界，不是 site 年龄）。同拍 `workers=4` 在房里、`road-build` 账本 `机会=72,874 无能量=24,730 无WORK=0 射程外=46,309 建成intent=1,835 ‖ roadsBuilt=0 sites=6`。
+链读下来是三段：
+- **回收器结构上碰不到它**：`road-planner.ts:309` 的 `offCorridor` 只收"**不在被踩过的线上**"的格；而这车道 `热度格=96`、site 正长通勤线上 ⇒ 按构造**永生**。注释里"有进度又不肯长的格恰恰是最该走的"这一判断，前提是"有人在射程内且带着能"。
+- **卡的是能量那一侧**：`无WORK=0`（body 没问题）、`无能量` 占 34%、`射程外` 占 63% —— 正是 **#111(B)「让通勤腿留能施工，代价该腿运力 20-30%」** 的现场后果，而那一笔的定价是属人的（我没有替谁决定）。
+- **报警无人接**：`siteStaleWorkerIdle` 的消费者**全仓为零**（除 `expectations.ts` 自身与 `road-planner.ts:181` 的一句注释外无引用），`ExpectationViolation` 事件只带总数（`kernel.ts:600`）⇒ 这条停摆既不进失败图、也不进恢复动作。**这不是"检测缺失"，是"检测存在而读者为零"**——与 #116 的 `lostRooms`、#110 的 `escalations` 同族（第十一型第 N 次）。
+
+**③ 线上产物里到底有没有这两列（不靠记忆，逐串现搜 `dist/main.js`）**
+`noEnergyInRange=1`（#111 的第一刀**已在线上**）、`noWorkInRange=0`、`window-slip=0` ⇒ 0-WORK 走廊那列拆分与 #142 都在**未推批**里。这条直接决定 #111 的定价能不能用现读数据算：`noEnergyInRange` 可算，`noWorkInRange` 要等上线。
+
+**④ 自纠一条（R419 的"领先假说"要降级）**
+R419 我把"planner 整趟 pass 被 `budget.canStart(1)` 拒"记成 tick 不动的领先解释。现读两把尺都不支持：`kernel.skipReasons`（本窗）**无任何 `*/budget` 键**、`kernel.prevSkipReasons` 里 6 个 budget 键**全是 `creep/*`**（reserver=4、distributor/upgrader/builder/mineralMiner 各 1），一个系统级都没有 ⇒ 按 3.1~3.3 s/拍换算，100 拍≈310~330 s，两轮读数间隔 300~323 s **本来就差一点点跨不过边界**。结论改成：**(i) 边界时序是当前唯一有支持的读法；(ii) 预算拒 pass 没有证据**。
+顺带给 #136 的间歇态台账添一发（第 11 类口径照旧）：`cur=0 个 budget 键 / prev=6 个且全为 creep/*`，两把尺成对写。
+
+**⑤ 预检（不 build、不 push）**：`src/tests 脏=0`、`origin/dev..HEAD` src 文件=20 ＝ 脚本 `EXPECT_SRCF` 默认值、无在跑的验证窗（`vitest run tests/e2e|npm run build|git push` 计数=0）。判据器 round=3 `SAME-PASS blk=G0+G6` 与 ④ 同向。
