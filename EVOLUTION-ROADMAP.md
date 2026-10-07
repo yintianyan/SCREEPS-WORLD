@@ -9866,3 +9866,24 @@ R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `ca
 - 工具层自纠：R414b 用**未加引号的 heredoc** 落盘（为了让变量插值），正文里的行内代码反引号被当成命令替换执行掉 —— 现场报错 `command not found: FLAP` 与 `permission denied: tmp/observe/gate-flap-r412.log`。⇒ 该条正文里的两处反引号片段是**空的**，事实以本条为准：`flap=0`、`noread=0`、`rounds=18`。需要变量插值就用 printf 单引号串，别用裸 heredoc。
 - 快读器实测（原判据的正确读数）：18 轮全部 `blk=G0+G6`，且**dashboard tick 恒为 83,463,384 一轮未推进**（08:31:09→08:36:32，跨 323 秒 ≈ 100+ 个游戏拍）。
 - 由此多出一条**未定性的新事实**：快照寿命按 interval=100 应 ≈100 拍一换，而这 5 分钟里写者没有落过新快照。三种可能还没分：(i) 窗口恰好没跨过边界（323 s ≈ 103 拍，差一点）；(ii) `expansion-planner` 是 priority 1，`budget.canStart(1)` 被拒 ⇒ **整趟 pass 缺席，快照可以是好几个周期前的**；(iii) 读路缓存。**读数规则的补强**：跨 pass 比较前必须先确认 `dashboard.tick` 真的变了，否则"上一趟 pass"这个说法不成立 —— 这恰好也是 R413 那条"5→2 是跨 pass 抖动"结论要补的限定：那两轮的 tick 确实 +100，所以结论不受影响，但今后凡读门集增减都要把 tick 变化写进同一行。
+
+### 巡检 R415（2026-10-07 22:5xZ，续跑批）—— 门集抖动的机制结案：G2/G3/G5 不是三件事，是**同一枚 one-hot 分类位**；顺带 #116 的清退预报命中到拍
+
+**① #116 结案（行为级，零误差）**
+`lostroom-purge` 监视器 round=19 抓到事件本体：`LostRoomPurge r=W38S58 d=[0,0,0,0,0,20001]`，**事件 tick=83,464,423 ＝ 预报点（`lostRooms.W38S58=83,444,422 + LOST_ROOM_GRACE 20,000 + 1`）**；同拍 `lostRooms` 已不含该房、`rooms.W38S58.colonyState=absent`、`lastEval=absent`。⇒ "检测存在"与"清退存在"两半都有现场证据，幻影房占工单那一半随之解除。（round=18 有一发 `NOREAD`，按规矩没当成"没到期"。）
+遗留一条**新小项**：`d` 的第 6 列=20,001 疑似"已过宽限拍数"，语义要回写者核，不许凭形状解释。
+
+**② 三把门的耦合是构造性的（读码，不经新读数）**
+- `readiness.ts:170/201/179` ⇒ `G2=!view.hasStruggling`、`G5=view.coreRooms ≥ minCoreRooms`、`G3=health`，而 `health` 的折叠输入含 `coreRooms`（`readiness.ts:187` 的 `value` 字段自陈 `netFlow=…,core=…`）。
+- `resource-view.ts:159-172` ⇒ `strugglingRooms` 与 `coreRooms` **都从同一个 one-hot 字段 `p.economicClass` 计数**。
+- `room-profile.ts:202-217` ⇒ `classifyRoomEconomic(rcl, hasStorage, colonyState)`：**`colonyState ∈ {bootstrap, recovery, defense}` 一律判 `struggling`，完全不看任何经济量**；否则按 RCL/有无 storage 分 candidate/production/core。
+⇒ 任一房的状态位一进 `recovery/defense`，同一趟 pass 里 `core→struggling` 使 `coreRooms−1` 且 `struggling=1` ⇒ **G2、G5 同红，G3 若 core 正卡阈值也同红**，而 netFlow/G4/G6/G0 一个都没动。这解释 R411 那次 `G0+G6 → G0+G2+G3+G5+G6 → G0+G6`：**不是三把门各自抖，是一枚分类位翻了又翻回来**。
+**事前预报（可否证、不需要部署）**：下次任一自有房进 `defense/recovery/bootstrap`，同趟 planner pass 的 `failedGates` 必须**同时**多出 `G2(struggling=1…)` 与 `G5(core=N-1…)`（core 卡在阈值时再加 `G3(…core=N-1)`）；若出现"只有 G2 没有 G5"或反之，本条作废。肇事候选＝83,463,108 那次目击把 W37S58 打进 `defense`。
+**旁注（排除幻影房）**：W38S58 的 `colonyState="recovery"` 在监视器里连读 9 轮逐字未变，而 G2 只在**一发**里红 ⇒ 幻影房根本没进 `profiles`（`empire-economy.ts:230` 遍历 `ctx.snapshots()`，非 `Memory.rooms`）。这条负向是靠"红没持续"得到的，不是靠缺席。
+
+**③ #73 升级并重述（属人，我不自办）**
+旧描述是"把幼房的瞬时 recovery 当经济困难"。真相范围更大：**`economicClass` 是状态标签门而非经济门**——RCL8、storage 满、净流为正的核心房，在敌人在场那几十拍里同样被判 `struggling`，并连带关掉 G2/G5（及边界上的 G3）。要不要把 `defense` 从 struggling 里摘出去、或让 G2/G5 吃经济量，是属人的设计裁决。
+
+**④ 一处口径旁注（登记不改码）**：`empire-economy.ts:277-293` 的注释称慢视图 `gateView` 让"deficit·struggling 分类 / core 判定整体按长视界算"——但分类输入里没有 netFlow（② 的 `classifyRoomEconomic`），所以那句话对**分类位是空话**：慢与快两视图在 G2/G5 上逐字相同，慢视界只影响 netFlow 派生量（G4 与 health 里的 netFlow/selfSufficiency）。引用 `G3/G4` 时别以为分类也变慢了。
+
+**状态**：`HEAD` 见本条提交；`origin/dev..HEAD` 仍是 **18 src + 15 test**（325 笔未推，线上产物 `649eb94b9784/787,752B` 未变，#139 至今未部署）；三个只读器都已自然收工，无在途。下一步优先级：①那一次部署授权（解锁 #115/#142 与 9 条边沿签名）；②`tmp/observe/` 里 `?? 0` 这个来历不明的文件请主人确认后再处置，我没动它。
