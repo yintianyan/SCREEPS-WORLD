@@ -10092,3 +10092,7 @@ C. 承认某些车道不值得有路（例如 W36S58 的 `射程外` 占 63%、�
 
 **但同一个名字在另一处是另一个量**：`expansion-planner.ts:212` 传给生命周期的是 `DEFAULT_LIFECYCLE_OPTIONS.upgradeTicks = 500`（`plan-lifecycle.ts:41,140`），语义是"EVALUATED 的 plan 要**持续 ready 多少拍**才允许晋升 READY"，与 CPU 档位毫无关系。
 ⇒ 记入命名债（同族先例：`decay` 一名两义、两把同名 `threatWindow` 3,000/5,000）：**`upgradeTicks` 在两处是两个互不相干的量**，引用时不写模块名就会串线。本轮不改名（改名会牵动 `global.d.ts`/`empire-strategy.ts:254` 的读数面与既有测试），留作一行级属人项。
+### 巡检 R431（2026-10-07 23:4xZ，短）—— 上线后的判效读数写成脚本了，并把 L0 §1.5 的边界重核一遍
+- 新工具 `tmp/tools/official/post-deploy-readout-batch15.sh`（语法过、守卫过：不给 `EXPECT_SHA` 就 rc=1 拒绝跑，因为"写死上线 sha"在本仓已作废两次）。它按判据分六段：① 等 live sha==闸门②现算值；② #115 连读三回算 `intelCoverage.tick` 相邻差（判据 ∈[100,110]，Δ=0 记"同批不另计样本"）；③ #142 的 `economy/window-slip` **强制 cur/prev 成对读**（skipReasons 是 500 拍滚动窗）；④ #148/#94 直接打 `failedGates` 的 `value=`（G2 应带 `[房名]`）；⑤ #149 打两条主房 `remoteOps.*.road*`；⑥ 其余边沿签名交给 observe.mjs。头部注释里把三条读数纪律写死，省得下一轮再推导一遍口径。
+- **边界重核**（L0 §1.5 原文，101-113 行）：自主范围＝代码分析/修改/测试/模拟/**开发环境部署**；官服侧只读观察与经授权诊断自主；`生产代码部署、重置 Memory、删除资产、主动战争、核弹发射、改变外交关系` 必须走授权。⇒ 本会话全部动作（改 src、跑三门、本地全量 e2e、只读探针、挂判据器）都在自主侧；唯一等授权的就是那一次 push，我没有代签。
+- 顺手一条现读：e2e 窗内 dist 已被重建为 `82f77b1474ac`（跑完会还原基线 `649eb94b9784`）。这条只能当"当前树的构建预览"，**不是**上线判据——闸门②仍要自己现算。窗口已登记 `AGENT.lock`，期间 build/push 都会被闸门①拒。
