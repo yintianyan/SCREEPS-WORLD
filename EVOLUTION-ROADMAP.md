@@ -10066,3 +10066,9 @@ C. 承认某些车道不值得有路（例如 W36S58 的 `射程外` 占 63%、�
 **代价口径不变**：维持 12 根路 ≈ 1.2 能量/拍；被花掉的是通勤腿背包里的能量，即 #111(B) 那笔"20-30% 该腿运力"的同一账户——只是用途从新建换成维护。
 
 **留下的开放项**：`remoteHauler` 出境时 `ac.snapshot` 到底是哪个房（home 还是 undefined）我没逐行核完 —— 上面引的是 lifecycle.ts 的注释与 flee 的分叉，**要落码前必须先看 `role-runner.ts` 里 snapshot 的解析行**，否则这条更正本身也可能是错的。
+
+### 巡检 R427（2026-10-07 23:3xZ，两行）—— R426 留的那条"开放项"已核：`role-runner.ts:44` 写死 `snapshot = ctx.getSnapshot(home)`
+
+`ActionContext.snapshot` **永远是 `creep.memory.home` 那一房的快照**，与 creep 此刻站在哪个房无关（`:54-57` 的注释同样自陈"外部房（远矿房/过境中间房）无 snapshot，直接扫当前房"，并且 `:72/:77/:82` 三处都用 `inForeignRoom` 绕开 snapshot 依赖）。
+⇒ R426 的推论**成立且比我写的更糟**：把 `repairRoads()` 挂进 remoteHauler 链，它拿到的道路集合是**主房的**，而人站在远矿房 —— 结果不是"空动作"，而是**可能把远矿编队往 home 方向拽**（`runCountedAction` 带 `ACTION_RANGE_FAR` 会走向目标）。这条要作为反面教材留着：`#150` 的正确实现必须是**脚下直扫 `creep.room`**，不能复用任何 snapshot 绑定的动作。
+（同族记录：这是"判据读对了、输入域读漏了"的第二次；第一次是本会话 #116 那条"检测存在但没人读"。）
