@@ -69,6 +69,7 @@ function makeResourceView(over: Partial<EmpireResourceView> = {}): EmpireResourc
     productionRooms: 1,
     candidateRooms: 0,
     strugglingRooms: 0,
+    strugglingRoomNames: [],
     surplusRooms: ["W1N1", "W2N1"],
     deficitRooms: [],
     hasImbalance: false,

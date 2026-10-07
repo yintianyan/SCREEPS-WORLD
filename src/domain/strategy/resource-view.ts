@@ -45,6 +45,11 @@ export interface EmpireResourceView {
   candidateRooms: number;
   /** struggling 房间数。 */
   strugglingRooms: number;
+  /**
+   * struggling 房名单。只有计数时，读到 `G2` 红的人必须回源码重算才知道是
+   * 哪间房关掉了扩张（G2/G3/G5 同出一枚 economicClass，见 room-profile.ts:202-217）。
+   */
+  strugglingRoomNames: string[];
 
   // ── Imbalance 信号 ──
   /** 可输出能量的房间（canExportEnergy=true）名单。 */
@@ -112,6 +117,7 @@ export function buildEmpireResourceView(
       productionRooms: 0,
       candidateRooms: 0,
       strugglingRooms: 0,
+      strugglingRoomNames: [],
       surplusRooms: [],
       deficitRooms: [],
       hasImbalance: false,
@@ -139,6 +145,7 @@ export function buildEmpireResourceView(
 
   const surplusRooms: string[] = [];
   const deficitRooms: string[] = [];
+  const strugglingRoomNames: string[] = [];
 
   for (const p of profiles) {
     totalEnergy += p.storageEnergy;
@@ -168,6 +175,7 @@ export function buildEmpireResourceView(
         break;
       case "struggling":
         strugglingRooms++;
+        strugglingRoomNames.push(p.roomName);
         break;
     }
 
@@ -202,6 +210,7 @@ export function buildEmpireResourceView(
     productionRooms,
     candidateRooms,
     strugglingRooms,
+    strugglingRoomNames,
     surplusRooms,
     deficitRooms,
     hasImbalance,

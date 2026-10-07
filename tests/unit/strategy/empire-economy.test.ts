@@ -94,6 +94,7 @@ function makeView(over?: Partial<EmpireResourceView>): EmpireResourceView {
     productionRooms: 0,
     candidateRooms: 0,
     strugglingRooms: 0,
+    strugglingRoomNames: [],
     surplusRooms: [],
     deficitRooms: [],
     hasImbalance: false,
@@ -733,5 +734,71 @@ describe("A2B-011: Empire Resource View Aggregation", () => {
     expect(view.strugglingRooms).toBe(1);
     expect(view.hasStruggling).toBe(true);
     expect(view.empireNetFlowPositive).toBe(true);
+  });
+});
+
+// ─── R418：G2 必须报出「是哪间房」而不是只报一个计数 ─────────────
+// G2/G3/G5 同出一枚 economicClass 分类位（room-profile.ts:202-217），线上抓到"门集多
+// 了三把"时，只有计数就得回源码重算才知道肇事房 —— 本会话就是这么绕了一整轮。
+describe("R418: struggling 房名单", () => {
+  it("两间困难房 ⇒ 名单按 profiles 顺序给全，计数与名单等长", () => {
+    const view = buildEmpireResourceView(
+      [
+        makeProfile({
+          roomName: "W1N1",
+          economicClass: "struggling",
+          colonyState: "recovery",
+          isStruggling: true,
+        }),
+        makeProfile({
+          roomName: "W2N2",
+          economicClass: "struggling",
+          colonyState: "defense",
+          isStruggling: true,
+        }),
+        makeProfile({ roomName: "W3N3", economicClass: "core" }),
+      ],
+      1000,
+    );
+    expect(view.strugglingRooms).toBe(2);
+    expect(view.strugglingRoomNames).toEqual(["W1N1", "W2N2"]);
+  });
+
+  it("没有困难房 ⇒ 空数组（不是 undefined，读数侧不必再判缺键）", () => {
+    const view = buildEmpireResourceView(
+      [makeProfile({ roomName: "W1N1", economicClass: "core" })],
+      1000,
+    );
+    expect(view.strugglingRoomNames).toEqual([]);
+  });
+
+  it("G2 的 value 带上房名 ⇒ 一次读数就能指认是谁关了扩张", () => {
+    const view = buildEmpireResourceView(
+      [
+        makeProfile({ roomName: "W7N4", economicClass: "core" }),
+        makeProfile({
+          roomName: "W9N9",
+          economicClass: "struggling",
+          colonyState: "defense",
+          isStruggling: true,
+        }),
+      ],
+      1000,
+    );
+    const r = evaluateExpansionReadiness(view, "healthy", makeBudget(), "abundant", true);
+    const g2 = r.gates.find(g => g.name.startsWith("G2"));
+    expect(g2?.passed).toBe(false);
+    expect(g2?.value).toBe("struggling=1[W9N9]");
+  });
+
+  it("控制组：无困难房时 G2 的 value 不带方括号（旧形状逐字不变）", () => {
+    const view = buildEmpireResourceView(
+      [makeProfile({ roomName: "W7N4", economicClass: "core" })],
+      1000,
+    );
+    const r = evaluateExpansionReadiness(view, "healthy", makeBudget(), "abundant", true);
+    const g2 = r.gates.find(g => g.name.startsWith("G2"));
+    expect(g2?.passed).toBe(true);
+    expect(g2?.value).toBe("struggling=0");
   });
 });

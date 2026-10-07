@@ -171,7 +171,11 @@ export function evaluateExpansionReadiness(
   gates.push({
     name: "G2: no struggling rooms",
     passed: g2,
-    value: `struggling=${view.strugglingRooms}`,
+    // 名单必须带上：G2/G5 同出一枚 economicClass 分类位（room-profile.ts:202-217），
+    // 只报计数时读的人无法知道是哪间房（以及它是 core 掉下来的还是幼房）在关扩张。
+    value: `struggling=${view.strugglingRooms}${
+      view.strugglingRoomNames.length > 0 ? `[${view.strugglingRoomNames.join(",")}]` : ""
+    }`,
     condition: "hasStruggling === false",
   });
 
