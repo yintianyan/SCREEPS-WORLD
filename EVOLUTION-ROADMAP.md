@@ -9926,3 +9926,16 @@ R399 我写下"`11 = notFact5 + unowned6 + mine0 + notNormal0` 零残差 ⇒ `ca
 | ⑦ | `LostRoomPurge` 事件 `d` 第 6 列=20,001 的语义 | 小项，回写者核 | 纯读码 |
 
 **作废清单（引用旧文档时的排除项）**：①"G2/G3/G5 是三把独立门各自抖"（R415 推翻）；②"门集多出可归因于目击/threatWindow"（R411 否证，R416-417 给出真链条）；③"lostRooms 零读者所以幻影房永久占工单"（R415 清退命中到拍）；④"CONFIG 可能覆盖 readiness 阈值"（R417 核完：无覆盖）；⑤"gateView 慢视图也平滑 struggling/core 分类"（R415 ④：分类输入无 netFlow，两视图逐字相同）。
+
+### 巡检 R419（2026-10-07 23:0xZ）—— `LostRoomPurge` 的 `d` 列语义由写者结案；判据器给出第二个刷新样本
+
+**① d 列（读写者 `src/kernel/memory.ts:134-152`，不经解释器）**
+`d = [reasonCode, roleBounds 条目数, pendingValidation 条目数, frozenParams 条目数, remoteOps 条目数, lostFor 拍数]`，其中 `reasonCode` 注释自陈 **0＝失守宽限期届满，且是目前唯一出口**；`lostFor = Game.time - lostAt`。
+⇒ 线上那发 `d=[0,0,0,0,0,20001]` 逐字读成：**W38S58 被抹掉时四张调优/远矿子表全是空（或不存在），而它在失守后活了 20,001 拍**（＝`LOST_ROOM_GRACE 20,000 + 1`，与拍号 83,444,422→83,464,423 自洽）。
+⚠ 但 `:140` 有一道闸：`if (!state && !lastEval && !remoteOps) return;` —— **`d[1..4]` 数的是子表条目，不是这三个父对象在不在场**。所以"四列全 0 而事件照发"不是矛盾：只要 `tuning.lastEval[room]` 在场就发事件。而清退监视器 round=9..17 连读九轮的正是 `lastEval=present` ⇒ **两把仪器在此咬合**（一个读 Memory 键在场、一个数子表条目），这条也算给 #131/#116 那条"缺席不能当排除法"（R224 第十四型）再添一发实例。
+
+**② 门集耦合判据器第二发（tick 83,497,984）**：`blk=G0+G6`，W37S58/W38S56 两房 `normal` ⇒ 预报的**负分支没触发**（没有房进困难态，属正常支，不计否证）。
+顺带把 R414c 那条"tick 恒 100 拍不动"的悬念收窄：本轮 300 s（≈100 拍）读到 tick **+100**（83497884→83497984），即正常情形下每轮跨一趟 pass；那么 08:31–08:36 那 323 s 里 tick 未动就意味着**那一趟 pass 没落新快照**——最可能是 `expansion-planner` priority 1 被 `budget.canStart(1)` 拒（`skipReasons` 是 500 拍滚动窗，38 小时前的现场已不可追证 ⇒ 记为"领先假说、未定性"）。
+**派生读数规则**（引用 `expansionDashboard` 时）：判"门集变了"必须先证 `tick` 变了；`tick` 不动的两读＝同一趟 pass，不计新样本；而**连续两读 tick 差 >100 ＝ 中间有 pass 被整趟跳过**，此时不得把"门没变"读成"决策稳定"。
+
+**③ 本批新增一笔待推代码（#148）**：`EmpireResourceView.strugglingRoomNames` + G2 的 `value` 由 `struggling=N` 变 `struggling=N[房名]`（无困难房时逐字保持旧形状，控制组写进单测）。动机就是本轮绕的那一圈——三门同出一枚 `economicClass`，只报计数就得回源码重算才知道是谁关了扩张。tsc 0、受影响两文件 108/108；全量 unit+integration 后台在跑（任务 `bcitab8o1`），绿之前不随批 push。
