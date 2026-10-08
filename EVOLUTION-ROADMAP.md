@@ -10195,3 +10195,6 @@ G5: core rooms            (v=0 | coreRooms ≥ 1)
 - 三门：`tsc 0`／`tests/unit 396 files · 5312 tests`（+4）／与第三轮 e2e 并行跑（独立 config，互不影响）。踩坑一次并当场修：辅助函数最初被插进 `run()` 体内 ⇒ `Unexpected "export"`，移到模块作用域后重跑。提交 `6a72a3ee`。
 - 批大小随之 **22 src + 19 test**，`EXPECT_SRCF` 同步到 22（这条闸门就是为"批变动必须重新审"而设计的，改数是有意动作不是补丁）。
 - **上线后新增的读法（#152 判据）**：`Memory.rooms.<自有房>.lastInvaderHostileAt` 应随每次 NPC 进犯前移、`lastPlayerHostileAt` 应长期缺键或极旧 —— 两把尺的**比值**就是 #151 该不该做的直接证据；若 `lastPlayerHostileAt` 一直空，说明这个帝国三十天来的战争全部由 NPC 撑起。
+### 巡检 R449（2026-10-08 00:0xZ，一行）—— #152 之后集成面复跑过：`tests/integration 30 files · 239 tests` 仍全绿（INTEG_RC=0）
+- 补这一发的原因：R447 报三门时集成面是在 #152 **之前**跑的，把那次读数当"当前批的绿"就是推算。现在三门都对**当前 22 src/19 test 树**成立：`tsc 0`／`unit 396·5312`／`integration 30·239`。
+- #152 的 Memory 体积代价：仅在"威胁新增"那一拍多写两个数字键（`lastInvaderHostileAt`/`lastPlayerHostileAt`，每房至多各一个），相对 `RawMemory` 1.5 MB 告警线可忽略；无新增遍历（复用已在手里的 `snapshot.threatCreeps`）。
