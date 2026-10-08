@@ -1,3 +1,4 @@
+import { INVADER_USERNAME } from "../../domain/intel";
 import { CONFIG } from "../../config";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import {
@@ -188,6 +189,12 @@ export const roomStateSystem: System = {
       // lastHostileAt 只在威胁新增时刷新（首次到达或增援）。
       if (threatCount > 0 && threatIncreased) {
         roomMem.lastHostileAt = ctx.tick;
+        // #152：同一拍按行凶者身份分尺盖章。只落盘、不参与任何判定（消费者为零），
+        // 目的是让 #151「按来源降 war 尾税」有输入可谈——现在房级一把尺把 NPC 骚扰与
+        // 玩家宣战记成同一件事，而段 5 的按人敌意列对 NPC 恒为 0。
+        const cls = classifyThreatOwners(snapshot.threatCreeps);
+        if (cls.invader) roomMem.lastInvaderHostileAt = ctx.tick;
+        if (cls.player) roomMem.lastPlayerHostileAt = ctx.tick;
       }
 
       // nuke 落点预警差分（审计缺口 1）：新 nuke id 首次出现即报事件 + 限流
@@ -471,4 +478,26 @@ function buildThreatAssessment(
     defenseContext,
     // playerIntel 和 remoteContext 在自有房场景不提供（A5.2 扩展点）
   });
+}
+
+/**
+ * 把一批发威胁 creep 按行凶者身份分成 NPC / 玩家两类（#152）。
+ *
+ * 为什么要单独成函数：房级只有一把 `lastHostileAt`，NPC 骚扰与玩家宣战被记成同一件事，
+ * 而按人域（段 5）对 NPC 恒为 0（`intelligence.ts:83-91` 显式排除 `INVADER_USERNAME`）——
+ * 于是"按来源降 war 尾税"(#151) 连输入都没有。这里只分类、只落盘，不参与任何判定。
+ * 无 owner（对象已消失/读不到）不算任何一类，免得把"看不见"记成"没发生"。
+ */
+export function classifyThreatOwners(
+  creeps: ReadonlyArray<{ owner?: { username?: string } | undefined }>,
+): { invader: boolean; player: boolean } {
+  let invader = false;
+  let player = false;
+  for (const c of creeps) {
+    const who = c.owner?.username;
+    if (!who) continue;
+    if (who === INVADER_USERNAME) invader = true;
+    else player = true;
+  }
+  return { invader, player };
 }

@@ -220,6 +220,15 @@ declare global {
      * （count 增加）时刷新，防旧威胁停留时永不过期。
      */
     lastHostileAt?: number;
+    /**
+     * #152 观测专用（**当前零消费者**）：与 `lastHostileAt` 同拍盖章，但按行凶者身份分尺。
+     * 立此因由：把 posture 钉在 `war` 的是上面那把房级尺，而段 5 的按人敌意列对 NPC 恒为 0
+     * （`intelligence.ts:83-91` 显式排除 `INVADER_USERNAME`）⇒ 三十天里没有任何玩家攻击记录，
+     * 恒战的成因是 **NPC 骚扰与玩家宣战在这把尺上同价**。分尺落盘后 #151 才谈得上按来源降尾税。
+     * 两把尺都不参与任何决策，改动战争语义仍属人。
+     */
+    lastInvaderHostileAt?: number;
+    lastPlayerHostileAt?: number;
     /** P1-3：上一 tick 的威胁 creep 数量，用于检测新增威胁（count 增加）。
      * room-state 每 tick 写入，缺失时按 0 处理（首威胁即新增）。 */
     prevThreatCount?: number;
