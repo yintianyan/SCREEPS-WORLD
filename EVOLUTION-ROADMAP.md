@@ -10198,3 +10198,20 @@ G5: core rooms            (v=0 | coreRooms ≥ 1)
 ### 巡检 R449（2026-10-08 00:0xZ，一行）—— #152 之后集成面复跑过：`tests/integration 30 files · 239 tests` 仍全绿（INTEG_RC=0）
 - 补这一发的原因：R447 报三门时集成面是在 #152 **之前**跑的，把那次读数当"当前批的绿"就是推算。现在三门都对**当前 22 src/19 test 树**成立：`tsc 0`／`unit 396·5312`／`integration 30·239`。
 - #152 的 Memory 体积代价：仅在"威胁新增"那一拍多写两个数字键（`lastInvaderHostileAt`/`lastPlayerHostileAt`，每房至多各一个），相对 `RawMemory` 1.5 MB 告警线可忽略；无新增遍历（复用已在手里的 `snapshot.threatCreeps`）。
+
+### 巡检 R450（2026-10-08 00:1xZ）—— 授权前清单：这一批 22 个 src 文件到底改了什么、上线后怎么判、风险在哪
+
+**为什么写这一节**：这批已经攒到 40+ 小时未推，每轮都在问同一句授权；问之前先把"你要批准的是什么"一次列清，比每次重贴零散结论有用。判据都已进 `post-deploy-readout-batch15.sh`，一条命令可全收。
+
+| 笔 | src 文件 | 改了什么（一句话） | 上线判据 | 风险／代价 |
+|---|---|---|---|---|
+| #115 `f6beef69` | `systems/intelligence.ts` | 老化批从"绝对对齐 `tick%100`"改成 **elapsed（距上次真跑 ≥100）＋ 相位无关**，并拆成三段 `safeRun` | `stats.intelCoverage.tick` 相邻两读差全 ∈[100,110] | 无阈值改动；"因"仍未定（R405 自降级），故判据只看间隔不看成因 |
+| #142 `55cf0d24` | `systems/room/economy.ts` | 断档丢整窗不再无痕：`recordSkip("economy/window-slip")`（仅非首见时计） | `kernel.skipReasons` 与 `prevSkipReasons` **成对读**该键 | 零判定影响；净流 EMA 是 G4/G6 输入，此键只解释"仪器饿着" |
+| #148 `448f0de5` | `domain/strategy/resource-view.ts`＋`readiness.ts` | G2 门值 `struggling=N` → `struggling=N[房名]` | 一次困难态 pass 里 `failedGates` 出现 `G2...(v=struggling=1[W..])` | 无困难房时逐字保持旧形状（控制组入单测） |
+| #149 `9e1a3a9c` | `systems/remote/road-planner.ts` | 每轮新建上限的 `return` 从循环头挪到清扫之后 ⇒ 后续车道不再被吞 | 新建触顶那一轮，其它车道 `roadReaped`/`roadSiteCount` 写入本值 | 回收规则未变；触顶那一轮每条后续车道多 2 次 `room.find` |
+| #152 `6a72a3ee` | `systems/room/room-state.ts`＋`types/global.d.ts` | 房级敌意按行凶者身份**分尺**（NPC／玩家），只落盘 | 两把尺的比值：invader 随进犯前移、player 长期缺键 | **新键零消费者**、判定链未改 |
+| 其余 17 件 | 观测/缺陷类（#93/#94/#96/#102/#105/#119/#131/#141 等） | 多为"读数不再说谎"：跨部署存活、分母修正、拒因分离、盲点普查 | 见 §3.0-v3 表①那 9 条边沿签名 | 均为观测面；不改阈值、不改门禁 |
+
+**明确不在这一批里的**（别误以为顺带上线）：任何 `threatWindow`/`warPatience`/G 门阈值（#50、#73、#92、#151 都还挂着等属人拍板）、`allies`／外交侧、远矿维护接线（#150）。**这批推上去不会让任何一道闸变绿** —— 这点很重要：它买的是"下一轮能看清"，不是"这轮就扩张"。
+
+**三门与第四轮**：`tsc 0`／`unit 396·5312`／`integration 30·239`（都对当前 22/19 树重跑过）；第三轮全量 e2e 仍在跑（00:12Z 23/34，无 FAIL）。
