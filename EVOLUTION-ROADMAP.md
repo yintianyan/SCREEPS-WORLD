@@ -10705,3 +10705,16 @@ G5: core rooms            (v=0 | coreRooms ≥ 1)
 **为什么这条对 #151 是决定性的**：和平被切断的原因不是"敌人更强"，而是**一次 NPC 进犯在退出后仅 815 拍就又出现**，而现有制度把它和"玩家宣战"记成同一件事 ⇒ 尾税 5,000 拍 + `warPatience` 3,000 拍把 G0-open 窗口压成 3,815 拍（且这 3,815 拍里 G6 全程红）。⇒ **#151（分来源）与 #50（CPU）是串联**：只解一个都扩不了张。这也是 R452 那条结论的逐拍版本。
 
 **待 #152 上线后的第一读**（不用等 30 天）：`rooms.*.lastInvaderHostileAt` 与 `lastPlayerHostileAt` 的键位差 —— 若 `lastPlayerHostileAt` 在 3,815 拍窗口里始终缺键，则"这一整条链全部由 NPC 撑起"从**推断**升成**直接读数**。
+
+### 巡检 R454（2026-10-09 10:2xZ）—— 结构结论修正一处我自己的假设，并给出**决策顺序**：#50（CPU）在 #151/#73 上游
+
+**先自纠**：我一度以为 `isReady` 里的 `extendedReadiness.allPassed` 把 G0/G6 也并进来了 —— **不对**。`allPassed` 是 `execution-gate.ts:169` 那套 **11 项 TOCTOU 执行门禁**（`failedGates.length===0`），与就绪度的七把门不是一套（旧账"执行门禁只认 expansionAllowed，无 G4/G6"与此一致）。真正把 G0/G6 传进晋升的是**同一行的第二个合取项**：
+```
+isReady = extendedReadiness.allPassed && plannerInput.readiness.readiness !== "NOT_READY"   // expansion-planner.ts:200
+```
+`readiness` 就是 G0..G7 那套（现读 `Blocked=G0+G6` ⇒ `NOT_READY`）。而 `applyHysteresis(plan, false, tick)` 在 `plan-lifecycle.ts:147` 把 `readySince` **清成 undefined** ⇒ 门一红，已累计的连续 ready 拍数**直接归零**，不是"暂停"。
+
+**于是量化的结构结论**：晋升要 `upgradeTicks=500` 个**连续**全绿拍（`plan-lifecycle.ts:41,140`），而 `tier=tight` 已连续 **62,979 拍**未换档 ⇒ 在这 62,979 拍里，"可累计"的拍数是 **0**；其中 G0 打开的那 3,815 拍（R453）也全部落在 G6 红区内 ⇒ **这 3,815 拍里同样一天都没攒到**。旁证与主证一致：所有 plan 的持久字段 `rd`（=`readySince`）历次现读均为未赋值（对端 R270 第四次同代核对）。
+⇒ **#50 是 #151/#73 的上游**：把 war 语义改得再漂亮，只要不存在"连续 500 拍 tier≤comfortable"，晋升链就**从没开始过**，扩张仍然不会发生。反之若 CPU 达标，#151/#73 才变成瓶颈（那时窗口只有 3,815 拍 ≈ 7.6 个 500 拍周期，余量本就不厚）。
+**这条给属人决策的实际排序**：先回答 #50（要不要接受 `constrained` 并改判据，或从别处腾 3.4~3.5/t），再谈 #151/#73/#150。三者不是并列清单，是有先后的链条。
+**#94 的作用被顺带确认**：它落盘"决策那拍的 `gclLevel`/`bucket`"，正是为了下次不再靠"tier 红"倒推 CPU 现场——上线后 `rd` 与 #94 两枚键要一起读（前者证"从没攒过"，后者证"当时差多少"）。
