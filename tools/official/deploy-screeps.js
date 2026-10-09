@@ -19,6 +19,38 @@
 const fs = require("fs");
 const path = require("path");
 require("../load-env"); // 本地手动部署时从 tools/.env 读取 token；CI 中 env 已由 workflow 注入
+// 部署闸门（R274 加，成因＝本仓一次把"只读核对线上 sha"敲成 `node tools/official/deploy-screeps.js --check-code`，
+// 而本脚本历史上零 argv 分支 ⇒ 任何一次调用都是真实上传，等价于未经批复的部署）。
+// 规矩：本脚本唯一的职责是上传。只读核对一律走 tools/official/check-code.mjs。
+//   · 任何未知参数 ⇒ 拒绝（不猜意图，绝不把"看起来像 dry-run 的参数"当 dry-run）
+//   · 非 CI 环境 ⇒ 必须显式 SCREEPS_DEPLOY_CONFIRM=1 或参数 --confirm-deploy
+//   · CI（GITHUB_ACTIONS=true，workflow 里无参数调用）⇒ 行为逐字不变
+{
+  const args = process.argv.slice(2);
+  const unknown = args.filter((a) => a !== "--confirm-deploy");
+  if (unknown.length > 0) {
+    console.error(
+      "[Deploy] ✗ 拒绝执行：本脚本无只读模式，未知参数 " + JSON.stringify(unknown) +
+      " 会被当作上传指令。只读核对请用 tools/official/check-code.mjs；" +
+      "确要部署请显式加 --confirm-deploy 或设 SCREEPS_DEPLOY_CONFIRM=1。"
+    );
+    process.exit(1);
+  }
+  const confirmed = process.env.GITHUB_ACTIONS === "true" ||
+    process.env.SCREEPS_DEPLOY_CONFIRM === "1" ||
+    args.indexOf("--confirm-deploy") >= 0;
+  if (!confirmed) {
+    console.error(
+      "[Deploy] ✗ 拒绝执行：未经确认的部署调用（安全内核第 3 条：未经批复不部署）。\n" +
+      "  确认部署：SCREEPS_DEPLOY_CONFIRM=1 node tools/official/deploy-screeps.js\n" +
+      "  只想看线上跑的是哪一版：node tools/official/check-code.mjs"
+    );
+    process.exit(1);
+  }
+  console.error("[Deploy] ! 部署闸门：确认通过（GITHUB_ACTIONS=" + (process.env.GITHUB_ACTIONS || "-") +
+    ", SCREEPS_DEPLOY_CONFIRM=" + (process.env.SCREEPS_DEPLOY_CONFIRM || "-") +
+    ", argv=" + JSON.stringify(args) + "）— 即将真实上传。");
+}
 
 const token = process.env.SCREEPS_TOKEN;
 const branch = process.env.SCREEPS_BRANCH || "default";
