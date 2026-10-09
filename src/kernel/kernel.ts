@@ -155,21 +155,28 @@ export class Kernel {
     // 而 segmentUnavailable 守卫依赖 requestSegments 写入的 requestedAt 判断
     // 「reset 首 tick segment 未加载」。若迁移先执行，守卫失效，空结构可能被
     // 缓存并在 flush 时整体覆盖 segment 历史数据。
-    safeRun("segments-request", () => requestSegments(), true);
+    // 相位账（`phase/*`）此前从第一个 measuredRun 才开始，而上面这段（段声明、Memory 迁移与
+    // 维护、路径缓存清理、遥测初始化）跑在它之前 ⇒ 实测每拍有 ≈0.9 CPU 落在这张表的账外。
+    // 包成一个 `phase/pre` 桶：`safeRun` 的裸标签不带 `system/`·`creep/`·`room/`·`phase/` 前缀，
+    // 会被 `recordCpu` 的四个分支全部漏掉（`safe-run.ts:146-175`），所以只能靠这一层跨度收口。
+    // 顺序照原样保留：段声明必须在 maintainMemory 之前（否则迁移读不到 requestedAt 守卫）。
+    measuredRun("phase/pre", () => {
+      safeRun("segments-request", () => requestSegments(), true);
 
-    // Memory — 迁移与日常维护拆分为两个错误边界（K-5）：迁移 throw 不连坐
-    // 死 creep 清理/房间兜底（防 Memory.creeps 慢性泄漏）。关键步骤：永不冷却。
-    safeRun("memory-migrate", () => runMigrations(), true);
-    safeRun("memory", () => maintainMemory(), true);
+      // Memory — 迁移与日常维护拆分为两个错误边界（K-5）：迁移 throw 不连坐
+      // 死 creep 清理/房间兜底（防 Memory.creeps 慢性泄漏）。关键步骤：永不冷却。
+      safeRun("memory-migrate", () => runMigrations(), true);
+      safeRun("memory", () => maintainMemory(), true);
 
-    // P2-L：每 100 tick 清理 __creepPathCache 中死 creep 残留 — global 状态无析构，
-    // 残留条目累积内存；低频触发（非每 tick）— 清理是兜底卫生，不值得常态 CPU。
-    if (Game.time % 100 === 0) {
-      safeRun("prune-path-cache", () => pruneDeadCreepCache());
-    }
+      // P2-L：每 100 tick 清理 __creepPathCache 中死 creep 残留 — global 状态无析构，
+      // 残留条目累积内存；低频触发（非每 tick）— 清理是兜底卫生，不值得常态 CPU。
+      if (Game.time % 100 === 0) {
+        safeRun("prune-path-cache", () => pruneDeadCreepCache());
+      }
 
-    // initTelemetry 也走错误边界：遥测初始化失败不得中断 tick。
-    safeRun("telemetry-init", () => initTelemetry(Game.time), true);
+      // initTelemetry 也走错误边界：遥测初始化失败不得中断 tick。
+      safeRun("telemetry-init", () => initTelemetry(Game.time), true);
+    });
 
     const ctx = new Context(budget);
 
