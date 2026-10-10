@@ -11148,6 +11148,11 @@ G5: core rooms            (v=0 | coreRooms ≥ 1)
 | 市场买矿 | 本服**零卖单**（`buyBestAsk=0`，credits 27.68M ⇒ 不是钱） | R381 + 本会话 R428 现读 | 外部事实，不受我代码影响 |
 | 一次全量 e2e | 本地 ≈ **10~15 分钟**、34 files/72 tests（含在跑的这一轮） | e2e-full-r404/r429 | 长 soak 场景**不可复现**（调优有随机探索，#62 未结） |
 | 判据器一次武装的成本 | 每轮 5 次只读 peek、GAP 300 s、60 轮 ≈ 5 小时墙钟，零 console 副作用 | gate-coupling / posture-exit3 / lostroom-purge 实测 | — |
+| 帝国工事维持义务（rampart 侧） | 衰减 **300 hits/99 拍·根**（＝3.03/拍·根）× 149 根 ≈ **451 hits/拍**；按 1 能量=100 hits 折 ≈ **4.5 能量/拍** | 衰减常数＝`tmp/observe/r307-d{1,2,4}.out` 12/12 枚同值＋聚合层整除（`N=(ΣdB−ΣdA+n·W)/99`，五窗全整除）；能量腿＝对端 R310 钉 id 同对象对 Δcarry −16 ↔ Δhits +1,600 | **墙不计入**：111 根 wall 实测**不衰减**（`ticksToDecay` 全缺＋两读 Δhits=0）⇒ 义务只算 rampart；塔侧 hits/能量 折算尺已被对端 R316 撤回（九值跨 1.8 倍），故本行换算仅走 creep 侧 |
+| 一次和平窗里工事实际拿到多少修理工时 | 世界侧粗修入 ≈ **18.5 hits/拍**（一枚非零样本：54 拍窗 +1,000 hits）⇒ 对核心房义务 264 hits/拍 ≈ **7%**；账本侧三窗上界 **[13%, 27%]** | `tmp/observe/r307-z5.out`／`r307-z10.out`（同发 `ΣticksToDecay` 差分）＋对端 R310/R314 账本覆盖率 | **不是稳态速率**：同序列另有 42 拍窗＝0，五个独立窗合计 230+ 拍里四枚为 0 ⇒ 修入是间歇脉冲（builder carry 0↔200 循环，花费段常落在锚之间）；稳态需 ≥1,000 拍密采或部署侧计数 |
+| 一名 builder 的修理运力上限（排产决策的分母） | carry **200 能量/趟** ⇒ 每趟名义上界 20,000 hits；每房编制名额 **1** | `tmp/observe/r307-{z1,z5,z10,y1,y2}.out` 现读 `cap:200`；名额＝`roleBounds.builder.maxCount=1`（项目记忆 remote-roads 条） | 名义≠实测：真正落在工事上的份额未测（链序把施工/container/修路排在前面，见 §4.0 补180/186/187）；`hits/能量` 只对 creep 侧成立 |
+| 本服结构门槛与可见性（任何「能不能盖／在不在」判断的前提） | `CONTROLLER_STRUCTURES.observer = {1..7:0, 8:1}` ⇒ **Observer 到 RCL8 才解锁**；rampart 每级上限 **2,500 根**；`FIND_MY_STRUCTURES` **不返回** wall/container/road | `tmp/observe/r317-l1.out`（引擎表直读）＋`r307-c2.out`（同发两把 find 逐类对比，控制组＝rampart/tower 同数） | `controller.isStructureAvailable` 本服 undefined（试过＝"nofn"）⇒ 判解锁只能读表；幼房现读 RCL6 ⇒「给幼房盖 Observer」这一属人选项作废 |
+| 一间候选房的情报完备度（扩张决策的输入质量） | 候选池 n=10 中 **2 间 `sc=undefined／st=UNKNOWN`**（W37S56／W39S56），陈旧 3,437／3,837 拍，**不在视野、房内无我方 creep** ⇒ 无自关机制 | `tmp/observe/r317-{i8,i9}.out`（列义＝`global.d.ts:1093-1122`）＋写者链 `candidate.ts:157`／`expansion-planner.ts:142-143`／`bootstrap.ts:185` | 已判：UNKNOWN 是「跳过」不是「被拒」（进不了评分门）。未判：这两间在按 username 的敌意记忆（段 5 域）里是否被同批事件写过 |
 
 **读法约定**：这张表只给"动作值多少钱"，不给"该不该做"。属人决策（#50/#73/#111/#150/#107/Power）都各引用其中一行或数行。
 
