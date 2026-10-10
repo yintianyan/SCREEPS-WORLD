@@ -208,7 +208,11 @@ export class Kernel {
     // cpuByHome 归因），但**不经过 canStart**：让位闸对观测是自败回路。
     measuredRun("phase/observability", () => this.runObservabilitySystems(ctx));
 
-    emitSummary(budget);
+    // emitSummary 此前不计费：它每拍排序整张 systemCpu 榜、拼 intents 字符串并在
+    // CPU 偏高时写一条 log —— 而 `phase/*` 合计与拍尾实测之间那 ≈0.6/拍的差额就住在这里
+    // （或住在上面的 createBudget，它没法包：telemetry 的时标要到 phase/pre 才刷新，
+    // recordCpu 的闸会把更早的跨度全部丢掉）。包起来才分得出这两种答案。
+    measuredRun("phase/summary", () => emitSummary(budget));
 
     // 相位⑨：遥测采集 — 各域 collect 函数内部有频率门控和 try/catch，
     // 失败不得影响 AI。safeRun 外层再加一道隔离。
