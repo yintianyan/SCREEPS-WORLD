@@ -266,7 +266,10 @@ export const expansionPlannerSystem: System = {
     // ── 步 11：持久化到 Memory ──
     if (!Memory.kernel) Memory.kernel = {};
     Memory.kernel.expansionPlans = plans.map(serializePlan);
-    Memory.kernel.expansionCandidates = allCandidates.slice(0, 10).map(serializeCandidate);
+    const persistedCandidates = allCandidates
+      .slice(0, CANDIDATE_PERSIST_CAP)
+      .map(serializeCandidate);
+    Memory.kernel.expansionCandidates = persistedCandidates;
 
     // ── 步 12：Dashboard ──
     const dashboard = buildExpansionDashboard({
@@ -284,6 +287,12 @@ export const expansionPlannerSystem: System = {
     Memory.kernel.expansionDashboard = {
       tick: ctx.tick,
       summary: dashboard.summary,
+      // 截断要留痕：`expansionCandidates` 只落盘前 CANDIDATE_PERSIST_CAP 条，读数人拿它的
+      // length 当池规模就会把前缀当全集（同族先例＝`stats.cpuBySystem` 的 top-10 榜，
+      // 立案过程见 roadmap 补208）。
+      // 早退分支不写这两列 —— 那一趟跳过了全量管线，条数不是"算出来少了"而是"没算"。
+      poolTotal: allCandidates.length,
+      poolCut: allCandidates.length - persistedCandidates.length,
       // 闸门明细本来就已经算出来了，只是从来没落盘：线上只看到 `Readiness=NOT_READY`
       // 这一个词，而 G0（在打仗）/G1（有活威胁）/G6（CPU 余量）三种 NOT_READY 的动作
       // 完全不同 —— 分不清就会去优化错的那一个。
@@ -403,6 +412,14 @@ function deserializePlan(m: ExpansionPlanMemory): ExpansionPlan | null {
     explanation: m.ex ?? "",
   };
 }
+
+/**
+ * 候选池的落盘上限。`Memory.kernel.expansionCandidates` 是**按数组尾截断的投影**，不是全集
+ * （线上实测：同一趟 pass 里仪表盘串 `Candidates=13` 而落盘表 10 条，全部差值落在被
+ * REJECTED+BLACKLISTED 折叠过的那一档）⇒ 从落盘表数出的池规模只是下界，分母要看快照里
+ * 同拍的 `poolTotal` / `poolCut` 两列。
+ */
+export const CANDIDATE_PERSIST_CAP = 10;
 
 /** 序列化候选到 Memory 瘦结构。 */
 function serializeCandidate(c: ExpansionCandidateV2): ExpansionCandidateMemory {

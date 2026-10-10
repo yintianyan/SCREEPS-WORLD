@@ -1007,6 +1007,13 @@ declare global {
       /** 本轮没过的 readiness 闸门名（`G0: posture expansionAllowed` / `G1…` / `G6…`）——
        * 光有 `Readiness=NOT_READY` 判不出该去做哪件事。 */
       failedGates?: string[];
+      /** 全量管线这一趟看到的候选总数（截断之前）。
+       * `expansionCandidates` 是按数组尾 `slice(0, 10)` 落盘的投影 ⇒ 它的 length 是**下界**；
+       * 线上实测同一趟 pass 里仪表盘串报 13、落盘表 10（差值全在被 REJECTED+BLACKLISTED
+       * 折叠过的那一档）。没有这两列，读数人会把前缀当全集。 */
+      poolTotal?: number;
+      /** 被落盘上限切掉、Memory 里读不到的条数（`poolTotal - 已落盘条数`）。 */
+      poolCut?: number;
     };
     /**
      * A4.1 远矿经济 Dashboard 快照（specialization-planner 每 100t 写入）—
