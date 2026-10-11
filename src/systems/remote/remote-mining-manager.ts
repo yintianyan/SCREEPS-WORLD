@@ -13,7 +13,13 @@ import {
   setRemoteOpLedger,
   pruneRemoteOpLedgers,
 } from "../../kernel/global-cache";
-import { emptyOpLedger, toOpLedgerSnapshot, recordOpCpu } from "../../domain/remote/op-ledger";
+import {
+  aggregateRemoteEconomy,
+  emptyOpLedger,
+  toOpLedgerSnapshot,
+  recordOpCpu,
+  type RemoteOpLedger,
+} from "../../domain/remote/op-ledger";
 import { intelPayloadView } from "../intelligence";
 import {
   decideRemoteDefenseAction,
@@ -569,6 +575,32 @@ export const remoteMiningManagerSystem: System = {
       recycleExcessRemoteCreeps(snapshot.roomName, remoteOps, intel);
     }
 
+    // #167：帝国级远矿经济快照（纯观测，零决策输入 —— 与 E9 的「只记录不定价」同批）。
+    // 落它的理由见 domain/remote/op-ledger.aggregateRemoteEconomy：此前 netRate 与
+    // cpuPerTick 只在 heap 与逐条日志里，读数人要手工回代才能算出 e/cpu 这个比值。
+    // 只数 active 线：废弃 op 的账本是复盘数据，混进来会把死线的历史当现役收入。
+    const econLedgers: RemoteOpLedger[] = [];
+    let pausedOpCount = 0;
+    for (const room of Object.values(Game.rooms)) {
+      if (!room.controller?.my) continue;
+      const ops = Memory.rooms[room.name]?.remoteOps;
+      if (!ops) continue;
+      for (const [target, op] of Object.entries(ops)) {
+        if (op.state === "paused") {
+          pausedOpCount++;
+          continue;
+        }
+        if (op.state !== "active") continue;
+        const ledger = peekRemoteOpLedger(room.name, target);
+        if (ledger) econLedgers.push(ledger);
+      }
+    }
+    if (!Memory.kernel) Memory.kernel = {};
+    Memory.kernel.remoteEconomyDashboard = aggregateRemoteEconomy(
+      econLedgers,
+      pausedOpCount,
+      ctx.tick,
+    );
     logRemoteLedgers(ctx.tick);
   },
 };

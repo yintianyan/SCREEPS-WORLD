@@ -1016,27 +1016,33 @@ declare global {
       poolCut?: number;
     };
     /**
-     * A4.1 远矿经济 Dashboard 快照（specialization-planner 每 100t 写入）—
-     * 全链路可观测性：Remote Source / Operation / Production / Transport /
-     * Delivered / Net Value / ROI / Health / Budget 汇总。
+     * A4.1 远矿经济 Dashboard 快照（remote-mining-manager 每趟聚合一次）—
+     * 全链路可观测性：现役/暂停运营数、总交付速率、净营收速率、健康/亏损计数、
+     * 线级 CPU 合计，以及 `e/cpu` 比值。
+     *
+     * 这里**没有** `tp`（总产出）：账本只记交付（`delivered`），产出侧无归属仪器；
+     * 要记采出量得另建仪器，不能拿交付当产出（同一名词两种量）。落这一格的来龙去脉见
+     * roadmap 补218／补219（此前 `netRate` 与 `cpuPerTick` 只在 heap 与逐条日志里，
+     * 读数人要手工回代才能回答"这条远矿线值多少 CPU"，而扩张闸的 CPU 缺口决策正卡在这比值上）。
      */
     remoteEconomyDashboard?: {
+      /** 聚合发生的那一拍。 */
       t: number;
       /** 活跃远矿数。 */
       ao: number;
-      /** 总产出（e/tick）。 */
-      tp: number;
-      /** 总交付（e/tick）。 */
+      /** 总交付速率（e/tick，按各自窗口折算后求和）。 */
       td: number;
-      /** 总净价值（e/tick）。 */
+      /** 总净营收速率（e/tick，`opNetRate` 求和；已扣未回收孵化投入与工事投入）。 */
       nv: number;
-      /** 健康运营数。 */
+      /** 健康运营数（`opProfitable` 为真）。 */
       ho: number;
-      /** 降级运营数。 */
+      /** 亏损运营数（现役但 `opProfitable` 为假——含窗口未满的新线）。 */
       dg: number;
       /** 暂停运营数。 */
       sp: number;
-      /** 摘要文本。 */
+      /** 线级 CPU 合计（/tick，各 op 的 EMA 求和；跨 boot 由 `ledger.c` 带回来）。 */
+      cu: number;
+      /** 摘要文本（含 e/cpu 比值，CPU 为 0 时写 n/a 而不是除出 Infinity）。 */
       s: string;
     };
   }

@@ -150,8 +150,61 @@ function finiteOrZero(v: number | undefined): number {
   return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0;
 }
 
-/** 单行摘要（供低频日志观测，不参与任何决策）。 */
-export function summarizeOpLedger(
+/**
+ * 帝国级远矿经济聚合（纯函数，只喂给 `Memory.kernel.remoteEconomyDashboard` 那一格快照）。
+ *
+ * 立案（roadmap 补218／补219）：`netRate` 与 `cpuPerTick` 此前只存在于 heap 与逐条日志，
+ * 读数人要手工回代才能回答「这条线值多少 CPU」，而扩张闸的 CPU 缺口决策正卡在这个比值上。
+ * **零决策输入**：三个判据（`opNetRate`／`opProfitable`／`opUnrecoveredInvestment`）都不读这里的输出。
+ *
+ * 只统计现役（active）线：废弃线留下的账本是复盘数据，混进来会把死线的历史当现役收入。
+ * 没有「总产出」这一项——账本只记交付，产出侧无归属仪器（拿交付当产出＝一名两义）。
+ */
+export function aggregateRemoteEconomy(
+  activeLedgers: readonly RemoteOpLedger[],
+  pausedOps: number,
+  tick: number,
+): {
+  t: number;
+  ao: number;
+  td: number;
+  nv: number;
+  ho: number;
+  dg: number;
+  sp: number;
+  cu: number;
+  s: string;
+} {
+  let deliveredRate = 0;
+  let netRate = 0;
+  let cpuPerTick = 0;
+  let healthy = 0;
+  for (const l of activeLedgers) {
+    const window = Math.max(1, tick - l.windowStart);
+    deliveredRate += l.delivered / window;
+    netRate += opNetRate(l, tick);
+    cpuPerTick += l.cpuPerTick;
+    if (opProfitable(l)) healthy++;
+  }
+  const round = (v: number): number => Math.round(v * 100) / 100;
+  const perCpu = cpuPerTick > 0 ? round(netRate / cpuPerTick) : "n/a";
+  return {
+    t: tick,
+    ao: activeLedgers.length,
+    td: round(deliveredRate),
+    nv: round(netRate),
+    ho: healthy,
+    dg: activeLedgers.length - healthy,
+    sp: pausedOps,
+    cu: round(cpuPerTick),
+    s:
+      `Remote Economy @${tick} | ops=${activeLedgers.length} active, ${pausedOps} paused | ` +
+      `delivered=${round(deliveredRate)} e/tick | net=${round(netRate)} e/tick | ` +
+      `cpu=${round(cpuPerTick)}/tick | e/cpu=${String(perCpu)} | healthy=${healthy}`,
+  };
+}
+
+/** 单行摘要（供低频日志观测，不参与任何决策）。 */ export function summarizeOpLedger(
   home: string,
   target: string,
   l: RemoteOpLedger,
