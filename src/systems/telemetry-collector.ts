@@ -91,11 +91,12 @@ export function computeCpuRate(
   // 一旦有计数就用它 —— 这才是"分子分母同一批拍"的那个分母。
   const w = cum.ticks === undefined ? window : Math.max(1, cum.ticks);
   const sum = (m: Record<string, number>): number => Object.values(m).reduce((a, b) => a + b, 0);
-  const perTick = (m: Record<string, number>): Record<string, number> =>
+  // `limit` 默认前十，只有相位表关掉截断（见下）—— 它是这张表里唯一**规模有界**的一列。
+  const perTick = (m: Record<string, number>, limit = 10): Record<string, number> =>
     Object.fromEntries(
       Object.entries(m)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
+        .slice(0, limit)
         .map(([k, v]) => [k, round2(v / w)]),
     );
   return {
@@ -115,7 +116,11 @@ export function computeCpuRate(
     tail: round2((cum.tail ?? 0) / w),
     bySystem: perTick(cum.systems),
     byRole: perTick(cum.roles),
-    byPhase: perTick(cum.phases ?? {}),
+    // 相位表**不截断**（#174）。两条理由：一、它的规模由源码里 `measuredRun("phase/…")` 的标签数决定
+    // （有界，现读 10 枚），不是无界字典；二、它是 `unphased = total − Σphases` 那笔账的复算依据，
+    // 而 `unphased` 用的是全量求和 ⇒ 一旦截断把某项切出表，读数人拿 `total − ΣbyPhase` 就得到**假残差**
+    // （两者只在标签数 ≤ 上限时同值；补248 落了 `phase/early` 后正好装满前十，下一枚标签就会分叉）。
+    byPhase: perTick(cum.phases ?? {}, Number.POSITIVE_INFINITY),
   };
 }
 
