@@ -175,6 +175,19 @@ function recordCpu(label: string, cost: number): void {
   }
 }
 
+/**
+ * #173：按**已知跨度**记一笔相位账，用于 `recordCpu` 的时标闸结构上打不开的那一段。
+ *
+ * 为什么要有这个入口（不是 convenience wrapper）：`recordCpu` 第一行要 `g.telemetry.tick === Game.time`，
+ * 而那个时标是在 `phase/pre` **内部**的 telemetry-init 才刷新的 ⇒ 早于它的语句（预算与上下文构造）
+ * 用 `measuredRun` 包也只会得到构造性的 0。唯一诚实的写法是在闸打开之后，把"从拍首到现在的总跨度"
+ * 减去已记账的那段补记一笔 —— 跨度由调用方在第一条语句处取，本函数只负责入桶。
+ * 命名与 `measuredRun("phase/x")` 完全同构（同一个桶、同一份语义），所以 `unphased` 的恒等式不变。
+ */
+export function recordPhaseSpan(name: string, cost: number): void {
+  recordCpu(`phase/${  name}`, cost);
+}
+
 /** 记录 Action 级 CPU profiling 数据（仅当 CONFIG.debug.actionProfiling 为 true 时调用 —
  * 调用方负责门禁）。key 格式："roleName/actionName/resolve|execute" | "roleName/onFlee"。
  * 按 tick 惰性重置 Map。 */

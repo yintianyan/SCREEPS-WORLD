@@ -10,7 +10,7 @@ import {
 import { recordSkip, flushSkips, maintainMemory, runMigrations } from "./memory";
 import { systemPhase } from "./phase";
 import { requestSegments, flushSegments } from "./segment-store";
-import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
+import { measuredRun, safeRun, safeRunBuild, recordPhaseSpan } from "./safe-run";
 import { buildCadenceTable, resolveInterval, type CadenceTable } from "./cadence";
 import { createBudget } from "./scheduler";
 import {
@@ -148,6 +148,9 @@ export class Kernel {
   }
 
   run(): void {
+    // #173 取表点＝本函数的**第一条语句**：它之前（模块级 loop 包装）不在这一笔账里，
+    // 之后的（预算与上下文构造）在 `phase/early` 那笔补记里。取早一步就把闸外的段量进来。
+    const tickStart = Game.cpu.getUsed();
     // 预算：根据 bucket 带滞回地确定 CPU 档位。
     const budget = createBudget();
 
@@ -160,7 +163,7 @@ export class Kernel {
     // 包成一个 `phase/pre` 桶：`safeRun` 的裸标签不带 `system/`·`creep/`·`room/`·`phase/` 前缀，
     // 会被 `recordCpu` 的四个分支全部漏掉（`safe-run.ts:146-175`），所以只能靠这一层跨度收口。
     // 顺序照原样保留：段声明必须在 maintainMemory 之前（否则迁移读不到 requestedAt 守卫）。
-    measuredRun("phase/pre", () => {
+    const preCost = measuredRun("phase/pre", () => {
       safeRun("segments-request", () => requestSegments(), true);
 
       // Memory — 迁移与日常维护拆分为两个错误边界（K-5）：迁移 throw 不连坐
@@ -179,6 +182,13 @@ export class Kernel {
     });
 
     const ctx = new Context(budget);
+
+    // #173：这一段（预算判定 + 上下文构造）此前**结构上量不到** —— `recordCpu` 的时标闸要到
+    // phase/pre 内部才打开，拿 `measuredRun` 包它会记成 0（不是"不花钱"）。这里在闸已打开的位置，
+    // 用「从拍首到现在的总跨度 − 已入账的 phase/pre」补记，桶与命名与 measuredRun 完全同构 ⇒
+    // `unphased = total − Σphases` 那条恒等式的语义一字未动。
+    // 实测（roadmap 补245）：补记前 `unphased ≈ 0.87/拍`，而 `phase/summary` 只有 0.03/拍。
+    recordPhaseSpan("early", Game.cpu.getUsed() - tickStart - preCost);
 
     // 房间快照（P0 — 必须在任何读取快照的系统之前运行）。
     // 用 safeRun 包裹：快照是全 tick 数据量最大、字段访问最密集的热点，
