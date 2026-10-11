@@ -131,6 +131,23 @@ declare global {
     expiresAt?: number;
     replaceBy?: number;
     retries: number;
+    /**
+     * #169 逐请求留痕＝**真的调用过 spawnCreep 的次数**（写者＝trySpawn 里 cast 那一行）。
+     * 它答的是「这条请求被允许试过没有」——缺席（undefined）＝这一代从未被允许试铸。
+     * `submitRequest` 的合并路径（queue.ts:8-22）刻意不清它：它是历史，不是本拍状态。
+     */
+    attempts?: number;
+    /**
+     * #169 最近一次「这一拍这条请求被怎么处置」的码。取值＝`cast`（走到了 spawnCreep）
+     * 或 reject 码 "blacklisted" "survivalBlock" "emptyBody" "budget" "reserveOnly"
+     * "noDegrade" "floor" "degradeGateClosed" "capacity"。
+     * 与房间级 `spawnRejects` 的分工：那一本每拍每请求计数，答「这一房被什么挡住了几拍」；
+     * 这一列答「这一条请求卡在哪一步」——两者口径不同，不能互相折算。
+     * ⚠️**后写覆盖先写＝它是本拍的终码，不是本拍经过的全部码**：同一条"付不起"路径先写
+     * "budget"/"reserveOnly"，继续走到降级裁决就变成 "degradeGateClosed"/"noDegrade"/"floor"。
+     * 「钱不够还是被预留扣走」只能问房间级那两列。钉这套语义的用例＝spawn-request-attempt-trace.test.ts。
+     */
+    block?: string;
   }
 
   interface BuildTask {

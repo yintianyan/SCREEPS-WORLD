@@ -457,7 +457,10 @@ export function trySpawn(
     // 隔离名单在孵化口收口：过去只在属主重建需求时查（本文件 :185），于是外部生产者
     // （recovery 的 REMOTE/DEFENSE/… 提交路径）用同名 key 直接 submitRequest 就能把
     // 被封请求复活 —— 隔离对它们形同不存在。
-    if ((Memory.rooms[snapshot.roomName]?.spawnBlacklist?.[req.key] ?? 0) > Game.time) continue;
+    if ((Memory.rooms[snapshot.roomName]?.spawnBlacklist?.[req.key] ?? 0) > Game.time) {
+      req.block = "blacklisted";
+      continue;
+    }
 
     // P0 阻塞：如果存在 P0 请求但暂时无法满足，不孵化非 P0 creep。
     if (hasSurvival && !req.survival) {
@@ -465,12 +468,14 @@ export function trySpawn(
       // 否则这一型停摆在计数里会被压成每拍 +1 的常数。
       let skipped = 0;
       for (const pending of queue) if (!pending.survival) skipped++;
+      req.block = "survivalBlock";
       countSpawnReject(snapshot.roomName, "survivalBlock", skipped);
       return;
     }
 
     // 检查 body 是否有效。
     if (req.body.length === 0) {
+      req.block = "emptyBody";
       req.retries++;
       continue;
     }
@@ -503,6 +508,7 @@ export function trySpawn(
       // 两档按「同一次判定算两个阈值」分：cost 越过**未扣预留**的预算 = 真液体不足；
       // 只在扣了预留之后才越线 = 预留单独挡住的（这条差集就是"预留该不该豁免交付角色"的证据）。
       // 单位是「请求·拍」：每拍对每个在途请求各计一次 ⇒ 差分 ÷ 拍数 = 该档平均挡住在途请求数。
+      req.block = cost > energyBudget ? "budget" : "reserveOnly";
       countSpawnReject(snapshot.roomName, cost > energyBudget ? "budget" : "reserveOnly");
       const roomMem = Memory.rooms[snapshot.roomName];
       const roomState = roomMem?.colonyState ?? "normal";
@@ -536,6 +542,7 @@ export function trySpawn(
           //   · cleanQueue 的 TTL 分支（queue.ts:167）到期即出队；
           //   · churn 熔断按 purge 计数（含 expired），200t 窗口 >20 次即冻 100t ——
           //     真·配置错误仍会被刹住，见 :66-71 recordChurn 的两种 reason。
+          req.block = "noDegrade";
           countSpawnReject(snapshot.roomName, "noDegrade");
           continue;
         }
@@ -546,6 +553,7 @@ export function trySpawn(
           // ⚠️读数口径：地板在 bootstrap/recovery 被 survivalPath **豁免** ⇒ 这一档只在
           //    colonyState=normal 时才涨。所以"floor=0" 既可能是"没被地板挡"，也可能是
           //    "当时在带里（本来就不该挡）" —— 差分要和同窗的 colonyState 一起看。
+          req.block = "floor";
           countSpawnReject(snapshot.roomName, "floor");
           continue;
         }
@@ -554,6 +562,7 @@ export function trySpawn(
         // #64：上面已按 budget/reserveOnly 记过"付不起"，这一档答的是另一半问题——**会不会被允许出小 body**。
         // 只有这一支能把"等能量"与"永远不会被允许等不到能量"分开；allowDegrade 的五个条件与
         // 两个阈值（pressure>0.5、starvationDegradeFloor）一个都没动 —— 纯加出口。
+        req.block = "degradeGateClosed";
         countSpawnReject(snapshot.roomName, "degradeGateClosed");
         continue;
       }
@@ -563,6 +572,7 @@ export function trySpawn(
     const capacity = spawn.room ? spawn.room.energyCapacityAvailable : 0;
     if (capacity === 0) continue; // 【防御】同上：room 引用瞬态缺失时跳过本次请求。
     if (bodyCost(body) > capacity) {
+      req.block = "capacity";
       req.retries++;
       log.info("spawn-manager", `spawn/${snapshot.roomName}: body exceeds capacity for ${req.key}`);
       continue;
@@ -585,6 +595,9 @@ export function trySpawn(
     }
     kernelMem.creepSeq = nameSeq;
 
+    // #169 判别列：只有这一行区分得开「从未被允许试铸」与「每次都去铸」。
+    req.attempts = (req.attempts ?? 0) + 1;
+    req.block = "cast";
     const result = spawn.spawnCreep(body, name, {
       memory: { ...req.memory },
     });
