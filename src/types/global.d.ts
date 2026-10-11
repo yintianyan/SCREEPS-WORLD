@@ -229,6 +229,18 @@ declare global {
      */
     lastInvaderHostileAt?: number;
     lastPlayerHostileAt?: number;
+    /**
+     * #168 观测专用（零消费者）：`lastHostileAt` 每次**上抬**的历史环（旧→新，上限 40 条）。
+     * 立此因由：判「NPC 骚扰多久来一次」三样载体都不够——事件环跨度实测 3,162 拍 <
+     * 威胁窗 5,000 拍（按构造答不了频率）；`lastHostileAt` 只有最新值、每次覆写；
+     * 巡检锁是散文。这条环是第一个能算**簇间隔分布**的载体，#151/#92 要的正是它。
+     */
+    hostileEdges?: {
+      /** 上抬发生的那一拍。 */
+      t: number;
+      /** 来源（player 优先于 invader；两者都不认识时 unknown）。 */
+      s: "player" | "invader" | "unknown";
+    }[];
     /** P1-3：上一 tick 的威胁 creep 数量，用于检测新增威胁（count 增加）。
      * room-state 每 tick 写入，缺失时按 0 处理（首威胁即新增）。 */
     prevThreatCount?: number;

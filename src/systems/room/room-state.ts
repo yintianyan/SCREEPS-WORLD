@@ -195,6 +195,16 @@ export const roomStateSystem: System = {
         const cls = classifyThreatOwners(snapshot.threatCreeps);
         if (cls.invader) roomMem.lastInvaderHostileAt = ctx.tick;
         if (cls.player) roomMem.lastPlayerHostileAt = ctx.tick;
+        // #168：锚上抬要留**历史**，不只是留最新值。现状是三样载体都答不了
+        // 「NPC 骚扰多久来一次」：事件环跨度实测 3,162 拍 < 威胁窗 5,000 拍；
+        // `lastHostileAt` 每次覆写、无历史；巡检锁是散文。这条有界环是第一个能算
+        // 簇间隔的载体 —— 只落盘，零消费者，不参与任何判定（#151 的按来源降尾税
+        // 决策需要的是频率证据，不是又一个瞬时值）。
+        roomMem.hostileEdges = recordHostileEdge(
+          roomMem.hostileEdges,
+          ctx.tick,
+          cls.player ? "player" : cls.invader ? "invader" : "unknown",
+        );
       }
 
       // nuke 落点预警差分（审计缺口 1）：新 nuke id 首次出现即报事件 + 限流
@@ -488,6 +498,38 @@ function buildThreatAssessment(
  * 于是"按来源降 war 尾税"(#151) 连输入都没有。这里只分类、只落盘，不参与任何判定。
  * 无 owner（对象已消失/读不到）不算任何一类，免得把"看不见"记成"没发生"。
  */
+/** 敌意锚历史上限（条/房）：40 条足够算出簇间隔的分布，又把 Memory 体积钉住。 */
+export const HOSTILE_EDGE_HISTORY_CAP = 40;
+
+/** 一次锚上抬的记录：拍号 + 来源（`player` 优先于 `invader`，两者同时在场记 player）。 */
+export interface HostileEdgeRecord {
+  /** tick。 */
+  t: number;
+  /** 来源：player / invader / unknown。 */
+  s: "player" | "invader" | "unknown";
+}
+
+/**
+ * 追加一条"敌意锚上抬"记录并按上限裁剪（纯函数，旧→新）。
+ *
+ * @internal 导出仅供单元测试——业务入口是 room-state 的房态更新。
+ */
+export function recordHostileEdge(
+  history: HostileEdgeRecord[] | undefined,
+  tick: number,
+  source: HostileEdgeRecord["s"],
+): HostileEdgeRecord[] {
+  const next = Array.isArray(history) ? history.slice(-HOSTILE_EDGE_HISTORY_CAP) : [];
+  const last = next.length > 0 ? next[next.length - 1] : undefined;
+  // 同一拍重复盖章（增援与首达同拍）不重复入账，否则间隔序列会出现 0 拍毛刺。
+  if (last && last.t === tick) {
+    return last.s === "unknown" && source !== "unknown"
+      ? next.slice(0, -1).concat({ t: tick, s: source })
+      : next;
+  }
+  return next.concat({ t: tick, s: source }).slice(-HOSTILE_EDGE_HISTORY_CAP);
+}
+
 export function classifyThreatOwners(
   creeps: ReadonlyArray<{ owner?: { username?: string } | undefined }>,
 ): { invader: boolean; player: boolean } {
