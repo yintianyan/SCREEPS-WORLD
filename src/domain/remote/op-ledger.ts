@@ -109,6 +109,13 @@ export interface RemoteOpLedgerSnapshot {
   i: number;
   /** windowStart */
   w: number;
+  /**
+   * cpuPerTick 的 EMA 采样（三位小数）。落它的理由：`opNetRate`（能量/拍）与
+   * `cpuPerTick`（CPU/拍）必须能同框比较，才谈得上"这条线值多少 CPU"；此前快照只有
+   * 四个金额字段，恢复时 CPU 恒置 0 ⇒ 每次部署把线级 CPU 归属清零，比值只能靠角色普查近似。
+   * 写成可选是因为部署前写入的存量记录确实没有这一格；`fromOpLedgerSnapshot` 对缺席值回退 0（不迁移旧档）。
+   */
+  c?: number;
 }
 
 export function toOpLedgerSnapshot(l: RemoteOpLedger): RemoteOpLedgerSnapshot {
@@ -118,6 +125,7 @@ export function toOpLedgerSnapshot(l: RemoteOpLedger): RemoteOpLedgerSnapshot {
     r: Math.round(l.refund),
     i: Math.round(l.infraCost),
     w: l.windowStart,
+    c: Math.round(l.cpuPerTick * 1000) / 1000,
   };
 }
 
@@ -132,7 +140,7 @@ export function fromOpLedgerSnapshot(
     spawnCost: finiteOrZero(s.s),
     refund: finiteOrZero(s.r),
     infraCost: finiteOrZero(s.i),
-    cpuPerTick: 0,
+    cpuPerTick: finiteOrZero(s.c),
     windowStart: Number.isFinite(s.w) ? s.w : tick,
     lastTick: tick,
   };

@@ -133,13 +133,22 @@ describe("RemoteOpLedger — Memory 快照往返", () => {
       windowStart: 12345,
     });
     const snap = toOpLedgerSnapshot(l);
-    expect(snap).toEqual({ d: 3000, s: 1001, r: 200, i: 100, w: 12345 });
+    expect(snap).toEqual({ d: 3000, s: 1001, r: 200, i: 100, w: 12345, c: 0 });
 
     const back = fromOpLedgerSnapshot(snap, 99999);
     expect(back.delivered).toBe(3000);
     expect(back.spawnCost).toBe(1001);
     expect(back.windowStart).toBe(12345);
     expect(back.lastTick).toBe(99999);
+    expect(back.cpuPerTick).toBe(0);
+  });
+
+  it("线级 CPU 也在快照里往返（跨 boot 后可算能量/CPU 比值）", () => {
+    const l = led({ delivered: 1000, spawnCost: 0, refund: 0, infraCost: 0, windowStart: 1 });
+    recordOpCpu(l, 0.31);
+    const snap = toOpLedgerSnapshot(l);
+    expect(snap.c).toBe(0.31);
+    expect(fromOpLedgerSnapshot(snap, 99999).cpuPerTick).toBe(0.31);
   });
 
   it("快照缺失/字段非法时回退空账本，窗口从当前 tick 起算", () => {
