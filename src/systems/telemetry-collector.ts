@@ -90,6 +90,12 @@ export function computeCpuRate(
   tail: number;
   bySystem: Record<string, number>;
   byRole: Record<string, number>;
+  /** 截断**前**的键数（留痕式，与房榜的 `cpuPerTickByRoomCount` 同形）。
+   *  这两张榜的键是无界的、按设计只留前十 ⇒ 榜里查无此标签**推不出**它没被计费（#142 就在这上面
+   *  错过一次）；只有当 count 小于上限时，"缺席"才升级为有意义的负向证据。
+   */
+  bySystemCount: number;
+  byRoleCount: number;
   byPhase: Record<string, number>;
 } {
   const window = Math.max(1, windowTicks);
@@ -127,6 +133,8 @@ export function computeCpuRate(
     tail: round2((cum.tail ?? 0) / w),
     bySystem: perTick(cum.systems),
     byRole: perTick(cum.roles),
+    bySystemCount: Object.keys(cum.systems ?? {}).length,
+    byRoleCount: Object.keys(cum.roles ?? {}).length,
     // 相位表**不截断**（#174）。两条理由：一、它的规模由源码里 `measuredRun("phase/…")` 的标签数决定
     // （有界，现读 10 枚），不是无界字典；二、它是 `unphased = total − Σphases` 那笔账的复算依据，
     // 而 `unphased` 用的是全量求和 ⇒ 一旦截断把某项切出表，读数人拿 `total − ΣbyPhase` 就得到**假残差**

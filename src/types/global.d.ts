@@ -490,6 +490,9 @@ declare global {
         tail?: number;
         bySystem?: Record<string, number>;
         byRole?: Record<string, number>;
+        /** 截断前的键数；判"榜里查无此标签"能不能升成负向结论，只看这两列（见 telemetry-collector 的 bySystemCount 注释）。 */
+        bySystemCount?: number;
+        byRoleCount?: number;
         byPhase?: Record<string, number>;
       };
       /** 最近 10 采样点峰值 CPU。 */

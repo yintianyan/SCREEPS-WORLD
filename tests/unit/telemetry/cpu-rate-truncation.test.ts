@@ -61,7 +61,7 @@ describe("computeCpuRate 的截断口径", () => {
 
   it("byRole／bySystem 的截断留着：榜的键是无界的，这里不该改成全量", () => {
     const roles: Record<string, number> = {};
-    for (let i = 0; i < 25; i++) roles[`role${  String(i).padStart(2, "0")}`] = i + 1;
+    for (let i = 0; i < 25; i++) roles[`role${String(i).padStart(2, "0")}`] = i + 1;
     const r = computeCpuRate(cumWith({ roles, systems: roles }), WINDOW);
     expect(Object.keys(r.byRole)).toHaveLength(10);
     expect(Object.keys(r.bySystem)).toHaveLength(10);
@@ -70,6 +70,20 @@ describe("computeCpuRate 的截断口径", () => {
     expect(Object.values(roles).reduce((a, b) => a + b, 0)).toBe(325);
     expect(PHASE_SUM).toBe(247);
     expect(r.unexplained).toBe(3.5);
+  });
+
+  it("系统榜 12 枚 ⇒ 榜给前十、bySystemCount 报 12（截断留痕：缺席要有意义，得先看 count）", () => {
+    const systems: Record<string, number> = {};
+    for (let i = 0; i < 12; i++) systems[`s${i}`] = 10 + i;
+    const r = computeCpuRate(cumWith({ systems, roles: {} }), WINDOW);
+    expect(Object.keys(r.bySystem)).toHaveLength(10);
+    expect(r.bySystemCount).toBe(12);
+  });
+
+  it("榜未满上限 ⇒ byRoleCount 等于榜内条数（count 既不是榜长的别名，也不恒等于上限）", () => {
+    const r = computeCpuRate(cumWith({ roles: { hauler: 30, harvester: 20 } }), WINDOW);
+    expect(r.byRoleCount).toBe(2);
+    expect(Object.keys(r.byRole)).toHaveLength(2);
   });
 
   it("相位表为空 ⇒ byPhase 是空对象而不是伪造项，unphased 就等于 total", () => {
