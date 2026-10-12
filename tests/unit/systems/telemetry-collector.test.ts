@@ -505,3 +505,55 @@ describe("telemetry-collector — 健康度告警已移除", () => {
     expect(alertLines).toHaveLength(0);
   });
 });
+
+// ── #174 家族：房榜截断必须留痕（cpuPerTickByRoomCount）──────────────
+const { ROOM_CPU_BOARD_CAP } = await import("../../../src/systems/telemetry-collector");
+
+describe("#174 家族 — 房榜截断留痕（cpuPerTickByRoomCount）", () => {
+  const seed = (roomCount: number) => {
+    capturedEvents.length = 0;
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    const rooms: Record<string, number> = {};
+    for (let i = 0; i < roomCount; i++) rooms[`R${  String(i).padStart(2, "0")}`] = (i + 1) * 100;
+    mockGlobalCache.cpuCumulative = { total: 0, systems: {}, roles: {}, rooms, ticks: 100 };
+    (globalThis as Record<string, unknown>).Memory = { rooms: { W1N1: {} }, kernel: { stats: {} } };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 105,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+    return (globalThis as any).Memory.kernel.stats as {
+      cpuPerTickByRoom?: Record<string, number>;
+      cpuPerTickByRoomCount?: number;
+    };
+  };
+
+  it("9 间房（少于上限）⇒ 榜给全 9 条且 count=9 ⇒ Σ 就是全量", () => {
+    const stats = seed(9);
+    expect(Object.keys(stats.cpuPerTickByRoom ?? {})).toHaveLength(9);
+    expect(stats.cpuPerTickByRoomCount).toBe(9);
+  });
+
+  it("20 间房 ⇒ 榜只给 ROOM_CPU_BOARD_CAP 条而 count 报 20 ⇒ 读数人看得出 Σ 是部分和", () => {
+    const stats = seed(20);
+    expect(Object.keys(stats.cpuPerTickByRoom ?? {})).toHaveLength(ROOM_CPU_BOARD_CAP);
+    expect(stats.cpuPerTickByRoomCount).toBe(20);
+  });
+
+  it("没有 rooms 时不伪造 count 键（缺席不是 0）", () => {
+    capturedEvents.length = 0;
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    delete mockGlobalCache.cpuCumulative;
+    (globalThis as Record<string, unknown>).Memory = { rooms: { W1N1: {} }, kernel: { stats: {} } };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 105,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+    expect((globalThis as any).Memory.kernel.stats.cpuPerTickByRoomCount).toBeUndefined();
+  });
+});

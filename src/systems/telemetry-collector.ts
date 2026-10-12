@@ -28,6 +28,17 @@ import { log } from "../kernel/log";
 const round2 = (v: number): number => Math.round(v * 100) / 100;
 
 /**
+ * 房榜的显示上限（#174 同族，见 roadmap 补252）。
+ *
+ * 房集合含过境房 ⇒ 规模**无界**，所以这里不放开截断，而是**留痕**：同一发里落一列
+ * `cpuPerTickByRoomCount`，报截断**前**的房数。理由＝这张榜的唯一用途是把交通解算量按房加总
+ * （实测那笔「ΣbyRoom 3.056 对 `cpuRate.bySystem["traffic-manager"]` 3.23 ⇒ 未覆盖两段 0.17/拍」
+ * 就是这么算的），一旦房数越过上限，`Σ` 静默变成部分和而读数人无从得知。
+ * 上限抬到 16 是给帝国房数（自有＋远矿＋过境）留余量：现读线上 n=7，只差一间房就撞旧的 8。
+ */
+export const ROOM_CPU_BOARD_CAP = 16;
+
+/**
  * 角色 CPU 的跨采样 EMA（每拍口径：creep 逻辑每拍都跑，不像系统需要除 cadence）。
  *
  * 为什么要单独一份账：角色侧此前只有环里的 top-3 可见（`s1/r1` 那种三元组），
@@ -423,10 +434,13 @@ function sampleMemorySize(_tick: number): void {
       { rooms?: Record<string, number>; ticks?: number } | undefined;
     if (cumRoom?.rooms && (cumRoom.ticks ?? 0) > 0) {
       const denom = cumRoom.ticks ?? 1;
+      // 留痕列与榜同发：`count` 是**截断前**的房数，所以读数人永远分得清
+      // 「Σ 榜就是全量」与「Σ 榜只是部分和」（见 ROOM_CPU_BOARD_CAP 的因由）。
+      (Memory.kernel.stats as any).cpuPerTickByRoomCount = Object.keys(cumRoom.rooms).length;
       (Memory.kernel.stats as any).cpuPerTickByRoom = Object.fromEntries(
         Object.entries(cumRoom.rooms)
           .sort((a, b) => b[1] - a[1])
-          .slice(0, 8)
+          .slice(0, ROOM_CPU_BOARD_CAP)
           .map(([k, v]) => [k, Math.round((v / denom) * 1000) / 1000]),
       );
     }
