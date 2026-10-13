@@ -3,8 +3,9 @@
  *
  * 为什么需要这一列：仪表盘每拍给自己盖 `tick`，可 `failedGates` 里的闸门值来自 empire-economy
  * 的 heap 缓存（`expansion-planner.ts:47` → `queryEmpirePlannerInput()` → `empire-economy.ts:206/214`）。
- * 两者不同时刻，而缓存的构建拍号以前从没落过盘 ⇒ 线上实测出现过"仪表盘行只老 21 拍，
- * 而它引用的姿态标志已翻 2,251 拍"，读数人无法区分"刚算的"与"旧账"。
+ * 两者不同时刻，而缓存的构建拍号以前从没落过盘 ⇒ 读数人无法区分"刚算的"与"旧账"。
+ * ⚠️立案时曾用 `kernel.strategy.since` 反推出"闸门值旧 2,251 拍"——那把尺用错了对象（`since` 是**姿态翻档拍**，
+ * 不是这个布尔位的成立时刻；作废过程见 roadmap `补294⑥` 与 §3.5 #178）。本列正是它的合法替代尺。
  *
  * 为什么这个文件不直接跑 planner：这一列的**语义**（未知怎么表示、年龄怎么算、两条分支是否同源）
  * 全部可在纯函数与源码形状上钉住；跑一趟 planner 需要整套 EmpireResourceView 夹具，
@@ -63,7 +64,7 @@ describe("readinessTick 的语义", () => {
     const built = 83_615_034;
     // 相位差实测 ≈27（EE≡57、planner≡84），故健康状态下 readinessAge ≤ 2×interval。
     expect(mustAge(built + 27, built)).toBeLessThanOrEqual(2 * INTERVAL);
-    // 而"仪表盘很新但闸门值很旧"这种线上现象（实测相差 2,251 拍），只有这一列存在时才量得出来。
+    // 而"仪表盘很新、闸门值可能很旧"这种形状（立案时无法判定，见文件头那条作废记），只有这一列存在时才量得出来。
     expect(mustAge(built + 2_251, built)).toBeGreaterThan(2 * INTERVAL);
   });
 });
