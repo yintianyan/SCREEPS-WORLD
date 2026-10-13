@@ -1046,6 +1046,11 @@ declare global {
       poolTotal?: number;
       /** 被落盘上限切掉、Memory 里读不到的条数（`poolTotal - 已落盘条数`）。 */
       poolCut?: number;
+      /** 这些闸门值**是在哪一拍算出来的**（`-1`＝本 boot 里 empire-economy 还没跑过）。
+       *  与上面的 `tick` 相减就是闸门值的年龄：仪表盘每拍盖章，而 `failedGates` 吃的是 heap 缓存，
+       *  两者不同时刻——没有这一列时 `G0(v=false)` 既可能是几十拍前的真值、也可能是几千拍前的旧账
+       *  （roadmap #178 的现场就是一发里两者相差 2,251 拍）。 */
+      readinessTick?: number;
     };
     /**
      * A4.1 远矿经济 Dashboard 快照（remote-mining-manager 每趟聚合一次）—

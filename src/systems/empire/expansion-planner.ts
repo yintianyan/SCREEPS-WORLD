@@ -1,7 +1,7 @@
 /** Expansion Planner 系统 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
-import { queryEmpirePlannerInput } from "./empire-economy";
+import { queryEmpirePlannerInput, queryEmpirePlannerInputTick } from "./empire-economy";
 import { queryRoomIntel } from "../intelligence";
 import { evaluateExpansionPressure } from "../../domain/expansion/pressure";
 import { discoverCandidates } from "../../domain/expansion/discovery";
@@ -76,6 +76,7 @@ export const expansionPlannerSystem: System = {
       const tieredBudgetFast = computeTieredBudget(plannerInput.budget);
       Memory.kernel.expansionDashboard = {
         tick: ctx.tick,
+        readinessTick: queryEmpirePlannerInputTick(),
         summary: `Expansion Dashboard @${ctx.tick} | Pressure=LOW(early-exit) | no candidates, no active plans`,
         // 早退分支也要落 failedGates：它上面那份 heap 读数有，Memory 这份没有 ——
         // 于是"低压早退"之后读到的数组是**上一轮全量**留下的，摘要与闸门明细分属两次运行。
@@ -286,6 +287,7 @@ export const expansionPlannerSystem: System = {
 
     Memory.kernel.expansionDashboard = {
       tick: ctx.tick,
+      readinessTick: queryEmpirePlannerInputTick(),
       summary: dashboard.summary,
       // 截断要留痕：`expansionCandidates` 只落盘前 CANDIDATE_PERSIST_CAP 条，读数人拿它的
       // length 当池规模就会把前缀当全集（同族先例＝`stats.cpuBySystem` 的 top-10 榜，

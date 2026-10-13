@@ -214,6 +214,18 @@ export function queryEmpirePlannerInput() {
   return cachedPlannerInput?.input;
 }
 
+/**
+ * 缓存的**构建拍号**（`-1`＝这台缓存还不存在，比如本 boot 里 empire-economy 尚未跑过一趟）。
+ *
+ * 为什么要单独开口：扩张仪表盘把 `failedGates` 落盘时盖的是**自己那一趟**的 `tick`，而闸门值
+ * 来自上面这台 heap 缓存。两者不同时刻 ⇒ 读数人看到 `G0(v=false)` 时无法判断它是几十拍前的
+ * 真值还是几千拍前的旧账（实测曾出现仪表盘只老 21 拍、而它引用的姿态标志已翻 2,251 拍）。
+ * 这里只把已有的 tick 暴露出去，不改任何计算。
+ */
+export function queryEmpirePlannerInputTick(): number {
+  return cachedPlannerInput?.tick ?? -1;
+}
+
 // 长视界净流仪器住在 Memory.kernel.gateNetFlow（见其类型注释）—— 曾经放 heap，
 // 结果每次部署把 ~2500 拍的收敛历史丢掉，把 G3/G4 连带 readySince 一起打回起点。
 
