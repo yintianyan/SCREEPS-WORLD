@@ -21,10 +21,17 @@ export interface RemoteOpLedger {
   /** 基建消耗：container / road 工地创建时一次性计入。 */
   infraCost: number;
   /**
-   * 该 op 分摊到的 CPU 速率（CPU/tick，EMA 平滑）。**仪表值，非累计计数器**：
-   * 不随账本持久化（近期速率量，跨 reset 恢复无意义），也不参与 `opNetDelivered`
-   * ——CPU 定价系数尚无实测依据，硬编一个只会污染判据。此字段只供观测与人工校准：
-   * 把「净营收 e/t」与「CPU/t」并列呈现，由运营者判断哪条线值得占 CPU 预算。
+   * 该 op 分摊到的 CPU 速率（CPU/tick，EMA 平滑）。**仪表值，非累计计数器**，也不参与
+   * `opNetDelivered` —— CPU 定价系数尚无实测依据，硬编一个只会污染判据；此字段只供观测与人工校准。
+   *
+   * 两条读法约束（都是本文件外的实测逼出来的）：
+   *  1. 分母只是一片观测切片：本房 demand 评估的跨度 ÷ active 线数
+   *     （写者 `systems/remote/remote-mining-manager.ts` 里 `recordOpCpu` 那一处），
+   *     **不含远矿 creep 的实耗** —— 那一侧的分母在角色榜
+   *     （`remoteHarvester` / `remoteHauler` / `reserver`）。两者相差约 30 倍，
+   *     所以引用"这条线值多少 CPU"必须带尺名（roadmap 补303③）。
+   *  2. 它**确实**随账本落盘（快照字段 `c`，见 `toSnapshot` / `fromSnapshot`）——
+   *     本注释此前写"不随账本持久化"，与 #167 落的那半修复相互矛盾，已更正。
    */
   cpuPerTick: number;
   /** 窗口起点 tick。 */
@@ -200,7 +207,10 @@ export function aggregateRemoteEconomy(
     s:
       `Remote Economy @${tick} | ops=${activeLedgers.length} active, ${pausedOps} paused | ` +
       `delivered=${round(deliveredRate)} e/tick | net=${round(netRate)} e/tick | ` +
-      `cpu=${round(cpuPerTick)}/tick | e/cpu=${String(perCpu)} | healthy=${healthy}`,
+      // 标签必须自带尺名：这里的 cpu 只是"本房 demand 评估跨度 ÷ active 线数"这一片观测切片，
+      // **不含远矿 creep 的实耗**（角色榜上那三个远矿角色才是分母，量级差 ~30 倍，roadmap 补303③）。
+      // 裸写 `e/cpu` 会被"削远矿线省多少 CPU"这类决策直接误用（#50 的 (a) 支）。
+      `cpu(demand-eval-slice)=${round(cpuPerTick)}/tick | e/cpu(mgr-slice)=${String(perCpu)} | healthy=${healthy}`,
   };
 }
 
@@ -216,7 +226,8 @@ export function aggregateRemoteEconomy(
     `(${rate >= 0 ? "+" : ""}${rate.toFixed(2)}e/t) ` +
     `delivered=${Math.round(l.delivered)} spawn=${Math.round(l.spawnCost)} ` +
     `refund=${Math.round(l.refund)} infra=${Math.round(l.infraCost)} ` +
-    `cpu=${l.cpuPerTick.toFixed(3)} ` +
+    // 尺名同 `aggregateRemoteEconomy` 的标签：这片分母不含远矿 creep 实耗（roadmap 补303③）。
+    `cpu(demand-eval-slice)=${l.cpuPerTick.toFixed(3)} ` +
     `win=${Math.max(0, nowTick - l.windowStart)}t`
   );
 }

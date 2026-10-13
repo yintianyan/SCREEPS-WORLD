@@ -67,7 +67,7 @@ describe("远矿经济聚合：数字可复现、除零不造脏值", () => {
       1100,
     );
     expect(agg.cu).toBe(0);
-    expect(agg.s).toContain("e/cpu=n/a");
+    expect(agg.s).toContain("e/cpu(mgr-slice)=n/a");
     expect(agg.s).not.toContain("Infinity");
   });
 
@@ -77,6 +77,9 @@ describe("远矿经济聚合：数字可复现、除零不造脏值", () => {
     // 净 1000 ÷ 100 拍 = 10 e/拍，CPU 0.5/拍 ⇒ 20 e/cpu
     expect(agg.nv).toBe(10);
     expect(agg.cu).toBe(0.5);
-    expect(agg.s).toContain("e/cpu=20");
+    expect(agg.s).toContain("e/cpu(mgr-slice)=20");
+    // 标签必须自带尺名：分母只是"本房 demand 评估 ÷ 线数"这一片，不含远矿 creep 实耗。
+    // 改回裸 `e/cpu` 时这两条断言会红（roadmap 补303③：同一个名字两种分母差 31.6×）。
+    expect(agg.s).toContain("demand-eval-slice");
   });
 });

@@ -87,7 +87,7 @@ describe("RemoteOpLedger — 净营收口径", () => {
     expect(s).toContain("net=2100e");
     expect(s).toContain("+2.10e/t");
     expect(s).toContain("delivered=3000");
-    expect(s).toContain("cpu=0.123");
+    expect(s).toContain("cpu(demand-eval-slice)=0.123");
     expect(s).toContain("win=1000t");
   });
 });
