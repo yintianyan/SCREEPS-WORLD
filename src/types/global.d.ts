@@ -493,6 +493,9 @@ declare global {
         /** 截断前的键数；判"榜里查无此标签"能不能升成负向结论，只看这两列（见 telemetry-collector 的 bySystemCount 注释）。 */
         bySystemCount?: number;
         byRoleCount?: number;
+        /** 榜外那段的实际成本（第 11 名起）；与上面的 count 配对才是「榜是否全集」的判据。 */
+        bySystemTailSum?: number;
+        byRoleTailSum?: number;
         byPhase?: Record<string, number>;
       };
       /** 最近 10 采样点峰值 CPU。 */

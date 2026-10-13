@@ -96,6 +96,9 @@ export function computeCpuRate(
    */
   bySystemCount: number;
   byRoleCount: number;
+  /** 榜外那段（第 11 名起）的实际成本，每拍。`0` 且 `*Count ≤ 10` ⇒ 榜即全集。 */
+  bySystemTailSum: number;
+  byRoleTailSum: number;
   byPhase: Record<string, number>;
 } {
   const window = Math.max(1, windowTicks);
@@ -116,6 +119,20 @@ export function computeCpuRate(
         .slice(0, limit)
         .map(([k, v]) => [k, round2(v / w)]),
     );
+  /**
+   * 榜被切掉那一段的实际成本（每拍/拍）。`perTick` 只留前十，于是"榜面合计 ≠ 全量"这件事
+   * 一直只能用恒等式推出一个**上界**（线上实测系统标签全集 38 个、榜只给 10 个 ⇒ 28 个不在榜上），
+   * 而无法说"那 28 个一共值多少"。有了这两列，判据变成可算的：
+   * `count <= 10 且 tail === 0` ⇔ 榜即全集；否则榜是部分和，缺席不许升成负向结论。
+   * 这里再排一次同一个数组（键量级只有几十）——把排序合并进 `perTick` 能省掉，但那会让
+   * 「榜」与「尾部」两个口径互相依赖，先按可读写。
+   */
+  const tailPerTick = (m: Record<string, number>, limit = 10): number => {
+    const rest = Object.entries(m)
+      .sort((a, b) => b[1] - a[1])
+      .slice(limit);
+    return round2(rest.reduce((a, [, v]) => a + v, 0) / w);
+  };
   return {
     windowTicks: window,
     // `sampledTicks=0` = 这个构建还没记 ticks（未知），不是"一拍都没采到"；
@@ -135,6 +152,8 @@ export function computeCpuRate(
     byRole: perTick(cum.roles),
     bySystemCount: Object.keys(cum.systems ?? {}).length,
     byRoleCount: Object.keys(cum.roles ?? {}).length,
+    bySystemTailSum: tailPerTick(cum.systems ?? {}),
+    byRoleTailSum: tailPerTick(cum.roles ?? {}),
     // 相位表**不截断**（#174）。两条理由：一、它的规模由源码里 `measuredRun("phase/…")` 的标签数决定
     // （有界，现读 10 枚），不是无界字典；二、它是 `unphased = total − Σphases` 那笔账的复算依据，
     // 而 `unphased` 用的是全量求和 ⇒ 一旦截断把某项切出表，读数人拿 `total − ΣbyPhase` 就得到**假残差**

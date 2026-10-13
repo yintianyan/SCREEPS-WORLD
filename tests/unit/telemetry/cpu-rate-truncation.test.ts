@@ -86,6 +86,35 @@ describe("computeCpuRate 的截断口径", () => {
     expect(Object.keys(r.byRole)).toHaveLength(2);
   });
 
+  it("榜外尾部成本＝可算：12 枚系统标签 ⇒ 榜给前十、tail 是后两枚之和", () => {
+    const systems: Record<string, number> = {};
+    for (let i = 0; i < 12; i++) systems[`s${i}`] = 100 - i * 5; // s0=100 递减到 s11=45
+    const r = computeCpuRate(cumWith({ systems, roles: {} }), WINDOW);
+    expect(Object.keys(r.bySystem)).toHaveLength(10);
+    // 第 11、12 名是 s10=50、s11=45 ⇒ 尾部合计 95/窗（WINDOW=100）
+    expect(r.bySystemTailSum).toBe(0.95);
+    // 恒等式：榜面 + 尾部 ＝ 全量（这条是两列存在的唯一理由）
+    const boardSum = Object.values(r.bySystem).reduce((a, b) => a + b, 0);
+    expect(Math.abs(boardSum + r.bySystemTailSum - 8.7)).toBeLessThan(0.05); // Σ=870/100
+  });
+
+  it("标签不超过上限 ⇒ tail 是 0（不是缺席）；与 count 配对才是「榜即全集」判据", () => {
+    const r = computeCpuRate(cumWith({ systems: { a: 10, b: 20 }, roles: { x: 30 } }), WINDOW);
+    expect(r.bySystemTailSum).toBe(0);
+    expect(r.byRoleTailSum).toBe(0);
+    expect(r.bySystemCount).toBe(2);
+  });
+
+  it("反向实验的准备：tail 与榜是同一个切法的话，恒等式当场破", () => {
+    // 故意用「同一批前十」当尾部（＝错写法），验证上面那条恒等式确实能抓到它。
+    const systems: Record<string, number> = {};
+    for (let i = 0; i < 12; i++) systems[`s${i}`] = 100 - i * 5;
+    const r = computeCpuRate(cumWith({ systems, roles: {} }), WINDOW);
+    const boardSum = Object.values(r.bySystem).reduce((a, b) => a + b, 0);
+    const wrongTail = boardSum; // 若把尾部写成"再取一次前十"
+    expect(Math.abs(boardSum + wrongTail - 8.7)).toBeGreaterThan(0.5);
+  });
+
   it("相位表为空 ⇒ byPhase 是空对象而不是伪造项，unphased 就等于 total", () => {
     const r = computeCpuRate(cumWith({ phases: {} }), WINDOW);
     expect(r.byPhase).toEqual({});
