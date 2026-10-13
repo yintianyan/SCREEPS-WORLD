@@ -450,6 +450,9 @@ function sampleMemorySize(_tick: number): void {
       };
     }
     if (g.systemBudgetEma instanceof Map && g.systemBudgetEma.size > 0) {
+      // 留痕列＝**截断前**的标签数：EMA 榜只给前 10，读数人必须分得清「榜即全集」与
+      // 「榜只是部分和」——否则「某标签不在榜上」会被误读成「它没有写者」（#142 同族）。
+      (Memory.kernel.stats as any).cpuBySystemCount = g.systemBudgetEma.size;
       (Memory.kernel.stats as any).cpuBySystem = Object.fromEntries(
         [...g.systemBudgetEma.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
       );
@@ -474,6 +477,10 @@ function sampleMemorySize(_tick: number): void {
     if (g.systemCpuPerTick && Object.keys(g.systemCpuPerTick).length > 0) {
       // 同一份账的 per-tick 口径（÷interval，内核算）—— 与上面那份一起落，是为了让
       // 「谁在吃产能」这个问题有唯一答案：EMA 排出来的榜会把低频系统错当成大户。
+      // `*Count`＝截断前的标签数（`cpuSystemTotal` 给量级、这一列给面积，两问分开答）。
+      (Memory.kernel.stats as any).cpuPerTickBySystemCount = Object.keys(
+        g.systemCpuPerTick as Record<string, number>,
+      ).length;
       (Memory.kernel.stats as any).cpuPerTickBySystem = Object.fromEntries(
         Object.entries(g.systemCpuPerTick as Record<string, number>)
           .sort((a, b) => b[1] - a[1])
@@ -496,6 +503,8 @@ function sampleMemorySize(_tick: number): void {
         );
         g.roleCpuEma = roleEma;
         const roleEntries = Object.entries(roleEma);
+        // 截断前的角色数：与 `cpuRoleTotal`（不截断的总量）配对，读数人才能自证「这张榜是全量」。
+        (Memory.kernel.stats as any).cpuPerTickByRoleCount = roleEntries.length;
         (Memory.kernel.stats as any).cpuPerTickByRole = Object.fromEntries(
           roleEntries
             .sort((a, b) => b[1] - a[1])

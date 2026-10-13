@@ -514,7 +514,7 @@ describe("#174 家族 — 房榜截断留痕（cpuPerTickByRoomCount）", () => 
     capturedEvents.length = 0;
     mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
     const rooms: Record<string, number> = {};
-    for (let i = 0; i < roomCount; i++) rooms[`R${  String(i).padStart(2, "0")}`] = (i + 1) * 100;
+    for (let i = 0; i < roomCount; i++) rooms[`R${String(i).padStart(2, "0")}`] = (i + 1) * 100;
     mockGlobalCache.cpuCumulative = { total: 0, systems: {}, roles: {}, rooms, ticks: 100 };
     (globalThis as Record<string, unknown>).Memory = { rooms: { W1N1: {} }, kernel: { stats: {} } };
     (globalThis as Record<string, unknown>).Game = {
@@ -555,5 +555,79 @@ describe("#174 家族 — 房榜截断留痕（cpuPerTickByRoomCount）", () => 
     };
     telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
     expect((globalThis as any).Memory.kernel.stats.cpuPerTickByRoomCount).toBeUndefined();
+  });
+});
+
+// ── #137：三张姊妹榜的截断留痕列（#142 同族）────────────────────────
+// 钉的是「榜是不是全集」：`cpuBySystem`／`cpuPerTickBySystem`／`cpuPerTickByRole` 都只给前 10，
+// 而线上实测系统标签全集 38、角色 22 ⇒「某标签不在榜上」推不出「它没有写者」。
+// 这三张榜在 src 内**零读者**（唯一引用是 e2e 里一行 JSON.stringify 日志）⇒ 新增兄弟键不改既有形状。
+// 尾巴量级另有 `cpuSystemTotal`／`cpuRoleTotal`（不截断的总和），本用例只钉"面积"，不发明第二把量级尺。
+//
+// 两道门都要按写者补种子（`telemetry-collector.ts:199` 的早退 + `:212` 的相位门）：
+//   · `run()` 在 `globalCache().telemetry.tick !== ctx.tick` 时**整段早退**；
+//   · 人口普查（`sampleMemorySize` 所在段）只在 `(tick − systemPhase(name, 10)) % 100 === 0` 时跑。
+// 所以 tick 由 `systemPhase` 现算，而不是手写一个"看起来像 100"的数。
+import { systemPhase } from "../../../src/kernel/phase";
+
+describe("三张姊妹榜的 *Count 留痕列", () => {
+  const CENSUS_TICK = systemPhase("telemetry-collector", 10) + 100;
+
+  function seed(n: number): void {
+    const ema = new Map<string, number>();
+    const perTick: Record<string, number> = {};
+    const roleCpu: Record<string, number> = {};
+    for (let i = 0; i < n; i++) {
+      ema.set(`sys${i}`, (n - i) * 2);
+      perTick[`sys${i}`] = (n - i) * 2;
+      roleCpu[`role${i}`] = (n - i) * 2;
+    }
+    mockGlobalCache.systemBudgetEma = ema;
+    mockGlobalCache.systemCpuPerTick = perTick;
+    // 角色榜是 EMA 累积表：不清就会被上一个用例的键撑住（12 枚用例先跑 ⇒ 本用例"8 枚"变"12 枚"），
+    // 那是**测试态泄漏**不是产品行为，所以每次种子都从空 EMA 起（线上首见同理：boot 起 EMA 为空）。
+    delete mockGlobalCache.roleCpuEma;
+    mockGlobalCache.telemetry = { tick: CENSUS_TICK, roleCpu };
+  }
+
+  function stats(): any {
+    seedBoards();
+    telemetryCollectorSystem.run(makeCtx("healthy", CENSUS_TICK, [makeSnapshot()]));
+    return (Memory as any).kernel.stats;
+  }
+  function seedBoards(): void {
+    /* 占位：种子已在各用例里给 */
+  }
+
+  it("12 枚标签 ⇒ 三张榜各给 10 条，而 *Count 报 12", () => {
+    seed(12);
+    const s = stats();
+    expect(Object.keys(s.cpuBySystem)).toHaveLength(10);
+    expect(s.cpuBySystemCount).toBe(12);
+    expect(Object.keys(s.cpuPerTickBySystem)).toHaveLength(10);
+    expect(s.cpuPerTickBySystemCount).toBe(12);
+    expect(Object.keys(s.cpuPerTickByRole)).toHaveLength(10);
+    expect(s.cpuPerTickByRoleCount).toBe(12);
+  });
+
+  it("8 枚标签 ⇒ 榜即全集：*Count 与榜内条数逐张相等", () => {
+    seed(8);
+    const s = stats();
+    for (const [board, count] of [
+      ["cpuBySystem", "cpuBySystemCount"],
+      ["cpuPerTickBySystem", "cpuPerTickBySystemCount"],
+      ["cpuPerTickByRole", "cpuPerTickByRoleCount"],
+    ] as const) {
+      expect(Object.keys(s[board]).length).toBe(8);
+      expect(s[count]).toBe(Object.keys(s[board]).length);
+    }
+  });
+
+  it("count 是截断**前**的数，不是榜内条数（写成后者时本例会红）", () => {
+    seed(12);
+    const s = stats();
+    expect(s.cpuPerTickBySystemCount).not.toBe(Object.keys(s.cpuPerTickBySystem).length);
+    expect(typeof s.cpuSystemTotal).toBe("number");
+    expect(s.cpuSystemTotal).toBeGreaterThan(0);
   });
 });
