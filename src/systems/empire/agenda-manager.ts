@@ -63,6 +63,7 @@ import { MAX_GLOBAL_OPERATIONS } from "../../domain/operation/allocation-policy"
 import { computeNetworkHealth } from "../../domain/operation/network-health";
 import { RebalanceState, decideRebalance, markRebalanced } from "../../domain/operation/rebalance";
 import { log } from "../../kernel/log";
+import { pruneStaleCarrierBinding } from "../../domain/operation/op-binding";
 
 /** 默认 Operation 超时（tick）。2000 tick ≈ 运输 + 验证 + 重试。 */
 const DEFAULT_OPERATION_DEADLINE = 2000;
@@ -563,6 +564,16 @@ export const agendaManagerSystem: System = {
       }
     }
 
+    // #181：本趟算一次"可用载体名"，供循环内清洗悬挂绑定。口径与 hasCarrierForOp 的或项①一致
+    // （在场且 !spawning）——否则会抖成"这趟清掉、下趟又绑回一只还在孵的"。
+    const liveCarrierNames = new Set<string>(
+      querySquad({ role: "carrier" })
+        .filter(e => {
+          const c = Game.creeps[e.name];
+          return c !== undefined && !c.spawning;
+        })
+        .map(e => e.name),
+    );
     // ── 15. 验证 running Operation（Baseline 污染修复）──
     for (const op of operations) {
       if (op.status !== "running") continue;
@@ -581,6 +592,10 @@ export const agendaManagerSystem: System = {
       // 记录 carrier name：优先按 assignment id 精确匹配；assignment 被租约清理后
       // （操作直派任务不在池内），退回 role/home/remoteTarget 兜底匹配，否则
       // op.carrierName 永不落账、hasCarrierForOp 持续误判缺员。
+      // 悬挂绑定清洗（#181）：名字还在但解析不到活体 ⇒ 后面两段 `!op.carrierName` 兜底绑定与
+      // 入账都进不去，本趟先清掉，:584 的兜底就能在同趟重绑到那只**活着**的载体（清在入账之后要等
+      // 下一趟＝interval 100 拍，见 roadmap 补329）。
+      pruneStaleCarrierBinding(op, liveCarrierNames);
       if (!op.carrierName) {
         for (const [name, creep] of Object.entries(Game.creeps)) {
           if (creep.memory.assignment?.id === op.id) {
