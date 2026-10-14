@@ -15,6 +15,7 @@ import {
 } from "../../kernel/global-cache";
 import {
   aggregateRemoteEconomy,
+  sumRemoteNamedRoleCpu,
   emptyOpLedger,
   toOpLedgerSnapshot,
   recordOpCpu,
@@ -596,10 +597,16 @@ export const remoteMiningManagerSystem: System = {
       }
     }
     if (!Memory.kernel) Memory.kernel = {};
+    // 车道成本的分母取自遥测的角色榜（写者 telemetry-collector，`stats.cpuPerTickByRole`）——
+    // 本函数只按名字规则求和（remote*），reserver/carrier 属不属于远矿道是决策口径，留给读数人。
+    // ⚠️这张榜是 flush-成块镜像（跟着 telemetry 的成块节奏走），当场差分非法，只当水平值用。
+    const roleBoard = (Memory.kernel.stats as { cpuPerTickByRole?: Record<string, number> })
+      ?.cpuPerTickByRole;
     Memory.kernel.remoteEconomyDashboard = aggregateRemoteEconomy(
       econLedgers,
       pausedOpCount,
       ctx.tick,
+      sumRemoteNamedRoleCpu(roleBoard),
     );
     logRemoteLedgers(ctx.tick);
   },

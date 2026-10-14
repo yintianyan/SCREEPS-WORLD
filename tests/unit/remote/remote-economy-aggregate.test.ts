@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateRemoteEconomy,
   emptyOpLedger,
+  sumRemoteNamedRoleCpu,
   opNetRate,
   recordOpCpu,
 } from "../../../src/domain/remote/op-ledger";
@@ -81,5 +82,77 @@ describe("远矿经济聚合：数字可复现、除零不造脏值", () => {
     // 标签必须自带尺名：分母只是"本房 demand 评估 ÷ 线数"这一片，不含远矿 creep 实耗。
     // 改回裸 `e/cpu` 时这两条断言会红（roadmap 补303③：同一个名字两种分母差 31.6×）。
     expect(agg.s).toContain("demand-eval-slice");
+  });
+});
+
+describe("远矿道成本的分母：remote* 名字规则求和（#138 升档，roadmap 补324）", () => {
+  /** 线上角色榜形状（同拍现读 @83,634,465：板总 6.64，remoteHarvester 1.78／remoteHauler 0.57／reserver 0.68）。 */
+  const LIVE_BOARD: Record<string, number> = {
+    harvester: 1.87,
+    remoteHarvester: 1.78,
+    reserver: 0.68,
+    remoteHauler: 0.57,
+    upgrader: 0.45,
+    distributor: 0.43,
+    labTender: 0.41,
+    hauler: 0.2,
+    carrier: 0.14,
+    builder: 0.12,
+    remoteDefender: 0,
+  };
+
+  it("只收 remote* 名角色，reserver 明确留在门外（边界不替人划）", () => {
+    const { sum, included } = sumRemoteNamedRoleCpu(LIVE_BOARD);
+    expect(Math.round(sum * 100) / 100).toBe(2.35);
+    expect(included).toEqual(["remoteHarvester", "remoteHauler"]);
+    // 前提检查：这张榜里 reserver 是**在场且非零**的，否则"被排除"这件事根本没被验证。
+    expect(LIVE_BOARD.reserver).toBeGreaterThan(0);
+    expect(included).not.toContain("reserver");
+  });
+
+  it("脏值不进分母（0／负／NaN 一律滤掉）", () => {
+    const { sum, included } = sumRemoteNamedRoleCpu({
+      remoteHarvester: 1,
+      remoteHauler: 0,
+      remoteDefender: Number.NaN,
+      remoteMiner: -5,
+    });
+    expect(sum).toBe(1);
+    expect(included).toEqual(["remoteHarvester"]);
+  });
+
+  it("两把尺并排上桌：lane-name-rule 的分母比 mgr-slice 大一个数量级以上", () => {
+    const l = ledger({
+      delivered: 6_847_124,
+      spawnCost: 4_633_060,
+      infraCost: 107_800,
+      window: 586_065,
+      cpu: 0.06, // 线上 dashboard 的 cu 就是这个量级
+    });
+    const agg = aggregateRemoteEconomy([l], 0, 1000 + 586_065, sumRemoteNamedRoleCpu(LIVE_BOARD));
+    expect(agg.lc).toBe(2.35);
+    expect(agg.s).toContain("cpu(remote-named-roles)=2.35/tick[remoteHarvester+remoteHauler]");
+    expect(agg.cu).toBeGreaterThan(0);
+    // 这条才是本轮买到的东西：误用**在串上可见**（119 那种数旁边就摆着真量级）。
+    expect((agg.lc ?? 0) / agg.cu).toBeGreaterThan(10);
+    const laneRatio = Math.round((agg.nv / (agg.lc as number)) * 100) / 100;
+    expect(agg.s).toContain(`e/cpu(lane-name-rule)=${laneRatio}`);
+  });
+
+  it("调用方没给角色榜 ⇒ 那一段整个不发、lc 缺席（缺席≠0）", () => {
+    const l = ledger({ delivered: 1000, spawnCost: 0, infraCost: 0, window: 100 });
+    const agg = aggregateRemoteEconomy([l], 0, 1100);
+    expect("lc" in agg).toBe(true);
+    expect(agg.lc).toBeUndefined();
+    expect(agg.s).not.toContain("lane-name-rule");
+    expect(agg.s).toContain("healthy="); // 原有段落不许被追加改坏
+  });
+
+  it("给了但榜上无 remote* ⇒ lc=0 且比值写 n/a（与上面那格分得开）", () => {
+    const l = ledger({ delivered: 1000, spawnCost: 0, infraCost: 0, window: 100 });
+    const agg = aggregateRemoteEconomy([l], 0, 1100, sumRemoteNamedRoleCpu({ harvester: 1.87 }));
+    expect(agg.lc).toBe(0);
+    expect(agg.s).toContain("cpu(remote-named-roles)=0/tick[none]");
+    expect(agg.s).toContain("e/cpu(lane-name-rule)=n/a");
   });
 });

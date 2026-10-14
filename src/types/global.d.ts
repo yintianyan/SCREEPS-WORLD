@@ -1088,6 +1088,8 @@ declare global {
       sp: number;
       /** 线级 CPU 合计（/tick，各 op 的 EMA 求和；跨 boot 由 `ledger.c` 带回来）。 */
       cu: number;
+      /** remote* 名角色的 CPU 和（/tick，名字规则；不含 reserver/carrier）。缺席＝本趟没拿到角色榜。 */
+      lc?: number;
       /** 摘要文本（含 e/cpu 比值，CPU 为 0 时写 n/a 而不是除出 Infinity）。 */
       s: string;
     };
