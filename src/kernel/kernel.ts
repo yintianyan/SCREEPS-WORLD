@@ -618,6 +618,9 @@ export class Kernel {
     if (res.violations.length > 0) {
       kernelMem.expectations = {
         tick: ctx.tick,
+        // 留痕列＝**本 pass 的违例全数**（下面那份榜宽 10、`recent` 另有 LRU 上限）。
+        // 没有它，「这一列里没有 E5」会被读成「E5 没违例」——而 E 系列正是这台机器的自检面。
+        violationsTotal: res.violations.length,
         violations: res.violations.map(v => `${v.id}(${v.detail})`).slice(0, 10),
         recent: mergeViolationTraces(kernelMem.expectations?.recent, res.violations, ctx.tick),
         e3: e3Prev as Record<string, unknown>,

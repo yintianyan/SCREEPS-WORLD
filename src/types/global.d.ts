@@ -899,6 +899,8 @@ declare global {
     /** 期望自检结果（kernel 写）：最近一次核验的违例清单。 */
     expectations?: {
       tick: number;
+      /** 本 pass 违例的全数（`violations` 是截断到 10 的快照）。缺席＝这版码没上线。 */
+      violationsTotal?: number;
       violations: string[];
       /**
        * R265：违例身份留痕。事件 `ExpectationViolation` 只带总数（限流后逐拍不重报），
