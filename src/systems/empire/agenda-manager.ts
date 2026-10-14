@@ -577,6 +577,12 @@ export const agendaManagerSystem: System = {
     // ── 15. 验证 running Operation（Baseline 污染修复）──
     for (const op of operations) {
       if (op.status !== "running") continue;
+      // 悬挂绑定清洗（#181）必须走在 hasCarrierForOp 之前：该判定的三个或项里，
+      // ①"名字解析到活体"与③"线上还有任意在册载体"在**整线载体都死光**时同时为假，
+      // 于是走 `!inQueue && !op.carrierName` 的补孵分支——而悬挂名让 `!op.carrierName` 为假
+      // ⇒ 既不补孵也不重绑，直接 continue，任何在其后的清洗都轮不到（＝我在 补331 落点上的
+      // 一处自审缺口，roadmap 补341）。清在这里：悬挂名一摘，补孵分支与两段兜底绑定同趟可达。
+      pruneStaleCarrierBinding(op, liveCarrierNames);
 
       const carrierExists = hasCarrierForOp(op);
       if (!carrierExists) {
@@ -592,10 +598,6 @@ export const agendaManagerSystem: System = {
       // 记录 carrier name：优先按 assignment id 精确匹配；assignment 被租约清理后
       // （操作直派任务不在池内），退回 role/home/remoteTarget 兜底匹配，否则
       // op.carrierName 永不落账、hasCarrierForOp 持续误判缺员。
-      // 悬挂绑定清洗（#181）：名字还在但解析不到活体 ⇒ 后面两段 `!op.carrierName` 兜底绑定与
-      // 入账都进不去，本趟先清掉，:584 的兜底就能在同趟重绑到那只**活着**的载体（清在入账之后要等
-      // 下一趟＝interval 100 拍，见 roadmap 补329）。
-      pruneStaleCarrierBinding(op, liveCarrierNames);
       if (!op.carrierName) {
         for (const [name, creep] of Object.entries(Game.creeps)) {
           if (creep.memory.assignment?.id === op.id) {
