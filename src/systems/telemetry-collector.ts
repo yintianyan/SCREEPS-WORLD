@@ -4,6 +4,7 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { globalCache } from "../kernel/global-cache";
 import { systemPhase } from "../kernel/phase";
+import { freshTailDropStat } from "../kernel/tail-drop";
 import {
   readCpuSegment,
   readEconomySegment,
@@ -449,6 +450,13 @@ function sampleMemorySize(_tick: number): void {
         tick: Game.time,
       };
     }
+    // 【#179 修法 A】调度环「预算尾丢」＝唯一会整批饿死系统的出口，而它故意不写
+    // skipReason（逐系统记会淹没 skipHotspot）。**恒定写**：没发作也落一份全零，
+    // 于是「键缺席」严格等于「这版码没上线」，不再与「从没发生过」共用同一个形状。
+    (Memory.kernel.stats as any).tailDrop = {
+      ...(g.tailDrop ?? freshTailDropStat()),
+      flushTick: Game.time,
+    };
     if (g.systemBudgetEma instanceof Map && g.systemBudgetEma.size > 0) {
       // 留痕列＝**截断前**的标签数：EMA 榜只给前 10，读数人必须分得清「榜即全集」与
       // 「榜只是部分和」——否则「某标签不在榜上」会被误读成「它没有写者」（#142 同族）。

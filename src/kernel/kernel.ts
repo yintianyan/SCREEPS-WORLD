@@ -9,6 +9,7 @@ import {
 } from "./contracts";
 import { recordSkip, flushSkips, maintainMemory, runMigrations } from "./memory";
 import { systemPhase } from "./phase";
+import { countDueRemaining, recordTailDrop } from "./tail-drop";
 import { requestSegments, flushSegments } from "./segment-store";
 import { measuredRun, safeRun, safeRunBuild, recordPhaseSpan } from "./safe-run";
 import { buildCadenceTable, resolveInterval, type CadenceTable } from "./cadence";
@@ -491,7 +492,8 @@ export class Kernel {
   }
 
   private runSystems(ctx: Context): void {
-    for (const system of this.sortedSystems) {
+    const systems = this.sortedSystems;
+    for (const [i, system] of systems.entries()) {
       if (!this.shouldRunSystem(system, ctx)) {
         // K-6：interval 跳过是计划内行为，不记 skipReason —
         // 与 budget/colony-state 等异常跳过混入同一表会让遥测
@@ -529,7 +531,19 @@ export class Kernel {
       this.recordSystemEma(system, cpuCostSys);
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
-      if (ctx.budget.isExhausted()) break;
+      if (ctx.budget.isExhausted()) {
+        // 【#179 修法 A】这条出口故意不写 skipReason（逐系统记会淹没 skipHotspot，见上面
+        // K-6 注释），但「整批饿死」是这台机器唯一不可数的失败面 ⇒ 只记聚合标量。
+        // 口径＝本拍到期而未跑（过 interval 闸，纯函数），是上界不是「一定跑得成」。
+        recordTailDrop(
+          gRun,
+          "main",
+          countDueRemaining(systems.slice(i + 1), s => this.shouldRunSystem(s, ctx)),
+          system.name,
+          ctx.tick,
+        );
+        break;
+      }
     }
   }
 
@@ -850,7 +864,8 @@ export class Kernel {
 
   /** 后置系统 — 在所有 creep 角色之后运行，复用 main 阶段的 budget/safeRun/measuredRun 管线。 */
   private runPostSystems(ctx: Context): void {
-    for (const system of this.postSystems) {
+    const systems = this.postSystems;
+    for (const [i, system] of systems.entries()) {
       if (!this.shouldRunSystem(system, ctx)) continue;
       if (!ctx.budget.canStart(system.priority)) {
         recordSkip(`system/${system.name}/budget`);
@@ -873,7 +888,17 @@ export class Kernel {
       this.recordSystemEma(system, cpuCostPost);
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
-      if (ctx.budget.isExhausted()) break;
+      if (ctx.budget.isExhausted()) {
+        // 【#179 修法 A】post 环同口径：整批饿死只记聚合标量，不逐系统写 skipReason。
+        recordTailDrop(
+          gRun,
+          "post",
+          countDueRemaining(systems.slice(i + 1), s => this.shouldRunSystem(s, ctx)),
+          system.name,
+          ctx.tick,
+        );
+        break;
+      }
     }
   }
 

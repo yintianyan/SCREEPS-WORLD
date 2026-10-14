@@ -367,6 +367,9 @@ export interface GlobalCache {
   cpuByHome?: Map<string, number>;
   /** 各系统最近一次实际执行 tick（kernel.runSystems 记录）—— 期望自检的 P3 存活判据输入。heap 存储。 */
   systemLastRun?: Record<string, number>;
+  /** 【#179 修法 A】主环／post 环「预算尾丢」的聚合计数（heap，与 systemLastRun 同生命周期：
+   * global reset 即清零）。这条出口故意不写 skipReason，所以没这份账就只能靠窗口抽样猜。 */
+  tailDrop?: import("./tail-drop").TailDropStat;
   // 【F-DEAD-2 已删除】empireTransportRequests — A3.0 帝国级跨房调拨请求池
   // 连生产者都不存在（agenda-manager 不写、logistics 不读），只有 cache 槽位和
   // 文档描述。若 A3.0 帝国调拨进入路线图，须重新设计完整链路而非留假装存在的槽位。
