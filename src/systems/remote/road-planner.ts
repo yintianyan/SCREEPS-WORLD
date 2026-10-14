@@ -205,6 +205,19 @@ export function planRemotePathRoads(
   // 旧实现在这段 per-home 调用里用 room.find 自行累加本主房的 op，于是 20 的帽实际
   // 是 20×主房数 —— 名义全局、实为每房（详见 getRemoteRoadSiteTotal）。
   const roadBudget = getRemoteRoadSiteTotal();
+  // 【#139 配额侧留痕】把"闸此刻看到的数"原样落一列：不重算、不新增模块边（曾试过让
+  // telemetry 去求和，那需要一条 systems 间 import，R11 禁；且实测一条未使用的 import
+  // 单独就能弄坏 telemetry 的榜用例）。口径＝与上面两处 `>= cap` 判断逐字同一个数。
+  if (Memory.kernel?.stats) {
+    const capTotal = CONFIG.remote.roadSitesPerOpTotal;
+    (Memory.kernel.stats as any).remoteRoadLane = {
+      pendingTotal: roadBudget,
+      cap: capTotal,
+      headroom: capTotal - roadBudget,
+      saturated: roadBudget >= capTotal,
+      tick: ctx.tick,
+    };
+  }
   let created = 0;
   // 本轮清扫释放的车道额度 — roadBudget 是 tick 入口的快照（per-tick 缓存），不减掉
   // 刚 remove 的残骸会让「被自己的残骸锁死」这条路径多等一个 manager 间隔才解开。
