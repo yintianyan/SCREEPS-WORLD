@@ -870,7 +870,11 @@ declare global {
     /** 帝国态势快照（empire-strategy 写，有界）：对手画像 + 命名条件。 */
     situation?: {
       tick: number;
+      /** 截断前的对手条数（榜宽 8）——没有它，「榜里没有他」会被误读成「没有对手」。 */
+      adversariesTotal: number;
       adversaries: Record<string, { rooms: string[]; lastSeen: number }>;
+      /** 截断前的条件条数（榜宽 12），同族留痕列。 */
+      conditionsTotal: number;
       conditions: { id: string; severity: number; detail: string }[];
     };
     /** 本次 boot 首个 tick（maintainMemory 记录）—— E2 相对宽限基准。 */

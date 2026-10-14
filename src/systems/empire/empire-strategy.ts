@@ -223,13 +223,17 @@ export const empireStrategySystem: System = {
       activeExpansionTarget: Memory.kernel?.expansion?.target,
     });
     const prevSit = Memory.kernel.situation;
+    // 留痕列＝**截断前**的条数（#137/#142 同族）。没有它，「榜里没有他」会被读成「没有对手」，
+    // 「榜里只有 8 家」会被读成「总共 8 家」——而按人归因的敌意记忆（#108/#151）问的正是这个。
     Memory.kernel.situation = {
       tick: situation.tick,
+      adversariesTotal: situation.adversaries.length,
       adversaries: Object.fromEntries(
         situation.adversaries
           .slice(0, 8)
           .map(a => [a.username, { rooms: a.rooms, lastSeen: a.lastSeen }]),
       ),
+      conditionsTotal: situation.conditions.length,
       conditions: situation.conditions
         .slice(0, 12)
         .map(c => ({ id: c.id, severity: c.severity, detail: c.detail })),

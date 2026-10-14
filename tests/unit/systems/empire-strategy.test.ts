@@ -198,3 +198,16 @@ describe("empire-strategy — #94 决策标量落盘", () => {
     expect(strategy.gclLevel).toBe(4);
   });
 });
+
+describe("situation 的截断前留痕列（#142 同族）", () => {
+  it("跑一轮就落 adversariesTotal／conditionsTotal，且条数 >= 榜宽内实际条目数", () => {
+    setupRoom();
+    empireStrategySystem.run(makeContext());
+    const sit = (globalThis as any).Memory.kernel.situation;
+    expect(typeof sit.adversariesTotal).toBe("number");
+    expect(typeof sit.conditionsTotal).toBe("number");
+    // 本夹具没有威胁 ⇒ 全集应为 0；两列同时在场才说明写者接上了（缺席＝没接）
+    expect(sit.adversariesTotal).toBe(0);
+    expect(sit.conditionsTotal).toBeGreaterThanOrEqual(sit.conditions.length);
+  });
+});
