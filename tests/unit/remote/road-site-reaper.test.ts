@@ -447,3 +447,57 @@ describe("planRemotePathRoads — 每轮新建上限不得吞掉后续车道的�
     expect(opB.roadSiteCount).toBe(0);
   });
 });
+
+describe("远矿车道留痕 stats.remoteRoadLane（#139 配额侧）", () => {
+  function laneFixture() {
+    const sites = [roadSite(20, 40, 100)];
+    const op = activeOp(frozen(50, 9000));
+    op.roadSiteCount = 3; // 闸读的是上一轮的记账 ⇒ 夹具里显式给一个非零数，否则前提不成立
+    const ops = { [T]: op };
+    const room = targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]);
+    seed(9000, ops, { [T]: room });
+    seedHeat([[20, 22]]);
+    return { sites, op, ops, room };
+  }
+
+  it("写的就是闸此刻用的那个数（saturated 按 >= cap、headroom 可为负）", () => {
+    const { ops } = laneFixture();
+    (g().Memory.kernel as any).stats = {};
+
+    planRemotePathRoads(HOME, ops, mockContext());
+
+    const lane = (g().Memory.kernel.stats as any).remoteRoadLane;
+    expect(lane).toBeDefined();
+    const cap = CONFIG.remote.roadSitesPerOpTotal;
+    expect(lane.cap).toBe(cap);
+    expect(lane.pendingTotal).toBeGreaterThan(0);
+    expect(lane.saturated).toBe(lane.pendingTotal >= cap);
+    expect(lane.headroom).toBe(cap - lane.pendingTotal);
+    expect(lane.tick).toBeGreaterThan(0);
+  });
+
+  it("超帽时 saturated 为真且 headroom 为负（线上形状 27/20 的最小复现）", () => {
+    const { ops } = laneFixture();
+    const cap = CONFIG.remote.roadSitesPerOpTotal;
+    (g().Memory.kernel as any).stats = {};
+    g().Memory.rooms[HOME].remoteOps[T].roadSiteCount = cap + 7;
+    // getRemoteRoadSiteTotal 有 per-tick heap 缓存（同拍读到的是拍入口快照）
+    // ⇒ 换数就得先把缓存清掉，等价于"新的一拍"。这条本身就是被断言的语义。
+    g().remoteRoadSiteTotal = undefined;
+
+    planRemotePathRoads(HOME, ops, mockContext());
+
+    const lane = (g().Memory.kernel.stats as any).remoteRoadLane;
+    expect(lane.pendingTotal).toBe(cap + 7);
+    expect(lane.saturated).toBe(true);
+    expect(lane.headroom).toBe(-7);
+  });
+
+  it("stats 还没建起来时不写、也不抛（⇒ 线上「缺席」不等于「闸开着」）", () => {
+    const { ops } = laneFixture();
+    delete (g().Memory.kernel as any).stats;
+
+    expect(() => planRemotePathRoads(HOME, ops, mockContext())).not.toThrow();
+    expect((g().Memory.kernel.stats as any)?.remoteRoadLane).toBeUndefined();
+  });
+});
