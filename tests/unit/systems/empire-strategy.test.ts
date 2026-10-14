@@ -210,4 +210,65 @@ describe("situation 的截断前留痕列（#142 同族）", () => {
     expect(sit.adversariesTotal).toBe(0);
     expect(sit.conditionsTotal).toBeGreaterThanOrEqual(sit.conditions.length);
   });
+
+  it("10 家对手 ⇒ adversariesTotal=10 而榜宽 8，且掉出去的是插入序尾部两家", () => {
+    // 截断式聚合的排序键是 `b.rooms.length - a.rooms.length || b.lastSeen - a.lastSeen`：
+    // 十家各占一房、lastSeen 同拍 ⇒ 两两比较全为 0 ⇒ 稳定排序保留 Map 插入序 = threatCreeps 序。
+    // 因此"谁在榜外"是可命名的，不只是"少了几家"。
+    setupRoom();
+    const owners = Array.from({ length: 10 }, (_, i) => `adv-${i}`);
+    const snap = mockSnapshot({
+      threatCreeps: owners.map((o, i) => ({ owner: { username: o }, name: `c${i}` })) as any,
+    });
+    empireStrategySystem.run(makeContext(snap));
+    const sit = (globalThis as any).Memory.kernel.situation;
+    expect(sit.adversariesTotal).toBe(10);
+    expect(Object.keys(sit.adversaries).length).toBe(8);
+    expect(Object.keys(sit.adversaries)).toEqual(owners.slice(0, 8));
+    expect(sit.adversaries["adv-8"]).toBeUndefined();
+    expect(sit.adversaries["adv-9"]).toBeUndefined();
+  });
+
+  it("14 条条件 ⇒ conditionsTotal=14 而榜宽 12（severity 排序后掉出的是尾档）", () => {
+    // 每房最多产两条（newbornColonyRisk + controllerUnderAttack），七房 ⇒ 14 > 12。
+    // 两类的 severity：newborn 取 2（无 spawn + 敌情、TTD 未到 800）／controllerUnderAttack 取 3，
+    // 排序 `b.severity - a.severity` ⇒ 七条 3 在前、七条 2 在后 ⇒ 被切掉的 2 条全是 severity 2，
+    // 也就是「榜里的最低档不完整」——没有 conditionsTotal 就只能读成「帝国只有 12 个条件」。
+    (globalThis as any).Memory.kernel = {};
+    const tick = (globalThis as any).Game.time;
+    const snaps: any[] = [];
+    for (let i = 0; i < 7; i++) {
+      const name = `R${i}`;
+      const controller: any = mockController({ my: true });
+      controller.ticksToDowngrade = 1000; // < CONTROLLER_PRESSURE_TTD(2000)
+      controller.progress = 12000;
+      (globalThis as any).Game.rooms[name] = { controller, name };
+      (globalThis as any).Memory.rooms[name] = {
+        spawnQueue: [],
+        buildQueue: [],
+        colonyState: "normal",
+        economyPressure: 0.1,
+      };
+      snaps.push(
+        mockSnapshot({
+          roomName: name,
+          rcl: 3,
+          spawns: [] as any,
+          storage: undefined,
+          controller,
+          threatCreeps: [{ owner: { username: "thief" }, name: "t" }] as any,
+        }),
+      );
+    }
+    const ctx: any = makeContext(snaps[0]);
+    ctx.tick = tick;
+    ctx.snapshots = () => snaps[Symbol.iterator]();
+    ctx.getSnapshot = (n: string) => snaps.find(s => s.roomName === n);
+    empireStrategySystem.run(ctx);
+    const sit = (globalThis as any).Memory.kernel.situation;
+    expect(sit.conditionsTotal).toBe(14);
+    expect(sit.conditions.length).toBe(12);
+    expect(sit.conditions.filter((c: any) => c.severity === 3).length).toBe(7);
+    expect(sit.conditions.filter((c: any) => c.severity === 2).length).toBe(5);
+  });
 });
