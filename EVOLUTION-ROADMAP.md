@@ -12899,3 +12899,17 @@ isReady = extendedReadiness.allPassed && plannerInput.readiness.readiness !== "N
 **五、【读任何一条之前要接受的仪器事实】（今天新增五条，v4 那五条继续有效）**：① 本服 `FIND_MY_STRUCTURES` **不返回** wall／container／road ⇒ 判这类结构在场否必须用写者那把 `FIND_STRUCTURES`（`room-snapshot.ts:32-40`）＋同发控制组；② 本服 `CONTROLLER_STRUCTURES.observer={1..7:0,8:1}` ⇒ **Observer 到 RCL8 才解锁**（幼房 RCL6 盖不了），且 `controller.isStructureAvailable` 在本服 undefined ⇒ 判解锁只读这张表；③ rampart 衰减＝**300 hits/99 拍**（12/12 枚＋聚合层整除），**墙不衰减**（111 根 `ticksToDecay` 全缺＋两读 Δhits=0）；④ `stats.cpuBySystem`／`cpuPerTickBySystem` 是 **top-10 截断榜** ⇒ "标签不在榜上"推不出"没写者"（#142 的原判法因此作废）；⑤ `Memory.kernel.skipReasons` 是**扁平累计表**（无 cur/prev）⇒ 判"某键不存在＝没调用过"的合法前提是同发读到其余键非零（我记忆里"500 拍滚动窗"那句只适用于另一台仪器）。
 
 **六、L2 下一轮主目标＝第一条（推批＋线上验证），第二条（#151）与之并列、等同一句授权**；在授权到手前不做任何阈值／门禁改动、不制造敌情、不动编制。⚠️任何"沿＝锚＋常数"型预报引用前必须重读锚（R315 那条被抢跑 127 拍的教训仍在 §4.0 补196）。
+
+## §3.0-v6 优先队列（2026-10-15 04:1xZ 重排，**覆盖 §3.0-v5**；v5 只作状态出处。本轮现取，下一轮可直接执行，不需重推）
+
+**0｜唯一阻塞＝生产部署授权（L0 `:103/:109/:111/:113` 属人）。** 执行式＝`SCREEPS_DEPLOY_CONFIRM=1 bash tmp/tools/official/batch16-gate-and-push.sh`（先跑 `npm run build` 保证 dist 比所有源新；推前用同发回显核 `src=15／tests=13` 对 `EXPECT_SRCF=15`）。代价＝heap 全清＋≈400 拍 G6 税（拍长 4.054 s ⇒ ≈27 分钟）；**换码不改姿态**（`strategy.since`／`warPressureTicks`／`lastHostileAt`／`op.roadHeat` 全在 Memory，且 `road-planner.ts:285-291` 的 `bootTick` 双闸已防"部署快于合并窗时白扣一次遗忘"）。纪律＝判效窗内不许二次部署、不许边验证边构建。
+
+**1｜上线后立刻读的五格（PASS 条件写死，不可判要显式登记）**＝①`kernel.strategy.params` 在场且 `params.threatWindow` 等于生效档（low＝5000）；②`kernel.stats.remoteRoadLane` 在场，`pendingTotal` 与我按 `site-quota.ts:44` 自算的 Σ 同拍相等；③`expansionDashboard.readinessTick` 在场且 `dash.tick − readinessTick ≤ 200`；④readout 行『#187 roadLaid 每 pass』＝Σ≥20 且所有在场 `roadLaid` 报 0；⑤`#169` 的逐请求列——**必须连采**（队列项短于采样节律，`nq=0` 只算不可判、不算阴性）。早批已上线的三列一律摘出、不当本批战果：`rooms.*.hostileEdges`、`expansionDashboard.poolCut`、`recoveryRejections` 的 `<reason>:<retryable|non_retryable>` 复合键。
+
+**2｜若下一轮仍无授权（三条零成本取证，按顺序做）**＝①间歇速率的第二、三个窗：readout 行『远矿路消化差分 roadBuild』每轮自动与上一快照配平（本轮实测＝40 分钟三枚建成、随后 15 分钟零枚 ⇒ 均值不可用于推清空时间）；②`#187` 撒谎窗继续延长（现 ≥748 拍，六发同读 `2/2/2`）；③W36S58 那五枚若仍 `prog=538`、`动作=2` ⇒ 与 `outOfRange far=51,879（99.9%）` 同向，落点问题坐实（与能量政策无关）。
+
+**3｜六条属人决定（价格都在 §4.1，不要重测）**＝#139 抬不抬跨主房帽 20（现读 Σ=20、headroom 0、方向向下但无稳定速率）；#151·#186 威胁窗改读 `lastPlayerHostileAt`（收益量级＝33 枚沿全 NPC、零玩家，帝国级并集 99.25%）；#181 甲（按寿命绑定的换号，需一个新往返常数）／丙（连 `assignment` 一起清）——损害已量级化（一代实物 ≥6,000／+3,600 而账面 0）；#50 车道计价边界（B1 2.80／B2 2.17／B3 1.89／B4 1.82）；#107 `stability.ts` 删或接；#185 `lastError` 清闩锁或改名。另 #150 维护侧已闭到字段级（roles 唯一 `.repair(` 宾语是 container），修法仍属人。
+
+**4｜预写锚（到期就验，别重算）**＝交接 pass `83,655,472`（`dl=83,655,404`，严格 `>` ＋ pass ≡72）；war 出口右沿＝幼房 `lastHostileAt 83,654,156` ＋生效窗 5,000＝`83,659,156`（再有新升沿则**重锚并登记为"被抢跑"**，两种失败分开写）；`Σ < 20` ⇒ 车道自开（只登记方向，不登记时间）。
+
+**5｜纪律摘要（本会话被自己抓到的都在这）**＝产物文本一律 quoted heredoc（本轮矩阵 §28 因 `<<DOC` 把八条代码锚执行成空洞，更正＝`40ec0ce7`）；枚号与自述数字只抄脚本回显（写坏过两次：`5fc34a37`、`7b47b723`）；键路径一律从写者取（`kernel.remoteOps` 那次返回 n=0 是路径不存在）；判"在场＝本批上线"前先核是否早批就有；写"缺席＝未部署"前先数写者；常量声明值≠生效值；时间换算只用直读 `Game.time` 或同发 pass 戳；共享文件改行用行号＋前缀双断言；console 探针单发带门牌、发前 `wc -c`；市场只读；**不为把扩张变绿而放宽任何门**。
