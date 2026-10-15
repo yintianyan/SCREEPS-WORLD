@@ -287,6 +287,27 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
 
     expect(room.createConstructionSite).not.toHaveBeenCalled();
     expect(sites[0]!.remove).toHaveBeenCalledTimes(1);
+    // #187：闸关着时留痕列必须如实落 0，而不是留着上一趟铺路的数（它是每 pass 值）。
+    expect(ops[T].roadLaid).toBe(0);
+  });
+
+  it("#187 反向实验：上一趟铺了 2，被跨主房帽挡住这一趟读回 0 而不是 2", () => {
+    // 闩锁形状的可分判别＝同一 op、同一负载，唯一差别是本趟有没有被 roadSitesPerOpTotal 挡住。
+    const sites = [roadSite(20, 40), roadSite(20, 21)];
+    const op = activeOp({ roadSiteCount: 2, roadLaid: 2, ...frozen(0, 5014) });
+    const ops = { [T]: op };
+    const room = targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]);
+    seed(5014, ops, { [T]: room });
+    seedHeat([
+      [20, 21],
+      [20, 22],
+    ]);
+    g().Memory.rooms["W9N9"] = { remoteOps: { W0N0: activeOp({ roadSiteCount: 20 }) } };
+
+    planRemotePathRoads(HOME, ops, mockContext());
+
+    expect(op.roadLaid).toBe(0);
+    expect(sites[0]!.remove).toHaveBeenCalledTimes(1);
   });
 
   it("abandoned op → 计数归零让出车道，且不碰该房", () => {

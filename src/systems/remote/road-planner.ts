@@ -351,12 +351,25 @@ export function planRemotePathRoads(
     counters.roadProgressSum = roadProgressSum;
     counters.roadSitesPending = roadSitesPending;
     counters.roadsBuilt = roadsBuilt;
+    // #187：`roadLaid` 是**每 pass** 值。三处预算闸原本直接 continue，把赋值留在闸后 ⇒
+    // 车道饱和时整列停写、保留最后一次铺路的旧值，而"闸关着"恰是最想读它的那一刻
+    // （线上据此误读过一次，见 roadmap 补369②）。本列在 src 零读者，纯留痕 ⇒ 行为不变。
+    let laid = 0;
     // 清扫之后才判预算：本轮释放的额度当场可用（roadBudget 是 tick 入口快照）。
-    if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) continue;
+    if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) {
+      op.roadLaid = laid;
+      continue;
+    }
     // 单 op 挂起 road site 数（含在建）超上限则跳过 —— 铺完自然回落。
-    if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) continue;
+    if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) {
+      op.roadLaid = laid;
+      continue;
+    }
     // 每轮新建限速（#149：这条必须在清扫与账本校正**之后**）。
-    if (created >= CONFIG.remote.roadSitesPerRun) continue;
+    if (created >= CONFIG.remote.roadSitesPerRun) {
+      op.roadLaid = laid;
+      continue;
+    }
     const sources = room.find(FIND_SOURCES);
 
     // 铺路只沿着被走过的格子生长：热度高的格先铺（同分按坐标定序，保证同一输入同一结果）。
@@ -366,7 +379,6 @@ export function planRemotePathRoads(
       sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
       CONFIG.remote.roadMinTileWalks,
     );
-    let laid = 0;
     for (const tile of tiles) {
       if (created >= CONFIG.remote.roadSitesPerRun) break;
       if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;

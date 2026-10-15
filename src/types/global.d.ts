@@ -1387,7 +1387,13 @@ declare global {
     roadHeat?: Record<string, number>;
     /** 上一次热度合并的 tick（roadHeat 的窗口时钟，与 roadHeat 同写者）。 */
     roadHeatAt?: number;
-    /** 观测：最近一轮热度账里的合格格数、扫掉的残骸数、铺下的新格数（判"为什么没动工"用）。 */
+    /**
+     * 观测：最近一轮热度账里的合格格数、扫掉的残骸数、铺下的新格数（判"为什么没动工"用）。
+     * ⚠️`roadReaped`／`roadLaid` 都是**每 pass** 值，不是累计量，也不是"上一次有动作的那一趟"：
+     * `road-planner.ts` 在三处预算闸（跨主房帽／单 op 帽／每轮限速）之前先扫再判，被闸挡住的趟会
+     * 如实落 0（#187）。此前赋值在闸之后 ⇒ 车道饱和时整列停写、留着最后一次铺路的旧值，
+     * 于是"2"既可能是"这趟铺了 2"也可能是"闸关着、上趟铺了 2"——线上照后者误读过一次。
+     */
     roadHeatTiles?: number;
     roadReaped?: number;
     roadLaid?: number;
