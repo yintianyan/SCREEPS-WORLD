@@ -851,6 +851,23 @@ declare global {
       since: number;
       /** 升档候选连续满足余量的 tick 数（滞回防抖）。 */
       upgradeTicks: number;
+      /** #188：判定那拍的余量（`1 − usage/limit`），与 tier 同源同拍。 */
+      headroom?: number;
+      /**
+       * #188：`tier` 是 G6 唯一读的词，而"要削多少 CPU 才放行扩张"需要它的**输入**。
+       * 这几枚标量原先只存在于决策那一拍的 heap（同 #94 的 `gclLevel`/`bucket`、#186 的 `params`）。
+       * `avg10` 与 `rateTotal` 一起落盘：读者能看出 `usage` 走了哪条腿，而不必在写者里
+       * 复刻 `pickCpuUsagePerTick` 的信任规则。
+       */
+      inputs?: {
+        at: number;
+        usage: number;
+        avg10: number;
+        rateTotal?: number;
+        limit: number;
+        bucket: number;
+        tightRatio: number;
+      };
     };
     /**
      * 扩张节奏台账（v31+，expansion-manager 写入）：每次扩张任务收摊追加

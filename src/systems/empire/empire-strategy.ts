@@ -188,17 +188,20 @@ export const empireStrategySystem: System = {
 
     // ── R7a：算力容量 — 规模规划的前馈层（「养得起多大规模」）──
     const cpuRate = Memory.kernel.stats?.cpuRate;
+    // #188：这两个值**先取一次再喂判定**，好让落盘的留痕与闸用的数是同一个数。
+    const cpuUsagePerTick = pickCpuUsagePerTick({
+      avg10: Memory.kernel.stats?.cpuAvg10 ?? 0,
+      rateTotal: cpuRate?.total,
+      rateWindowTicks: cpuRate?.windowTicks,
+      rateUnsampledTicks: cpuRate?.unsampledTicks,
+    });
+    const capacityLimit = Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20);
     const capacity = evaluateCapacity(
       {
         cpuLimit: Game.cpu.limit,
         tickLimit: Game.cpu.tickLimit,
         bucket: Game.cpu.bucket ?? 10000,
-        cpuUsagePerTick: pickCpuUsagePerTick({
-          avg10: Memory.kernel.stats?.cpuAvg10 ?? 0,
-          rateTotal: cpuRate?.total,
-          rateWindowTicks: cpuRate?.windowTicks,
-          rateUnsampledTicks: cpuRate?.unsampledTicks,
-        }),
+        cpuUsagePerTick,
         cpuMax10: Memory.kernel.stats?.cpuMax10 ?? 0,
       },
       Memory.kernel.capacity,
@@ -262,16 +265,30 @@ export const empireStrategySystem: System = {
       log.info(
         "empire-strategy",
         `capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +
-          ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${Math.min(Game.cpu.limit, Game.cpu.tickLimit)})`,
+          ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${capacityLimit})`,
       );
     }
     // #140：原先这里有 `if (strategy?.posture !== undefined) postureChangedAt = Game.time`，
     // 而 `strategy` 在本 tick 早已被覆写成当前姿态 ⇒ 该条件恒真、戳记每拍刷新，
     // 于是"变更发生在哪一拍"永久读不出来。变更戳与分支改到上面真正的转换分支里写。
+    // #188：G6 只读 `tier` 一个词，而"要削多少 CPU 才放行扩张"需要它的**输入**。这几枚标量
+    // 原先只活在决策那一拍的 heap（与 #94 的 gclLevel/bucket、#186 的 params 同族）。
+    // `usage` 与 (`avg10`,`rateTotal`) 并记 ⇒ 读者能看出走了哪条腿，但**不在这里复刻** pickCpuUsagePerTick
+    // 的信任规则（同一规则写两处必然漂移）。
     Memory.kernel.capacity = {
       tier: capacity.tier,
       since: capacity.since,
       upgradeTicks: capacity.upgradeTicks,
+      headroom: capacity.headroom,
+      inputs: {
+        at: ctx.tick,
+        usage: cpuUsagePerTick,
+        avg10: Memory.kernel.stats?.cpuAvg10 ?? 0,
+        rateTotal: cpuRate?.total,
+        limit: capacityLimit,
+        bucket: Game.cpu.bucket ?? 10000,
+        tightRatio: CONFIG.capacity.tightRatio,
+      },
     };
 
     // ── P1-3：环境画像 — 低频采样（每 100 tick），getAllOrders 是 CPU 大户 ──

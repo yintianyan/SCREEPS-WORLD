@@ -318,3 +318,37 @@ describe("empire-strategy — #186 生效参数集落盘（params）", () => {
     expect(low.threatWindow).not.toBe(CONFIG.posture.threatWindow);
   });
 });
+
+describe("empire-strategy — #188 容量闸的输入落盘（capacity.inputs）", () => {
+  function runWithStats(stats: Record<string, unknown>): any {
+    (globalThis as any).Memory.kernel = {};
+    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 16, ...stats };
+    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, getUsed: () => 0, bucket: 9000 };
+    (globalThis as any).Game.gcl = { level: 5 };
+    setupRoom({ hostileAgo: 99999 });
+    empireStrategySystem.run(makeContext());
+    return (globalThis as any).Memory.kernel.capacity;
+  }
+
+  it("落盘的 usage 就是闸用的那一个数（可信窗取 rateTotal，而不是偏高的 cpuAvg10）", () => {
+    const cap = runWithStats({
+      cpuRate: { total: 8, windowTicks: 300, unsampledTicks: 0 },
+    });
+    expect(cap.inputs.usage).toBe(8);
+    expect(cap.inputs.avg10).toBe(16); // 两把尺并排落盘 ⇒ 读者能看出走了哪条腿
+    expect(cap.inputs.limit).toBe(20); // min(cpuLimit, tickLimit)
+    expect(cap.headroom).toBeCloseTo(1 - 8 / 20, 6);
+    expect(cap.inputs.tightRatio).toBe(CONFIG.capacity.tightRatio);
+    // 由落盘输入即可复算档位：余量 0.6 ⇒ comfortable（G6 要的正是 tier ≤ comfortable）
+    expect(cap.tier).toBe("comfortable");
+  });
+
+  it("窗不可信（有漏采拍）⇒ 退回偏高的 avg10，且落盘跟着退——留痕不许与判定分叉", () => {
+    const cap = runWithStats({
+      cpuRate: { total: 8, windowTicks: 300, unsampledTicks: 7 },
+    });
+    expect(cap.inputs.usage).toBe(16);
+    expect(cap.headroom).toBeCloseTo(1 - 16 / 20, 6);
+    expect(cap.tier).toBe("tight");
+  });
+});
