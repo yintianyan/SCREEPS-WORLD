@@ -1,6 +1,6 @@
 /** E2E 测试全局 setup。 */
-import { existsSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { execFileSync, execSync } from "node:child_process";
 import { resolve } from "node:path";
 import { afterAll, beforeAll } from "vitest";
 import { GAME_GLOBAL_CONSTANTS } from "../support/constants";
@@ -40,27 +40,41 @@ function installDeterministicRandom(): void {
 installDeterministicRandom();
 
 /**
- * 检测 @screeps/driver 的 runtime.snapshot.bin 是否与当前 Node 版本兼容。
- * 委托 scripts/rebuild-driver-snapshot.js（postinstall 同源逻辑），避免双实现。
+ * 检测 @screeps/driver 的 runtime.snapshot.bin 是否与当前 Node **大版本**兼容。
+ *
+ * 历史形状（本次改掉）：这里曾委托 `scripts/rebuild-driver-snapshot.js`，而那个脚本已在
+ * `58a65562`（"remove obsolete tools/scripts"）里被删；本函数却仍打印"请去运行它"——
+ * 一条指向不存在文件的指令，且那句"postinstall 同源逻辑"也不成立（package.json 无 postinstall）。
+ * driver 自带 `make-runtime-snapshot.js`，并把构建时的大版本写进 `build/.snapshot-node-version`
+ * （现读内容＝"24"）⇒ 改成**自己比对 marker、只在真不匹配时**跑 driver 自带的重建。
  */
 function ensureDriverSnapshot(): void {
-  const rebuildScript = resolve(process.cwd(), "scripts/rebuild-driver-snapshot.js");
-  if (!existsSync(rebuildScript)) {
-    console.warn(
-      "[e2e setup] scripts/rebuild-driver-snapshot.js not found. " +
-        "If e2e tests crash with 'Version mismatch between V8 binary and snapshot', " +
-        "run: node scripts/rebuild-driver-snapshot.js --force",
-    );
-    return;
-  }
+  const driverRoot = resolve(process.cwd(), "node_modules/@screeps/driver");
+  const marker = resolve(driverRoot, "build/.snapshot-node-version");
+  const makeScript = resolve(driverRoot, "make-runtime-snapshot.js");
+  // 装法不含快照（源码安装／新版改了布局）⇒ 不干预，也不报警。
+  if (!existsSync(marker) || !existsSync(makeScript)) return;
+  let built: string | null = null;
   try {
-    execSync(`node "${rebuildScript}"`, {
+    built = readFileSync(marker, "utf8").trim();
+  } catch {
+    built = null;
+  }
+  const running = process.versions.node.split(".")[0];
+  if (built === running) return; // 兼容 ⇒ 静默（旧版无论相容与否都先吼一声）
+  console.warn(
+    `[e2e setup] driver 快照由 Node ${built ?? "?"} 构建、当前 ${running} ⇒ 重建 runtime.snapshot.bin`,
+  );
+  try {
+    // execFileSync ＋ argv 数组：不过 shell（无元字符拼接面），且用**当前跑测试的这个 node**
+    // （process.execPath）重建——快照必须与它同版本，用 PATH 上碰巧的 node 反而会再错一次。
+    execFileSync(process.execPath, [makeScript], {
       encoding: "utf8",
       stdio: "pipe",
       cwd: process.cwd(),
     });
   } catch {
-    // rebuild 失败不阻塞 — 测试会在不兼容时自然报错
+    // 重建失败不阻塞 — 真不兼容时测试自己会崩，那时错误信息才是权威的
   }
 }
 
