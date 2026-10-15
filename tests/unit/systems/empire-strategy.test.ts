@@ -1,6 +1,7 @@
 /** Empire Strategy 系统测试（R6a/R7a 发布层 — 容量分档 + 议程归因）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { empireStrategySystem } from "../../../src/systems/empire/empire-strategy";
+import { CONFIG } from "../../../src/config";
 import { mockBudget, mockController, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
@@ -270,5 +271,50 @@ describe("situation 的截断前留痕列（#142 同族）", () => {
     expect(sit.conditions.length).toBe(12);
     expect(sit.conditions.filter((c: any) => c.severity === 3).length).toBe(7);
     expect(sit.conditions.filter((c: any) => c.severity === 2).length).toBe(5);
+  });
+});
+
+describe("empire-strategy — #186 生效参数集落盘（params）", () => {
+  function runOnce(envProfile?: Record<string, unknown>): any {
+    (globalThis as any).Memory.kernel = {};
+    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
+    if (envProfile) (globalThis as any).Memory.kernel.environment = envProfile;
+    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, getUsed: () => 0, bucket: 9000 };
+    (globalThis as any).Game.gcl = { level: 5 };
+    setupRoom({ hostileAgo: 99999 });
+    empireStrategySystem.run(makeContext());
+    return (globalThis as any).Memory.kernel.strategy;
+  }
+
+  it("环境画像缺席 ⇒ 中性档，params 存在且 threatWindow 等于合并后的值", () => {
+    const strategy = runOnce();
+    expect(strategy.params).toBeDefined();
+    expect(strategy.params.neighborPressure).toBe("medium");
+    expect(strategy.params.threatWindow).toBe(CONFIG.posture.threatWindow);
+  });
+
+  it("params 报的是**合并结果**而不是回读 CONFIG 字面量（改 CONFIG 立刻跟着变）", () => {
+    const original = CONFIG.posture.threatWindow;
+    const postureCfg = CONFIG.posture as unknown as { threatWindow: number };
+    try {
+      postureCfg.threatWindow = original + 777;
+      expect(runOnce().params.threatWindow).toBe(original + 777);
+    } finally {
+      postureCfg.threatWindow = original;
+    }
+    expect(CONFIG.posture.threatWindow).toBe(original);
+  });
+
+  it("基线 low 档确实把威胁窗抬到 5000（R407 误判的反向守卫：读 CONFIG 会得 3000）", async () => {
+    const { selectEnvBaseline } = await import("../../../src/domain/strategy/posture-baseline");
+    const low = selectEnvBaseline({
+      neighborPressure: "low",
+      marketActivity: "moderate",
+      gclProgressRate: 0,
+      hasLiveThreat: false,
+    } as any);
+    expect(low.threatWindow).toBe(5000);
+    expect(low.warPatience).toBe(3000);
+    expect(low.threatWindow).not.toBe(CONFIG.posture.threatWindow);
   });
 });

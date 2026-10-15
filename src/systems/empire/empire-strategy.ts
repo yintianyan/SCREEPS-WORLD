@@ -71,6 +71,17 @@ export const empireStrategySystem: System = {
     const gclLevel = Game.gcl?.level ?? 1;
     const cpuBucket = Game.cpu.bucket ?? 10000;
 
+    // #186 观测：环境档与合并后的姿态参数集。此前"生效窗到底是几千"只能靠行为反推
+    // （R407 就是这么算错过一次：读 `CONFIG.posture.threatWindow`=3000 而 low 档基线
+    // 覆盖成 5000），所以把合并链最后一层的实际取值与所用档位一起落盘。
+    const envInput = buildEnvBaselineInput(rooms);
+    const postureOptions = {
+      ...DEFAULT_POSTURE_OPTIONS,
+      ...CONFIG.posture,
+      ...selectEnvBaseline(envInput),
+      ...resolveStrategyOverrides(Memory.kernel?.tuning?.strategyOverrides, ctx.tick),
+    };
+
     const result = evaluateEmpirePosture(
       {
         tick: ctx.tick,
@@ -87,14 +98,8 @@ export const empireStrategySystem: System = {
       },
       // 姿态参数合并链（优先级低→高）：
       //   DEFAULT → CONFIG.posture → 环境基线 → strategyOverrides
-      // 环境基线：根据环境画像（邻居压力/市场/GCL）自动切换参数 profile，
-      //   解决换环境后参数不再最优的问题。strategyOverrides 仍可覆盖环境基线。
-      {
-        ...DEFAULT_POSTURE_OPTIONS,
-        ...CONFIG.posture,
-        ...selectEnvBaseline(buildEnvBaselineInput(rooms)),
-        ...resolveStrategyOverrides(Memory.kernel?.tuning?.strategyOverrides, ctx.tick),
-      },
+      // 已在上方合成为 `postureOptions`（同一对象既喂判定又落盘 ⇒ 读数与判定不可能不同版）。
+      postureOptions,
     );
 
     // 姿态变更时打日志 — 战略转向是帝国级事件，必须可观测。
@@ -130,6 +135,17 @@ export const empireStrategySystem: System = {
       // #94：判定实际用到的两个标量，随结果同拍落盘（零额外读盘；缺失时的兜底值=判定值）。
       gclLevel,
       bucket: cpuBucket,
+      // #186：判定实际用到的参数集＋所用环境档（合并链最后一层，零额外计算）。
+      params: {
+        at: ctx.tick,
+        threatWindow: postureOptions.threatWindow,
+        warPatience: postureOptions.warPatience,
+        minDwell: postureOptions.minDwell,
+        warExitPatienceTicks: postureOptions.warExitPatienceTicks,
+        warMaxPressure: postureOptions.warMaxPressure,
+        neighborPressure: envInput.neighborPressure,
+        marketActivity: envInput.marketActivity,
+      },
     };
 
     // ── R6a：帝国议程 — 姿态回答状态，议程回答主动目标 ──

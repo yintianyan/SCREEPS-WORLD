@@ -650,6 +650,22 @@ declare global {
       gclLevel?: number;
       /** #94：`bucket ≥ expandMinBucket` 那一项的**实际输入**（`Game.cpu.bucket`，缺失时按 10000 判定）。 */
       bucket?: number;
+      /**
+       * #186：姿态判定**实际用到**的参数集与所用环境档（合并链 DEFAULT→CONFIG.posture→
+       * 环境基线→strategyOverrides 的最后一层结果，非 CONFIG 字面量）。
+       * 为什么要落盘：`CONFIG.posture.threatWindow` 是 3000，而 `neighborPressure==="low"` 档
+       * 的基线把它覆盖成 **5000** —— 只看配置会算错冻结窗口（R407 就据此误判过一次"该退没退"）。
+       */
+      params?: {
+        at: number;
+        threatWindow: number;
+        warPatience: number;
+        minDwell: number;
+        warExitPatienceTicks: number;
+        warMaxPressure: number;
+        neighborPressure: "high" | "medium" | "low";
+        marketActivity: "active" | "moderate" | "thin";
+      };
     };
     /**
      * 失守房间记录（v11+）：房名 → 首次检测到失守的 tick。
