@@ -249,8 +249,9 @@ export function aggregateRemoteEconomy(
       // 标签必须自带尺名：这里的 cpu 只是"本房 demand 评估跨度 ÷ active 线数"这一片观测切片，
       // **不含远矿 creep 的实耗**（角色榜上那几个远矿角色才是分母，线上量到差 47~58 倍，
       // roadmap 补303③／补324）。裸写 `e/cpu` 会被"削远矿线省多少 CPU"这类决策直接误用（#50 的 (a) 支）。
-      `cpu(demand-eval-slice)=${round(cpuPerTick)}/tick | e/cpu(mgr-slice)=${String(perCpu)} | healthy=${healthy}${ 
-      laneSeg}`,
+      `cpu(demand-eval-slice)=${round(cpuPerTick)}/tick | e/cpu(mgr-slice)=${String(perCpu)} | healthy=${healthy}${
+        laneSeg
+      }`,
   };
 }
 

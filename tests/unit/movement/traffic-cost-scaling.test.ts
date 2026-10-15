@@ -98,7 +98,6 @@ describe("交通解算成本标定 — resolveTraffic 规模曲线", () => {
   const rows = SHAPES.map(shape => ({ shape, us: measure(buildRoom(shape), 2000) }));
 
   for (const { shape, us } of rows) {
-     
     console.log(
       `[TRAFFIC-BENCH] intents=${String(shape.intents).padStart(2)} pop=${String(shape.population).padStart(3)} congestion=${shape.congestion} -> ${us.toFixed(2)} us/call (~${(us / 1000).toFixed(4)} CPU/tick)`,
     );

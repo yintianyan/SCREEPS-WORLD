@@ -185,7 +185,7 @@ function recordCpu(label: string, cost: number): void {
  * 命名与 `measuredRun("phase/x")` 完全同构（同一个桶、同一份语义），所以 `unphased` 的恒等式不变。
  */
 export function recordPhaseSpan(name: string, cost: number): void {
-  recordCpu(`phase/${  name}`, cost);
+  recordCpu(`phase/${name}`, cost);
 }
 
 /** 记录 Action 级 CPU profiling 数据（仅当 CONFIG.debug.actionProfiling 为 true 时调用 —
