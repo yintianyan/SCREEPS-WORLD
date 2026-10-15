@@ -445,8 +445,21 @@ function sampleMemorySize(_tick: number): void {
       };
     }
     if (g.logisticsHealth) {
+      // #189：原先只镜像 `level` 一列 ⇒ 物流被判 `critical` 时**没有任何事后线索**说它是
+      // 由 `deliveryRate`／`backlogCount` 还是 `lossRate` 撑起来的。而这三列都不是装饰：
+      // `deliveryRate` 是恢复生命周期的输入（`recovery-execution-system.ts:1235`→
+      // `recovery-lifecycle.ts:397-398` 的 rateDelta），`backlogCount` 是战争规划的
+      // `logisticsReliability`（`war-planning-system.ts:185`）。它们只活在 heap ⇒ 一次 global
+      // reset 就永久不可归因（与 #94 的 gclLevel/bucket、#186 的 params、#188 的 capacity.inputs 同族）。
+      // 不镜像 `message`：那是给人看的自由文本，进 Memory 只涨字节，且数值列已够复算。
       (Memory.kernel.stats as any).logisticsHealth = {
         level: g.logisticsHealth.level,
+        score: g.logisticsHealth.score,
+        deliveryRate: g.logisticsHealth.deliveryRate,
+        lossRate: g.logisticsHealth.lossRate,
+        avgLatency: g.logisticsHealth.avgLatency,
+        backlogCount: g.logisticsHealth.backlogCount,
+        bottleneckRoom: g.logisticsHealth.bottleneckRoom,
         tick: Game.time,
       };
     }

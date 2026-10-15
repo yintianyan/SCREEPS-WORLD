@@ -631,3 +631,40 @@ describe("三张姊妹榜的 *Count 留痕列", () => {
     expect(s.cpuSystemTotal).toBeGreaterThan(0);
   });
 });
+
+describe("telemetry-collector — #189 物流健康度整列镜像", () => {
+  it("heap 有 logisticsHealth ⇒ 镜像带齐可归因的数值列，而不只 level", () => {
+    (globalThis as any).Memory.kernel = { stats: {} };
+    mockGlobalCache.logisticsHealth = {
+      level: "critical",
+      score: 0.31,
+      deliveryRate: 0.62,
+      lossRate: 0.08,
+      avgLatency: 120,
+      backlogCount: 7,
+      bottleneckRoom: "W37S58",
+      message: "delivery below threshold",
+    };
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+    const m = (globalThis as any).Memory.kernel.stats.logisticsHealth;
+    expect(m).toBeDefined();
+    expect(m.level).toBe("critical");
+    // 这三列是别人的决策输入（恢复生命周期读 deliveryRate、战争规划读 backlogCount）：
+    // 只留 level 就等于「判了 critical 却没人能说出为什么」。
+    expect(m.deliveryRate).toBe(0.62);
+    expect(m.backlogCount).toBe(7);
+    expect(m.lossRate).toBe(0.08);
+    expect(m.score).toBe(0.31);
+    expect(m.avgLatency).toBe(120);
+    expect(m.bottleneckRoom).toBe("W37S58");
+    expect(m.message).toBeUndefined(); // 自由文本不进 Memory
+    delete mockGlobalCache.logisticsHealth;
+  });
+
+  it("heap 没有 logisticsHealth ⇒ 不凭空造列（缺席仍等于「这条码没跑过」）", () => {
+    (globalThis as any).Memory.kernel = { stats: {} };
+    delete mockGlobalCache.logisticsHealth;
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+    expect((globalThis as any).Memory.kernel.stats.logisticsHealth).toBeUndefined();
+  });
+});
