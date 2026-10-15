@@ -3,6 +3,8 @@
  *
  * ⚠️边界要说清：本文件钉的是**判定本身**。`agendaManagerSystem` 全库没有任何测试夹具，
  * 所以"调用点真的接上了"这一件不在这里覆盖——它靠 typecheck＋线上部署后的读数判效
+ * （**R415 静态补一句**：接线已用读码确认＝`agenda-manager.ts:66` import ＋ `:585` 调用，
+ *  且全批 15 个 src 文件里只有这条是行为改动；读码≠行使，判效仍要上线后那一发读数）
  * （读法见 DEPLOY-RUNBOOK：新单绑定后同拍采 `carrierName` 与该只的 `ticksToLive`）。
  */
 import { describe, expect, it } from "vitest";
@@ -48,6 +50,30 @@ describe("悬挂载体绑定清洗（#181）", () => {
     // 夹具里显式写了 `carrierName: undefined` ⇒ 键是在的；这条用例真正要钉的是
     // 函数**不凭空造值**（也不把 undefined 变成一个假绑定）。
     expect(o.carrierName).toBeUndefined();
+  });
+
+  it("#181 甲的契约：只摘绑定、其余字段原样保留（下一趟靠 `!op.carrierName` 重新绑，账面不能跟着被抹）", () => {
+    const o: OperationContext = {
+      status: "verifying",
+      createdAt: 1000,
+      deadline: 3000,
+      requestedAmount: 1800,
+      deliveredAmount: 1200,
+      reserved: 0,
+      retries: 1,
+      updatedAt: 1900,
+      carrierName: "carrier-W37S58-0-83633073-5jw",
+    } as unknown as OperationContext;
+    expect(pruneStaleCarrierBinding(o, new Set(["carrier-W37S58-0-83634673-5kv"]))).toBe(true);
+    expect(o.carrierName).toBeUndefined();
+    // 这些一枚都不许动：动了就等于把"这一代已经搬了多少"从账上抹掉，
+    // 而调用点（agenda-manager.ts:585）要的只是"未绑态"。
+    expect(o.status).toBe("verifying");
+    expect(o.createdAt).toBe(1000);
+    expect(o.deliveredAmount).toBe(1200);
+    expect(o.requestedAmount).toBe(1800);
+    expect(o.updatedAt).toBe(1900);
+    expect(o.retries).toBe(1);
   });
 
   it("空活体集合 ⇒ 任何绑定都算悬挂（首趟冷启动会走这条路，由下一趟重新绑）", () => {
