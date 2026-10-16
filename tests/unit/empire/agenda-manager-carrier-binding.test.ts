@@ -197,4 +197,27 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     expect(o?.carrierName).toBe("carrier-hatching"); // 绑上＝代码本意
     expect(o?.deliveredAmount).toBe(1200); // 而这一代不许因此入账
   });
+
+  it("#183 守卫：终态行即便落在声明的 1,000 拍保留窗内，也进不了 Memory ⇒ 那条保留支在管线上不可达", () => {
+    // saveOperations 的保留条件是 `isTerminalStatus && now - updatedAt < TERMINAL_RETENTION(=1000)`，
+    // 但步 16 的 pruneTerminal 在步 18 保存之前就把终态行滤掉了 ⇒ 该条件永远拿不到操作数。
+    // 这条断言钉的是**组合**（域层的 pruneTerminal 单例用例钉不到它）。
+    const done = makeOp("op-183", "carrier-W0N1-0-1-dead");
+    done.status = "completed";
+    done.updatedAt = 1000 - 100; // 保留窗内（100 拍前刚更新）
+    (globalThis as any).Memory.kernel.agendas = [done];
+    squad.push({ name: "carrier-live" });
+    creeps["carrier-live"] = {
+      name: "carrier-live",
+      spawning: false,
+      memory: { role: "carrier", home: "W0N1" },
+    };
+
+    runNow();
+
+    const kept = ((globalThis as any).Memory.kernel.agendas ?? []).filter(
+      (o: any) => o.id === "op-183",
+    );
+    expect(kept).toHaveLength(0);
+  });
 });
