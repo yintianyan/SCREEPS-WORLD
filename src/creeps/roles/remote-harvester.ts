@@ -354,15 +354,26 @@ function dropEnergy(): ActionCandidate<DropEnergyTarget> {
  * ＠83,701,235，而同发自检面 `violationsTotal`=20 **全部**是 `siteStaleWorkerIdle`，落盘的十枚
  * detail 逐字为 `type=road prog=10~40/300 noProg=5043 workers=3`（W38S55 十条）。`workers=3` 不是
  * 推算——E7 这一列按 `workerCreepsInRoom` 现场数该房带 WORK 的我方 creep（kernel/expectations.ts:493-502）。
- * ⇒ 两件事同时成立：残骸已占满跨主房车道（headroom 为负＝新建侧被自己的残骸钉死），而"有 WORK 的人
- * 在场却不推进"是常态不是偶发——更早的 W36S58 两枚同类计数停在 134,455／139,444 拍，说明这不是"慢"，
- * 是**永远不会**。
+ * ⇒ 两件事同时成立：残骸已占满跨主房车道（headroom 为负＝新建侧被自己的残骸钉死；现读
+ * `roadSitesPending` W38S55=18＋W37S57=3＝`pendingTotal` 21），而"有 WORK 的人在场却不推进"是
+ * 常态不是偶发。更早那批 W36S58 同类计数停在 134,455／139,444 拍，同发现读该房
+ * `roadSitesPending=0／roadsBuilt=1／noSiteAtAll 4,218`＝十五万拍的停滞最后是**被回收侧收走的**
+ * （判据＝掉出热度线），不是被建成的——这正是要补施工腿的理由：回收只清场，不产出路面。
  *
- * 成因在动作可达性，不在编制：build 任务只从 `snapshot.myConstructionSites` 生成
- * （domain/assignment/service.ts:163-194），而 snapshot 只对**自有房**构建
- * （kernel/kernel.ts:465-466 `if (!room.controller?.my) continue`）⇒ 远矿房的 site 从不进任务池；
- * 远矿角色链里唯一的建造候选是 RM-1 的 source container（本文件按 `STRUCTURE_CONTAINER` 过滤那段）
- * ⇒ 一条远矿 road site 从出生起就没有任何施工腿，只能等它掉出热度线才被回收侧摘掉。
+ * 成因不是"远矿没有施工腿"，而是**施工窗口挂在了一条按构造背包必空的腿上**（我上一稿写成
+ * "唯一建造候选只认 container ⇒ site 从出生起无人施工"，被 `globalThis.roadBuildLedger` 的
+ * 现读当场否证＝同一 boot 段 W37S57 `built=180／roadsBuilt=11`，那条腿确实在建路）。
+ * 真形状＝remoteHauler 的脚下建路（`remote-hauler.ts:100-116`，由 `:277-296` 的 `withRoadBuild`
+ * 包装）只挂在 **acquire 链**（loot／pickup／withdraw——这段按构造背包是空的）和 **work 链的两条
+ * home 侧候选**（fillStorage／haulFillTarget 只有在家带货时才命中）上 ⇒ "带着货站在远矿走廊里
+ * 往外走"那一腿没有包装。现读印证（探针 mark r462p3，t=83,701,575，计数随 boot 归零）＝
+ * W38S55 `calls 4,208 → noEnergy 3,304（其中 in-range 1,993）→ built 0`，18 枚 site 的
+ * `roadProgressSum` 停在 310；同段 W37S57 `built 180`——差别只在沿线有没有零头可捡。
+ *
+ * 于是本候选补的是**另一条腿**：满载的采集者。名册现读（mark r462p2，t=83,701,563）＝那一刻
+ * W38S55 房内只有 1 只 `remoteHarvester`（5 WORK，背包 10，acquire），两只 1-WORK hauler 都在
+ * home `W38S56` 送货；也就是说该房里唯一"带 WORK 且能量可能是余量"的个体就是它，而它的
+ * work 链此前只会建 container。5 个 WORK＝300 点路面只需 60 个建造拍。
  *
  * 施工者选 remoteHarvester 而不新孵 builder：带 WORK 的人已经在房里（就是 E7 数到的那三枚），
  * 而门禁沿用 dropEnergy 同一把尺——**满载且 container 装不下**才投入，即只花那条本来必定落到
