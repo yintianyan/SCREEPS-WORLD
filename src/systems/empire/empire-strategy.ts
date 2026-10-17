@@ -189,12 +189,17 @@ export const empireStrategySystem: System = {
     // ── R7a：算力容量 — 规模规划的前馈层（「养得起多大规模」）──
     const cpuRate = Memory.kernel.stats?.cpuRate;
     // #188：这两个值**先取一次再喂判定**，好让落盘的留痕与闸用的数是同一个数。
-    const cpuUsagePerTick = pickCpuUsagePerTick({
+    // 这只对象**只构造一次**：既喂给判定，又给下面的留痕取信任位 ⇒ 落盘的与闸用的同源。
+    // 少了 `rateWindowTicks`／`rateUnsampledTicks` 这两枚，读数人只能看到"usage 等于 avg10"，
+    // 却分不出这是**设计上的保守退回**（窗未建立或窗内有漏采）还是选择器判错——线上就撞过一次：
+    // 现读 windowTicks=298、unsampledTicks=0、rateTotal=15.74，而同一趟留痕记 usage=18.3=avg10。
+    const cpuUsageMeasurement = {
       avg10: Memory.kernel.stats?.cpuAvg10 ?? 0,
       rateTotal: cpuRate?.total,
       rateWindowTicks: cpuRate?.windowTicks,
       rateUnsampledTicks: cpuRate?.unsampledTicks,
-    });
+    };
+    const cpuUsagePerTick = pickCpuUsagePerTick(cpuUsageMeasurement);
     const capacityLimit = Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20);
     const capacity = evaluateCapacity(
       {
@@ -285,6 +290,9 @@ export const empireStrategySystem: System = {
         usage: cpuUsagePerTick,
         avg10: Memory.kernel.stats?.cpuAvg10 ?? 0,
         rateTotal: cpuRate?.total,
+        // 这两枚＝选择器判"逐拍均量可不可信"的两个条件；带它们，哪把尺被采信就是可复算的。
+        rateWindowTicks: cpuUsageMeasurement.rateWindowTicks,
+        rateUnsampledTicks: cpuUsageMeasurement.rateUnsampledTicks,
         limit: capacityLimit,
         bucket: Game.cpu.bucket ?? 10000,
         tightRatio: CONFIG.capacity.tightRatio,

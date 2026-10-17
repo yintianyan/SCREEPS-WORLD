@@ -864,6 +864,9 @@ declare global {
         usage: number;
         avg10: number;
         rateTotal?: number;
+        /** 采信逐拍均量的两个条件（`windowTicks ≥ 100` 且 `unsampledTicks === 0`）；留它们是为了能复算"这趟用的哪把尺"。 */
+        rateWindowTicks?: number;
+        rateUnsampledTicks?: number;
         limit: number;
         bucket: number;
         tightRatio: number;

@@ -351,4 +351,22 @@ describe("empire-strategy — #188 容量闸的输入落盘（capacity.inputs）
     expect(cap.headroom).toBeCloseTo(1 - 16 / 20, 6);
     expect(cap.tier).toBe("tight");
   });
+
+  it("留痕要带上『为什么采信哪把尺』的两个信任位（线上进过：窗 298／漏采 0 却记 usage=avg10，缺这两枚无法归因）", () => {
+    // 可信腿：窗够长且零漏采 ⇒ usage=rateTotal，同时窗长与漏采数必须一起落盘。
+    const trusted = runWithStats({ cpuRate: { total: 8, windowTicks: 300, unsampledTicks: 0 } });
+    expect(trusted.inputs.rateWindowTicks).toBe(300);
+    expect(trusted.inputs.rateUnsampledTicks).toBe(0);
+    expect(trusted.inputs.usage).toBe(8);
+
+    // 退回腿（窗内有漏采拍）：usage 换成一旁的 avg10，而理由必须留在 `rateUnsampledTicks` 上。
+    const unsampled = runWithStats({ cpuRate: { total: 8, windowTicks: 300, unsampledTicks: 7 } });
+    expect(unsampled.inputs.rateUnsampledTicks).toBe(7);
+    expect(unsampled.inputs.usage).toBe(16);
+
+    // 退回腿（窗未建立，低于 MIN_RATE_WINDOW_TICKS=100）：同样要可复算，不许只剩一个 usage。
+    const youngWindow = runWithStats({ cpuRate: { total: 8, windowTicks: 50, unsampledTicks: 0 } });
+    expect(youngWindow.inputs.rateWindowTicks).toBe(50);
+    expect(youngWindow.inputs.usage).toBe(16);
+  });
 });
