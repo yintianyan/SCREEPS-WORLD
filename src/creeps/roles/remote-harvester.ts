@@ -5,7 +5,11 @@ import { defineRole } from "../engine/role-runner";
 import { CONFIG } from "../../config";
 import { moveToTarget, registerAnchor, registerStaticBlocker } from "../movement";
 import { getObjectById } from "../support/obj-cache";
-import { findSourcesCached, findRemoteHarvestersByTarget } from "../support/room-scans";
+import {
+  findSourcesCached,
+  findRemoteHarvestersByTarget,
+  findMySitesCached,
+} from "../support/room-scans";
 
 /** 改绑阈值：连续 stuck 达到此值时重评绑定（stuckThreshold=2/repathLimit=2 →
  * L3 在 stuck≥4 重置，此值取 3 = 每个 L3 周期恰好在重置前查一次，零额外节流）。 */
@@ -397,20 +401,20 @@ function buildRemoteRoad(): ActionCandidate<ConstructionSite> {
       const source = getRemoteSource(ac.creep);
       const container = source ? findSourceContainer(ac.creep, source) : undefined;
       if (container && container.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
-      // 就地扫射程内（7×7）的工地 — 与 RM-1 同款 lookForAtArea 形状，不用 find（避免整房扫描）。
-      const { x, y } = ac.creep.pos;
-      const sites = ac.creep.room.lookForAtArea(
-        LOOK_CONSTRUCTION_SITES,
-        Math.max(0, y - ROAD_BUILD_RANGE),
-        Math.max(0, x - ROAD_BUILD_RANGE),
-        Math.min(49, y + ROAD_BUILD_RANGE),
-        Math.min(49, x + ROAD_BUILD_RANGE),
-        true,
-      );
-      for (const entry of sites) {
-        if (entry.constructionSite.structureType === STRUCTURE_ROAD) return entry.constructionSite;
+      // 目标来源＝room-scans 的**按房按拍共享缓存**（与 hauler 那条脚下腿同一份），不是自己发
+      // lookForAtArea：实测单价 `lookForAt_single`≈7.0e-4/格（`tmp/cpu-baseline.json`，EMPTY_LOOP
+      // 基线已扣）⇒ 7×7 面积扫≈0.03 CPU/拍，而这个态可以连续几百拍不落；缓存未命中最坏也只是
+      // 本房这一拍多一次 `FIND_MY_CONSTRUCTION_SITES`（实测 ≈1.8e-4），增量上界与 creep 数无关。
+      // 选格沿用 hauler 那条腿的**反摊薄**判据（`road-underfoot-tiebreak.test.ts` 立的案：
+      // W37S54 一串 20 格每格只拿到 ~5 点、roads=0，就是"平手取 find 顺序"把每趟唯一一次
+      // build 摊到不同格上）——本候选只在射程内取进度最高那格，先建完一格再碰下一格。
+      let best: ConstructionSite | undefined;
+      for (const site of findMySitesCached(ac.creep.room)) {
+        if (site.structureType !== STRUCTURE_ROAD) continue;
+        if (ac.creep.pos.getRangeTo(site) > ROAD_BUILD_RANGE) continue;
+        if (!best || site.progress > best.progress) best = site;
       }
-      return undefined;
+      return best;
     },
     execute: (ac, site) => {
       // 停在射程内即可（moveRange=3），不为贴脸多走两格。

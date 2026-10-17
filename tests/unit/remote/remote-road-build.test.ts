@@ -24,8 +24,25 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const ROAD_SITE = { id: "road1", structureType: "road", pos: { x: 26, y: 25 } };
-const CONTAINER_SITE = { id: "csite1", structureType: "container", pos: { x: 25, y: 25 } };
+const ROAD_SITE = { id: "road1", structureType: "road", pos: { x: 26, y: 25 }, progress: 20 };
+const ROAD_SITE_ALMOST_DONE = {
+  id: "road2",
+  structureType: "road",
+  pos: { x: 24, y: 25 },
+  progress: 280,
+};
+const CONTAINER_SITE = {
+  id: "csite1",
+  structureType: "container",
+  pos: { x: 25, y: 25 },
+  progress: 0,
+};
+
+/**
+ * `findMySitesCached` 是 per-tick per-room 缓存 —— 每例必须换 tick，否则第二例读到第一例的
+ * site 列表＝假绿（同 `road-underfoot-tiebreak.test.ts` 里立过的案）。
+ */
+let tickSeed = 5000;
 
 /** container 读数：full=true → 仓位 0（能量必定落地）；false → 还有 1,000 仓位（正常倒能）。 */
 function sourceContainer(full: boolean): any {
@@ -45,7 +62,8 @@ function sourceContainer(full: boolean): any {
 
 /**
  * 站桩位／通勤位上的满载 remote-harvester。
- * `sites` 走 LOOK_CONSTRUCTION_SITES 支、`containers` 走 LOOK_STRUCTURES 支（与 RM-1 同款 mock）。
+ * `sites` 走 `FIND_MY_CONSTRUCTION_SITES`（room-scans 缓存），`containers` 走
+ * `LOOK_STRUCTURES`（RM-1 的 ±1 面积查找）。
  */
 function harvester(opts: {
   sites?: any[];
@@ -56,6 +74,7 @@ function harvester(opts: {
   creepRoom?: string;
   remoteTarget?: string;
 }): any {
+  (globalThis as any).Game.time = ++tickSeed;
   const source = mockSource("rs1");
   const creep = mockCreep({
     name: "rh_1",
@@ -72,10 +91,12 @@ function harvester(opts: {
     // ERR_NO_PATH：跑错房／丢 remoteTarget 时 role-runner 的 ensureHome 会走 moveTowardRoom，
     // 这里让它求不到出口就直接返回，测试只核"施工腿没被仲裁"这一件事。
     findExitTo: vi.fn(() => -11),
-    find: vi.fn(() => [source]),
+    find: vi.fn((constant: unknown) =>
+      constant === FIND_MY_CONSTRUCTION_SITES ? (opts.sites ?? []) : [source],
+    ),
     lookForAtArea: vi.fn((look: string) => {
       if (look === "structure") return (opts.containers ?? []).map((c: any) => ({ structure: c }));
-      return (opts.sites ?? []).map((s: any) => ({ constructionSite: s }));
+      return [];
     }),
     createConstructionSite: vi.fn(() => 0),
     lookForAt: vi.fn(() => []),
@@ -94,6 +115,16 @@ describe("RM-3 — 满载溢出能量施工远矿 road site", () => {
     expect(creep.drop).not.toHaveBeenCalled();
     // 候选链被 build 消费：不再对已满载的 source 白签一次 harvest（ERR_FULL）。
     expect(creep.harvest).not.toHaveBeenCalled();
+  });
+
+  it("射程内两格 road site → 建进度最高那格（反摊薄＝W37S54 那串 20 格每格 ~5 点、roads=0 立的案）", () => {
+    const creep = harvester({
+      sites: [ROAD_SITE, ROAD_SITE_ALMOST_DONE],
+      containers: [sourceContainer(true)],
+    });
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot()));
+
+    expect(creep.build).toHaveBeenCalledWith(ROAD_SITE_ALMOST_DONE);
   });
 
   it("满载但 container 还装得下 → 先倒能，路面施工不抢这条收入腿", () => {
