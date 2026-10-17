@@ -133,6 +133,22 @@ const HEALTH_RANK: Record<EmpireEconomicHealth, number> = {
  * @param postureExpansionAllowed posture 的 expansionAllowed 标志
  * @param options 选项
  */
+/**
+ * 决策面读数**不许四舍五入跨阈值**：净流串一律向零截断到一位小数。
+ * 线上实证（10-17）：`gateNetFlow` 求和 = 5.0375 − 0.0811 = **4.9565**，G4 判 `netFlow ≥ 5` 为红，
+ * 而面板串把同一个数印成 `v=5.0` ⇒ 读串的人会把"差 0.0435/拍"读成"已经达标"。
+ * 截断（不是舍入）保证 `|printed| ≤ |true|`：读数只会偏保守，不会偏乐观。
+ * 保持一位小数是为了不破坏既有"面板串 vs 自算 Σ"的精确匹配判读（同族＝报表会给列另起名字）。
+ */
+export function fmtFlowTrunc(v: number): string {
+  const t = Math.trunc(v * 10) / 10;
+  // ⚠️实测：`(-0).toFixed(1)` 在 V8 里就是 "0.0" ⇒ 光靠 -0 是保不住符号的。
+  // 小额负流（线上实例：幼房 W38S56 的 −0.0811/拍）若印成 "0.0"，读者就看不出方向，
+  // 而净流的**符号**正是 G3/G4 侧要看的量 ⇒ 显式保留 "-0.0"。
+  if (t === 0 && v < 0) return "-0.0";
+  return t.toFixed(1);
+}
+
 export function evaluateExpansionReadiness(
   view: EmpireResourceView,
   health: EmpireEconomicHealth,
@@ -188,7 +204,7 @@ export function evaluateExpansionReadiness(
     // "stable" 时读的人无法知道是哪一条把它压住，只能回源码重算（本轮就这么丢了两天）。
     // selfSufficiency 不在这里重复计算：它 = 1 − |netFlow| / income，而 income 已在
     // `Memory.rooms[r].economy.ei` 落盘 ⇒ 报出 netFlow 与 coreRooms 就完全可复算。
-    value: `${health}(netFlow=${view.totalNetFlow.toFixed(1)},core=${view.coreRooms})`,
+    value: `${health}(netFlow=${fmtFlowTrunc(view.totalNetFlow)},core=${view.coreRooms})`,
     condition: `health ≥ ${options.minHealth}`,
   });
 
@@ -197,7 +213,7 @@ export function evaluateExpansionReadiness(
   gates.push({
     name: "G4: net flow",
     passed: g4,
-    value: view.totalNetFlow.toFixed(1),
+    value: fmtFlowTrunc(view.totalNetFlow),
     condition: `netFlow ≥ ${options.minNetFlow}`,
   });
 
@@ -278,7 +294,7 @@ export function evaluateExpansionReadiness(
     {
       name: "G11: net flow strongly",
       passed: g11,
-      value: view.totalNetFlow.toFixed(1),
+      value: fmtFlowTrunc(view.totalNetFlow),
       condition: `netFlow ≥ ${options.stronglyMinNetFlow}`,
     },
   ];
@@ -289,14 +305,14 @@ export function evaluateExpansionReadiness(
   if (allStronglyPassed) {
     return {
       readiness: "STRONGLY_READY",
-      evidence: `all gates passed: netFlow=${view.totalNetFlow.toFixed(1)} core=${view.coreRooms} health=${health} tier=${cpuTier}`,
+      evidence: `all gates passed: netFlow=${fmtFlowTrunc(view.totalNetFlow)} core=${view.coreRooms} health=${health} tier=${cpuTier}`,
       gates: allGates,
     };
   }
 
   return {
     readiness: "READY",
-    evidence: `basic gates passed: netFlow=${view.totalNetFlow.toFixed(1)} core=${view.coreRooms} health=${health} tier=${cpuTier}`,
+    evidence: `basic gates passed: netFlow=${fmtFlowTrunc(view.totalNetFlow)} core=${view.coreRooms} health=${health} tier=${cpuTier}`,
     gates: allGates,
   };
 }
