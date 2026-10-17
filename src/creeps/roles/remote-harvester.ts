@@ -18,6 +18,13 @@ const REBIND_COOLDOWN_TICKS = 200;
 const CONTAINER_REPAIR_THRESHOLD = 0.8;
 
 /**
+ * 远矿路面施工的搜索／射程半径＝3 — 与 `ACTION_RANGE_FAR`（engine/actions/helpers.ts:87，
+ * build/repair 类动作的射程档）逐字同值。这里不 import 那个常量：角色层引 actions 层的
+ * helpers 会多开一条跨层边，而这个 3 是射程契约不是实现细节。
+ */
+const ROAD_BUILD_RANGE = 3;
+
+/**
  * 获取远矿 source — 从缓存 sourceId 或占用感知分配。首次入房执行一次 find，之后复用 sourceId。
  * Source 槽位预分配：spawn 时 demand 已为每只 harvester 分配 sourceSlot 索引，
  * 首绑直接按槽位选 FIND_SOURCES[sourceSlot]，不依赖 occupancy 扫描 — 彻底消除
@@ -339,6 +346,68 @@ function dropEnergy(): ActionCandidate<DropEnergyTarget> {
   };
 }
 
+/**
+ * RM-3：满载待 drop 的能量改投远矿 road site —— 补上「远矿路只建站、无人施工」这条断腿。
+ *
+ * 立案证据（线上现读，boot≈83,696,197 之后 E7 出盲期的第一枚读数）：
+ * `Memory.kernel.stats.remoteRoadLane` ＝ {pendingTotal 21, cap 20, headroom −1, saturated true}
+ * ＠83,701,235，而同发自检面 `violationsTotal`=20 **全部**是 `siteStaleWorkerIdle`，落盘的十枚
+ * detail 逐字为 `type=road prog=10~40/300 noProg=5043 workers=3`（W38S55 十条）。`workers=3` 不是
+ * 推算——E7 这一列按 `workerCreepsInRoom` 现场数该房带 WORK 的我方 creep（kernel/expectations.ts:493-502）。
+ * ⇒ 两件事同时成立：残骸已占满跨主房车道（headroom 为负＝新建侧被自己的残骸钉死），而"有 WORK 的人
+ * 在场却不推进"是常态不是偶发——更早的 W36S58 两枚同类计数停在 134,455／139,444 拍，说明这不是"慢"，
+ * 是**永远不会**。
+ *
+ * 成因在动作可达性，不在编制：build 任务只从 `snapshot.myConstructionSites` 生成
+ * （domain/assignment/service.ts:163-194），而 snapshot 只对**自有房**构建
+ * （kernel/kernel.ts:465-466 `if (!room.controller?.my) continue`）⇒ 远矿房的 site 从不进任务池；
+ * 远矿角色链里唯一的建造候选是 RM-1 的 source container（本文件按 `STRUCTURE_CONTAINER` 过滤那段）
+ * ⇒ 一条远矿 road site 从出生起就没有任何施工腿，只能等它掉出热度线才被回收侧摘掉。
+ *
+ * 施工者选 remoteHarvester 而不新孵 builder：带 WORK 的人已经在房里（就是 E7 数到的那三枚），
+ * 而门禁沿用 dropEnergy 同一把尺——**满载且 container 装不下**才投入，即只花那条本来必定落到
+ * 地上的能量。地上的能量虽可被 hauler 捡回（#40 记过它被净流重复计收的账），换成通勤线上的永久
+ * 路面还另外回收一次通行成本，故判为更优；这条判断可被"远矿 ROI"（#167）直接否证——若建成后
+ * haul 吞吐没涨，本候选该关掉。
+ *
+ * 明确**不做**维修：远矿 road 衰减 100 hits/1,000 拍·根，修它要抽的是在途收入而不是溢出能量，
+ * 那属 #150 那条仍未拍的属人项，本候选不越界。
+ */
+function buildRemoteRoad(): ActionCandidate<ConstructionSite> {
+  return {
+    name: "remote-harvest:build-road",
+    resolve: ac => {
+      // 与 dropEnergy 同一把闸：半载继续采集，本候选只接"这一脚能量必定落地"的那个态。
+      if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
+      // 只在本 op 房施工——通勤途中（home 房）不替别人的路施工。
+      const remoteTarget = ac.creep.memory.remoteTarget;
+      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
+      // container 还装得下就先倒：那条路是收入入账，不能拿它换路面。
+      const source = getRemoteSource(ac.creep);
+      const container = source ? findSourceContainer(ac.creep, source) : undefined;
+      if (container && container.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
+      // 就地扫射程内（7×7）的工地 — 与 RM-1 同款 lookForAtArea 形状，不用 find（避免整房扫描）。
+      const { x, y } = ac.creep.pos;
+      const sites = ac.creep.room.lookForAtArea(
+        LOOK_CONSTRUCTION_SITES,
+        Math.max(0, y - ROAD_BUILD_RANGE),
+        Math.max(0, x - ROAD_BUILD_RANGE),
+        Math.min(49, y + ROAD_BUILD_RANGE),
+        Math.min(49, x + ROAD_BUILD_RANGE),
+        true,
+      );
+      for (const entry of sites) {
+        if (entry.constructionSite.structureType === STRUCTURE_ROAD) return entry.constructionSite;
+      }
+      return undefined;
+    },
+    execute: (ac, site) => {
+      // 停在射程内即可（moveRange=3），不为贴脸多走两格。
+      if (ac.creep.build(site) === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, site, ROAD_BUILD_RANGE);
+    },
+  };
+}
+
 /** buildSourceContainer 的 resolve 返回类型。 */
 type ContainerBuildTarget = { kind: "build"; site: ConstructionSite } | { kind: "request" };
 
@@ -453,6 +522,12 @@ const policy: RolePolicy = {
     // RM-2：维修衰减中的 source container（远矿无 builder/tower 兜底，
     // 采集者是唯一维护者；详见函数注释）。
     repairSourceContainer(),
+    // RM-3：满载且 container 装不下（或 container 缺席）→ 把这一脚必定落地的能量投给射程内的
+    // 远矿 road site。**必须排在 stationaryMine 之前**：那条候选的门禁只在「满载且无 container」
+    // 时让位，满载＋container 已满是它截停的（harvest 返 ERR_FULL、transfer 因 freeCap=0 不触发、
+    // dropEnergy 永远轮不到），置后则本候选在最需要它的那个态里不可达。置前又不会抢倒能——
+    // 它的 resolve 在 container 还有仓位时直接返回 undefined。
+    buildRemoteRoad(),
     // 站桩采集 + 同 tick 倒能（work 模式也继续采）。
     remoteStationaryMine(),
     // 移动到 source 并采集（带能但被挤离矿位时归位）— 线上实证：采集者

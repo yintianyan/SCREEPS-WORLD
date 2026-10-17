@@ -194,7 +194,11 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     placeCreep(creep, 11, 10);
 
     const room = makeRoom(creep, [s1]);
-    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    // 按 look 类型分支：恒定返回 `{structure}` 会让「工地查找」返回结构条目＝引擎里不成立的
+    // 场景（RM-3 施工候选读 entry.constructionSite 时被它撞红两枚用例）。同族修正＝mockPos.getRangeTo。
+    room.lookForAtArea = vi.fn((look: unknown) =>
+      look === LOOK_STRUCTURES ? [{ structure: container }] : [],
+    );
     creep.room = room;
 
     return { creep, container, source: s1 };
@@ -250,7 +254,11 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     creep.memory.mode = "work";
     placeCreep(creep, 11, 10);
     const room = makeRoom(creep, [s1]);
-    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    // 按 look 类型分支：恒定返回 `{structure}` 会让「工地查找」返回结构条目＝引擎里不成立的
+    // 场景（RM-3 施工候选读 entry.constructionSite 时被它撞红两枚用例）。同族修正＝mockPos.getRangeTo。
+    room.lookForAtArea = vi.fn((look: unknown) =>
+      look === LOOK_STRUCTURES ? [{ structure: container }] : [],
+    );
     creep.room = room;
 
     remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
@@ -304,7 +312,11 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     creep.memory.mode = "work";
     placeCreep(creep, 16, 10); // 距 container(10,11)：max(6,1)=6 > 3
     const room = makeRoom(creep, [s1]);
-    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    // 按 look 类型分支：恒定返回 `{structure}` 会让「工地查找」返回结构条目＝引擎里不成立的
+    // 场景（RM-3 施工候选读 entry.constructionSite 时被它撞红两枚用例）。同族修正＝mockPos.getRangeTo。
+    room.lookForAtArea = vi.fn((look: unknown) =>
+      look === LOOK_STRUCTURES ? [{ structure: container }] : [],
+    );
     creep.room = room;
 
     remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
@@ -337,7 +349,11 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     creep.memory.remoteTarget = targetRoom;
     placeCreep(creep, 11, 10); // 矿位：距 source 1、距 container 1
     const room = makeRoom(creep, [s1]);
-    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    // 按 look 类型分支：恒定返回 `{structure}` 会让「工地查找」返回结构条目＝引擎里不成立的
+    // 场景（RM-3 施工候选读 entry.constructionSite 时被它撞红两枚用例）。同族修正＝mockPos.getRangeTo。
+    room.lookForAtArea = vi.fn((look: unknown) =>
+      look === LOOK_STRUCTURES ? [{ structure: container }] : [],
+    );
     creep.room = room;
 
     remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
@@ -369,7 +385,11 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     creep.memory.remoteTarget = targetRoom;
     placeCreep(creep, 11, 10);
     const room = makeRoom(creep, [s1]);
-    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    // 按 look 类型分支：恒定返回 `{structure}` 会让「工地查找」返回结构条目＝引擎里不成立的
+    // 场景（RM-3 施工候选读 entry.constructionSite 时被它撞红两枚用例）。同族修正＝mockPos.getRangeTo。
+    room.lookForAtArea = vi.fn((look: unknown) =>
+      look === LOOK_STRUCTURES ? [{ structure: container }] : [],
+    );
     creep.room = room;
 
     remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
