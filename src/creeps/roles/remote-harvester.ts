@@ -10,6 +10,7 @@ import {
   findRemoteHarvestersByTarget,
   findMySitesCached,
 } from "../support/room-scans";
+import { roadBuildCounters } from "../../kernel/global-cache";
 
 /** 改绑阈值：连续 stuck 达到此值时重评绑定（stuckThreshold=2/repathLimit=2 →
  * L3 在 stuck≥4 重置，此值取 3 = 每个 L3 周期恰好在重置前查一次，零额外节流）。 */
@@ -417,8 +418,12 @@ function buildRemoteRoad(): ActionCandidate<ConstructionSite> {
       return best;
     },
     execute: (ac, site) => {
+      const code = ac.creep.build(site);
+      // 归因分列：hauler 脚下腿独占 `built`（remote-hauler.ts:113-115），这条免费腿记
+      // `builtRemoteLeg`——共列时"哪条腿在出力"永远判不出（R466 现读 W38S55 built=11 的教训）。
+      if (code === OK) roadBuildCounters(ac.creep.room.name).builtRemoteLeg++;
       // 停在射程内即可（moveRange=3），不为贴脸多走两格。
-      if (ac.creep.build(site) === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, site, ROAD_BUILD_RANGE);
+      if (code === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, site, ROAD_BUILD_RANGE);
     },
   };
 }

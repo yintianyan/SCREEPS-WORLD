@@ -1024,6 +1024,7 @@ export function roadBuildCounters(room: string): RoadBuildCounters {
     outOfRangeFar: 0,
     built: 0,
     buildRejected: 0,
+    builtRemoteLeg: 0,
     roadProgressSum: 0,
     roadSitesPending: 0,
     roadsBuilt: 0,

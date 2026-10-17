@@ -74,6 +74,14 @@ export interface RoadBuildCounters {
   built: number;
   /** 发出 build() 但引擎拒绝的次数（ERR_*）。 */
   buildRejected: number;
+  /**
+   * 远矿采集腿（remote-harvester 的 `remote-harvest:build-road`）发出且被接受的 build() 次数。
+   *
+   * 为什么单列：`built` 只由 hauler 的脚下腿递增（`remote-hauler.ts:113-115`），两条腿共用一枚
+   * 计数器就永远判不出"harvester 那条免费腿有没有在出力"（R466 实测 W38S55 `built=11` 无法归因）。
+   * 本列只由采集腿递增，零行为改动。
+   */
+  builtRemoteLeg: number;
   // ── 以下三个由 road-planner（有视野那一侧）写，不是 creep 侧计数 ──
   /** 本房我方 road site 的 progress 之和（两次快照的差 = 真实施工速率）。 */
   roadProgressSum: number;
