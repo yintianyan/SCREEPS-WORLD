@@ -652,6 +652,11 @@ export class Kernel {
     } else {
       kernelMem.expectations = {
         tick: ctx.tick,
+        // 留痕列**两支都要写**，否则「这列不在」同时兼容"没违例"与"产物没这列"两种解释
+        // ——而自检面的读数恰恰要区分这两者（同形先例：#179 `tailDrop` 恒定写、#187 `roadLaid`
+        // 每 pass 写；线上实证：部署后 `expectations.tick` 新鲜、`violations=[]`、`violationsTotal`
+        // 缺席，判效器据此误报 NOT_DEPLOYED）。
+        violationsTotal: 0,
         violations: [],
         // ⚠️这一行是修 bug，不是可选装饰：违例是**间歇状态**（工地被回收、饥饿一拍缓解都会让
         // violations 变空），若这里不带走 `recent`，整块对象就被干净的一拍覆写掉，

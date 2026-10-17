@@ -55,4 +55,27 @@ describe("expectations.violationsTotal — 自检面的截断前全数", () => {
       expect(exp.violations.length).toBe(10);
     }
   });
+
+  it('零违例那一支也必须写这列（缺席只允许有一种解释＝产物没这列，而不是"没违例"）', () => {
+    // 现场：帝国级输入齐全 ⇒ 走 `else` 支（`violations=[]`）。
+    (globalThis as any).Memory.kernel = {
+      bootTick: (globalThis as any).Game.time,
+      // 两处都要给：`lastSample` 喂 telemetryStale（E1），`cpuRate` 的窗喂采样类判据。
+      stats: {
+        lastSample: (globalThis as any).Game.time,
+        cpuRate: { total: 10, windowTicks: 1000, sampledTicks: 1000, unsampledTicks: 0 },
+      },
+    };
+    (globalThis as any).Memory.rooms = {};
+    const kernel = new Kernel(new Registry());
+
+    (kernel as any).runExpectations(makeCtx((globalThis as any).Game.time));
+
+    const exp = (globalThis as any).Memory.kernel.expectations;
+    expect(exp).toBeDefined();
+    // 这条断言就是本次修复的全部动机：零违例时 `violationsTotal` 要在场且等于 0，
+    // 于是读数人拿"键不存在"只剩一个合法解释（旧写法下它恒等于 0 ⇒ 与未上线同形）。
+    expect(exp.violations.length).toBe(0);
+    expect(exp.violationsTotal).toBe(0);
+  });
 });
