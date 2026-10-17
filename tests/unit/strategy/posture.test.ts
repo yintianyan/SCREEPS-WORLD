@@ -412,6 +412,43 @@ describe("empire posture — 能量危机≠战争（recovery/bootstrap 经济�
   });
 });
 
+// 线上 83,708,005→83,708,055（W38S56）实测到一枚 50 拍的 colonyState="defense"（两枚边都由
+// colonyStateSince 直读），它关掉了 G2/G5（room-profile 的 struggling 含 defense），却没有动
+// 姿态机 —— 因为 anyRecovery 只认 recovery/bootstrap。两列共用一枚分类位却口径不同，靠一次
+// "顺手统一一下"的改法就会把撤防条件扩大到防御态（对真实进攻＝一进防御就自动降档）。
+// 那枚现场样本的 prev 是 fortify，所以下面这两例是把对照补到 prev=war 与升 war 两支上。
+describe("empire posture — defense 不是经济危机（anyRecovery 与 struggling 的分工）", () => {
+  it("war + defense 且威胁仍在窗内 → 维持 war（撤防臂不开火，对照 recovery 会降）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ colonyState: "defense", lastHostileAt: tick - 100 })],
+        prev: { posture: "war", since: tick - 100 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+  });
+
+  it("war + defense 且无活敌（威胁已出窗）→ 仍不因 defense 撤资（走 minDwell 驻留支）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ colonyState: "defense" })],
+        prev: { posture: "war", since: tick - 100 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+  });
+
+  it("defense 不拦升 war（耐心满 + 经济扛得住 → war；对照 recovery/bootstrap 拦）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ colonyState: "defense", lastHostileAt: tick - 100 })],
+        prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+  });
+});
+
 describe("empire posture — #140 分支标签（转换那一拍走了哪条 return）", () => {
   const o = DEFAULT_POSTURE_OPTIONS;
   // 节拍常数一律从导出的默认值推，不写死数字（同批 #139 的教训：猜常数会让判据红在测试自己身上）。
