@@ -95,6 +95,7 @@ describe("road-build — classifyRoadBuildAttempt（唯一归因，按早退顺�
       outOfRangeFar: 0,
       built: 0,
       buildRejected: 0,
+      builtRemoteLeg: 0,
       roadProgressSum: 0,
       roadSitesPending: 0,
       roadsBuilt: 0,
