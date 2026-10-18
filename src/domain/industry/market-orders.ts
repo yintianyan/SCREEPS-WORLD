@@ -38,6 +38,13 @@ export interface SellPricingEnv {
  * - bid 锚：挂单等买家的价差补偿（吃即刻成交的卖方溢价）。
  * - ask 锚：比最便宜的竞品卖单低一个步长，抢先成交。
  * - 地板：两个锚都跌破价值下限时取地板（宁可挂着不成交也不贱卖）。
+ *
+ * ⚠️ `floor` 必须是**绝对**价值地板（CONFIG 里的静态兜底价），不得由 bid 派生。
+ * 市场无自动撮合 ⇒ bid 高于 ask 的交叉报价可长期并存；此时 `buyMax × 0.9` 会高于
+ * `ask − step`，`max()` 把压价锚整个吃掉，挂单价恒落在最低竞品 ask 之上 ⇒ 永不成交
+ *（官服实测：O bid 37.846 / 最低 ask 27.091 ⇒ 地板 34.06 压过 askAnchor 27.08，
+ * 那张 5,000 单位的单挂了 4,646 拍零成交）。"我愿意接受的最低即时成交价"是 deal 侧
+ * `pickBestBuyOrder(minPrice)` 的语义，不是挂单地板 —— 两个决策不共用一个数。
  */
 export function anchorSellPrice(
   bestBuyPrice: number,
@@ -73,17 +80,27 @@ export function planSellOrder(input: SellOrderInput): SellOrderPlan | undefined 
   return { resourceType: input.resourceType, price, totalAmount };
 }
 
-/** 撤单决策：挂龄超限且 remainingAmount 未减（零成交）→ 撤。 */
+/**
+ * 撤单决策：挂龄超限且 remainingAmount 未减（零成交）→ 撤。
+ *
+ * ⚠️ 量纲是**拍**，不是毫秒 —— Screeps 的 Order 只有 `created`（拍号）这一个时间字段，
+ * 没有 `createdTimestamp`。调用方曾经传 `order.createdTimestamp ?? 0` 配 `Date.now()`，
+ * 于是 `now - 0 > stale` 恒真、这道闸形同不存在（每轮都判超龄）。算术本身没错，
+ * 错的是喂进来的两把尺不同源。
+ *
+ * 与改价的分工（见 shouldChangeOrderPrice）：改价每轮跟行情、零成本，所以**不受挂龄约束**；
+ * 撤单会重付一次挂单成本，所以只在"改不了价且真超龄"时发生。本函数只回答后者。
+ */
 export function shouldCancelStaleOrder(
-  createdTimestamp: number,
+  createdTick: number,
   remainingAmount: number,
   totalAmount: number,
-  nowMs: number,
-  staleMs: number,
+  nowTick: number,
+  staleTicks: number,
 ): boolean {
   if (remainingAmount <= 0) return true; // 已成交完的残单 — 清理
   if (remainingAmount < totalAmount) return false; // 有部分成交 — 价格有效，保留
-  return nowMs - createdTimestamp > staleMs;
+  return nowTick - createdTick > staleTicks;
 }
 
 /**

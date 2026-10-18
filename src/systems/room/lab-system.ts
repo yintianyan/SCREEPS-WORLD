@@ -417,6 +417,29 @@ export const labSystem: System = {
           industryMem.reactionTarget = "XGH2O";
           industryMem.reactionAmount = 300;
         }
+      } else if (
+        !warActive &&
+        industryMem.reactionTarget !== "G" &&
+        snapshot.nuker !== undefined &&
+        (snapshot.nuker.store[RESOURCE_GHODIUM] ?? 0) + (inventory[RESOURCE_GHODIUM] ?? 0) <
+          CONFIG.nuker.ghodiumStockpile
+      ) {
+        // ★G 短缺**抢占**已设定的经济目标（2026-10-18 人拍板「威慑 > 反应链」）。
+        // 上面那整块裹在 `if (!industryMem.reactionTarget)` 里 ⇒ 目标一旦被 XGH2O 占住，
+        // gShort 分支就再也轮不到；而 XGH2O 链的第一步正是 G+H→GH —— 等于让经济 boost
+        // 和核弹备弹抢同一份 G，且抢的一方（经济链）先占住目标就永远赢。
+        // 现场账（官服 tick 83,725,855）：nuker.G = 0 对备弹目标 5,000，而帝国 G 合计
+        // 只有 4,500（W37S58 terminal 4,200 + storage 300）⇒ 本来就不够装满，链上再消耗
+        // 一单位就少一单位。抢占代价＝丢弃半成品，这次为零：XGH2O 库存 360
+        //（storage 265 + terminal 95）已高于 boost.dailyStockpile(300)，那条链本就是盈余。
+        // 产出量纲仍按 ghodiumStockpile 整链规划（planReactionChain 会扣掉在手库存），
+        // 装填由 stockNuker 搬运。
+        industryMem.reactionTarget = "G";
+        industryMem.reactionAmount = CONFIG.nuker.ghodiumStockpile;
+        // 计划按目标缓存（`reactionPlan.target !== reactionTarget` 才重建）——
+        // 显式清掉，避免沿用旧目标的步骤表。
+        industryMem.reactionPlan = undefined;
+        delete industryMem.reactionWait;
       }
 
       let reactionStep: { input1: Compound; input2: Compound; output: Compound } | null = null;

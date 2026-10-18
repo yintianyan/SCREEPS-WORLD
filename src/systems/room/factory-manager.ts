@@ -96,6 +96,9 @@ function tryProduceCommodity(
     factoryLevel,
     recipes,
     CONFIG.factory.commodityEnergyReserve,
+    // 生产侧 ROI 闸：用自有库存转换也要算机会成本（料直接卖能拿到的钱）。
+    // 闸只在行情判得了时生效 —— 私服/测试环境 marketPrices 为空表 ⇒ judgeable=false ⇒ 放行。
+    { prices: g.marketPrices?.prices ?? {}, margin: CONFIG.factory.commodityRoiMargin },
   );
   // 目标缓存：distributor 的 stockFactoryComponents 消费（undefined 时清锚）。
   if (target) g.factoryTargets[snapshot.roomName] = target.resourceType;
@@ -186,7 +189,10 @@ function publishDesiredCommodityDemands(
 function collectRecipes(factoryLevel: number): CommodityRecipe[] {
   const table = (
     globalThis as {
-      COMMODITIES?: Record<string, { level?: number; components?: Record<string, number> }>;
+      COMMODITIES?: Record<
+        string,
+        { level?: number; amount?: number; components?: Record<string, number> }
+      >;
     }
   ).COMMODITIES;
   if (!table) return [];
@@ -196,7 +202,14 @@ function collectRecipes(factoryLevel: number): CommodityRecipe[] {
     // battery 走满仓压缩链，commodity 链不重复处理。
     if (resourceType === RESOURCE_BATTERY) continue;
     if ((def.level ?? 0) > factoryLevel) continue;
-    recipes.push({ resourceType, level: def.level ?? 0, components: def.components });
+    // amount 必须带上：生产侧 ROI 闸要按「单批产量 × 产物买价」算收益，
+    // 缺省成 1 会把收益低估两个数量级（oxidant 单批产 100），闸会误拦一切。
+    recipes.push({
+      resourceType,
+      level: def.level ?? 0,
+      amount: def.amount ?? 1,
+      components: def.components,
+    });
   }
   // 梯度降序（level 高 = 高级 commodity 优先）。
   recipes.sort((a, b) => b.level - a.level);
