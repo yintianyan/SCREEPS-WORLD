@@ -168,6 +168,11 @@ export const spawnManagerSystem: System = {
         agendaInitiative: Memory.kernel?.agenda?.initiative,
         // 【G-J 合规】churn 冻结表注入（写者=本系统 cleanQueue；domain 不触 Memory）。
         churnFreezeUntil: roomMem?.churnFreezeUntil as Record<string, number> | undefined,
+        // #156：帝国合计储量注入（数据源=各房 economy.cr＝storage+terminal+link 水位；domain 不触 Memory）。
+        empireStoredEnergy: Object.keys(Memory.rooms).reduce(
+          (sum, rn) => sum + (Memory.rooms[rn]?.economy?.cr ?? 0),
+          0,
+        ),
         // 【G-J 合规】建造 backlog 注入（数据源=construction-manager 维护的 RoomMemory.buildQueue；本系统为读者）。
         buildQueueBacklog:
           (roomMem?.buildQueue as readonly { state?: string }[] | undefined)?.filter(

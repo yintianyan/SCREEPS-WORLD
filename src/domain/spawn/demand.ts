@@ -73,6 +73,33 @@ export interface RoomDemandContext {
   /** R6a：帝国议程 initiative（empire-strategy 发布，spawn-manager 适配层注入）。
    *  "rcl-push" 时 upgrader 冲刺门槛放宽一档 — 目标驱动主动冲级，而非等水位自然触发。 */
   agendaInitiative?: string;
+  /**
+   * #156（人已授权）：帝国各房已储藏能量合计（适配层注入；domain 纯函数不触 Memory）。
+   *
+   * 用途＝别房闲置大量能量时，不再用「本房净流」派生的价格信号缩 builder 编制。
+   * 原语：energyPrice 的分子是本房 netFlow，而幼房唯一的出口正是"建自己"，
+   * 于是开发支出越大 → netFlow 越负 → 价格越低 → builder 越少 → 开发越慢（自败回路）。
+   * 该回路原先只对无 storage 的早期房豁免（:1091 注释），幼房一进入有 storage 段就被重新咬住，
+   * 而此时兄弟房正闲置数十万能量 — 帝国层面"紧缺"这个论断不成立。
+   */
+  empireStoredEnergy?: number;
+}
+
+/** #156：认定"帝国有闲置储量可供弱房发展"的门槛（能量）。线上实证量级＝强房单房 868K。 */
+export const EMPIRE_DEVELOPMENT_SURPLUS = 400_000;
+
+/**
+ * #156：builder 价格弹性的"帝国盈余"豁免判据（纯函数，便于单测与反向实验）。
+ *
+ * 只在同时满足时豁免收缩：①帝国合计储量 ≥ 门槛；②本房确有待建 backlog（>0）。
+ * 刻意**不**抬配额、不动 minCount/maxCount、不动 starvationDegradeFloor 与孵化侧
+ * budget/reserve 判定 — 它只让"既有的编制目标"不被本房局部净流信号砍掉。
+ */
+export function isBuilderElasticityExempt(
+  empireStoredEnergy: number,
+  buildQueueBacklog: number,
+): boolean {
+  return empireStoredEnergy >= EMPIRE_DEVELOPMENT_SURPLUS && buildQueueBacklog > 0;
 }
 
 /**
@@ -1095,7 +1122,12 @@ export function evaluateDemand(
     //   （ea=ec=650）、6 个工地待建，price=0.2256 ⇒ elasticity=0.314 ⇒ 编制从 3 被砍到 1。
     //   而且 #41 之后盈余已不会被倒在地上，这把闸原本要防的浪费不存在了。
     //   仍留三重兜底不会超编：economyCap（harvester+1）、B-5 水位权限表、builderPressure 迟滞带。
-    if (snapshot.storage !== undefined) {
+    // #156：兄弟房闲置大量能量且本房确有工地待建时，跳过这把"按本房净流收缩"的闸。
+    const elasticityExempt = isBuilderElasticityExempt(
+      roomCtx.empireStoredEnergy ?? 0,
+      roomCtx.buildQueueBacklog ?? 0,
+    );
+    if (snapshot.storage !== undefined && !elasticityExempt) {
       builderTarget = Math.max(0, Math.round(builderTarget * demandFactor));
     }
     if (builderTotal < builderTarget) {
