@@ -4,6 +4,7 @@ import {
   reclaimFactoryOutput,
   stockPowerSpawn,
   stockNuker,
+  stockFactoryComponents,
 } from "../../../src/creeps/engine/actions/industry";
 import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../src/domain/war/planning";
 import { CONFIG } from "../../../src/config";
@@ -291,5 +292,96 @@ describe("stockNuker — nuker 威慑备弹装填", () => {
   it("无 nuker → undefined", () => {
     const { ac } = makeAc({ storageStore: { energy: 50000 } });
     expect(stockNuker().resolve!(ac as any)).toBeUndefined();
+  });
+});
+
+/**
+ * stockFactoryComponents — commodity 补料腿。
+ *
+ * 为什么单独钉 terminal 回退：市场买入的货一律落在 terminal（executeDeal 的落地处），
+ * 而本动作曾是四条工业补给腿里唯一只读 storage 的一条（supplyLabs / stockNuker /
+ * stockPowerSpawn 都有 "storage 优先、terminal 回退"）。官服现场的后果：
+ * reductant 要 H、purifier 要 X，而 H 1,693 / X 845 **只在** terminal ⇒ 目标一切到
+ * 这两条配方就硬死；oxidant 只要 O 且 storage 有 18,676，才把这条洞盖住
+ *（tick 83,725,642 实测：factory 只有 energy 50,000，组件全 0）。
+ */
+describe("stockFactoryComponents — commodity 补料（含 terminal 回退）", () => {
+  /** 官服实读 COMMODITIES：oxidant(GO) = O 500 + energy 200 → 100。 */
+  function withTarget(ac: any): void {
+    (globalThis as any).COMMODITIES = {
+      GO: { level: 1, amount: 100, components: { O: 500, energy: 200 } },
+    };
+    (globalThis as any).factoryTargets = { [ac.snapshot.roomName as string]: "GO" };
+  }
+
+  it("组件只在 terminal → 仍认领取料，且取料口是 terminal（旧码这里 return undefined）", () => {
+    const { ac } = makeAc({
+      factoryStore: { energy: 50000 },
+      storageStore: { energy: 800000 }, // 有 storage，但没有 O
+      terminalStore: { O: 117009, energy: 8332 },
+    });
+    withTarget(ac);
+    const t = stockFactoryComponents().resolve!(ac as any);
+    expect(t).toBeDefined();
+    expect(t!.phase).toBe("withdraw");
+    expect(t!.resourceType).toBe("O");
+    expect((t as any).source).toBe(ac.snapshot.terminal);
+  });
+
+  it("storage 有货时优先 storage（terminal 只是回退，不改既有取料口）", () => {
+    const { ac } = makeAc({
+      factoryStore: { energy: 50000 },
+      storageStore: { energy: 800000, O: 18676 },
+      terminalStore: { O: 117009 },
+    });
+    withTarget(ac);
+    const t = stockFactoryComponents().resolve!(ac as any);
+    expect((t as any).source).toBe(ac.snapshot.storage);
+  });
+
+  it("两侧都没货 → undefined（放行后续候选，不空转占位）", () => {
+    const { ac } = makeAc({
+      factoryStore: { energy: 50000 },
+      storageStore: { energy: 800000 },
+      terminalStore: { energy: 8332 },
+    });
+    withTarget(ac);
+    expect(stockFactoryComponents().resolve!(ac as any)).toBeUndefined();
+  });
+
+  it("factory 内组件已够 → 无缺口，undefined（energy 份额也参与缺口计算）", () => {
+    const { ac } = makeAc({
+      factoryStore: { energy: 50000, O: 500 },
+      storageStore: { energy: 800000, O: 18676 },
+    });
+    withTarget(ac);
+    expect(stockFactoryComponents().resolve!(ac as any)).toBeUndefined();
+  });
+
+  it("背包里已是组件 → deposit 相送进 factory", () => {
+    const { ac } = makeAc({
+      factoryStore: { energy: 50000 },
+      storageStore: { energy: 800000, O: 18676 },
+      creepStore: { O: 300 },
+    });
+    withTarget(ac);
+    const t = stockFactoryComponents().resolve!(ac as any);
+    expect(t!.phase).toBe("deposit");
+    expect(t!.resourceType).toBe("O");
+    expect((t as any).dest).toBe(ac.snapshot.factory);
+  });
+
+  it("无 factoryTargets 锚 → undefined（factory-manager 被 ROI 闸拦下时会清锚）", () => {
+    const { ac } = makeAc({
+      factoryStore: { energy: 50000 },
+      storageStore: { energy: 800000, O: 18676 },
+    });
+    (globalThis as any).COMMODITIES = {
+      GO: { level: 1, amount: 100, components: { O: 500, energy: 200 } },
+    };
+    // ⚠️ 必须显式清锚：resetGlobals() 不删 factoryTargets，同 describe 里前一条用例
+    // 写进去的锚会漏过来，让这条"无锚"用例读到有锚的世界（假绿/假红都可能）。
+    (globalThis as any).factoryTargets = {};
+    expect(stockFactoryComponents().resolve!(ac as any)).toBeUndefined();
   });
 });

@@ -108,17 +108,25 @@ export function trySellSurplusEnergy(snapshot: RoomSnapshot, terminal: Structure
   );
   if (amount <= 0) return false;
 
-  // deal 从 terminal 出货 — terminal 现货不足时等 distributor 转运，下一窗口再试。
-  if (terminal.store.getUsedCapacity(RESOURCE_ENERGY) < amount) return false;
-
   const orders =
     getCachedOrders(ORDER_BUY, RESOURCE_ENERGY) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_ENERGY }));
   const best = pickBestBuyOrder(orders, CONFIG.energy.minEnergySellPrice);
-  if (!best) return false;
+  if (!best || !best.roomName) return false;
+
+  // 卖能量时「货」与「运费」同源 —— 都从本房 terminal 的能量里扣。只核 `held >= amount`
+  // 会在 amount+fee 越界时白跑一次 deal（引擎回 ERR_NOT_ENOUGH_RESOURCES ⇒ 本轮那唯一的
+  // 成交窗口作废，而 executeBestCandidate 已经把 true/false 当成"窗口用掉了没有"）。
+  // maxDealAmount 由 1,000 抬到 5,000 后这个洞从"几乎不可能"变成"terminal 能量落在
+  // 5,000~5,200 之间时必踩"（energyTarget 只有 10,000），所以在这里把量夹到运费之后。
+  const held = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+  const fee = Game.market.calcTransactionCost(amount, snapshot.roomName, best.roomName);
+  const sellable = Math.min(amount, held - fee);
+  if (sellable <= 0) return false;
+
   // 【审计修复 Phase 4-5】卖出能量入 L1 账本 — 记 sold。
-  if (executeDeal(best, amount, terminal, snapshot.roomName, "energySell")) {
-    bumpEnergyCounter(snapshot.roomName, "sold", amount);
+  if (executeDeal(best, sellable, terminal, snapshot.roomName, "energySell")) {
+    bumpEnergyCounter(snapshot.roomName, "sold", sellable);
     return true;
   }
   return false;

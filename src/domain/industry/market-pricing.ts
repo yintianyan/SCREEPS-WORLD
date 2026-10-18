@@ -96,6 +96,56 @@ export function commodityBatchRoi(
 }
 
 /**
+ * commodity「转换」正 ROI 判据（纯函数）—— 用**自有库存**产商品时的机会成本闸。
+ *
+ * 为什么不能复用 `commodityBatchRoi`：那是另一把尺，两个问题必须分开估。
+ * · `commodityBatchRoi` 问「要不要**花钱买料**来产」⇒ 成本按 `sellMin`（买入代价）；
+ * · 本函数问「要不要把**已经在手**的料转化掉」⇒ 成本按 `buyMax`
+ *   （这批料此刻直接卖能拿到的钱 ＝ 真实机会成本）。
+ * 用 `sellMin` 估自有库存会系统性高估收益：官服 shard3 实测（tick 83,725,692）
+ * O 的 `sellMin` 27.091 而 `buyMax` 37.846 —— 市场无自动撮合，交叉报价可长期并存，
+ * 两把尺差 40%。按 `sellMin` 算 oxidant 回收率 99%（看着快打平），按 `buyMax` 算只有 71%。
+ *
+ * 能量同样计入机会成本（与 `commodityBatchRoi` 的取舍相反）：那条尺问的是"要不要额外
+ * 花钱买料"，而能量从不买入、按自有产能计；这条尺问的是"这批能量拿去卖是不是更值"，
+ * 而能量在本服有活跃买盘（实测 `buyMax` 32.186）⇒ 烧进 factory 就是放弃了这笔钱。
+ * 满仓压缩链（`storageNearFull`）不走本闸 —— 那条链的语义是"能量马上要在源头被浪费"，
+ * 止损不等于增值，见 factory-manager.ts 的 battery 压缩分支。
+ *
+ * `judgeable` 必须与 `profitable` 分开返回（本仓库纪律：判不了 ≠ 不划算）：
+ * 行情表整个为空（私服/测试环境无市场 API）时判不了，调用方**不得**据此停产。
+ * 单个组件两价都缺同样判不了；产物无买盘则是"判得了且不划算"（卖了砸在手里）。
+ *
+ * @param components 单批配方（含 energy 项，按机会成本计）。
+ * @param prices 行情快照表。
+ * @param productType 产物资源类型。
+ * @param batchUnits 单批产量（`COMMODITIES[x].amount`）。
+ * @param margin 余量系数（与 `commodityRoiMargin` 同值同义：覆盖运费/手续费/冷却机会成本）。
+ */
+export function commodityConvertRoi(
+  components: Readonly<Record<string, number>>,
+  prices: Readonly<Record<string, MarketPriceSnapshot>>,
+  productType: string,
+  batchUnits: number,
+  margin: number,
+): { profitable: boolean; judgeable: boolean; cost: number; revenue: number } {
+  const unjudgeable = { profitable: false, judgeable: false, cost: 0, revenue: 0 };
+  let cost = 0;
+  for (const [res, qty] of Object.entries(components)) {
+    if (qty <= 0) continue;
+    const quote = prices[res];
+    // 机会成本优先取买盘（能立刻变现的价）；无买盘时退到卖盘（至少知道它值多少）。
+    const unit = quote ? (quote.buyMax > 0 ? quote.buyMax : quote.sellMin) : 0;
+    if (unit <= 0) return unjudgeable;
+    cost += unit * qty;
+  }
+  const productBid = prices[productType]?.buyMax ?? 0;
+  if (productBid <= 0) return { profitable: false, judgeable: true, cost, revenue: 0 };
+  const revenue = productBid * Math.max(1, batchUnits);
+  return { profitable: revenue >= cost * (1 + margin), judgeable: true, cost, revenue };
+}
+
+/**
  * 从订单列表中采集行情快照（最低卖价 / 最高买价）。
 
  * terminal-manager 在每 interval tick 调用此函数刷新行情。

@@ -271,7 +271,11 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
  */
 type FactoryComponentTarget =
   | { dest: StructureFactory; resourceType: ResourceConstant; phase: "deposit" }
-  | { source: StructureStorage; resourceType: ResourceConstant; phase: "withdraw" };
+  | {
+      source: StructureStorage | StructureTerminal;
+      resourceType: ResourceConstant;
+      phase: "withdraw";
+    };
 
 export function stockFactoryComponents(): ActionCandidate<FactoryComponentTarget> {
   return {
@@ -301,18 +305,31 @@ export function stockFactoryComponents(): ActionCandidate<FactoryComponentTarget
           phase: "deposit" as const,
         };
       }
-      // withdraw 相：挑缺口最大且 storage 有货的组件。
-      let pick: { res: string; gap: number } | undefined;
+      // withdraw 相：挑缺口最大且有货的组件 —— storage 优先、terminal 回退。
+      // terminal 回退不是可选项而是必需项：市场买入的货一律落在 terminal（executeDeal
+      // 的落地处），没有回退则"花钱买来的料永远进不了 factory"。本动作曾是四条工业
+      // 补给腿里唯一漏掉回退的一条（supplyLabs / stockNuker / stockPowerSpawn 都有）。
+      // 官服现场的后果：reductant 要 H、purifier 要 X，而 H 1,693／X 845 **只在**
+      // terminal ⇒ 目标一切到这两条配方就硬死；oxidant 只要 O 且 storage 有 18,676，
+      // 才把这条洞盖住（tick 83,725,642 实测 factory 只有 energy 50,000、组件全 0）。
+      const terminal = ac.snapshot.terminal;
+      let pick:
+        { res: string; gap: number; source: StructureStorage | StructureTerminal } | undefined;
       for (const [res, amount] of Object.entries(components)) {
         const gap = amount - (factory.store[res as ResourceConstant] ?? 0);
         if (gap <= 0) continue;
-        const inStorage = storage.store[res as ResourceConstant] ?? 0;
-        if (inStorage <= 0) continue;
-        if (!pick || gap > pick.gap) pick = { res, gap };
+        const from =
+          (storage.store[res as ResourceConstant] ?? 0) > 0
+            ? storage
+            : terminal && (terminal.store[res as ResourceConstant] ?? 0) > 0
+              ? terminal
+              : undefined;
+        if (!from) continue;
+        if (!pick || gap > pick.gap) pick = { res, gap, source: from };
       }
       if (!pick) return undefined;
       return {
-        source: storage,
+        source: pick.source,
         resourceType: pick.res as ResourceConstant,
         phase: "withdraw" as const,
       };

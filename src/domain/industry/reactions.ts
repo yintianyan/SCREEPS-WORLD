@@ -109,7 +109,17 @@ export function evaluateReactionPlan(
   available: Readonly<Record<string, number>>,
 ): ReactionPlanState {
   for (const step of plan.steps) {
-    if ((available[step.output] ?? 0) >= step.amount) continue;
+    // ⚠️ 终局产物那一步的完成判据必须用 `plan.targetAmount`（绝对目标），不能用
+    // `step.amount`。`step.amount` 是 planReactionChain 按 `deficit = need − have`
+    // 算出的**增量**（见本文件 planReactionChain 的 batches 计算），拿它跟"在手总量"
+    // 比是量纲错配：G 目标 5,000、在手 4,500 ⇒ 增量 500，而 `4,500 ≥ 500` 成立
+    // ⇒ 旧判据当场宣布"链已完成"，lab-system 随即清掉 reactionTarget —— 差的那 500
+    // 单位永远补不上（2026-10-18 由「G 威慑抢占经济目标」用例跑出来的红）。
+    // 中间产物仍按 step.amount 比：它们是给下游当料的，判据是"够不够这一步用"，
+    // 而绝对需求量没有被持久化到步骤里，改成绝对口径要动 Memory 里已冻结的计划
+    //（迁移风险），本轮不做，登记为已知窄化。
+    const goal = step.output === plan.target ? plan.targetAmount : step.amount;
+    if ((available[step.output] ?? 0) >= goal) continue;
     return canExecuteStep(step, available)
       ? { status: "ready", step }
       : { status: "waitingInput", step };

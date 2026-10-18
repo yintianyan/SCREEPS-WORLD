@@ -55,3 +55,50 @@ describe("evaluateReactionPlan — 三态而非一 null", () => {
     expect(evaluateReactionPlan(plan([]), {}).status).toBe("complete");
   });
 });
+
+/**
+ * 终局步的完成判据 —— 2026-10-18 由「G 威慑抢占经济目标」用例跑出来的量纲错配。
+ *
+ * `step.amount` 是 planReactionChain 按 `deficit = need − have` 算出的**增量**，
+ * 而旧判据拿它跟"在手总量"比：G 目标 5,000、在手 4,500 ⇒ 增量 500，`4,500 ≥ 500`
+ * 成立 ⇒ 当场宣布 complete ⇒ lab-system 清掉 reactionTarget ⇒ 差的 500 单位永远补不上。
+ * 本轮只收窄终局那一步（用 plan.targetAmount）；中间产物仍按 step.amount 比 —— 改成
+ * 绝对口径要动 Memory 里已冻结的计划，属迁移风险，登记为已知窄化。
+ */
+describe("evaluateReactionPlan — 终局步按目标总量判完成，不按增量", () => {
+  const G_PLAN: ReactionPlan = {
+    steps: [{ input1: "ZK", input2: "UL", output: "G", amount: 500 }],
+    target: "G",
+    targetAmount: 5000,
+  };
+
+  it("在手量 ≥ 增量但 < 目标 ⇒ 仍未完成（旧口径在这里当场 complete 并清目标）", () => {
+    const state = evaluateReactionPlan(G_PLAN, { G: 4500, ZK: 1000, UL: 1000 });
+    expect(state.status).toBe("ready");
+    if (state.status === "ready") expect(state.step.output).toBe("G");
+  });
+
+  it("在手量达目标总量 ⇒ 才是 complete", () => {
+    expect(evaluateReactionPlan(G_PLAN, { G: 5000, ZK: 1000, UL: 1000 }).status).toBe("complete");
+  });
+
+  it("在手量超过目标 ⇒ complete（不因增量小而反向卡住）", () => {
+    expect(evaluateReactionPlan(G_PLAN, { G: 9000, ZK: 1000, UL: 1000 }).status).toBe("complete");
+  });
+
+  it("中间产物那一步口径不变：在手 ≥ 增量即跳过，终局步仍按目标量判", () => {
+    const multi: ReactionPlan = {
+      steps: [
+        { input1: "GH", input2: "OH", output: "GH2O", amount: 130 },
+        { input1: "X", input2: "GH2O", output: "XGH2O", amount: 290 },
+      ],
+      target: "XGH2O",
+      targetAmount: 300,
+    };
+    // GH2O 在手 200 ≥ 中间步增量 130 ⇒ 跳过（旧口径同）；终局步 XGH2O 在手 0 < 目标 300
+    // ⇒ 停在终局步，且原料 X/GH2O 都在 ⇒ ready。
+    const state = evaluateReactionPlan(multi, { GH2O: 200, X: 600 });
+    expect(state.status).toBe("ready");
+    if (state.status === "ready") expect(state.step.output).toBe("XGH2O");
+  });
+});

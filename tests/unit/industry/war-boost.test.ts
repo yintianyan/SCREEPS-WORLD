@@ -8,6 +8,7 @@ import {
   isWithinBoostWindow,
 } from "../../../src/domain/industry/boost";
 import { labSystem } from "../../../src/systems/room/lab-system";
+import { CONFIG } from "../../../src/config";
 import { mockContext, mockSnapshot, registerObject, resetGlobals } from "../../support/factories";
 
 const g = globalThis as Record<string, any>;
@@ -215,10 +216,14 @@ function runLabSystem(
   storageContents: Record<string, number>,
   posture?: string,
   warPlan?: Record<string, any>,
+  nukerStore?: Record<string, number>,
+  seedIndustry?: Record<string, any>,
 ): void {
   g.Game.rooms = { W7N4: {} };
   g.Game.creeps = {};
-  g.Memory.rooms = { W7N4: {} };
+  // seedIndustry：给「目标已被占住」这类用例预置 industry 段 —— runLabSystem 每次都
+  // 重置 Memory，不预置就只能测到"首次选目标"，测不到抢占。
+  g.Memory.rooms = { W7N4: seedIndustry ? { industry: { ...seedIndustry } } : {} };
   g.Memory.kernel = {
     strategy: posture ? { posture, since: 900 } : undefined,
     warPlan,
@@ -230,6 +235,9 @@ function runLabSystem(
       id: "stor1",
       store: { energy: 5000, ...ALL_BASE_MINERALS, ...storageContents },
     } as any,
+    // 不传 nukerStore 时保持 undefined —— gShort 分支的准入条件之一就是
+    // `snapshot.nuker !== undefined`，默认给个 mock 会让既有 war 前馈用例悄悄换分支。
+    nuker: nukerStore ? ({ id: "nk1", store: nukerStore, cooldown: 0 } as any) : undefined,
   });
   labSystem.run(mockContext(snap));
 }
@@ -294,5 +302,98 @@ describe("lab-system — war 前馈接线", () => {
     });
     labSystem.run(mockContext(snap));
     expect(g.Memory.rooms.W7N4.industry.idleUntil).toBe(1000 + 500);
+  });
+});
+
+// ─── 5. G 威慑优先于反应链（2026-10-18 人拍板）──────────────
+
+/** 预置一份"目标已被经济链占住"的 industry 段 —— 抢占用例的前置状态。 */
+const LATCHED_XGH2O = {
+  reactionTarget: "XGH2O",
+  reactionAmount: 300,
+  reactionPlan: {
+    target: "XGH2O",
+    targetAmount: 300,
+    steps: [{ input1: "X", input2: "GH2O", output: "XGH2O", amount: 290 }],
+  },
+};
+
+describe("lab-system — G 备弹抢占经济反应目标", () => {
+  it("目标已被 XGH2O 占住 + nuker 缺 G → 抢占为 G 并清掉旧计划", () => {
+    // 现场账（官服 shard3 tick 83,725,855）：nuker.G = 0 对备弹目标 5,000，
+    // 帝国 G 合计仅 4,500（W37S58 terminal 4,200 + storage 300）⇒ 连装满都不够；
+    // 而 XGH2O 链的第一步正是 G+H→GH —— 经济链每消耗 1 单位 G，备弹就少 1 单位。
+    // 旧码整块裹在 `if (!industryMem.reactionTarget)` 里 ⇒ 经济目标先占住就永远赢。
+    runLabSystem(
+      { G: 4500, ZK: 1000, UL: 1000 },
+      "develop",
+      undefined,
+      { energy: 0, G: 0 },
+      LATCHED_XGH2O,
+    );
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("G");
+    expect(g.Memory.rooms.W7N4.industry.reactionAmount).toBe(CONFIG.nuker.ghodiumStockpile);
+    // 旧计划必须被清掉：reactionPlan 按目标缓存，留着 XGH2O 的步骤表就会拿它去装料。
+    expect(g.Memory.rooms.W7N4.industry.reactionPlan?.target).not.toBe("XGH2O");
+  });
+
+  it("nuker G 已装满 → 不抢占，经济目标原样保留", () => {
+    runLabSystem(
+      { G: 4500, ZK: 1000, UL: 1000 },
+      "develop",
+      undefined,
+      { energy: 300000, G: CONFIG.nuker.ghodiumStockpile },
+      LATCHED_XGH2O,
+    );
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XGH2O");
+  });
+
+  it("nuker + 库存合计达标 → 不抢占（口径是合计，不是只看 nuker）", () => {
+    runLabSystem(
+      { G: CONFIG.nuker.ghodiumStockpile, ZK: 1000, UL: 1000 },
+      "develop",
+      undefined,
+      { energy: 0, G: 0 },
+      LATCHED_XGH2O,
+    );
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XGH2O");
+  });
+
+  it("本房无 nuker → 不抢占（G 无消费方，抢了就是白扔半成品）", () => {
+    runLabSystem({ G: 0, ZK: 1000, UL: 1000 }, "develop", undefined, undefined, LATCHED_XGH2O);
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XGH2O");
+  });
+
+  it("war 姿态 → 不让 G 抢占（war 前馈 > 威慑备弹 > 经济 boost，沿用既有优先序）", () => {
+    runLabSystem(
+      { G: 4500, ZK: 1000, UL: 1000, XUH2O: 0 },
+      "war",
+      { targetRoom: "W6N4", sponsor: "W7N4", phase: "build" },
+      { energy: 0, G: 0 },
+      LATCHED_XGH2O,
+    );
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).not.toBe("G");
+  });
+
+  it("已经是 G 目标 → 不重复抢占（否则会每拍清计划、永远规划不出一步）", () => {
+    const seeded = {
+      reactionTarget: "G",
+      reactionAmount: CONFIG.nuker.ghodiumStockpile,
+      reactionPlan: {
+        target: "G",
+        targetAmount: CONFIG.nuker.ghodiumStockpile,
+        steps: [{ input1: "ZK", input2: "UL", output: "G", amount: 500 }],
+      },
+    };
+    runLabSystem(
+      { G: 4500, ZK: 1000, UL: 1000 },
+      "develop",
+      undefined,
+      { energy: 0, G: 0 },
+      seeded,
+    );
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("G");
+    // 计划必须原样留着 —— 被清掉就等于每拍重规划，反应永远推不进一步。
+    expect(g.Memory.rooms.W7N4.industry.reactionPlan?.target).toBe("G");
   });
 });

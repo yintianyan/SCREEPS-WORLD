@@ -100,7 +100,12 @@ describe("terminal-manager — battery 卖", () => {
 
     terminalManagerSystem.run(makeContext([room]));
 
-    expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith("bb1", 1000, "W7N4");
+    // amount = min(terminal 现货 1500, 订单量 100000, 单笔上限 maxDealAmount)。
+    // maxDealAmount 由 1,000 抬到 5,000 之后约束项从"单笔上限"换成"现货"——
+    // 断言按 min() 现算并前置钉住是哪一项在截断，常数再变时不会静默失去判别力。
+    const expected = Math.min(1500, 100000, CONFIG.market.maxDealAmount);
+    expect(expected).toBe(1500); // 本用例实际由 terminal 现货截断
+    expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith("bb1", expected, "W7N4");
   });
 
   it("买单价低于底线 → 不贱卖（囤着等行情）", () => {
@@ -285,7 +290,14 @@ describe("terminal-manager — ghodium 买（nuker 威慑备弹）", () => {
   /** 只挂 G 卖单（其余资源查单为空），隔离 power/energy 分支抢单干扰断言。 */
   function ghodiumMarket(overrides: Record<string, any> = {}): void {
     setupMarket({
-      credits: 320000, // 足够购买 1000 × 299.9 = 299900 + creditFloor 10000
+      // credits 必须随 maxDealAmount 现算，不能写死。affordable =
+      // floor((credits − ghodiumBuyCreditFloor) / best.price)：旧值 320,000 在
+      // maxDealAmount 由 1,000 抬到 5,000 之后会让 affordable=1,033 变成真正的约束项，
+      // 用例名声称的"受缺口/单笔上限约束"就成了假话（这次正是这么被跑出来的）。
+      credits:
+        CONFIG.nuker.ghodiumBuyCreditFloor +
+        CONFIG.market.maxDealAmount * CONFIG.nuker.fallbackGhodiumBuyMaxPrice +
+        1,
       getAllOrders: vi.fn((opts: any) =>
         opts.type === "sell" && opts.resourceType === "G"
           ? [
@@ -311,7 +323,9 @@ describe("terminal-manager — ghodium 买（nuker 威慑备弹）", () => {
 
     terminalManagerSystem.run(makeContext([room]));
 
-    // 缺口 5000、订单充足、credits 充足 → 受单笔上限 1000 截断。
+    // 缺口 5,000、订单量 100,000、credits 由 ghodiumMarket 按
+    // `信用地板 + maxDealAmount × 价格上限` 现算 ⇒ affordable 严格大于单笔上限，
+    // 不是约束项。剩下 min(缺口, 单笔上限) 两项，按 CONFIG 现算不写死数字。
     const expected = Math.min(CONFIG.nuker.ghodiumStockpile, CONFIG.market.maxDealAmount);
     expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith("g1", expected, "W7N4");
   });

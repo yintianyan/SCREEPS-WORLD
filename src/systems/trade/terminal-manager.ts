@@ -144,9 +144,24 @@ export const terminalManagerSystem: System = {
       }
 
       // 卖出候选（priority ≤ SELL_PRIORITY_CAP）。
+      //
+      // ★排位判据＝「这一笔卖出能不能腾出 terminal 容量」，不是「这一笔值多少钱」。
+      // terminal 容量 300,000 是整条工业线的硬瓶颈（矿物落地、factory 产出回收、市场
+      // 买入落地全都优先投 terminal），而能量**不占** terminal 容量 —— 它住在 storage
+      //（容量 1,000,000），只在成交那一刻从 terminal 的 10k 运费储备里扣。
+      // 旧排位把 sell-energy 放在 45（仅次于 buy-deficit 的 ≥51），而它的触发条件
+      // 「storage > energySellFloor(100k)」在能量盈余房里**恒真** ⇒ 每 200 拍那唯一的
+      // 成交窗口被它吃掉，sell-mineral/battery/compound/commodity 一次都轮不到。
+      // 官服实测后果（tick 83,725,642）：W37S58 terminal 用掉 278,956/300,000（93%，
+      // 只剩 21,044 空格），其中 O 117,009、battery 94,236、GO 7,972、UL 6,547
+      // 全部零出货，而同期 storage 能量 844,545 一直在被以 1,000/200拍 的速度卖掉。
+      // ⇒ 降到 19：高于 buy-power(15)/buy-ghodium(10)，但让位给一切"腾容量"的卖出。
+      // 取 19 而不是 20 是为了不和 DEFICIT_PRIORITY_BASE(20) 撞档 —— 需求表为空时
+      // buy-deficit 回落到 20（旧的 getMineralDeficits 支路，买基础矿备料，是生产性
+      // 投入），撞档时靠稳定排序的插入顺序决胜属于隐式契约，不如让位一档写明。
       candidates.push({
         type: "sell-energy",
-        priority: 45,
+        priority: 19,
         execute: () => trySellSurplusEnergy(snapshot, terminal),
       });
       candidates.push({
@@ -269,19 +284,29 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
   const ownOrderIds = new Set(Object.keys(market.orders ?? {}));
   // 同一轮内竞品 ask 查询缓存 — 同一资源类型不重复 getAllOrders。
   const askCache = new Map<string, number | undefined>();
+  // 挂单价的地板只用**绝对地板**，不再由 bid 派生。
+  //
+  // 为什么：`anchorSellPrice` 的算式是 `max(floor, min(bid×markup, ask−step))`，
+  // 而旧调用方把 floor 传成 `computeDynamicSellPrice(...)` = `max(buyMax×0.9, 绝对地板)`。
+  // 市场没有自动撮合 ⇒ bid 高于 ask 的「交叉报价」可以长期并存（官服 shard3 实测
+  // tick 83,725,711：O 最优买 37.846、最低竞品卖 27.091）。此时 floor=34.06 高于
+  // askAnchor=27.08 ⇒ max() 把压价锚整个吃掉，挂单价恒落在最便宜竞品 ask 之上 6.97，
+  // 而买家只吃最低 ask ⇒ 这张单永远排不上队。线上实证：sell O 5,000 @36.38 挂了
+  // 4,646 拍零成交、sell Z 1,150 @18.13 挂了 46,535 拍零成交（Z 的 bid 只有 12.541）。
+  //
+  // bid 派生的那个值不是"价值地板"，它是"我愿意接受的最低**即时成交**价"——
+  // 那个语义属于 deal 侧的 `pickBestBuyOrder(minPrice)`，下面继续用，两处不共用一个数。
+  //（家族：同一字段两种语义 ⇒ 自败回路。）
+  const orderPriceFloor = CONFIG.market.fallbackMinSellPrice;
   for (const order of myOrders) {
     if (order.type !== "sell" || order.roomName !== snapshot.roomName) continue;
-    const stale = shouldCancelStaleOrder(
-      order.createdTimestamp ?? 0,
-      order.remainingAmount ?? 0,
-      order.totalAmount ?? 0,
-      Date.now(),
-      CONFIG.market.orderStaleMs,
-    );
-    if (!stale) continue;
+    const remaining = order.remainingAmount ?? 0;
+    const total = order.totalAmount ?? 0;
 
-    // 超龄零成交 — 优先改价（省 5% 手续费），改不了再撤单重挂。
-    if (typeof market.changeOrderPrice === "function") {
+    // ── 改价：零成交就每轮跟行情，**不设挂龄门槛** ──
+    // changeOrderPrice 不重收手续费，所以"跟着 bid/ask 走"是零成本的；把它挂在超龄条件
+    // 下面等于让一张错价单在整个超龄期里干等。撤单重挂才有成本 —— 两件事的触发条件必须分开。
+    if (remaining > 0 && remaining >= total && typeof market.changeOrderPrice === "function") {
       const bids =
         getCachedOrders(ORDER_BUY, order.resourceType) ??
         toSummaries(
@@ -297,34 +322,37 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
         ),
       );
       const newPrice = shouldChangeOrderPrice(
-        order.remainingAmount ?? 0,
-        order.totalAmount ?? 0,
+        remaining,
+        total,
         order.price ?? 0,
         best?.price,
         CONFIG.market.sellOrderMarkup,
         {
           competingAsk: bestCompetingAsk(order.resourceType, ownOrderIds, askCache),
-          floor: computeDynamicSellPrice(
-            order.resourceType,
-            getMarketPrices(),
-            CONFIG.market.sellDiscount,
-            CONFIG.market.fallbackMinSellPrice,
-          ),
+          floor: orderPriceFloor,
           step: CONFIG.market.sellUndercutStep,
         },
       );
-      if (newPrice !== undefined) {
-        if (market.changeOrderPrice(order.id, newPrice) === OK) {
-          log.info(
-            "terminal",
-            `[${Game.time}] market: 改价 ${order.id}（${order.resourceType} ${order.price}→${newPrice}）`,
-          );
-          continue; // 改价成功 — 不撤单，等新价成交
-        }
+      if (newPrice !== undefined && market.changeOrderPrice(order.id, newPrice) === OK) {
+        log.info(
+          "terminal",
+          `[${Game.time}] market: 改价 ${order.id}（${order.resourceType} ${order.price}→${newPrice}）`,
+        );
+        continue; // 改价成功 — 不撤单，等新价成交
       }
     }
 
-    // 改价不适用（无 bid / 价变不足 / API 不可用）→ 撤单重挂。
+    // ── 撤单：残单立即清；零成交要**真**超龄才撤 ──
+    // ⚠️ 挂龄按拍号算：Screeps 的 Order 字段是 `created`（拍），没有 `createdTimestamp`。
+    // 旧写法 `order.createdTimestamp ?? 0` 配 `Date.now()` ⇒ 恒真 ⇒ 这道闸形同不存在。
+    const stale = shouldCancelStaleOrder(
+      order.created ?? 0,
+      remaining,
+      total,
+      Game.time,
+      CONFIG.market.orderStaleTicks,
+    );
+    if (!stale) continue;
     if (market.cancelOrder?.(order.id) === OK) {
       log.info(
         "terminal",
@@ -368,12 +396,9 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
     minOrderAmount: CONFIG.market.minOrderAmount,
     pricing: {
       competingAsk: bestCompetingAsk(homeMineral, ownOrderIds, askCache),
-      floor: computeDynamicSellPrice(
-        homeMineral,
-        getMarketPrices(),
-        CONFIG.market.sellDiscount,
-        CONFIG.market.fallbackMinSellPrice,
-      ),
+      // 同上：挂单地板只用绝对地板。用 bid×0.9 当地板会在交叉市场里把压价锚吃掉，
+      // 挂单永远排在最低竞品 ask 之上 ⇒ 永不成交（O @36.38 挂 4,646 拍零成交即此）。
+      floor: orderPriceFloor,
       step: CONFIG.market.sellUndercutStep,
     },
   });
