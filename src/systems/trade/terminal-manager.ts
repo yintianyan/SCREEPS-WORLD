@@ -233,6 +233,34 @@ export const terminalManagerSystem: System = {
             deficitPriority = Math.max(top.priority, SELL_PRIORITY_CAP + 1);
           }
         }
+        // ★terminal 空闲不足时把买入降级 —— 「工业链原料买入是生产性投资，优先于日常
+        // 卖出变现」这个前提只在 terminal 还有地方放货时成立。terminal 容量 300,000 是
+        // 整条工业线的硬瓶颈（矿物落地、factory 产出回收、市场买入落地全都优先投它），
+        // 而在所有候选里**只有买入会占用它** —— 卖出腾容量、买入吃容量。
+        //
+        // 官服实证（部署 f8c7990d 后的判效窗，tick 83,739,377→83,739,542）：
+        // `runs=2 / buyTried=2 / buyOk=2` ⇒ 两趟成交窗口全被买入吃掉，同窗 O 卖出 0；
+        // 而此前 13,248 拍里买入侧净灌进 +8,163 单位（battery +3,726、ZK +3,272、
+        // K +395、UL +200、GO +190…），卖出侧只有 O −4,304 ⇒ terminal 已用
+        // 278,956 → 282,773、空格跌到 15,412。
+        // 更糟的是买进来的多半是帝国已经严重超储的东西：需求表按**本房**库存算缺口
+        //（procurement.ts:124-127，口径 = storage+terminal+labs+factory），而跨房互济被
+        // planIsActive 压死 ⇒ W38S56 要 G 150 / UL 30 / U 295 / L 300，而姐妹房 W37S58
+        // 的 terminal 里正躺着 G 4,200 / UL 6,747 / U 3,387 / L 2,969。
+        //
+        // 降到 DEFICIT_PRIORITY_BASE(20)：仍高于 sell-energy(19)，但让位给一切腾容量的
+        // 卖出（mineral 40 / battery 35 / compound 30 / commodity 25）。
+        // 可观测性走**既有**列 `ledger.buyDeficitPriority`：demandsLive>0 而它读 20
+        // 就是降级签名 —— 不新增字段（新增列要类型＋零值＋行形状守卫＋体检清单四处成套）。
+        // 根因（需求该按帝国库存净额算 ＋ 跨房互济要活）属第三层，这里只是安全阀。
+        // ⚠️ 空闲容量读不到时**不降级**（保持旧行为）：私服/mock 的 store 常常只有
+        // getUsedCapacity，而本服也有 getFreeCapacity 返回 null 的在册形状（受限 store
+        // 不带资源参数时算不出来）。与 commodityConvertRoi 的 judgeable 同口径 ——
+        // 「判不了」不等于「该拦」，把未知折成 0 会在没有市场深度的环境里把买入整条关掉。
+        const terminalFree = terminal.store.getFreeCapacity?.() ?? Number.POSITIVE_INFINITY;
+        if (terminalFree < CONFIG.market.buyFreeCapacityFloor) {
+          deficitPriority = DEFICIT_PRIORITY_BASE;
+        }
         ledger.buyDeficitPriority = deficitPriority;
         candidates.push({
           type: "buy-deficit",

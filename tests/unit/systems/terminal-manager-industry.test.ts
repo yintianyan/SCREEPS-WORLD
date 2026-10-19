@@ -1,5 +1,5 @@
 /** Terminal Manager 工业链扩展测试 — battery 卖 / power 买 / 矿物互济。 */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/trade/terminal-manager";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
@@ -392,5 +392,127 @@ describe("terminal-manager — ghodium 买（nuker 威慑备弹）", () => {
     terminalManagerSystem.run(makeContext([room]));
 
     expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * buy-deficit 的 terminal 空闲容量安全阀 —— 2026-10-18 部署后判效窗跑出来的残留缺陷。
+ *
+ * 第一层把 sell-energy 从 45 降到 19，解开了"卖出通道互相挤"；但 buy-deficit 仍是
+ * max(需求 priority, SELL_PRIORITY_CAP+1) = ≥51，压过一切卖出（最高 40），而每 200 拍
+ * 只有一个成交窗口且命中即停。判效窗直读（tick 83,739,377→83,739,542，进程内干净差分）：
+ * `runs=2 / buyTried=2 / buyOk=2` ⇒ 两趟窗口全被买入吃掉、同窗 O 卖出 0；
+ * 而此前 13,248 拍里买入侧净灌进 +8,163 单位（battery +3,726、ZK +3,272、K +395、
+ * UL +200、GO +190），卖出侧只有 O −4,304 ⇒ terminal 已用 278,956→282,773、
+ * 空格跌到 15,412（容量 300,000）。
+ *
+ * 买进来的还多半是帝国已严重超储的东西：需求表按**本房**库存算缺口
+ *（procurement.ts:124-127），跨房互济又被 planIsActive 压死 ⇒ W38S56 要 G 150/UL 30/
+ * U 295/L 300，而姐妹房 terminal 里正躺着 G 4,200/UL 6,747/U 3,387/L 2,969。
+ * 根因属第三层；这一层只装安全阀：terminal 快满时买入让位给一切腾容量的卖出。
+ */
+describe("terminal-manager — terminal 快满时买入让位给卖出", () => {
+  /** 让需求表活着 —— 否则 buy-deficit 回落到 DEFICIT_PRIORITY_BASE，两组用例分不开。 */
+  function seedDemand(): void {
+    (globalThis as any).procurementDemands = {
+      byRoom: {
+        W7N4: [
+          {
+            resource: "U",
+            amount: 300,
+            priority: 25,
+            deadline: (globalThis as any).Game.time + 250,
+            reason: "lab-reaction",
+          },
+        ],
+      },
+    };
+  }
+
+  /** U 有卖单可买、O 有买单可卖 —— 两侧都成立，才看得出是谁抢到了那唯一的成交窗口。 */
+  function twoSidedMarket(): void {
+    setupMarket({
+      credits: 1000000,
+      getAllOrders: vi.fn((opts: any) => {
+        if (opts.type === ORDER_SELL && opts.resourceType === "U") {
+          return [{ id: "sellU", price: 1, remainingAmount: 100000, roomName: "W9N9" }];
+        }
+        if (opts.type === ORDER_BUY && opts.resourceType === "O") {
+          return [{ id: "buyO", price: 30, remainingAmount: 100000, roomName: "W9N8" }];
+        }
+        return [];
+      }),
+    });
+  }
+
+  // resetGlobals() 不清 procurementDemands ⇒ 显式收尾，免得泄漏给后加的用例
+  //（泄漏会让别的用例里 buy-deficit 莫名升到 51、抢走窗口，红得看不出原因）。
+  afterEach(() => {
+    delete (globalThis as any).procurementDemands;
+  });
+
+  it("空闲 < buyFreeCapacityFloor ⇒ 卖出抢到窗口，buyDeficitPriority 降到 base", () => {
+    seedDemand();
+    twoSidedMarket();
+    // 已用 255,000 / 容量 300,000 ⇒ 空闲 45,000 < 地板 50,000。
+    const room = roomSnapshot({
+      roomName: "W7N4",
+      homeMineral: "O",
+      storage: { energy: 500000, O: 20000 },
+      terminal: terminalMock({ energy: 10000, O: 245000 }),
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    // 降级签名走既有列 buyDeficitPriority（不新增字段）：需求活着却读 base = 被阀压下来了。
+    expect((globalThis as any).tradeLedger.buyDeficitPriority).toBe(20);
+    expect((globalThis as any).tradeLedger.demandsLive).toBe(1);
+    expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith(
+      "buyO",
+      CONFIG.market.maxDealAmount,
+      "W7N4",
+    );
+  });
+
+  it("空闲 ≥ 地板 ⇒ 买入照旧抢在卖出之前（对照组：证明翻转来自这道阀）", () => {
+    seedDemand();
+    twoSidedMarket();
+    // 已用 110,000 ⇒ 空闲 190,000 ≥ 地板 50,000。
+    const room = roomSnapshot({
+      roomName: "W7N4",
+      homeMineral: "O",
+      storage: { energy: 500000, O: 20000 },
+      terminal: terminalMock({ energy: 10000, O: 100000 }),
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    expect((globalThis as any).tradeLedger.buyDeficitPriority).toBe(51);
+    // 买入赢了 ⇒ 成交的是 U 的卖单（量受 demand.amount 300 约束）。
+    expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith("sellU", 300, "W7N4");
+  });
+
+  it("空闲容量读不到（store 只有 getUsedCapacity）⇒ 不降级：判不了 ≠ 该拦", () => {
+    // 这条是安全阀自己的健壮性用例。第一版写成 `getFreeCapacity() ?? 0`，
+    // 在 store 不完整的环境里直接抛（trade-ledger.test.ts 的两处 mock 就是这个形状，
+    // 当场跑红两条），而折成 0 又等于"读不到就关掉全部买入"—— 本服另有
+    // getFreeCapacity 对受限 store 返回 null 的在册形状，两种都不能当"已满"。
+    seedDemand();
+    twoSidedMarket();
+    const room = roomSnapshot({
+      roomName: "W7N4",
+      homeMineral: "O",
+      storage: { energy: 500000, O: 20000 },
+      terminal: {
+        cooldown: 0,
+        store: { getUsedCapacity: () => 255000 },
+        send: vi.fn(() => OK),
+      } as any,
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    expect((globalThis as any).tradeLedger.buyDeficitPriority).toBe(51);
+    expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith("sellU", 300, "W7N4");
   });
 });
