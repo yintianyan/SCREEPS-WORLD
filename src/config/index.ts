@@ -1085,6 +1085,18 @@ export const CONFIG = {
      * 运费储备（energyTarget）无压力。同时影响买入与跨房矿物互济（mineralAid
      * maxTransfer 共用此值）—— 互济单笔从 1,000 抬到 5,000 同样是想要的方向。 */
     maxDealAmount: 5000,
+    /**
+     * terminal 空闲容量地板 — 低于此值时 `buy-deficit` 从"压过一切卖出"降到
+     * DEFICIT_PRIORITY_BASE(20)，让位给一切腾容量的卖出（见 terminal-manager.ts）。
+     *
+     * 取值来由：terminal 容量 300,000，本值 = 1/6 容量 ≈ 10 笔 maxDealAmount 的余量。
+     * 它要同时兜住三件事：① 单笔买入最多 5,000 单位得有地方落；② 矿物搬运的投放相
+     * 是 terminal 优先（industry.ts haulMineralsToStorage），满了就整条断；
+     * ③ factory 产出回收（reclaimFactoryOutput）也是 terminal 优先。
+     * 官服实测触发点：2026-10-18 空格跌到 15,412（已用 95%）而买入侧仍在
+     * runs=2/buyOk=2 地吃满每一个成交窗口。
+     */
+    buyFreeCapacityFloor: 50000,
     /** terminal 能量储备目标 — deal 双向都从本方 terminal 扣能量运费。 */
     energyTarget: 10000,
     /**
