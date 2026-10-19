@@ -201,6 +201,20 @@ function collectRecipes(factoryLevel: number): CommodityRecipe[] {
     if (!def?.components) continue; // 不可生产（原料类/能量解压等）
     // battery 走满仓压缩链，commodity 链不重复处理。
     if (resourceType === RESOURCE_BATTERY) continue;
+    // energy 走危机解压链（tryDecompressBattery，门禁 storage < energyBuyFloor），
+    // commodity 链同样不重复处理。
+    //
+    // ⚠️ 这一条不是洁癖，是 2026-10-18 线上跑出来的：生产侧 ROI 闸把 oxidant 拦下之后
+    //（回收率 53%，深度倒挂），selectCommodityTarget 顺着梯度往下走选中了引擎的解压
+    // 配方 `COMMODITIES[energy] = {battery: 5} → energy 50`，`factoryTargets` 当场从
+    // "oxidant" 翻成 "energy"。按买价算它确实"划算"（5 battery × 200 = 1,000 对
+    // 50 energy × 32.186 = 1,609，+61% > margin 35%）—— 但 ROI 闸只看市场价，看不见
+    // **我们自己的出口能力**：battery 有畅通的卖出通道（sell-battery 优先级 35），
+    // 而能量已经在 surplus（storage 844,545，卖线 100,000）且出口被 maxDealAmount
+    // 卡到 25 单位/拍、优先级还刚被降到 19。把有出口的资产换成没出口的资产，
+    // 账面上 +61%、实际上是往一个只剩 118,842 空格的 storage 里灌水。
+    // 在 ROI 闸加上之前这条被 oxidant 的梯度（level 1 > 0）压着，是潜伏的。
+    if (resourceType === RESOURCE_ENERGY) continue;
     if ((def.level ?? 0) > factoryLevel) continue;
     // amount 必须带上：生产侧 ROI 闸要按「单批产量 × 产物买价」算收益，
     // 缺省成 1 会把收益低估两个数量级（oxidant 单批产 100），闸会误拦一切。
