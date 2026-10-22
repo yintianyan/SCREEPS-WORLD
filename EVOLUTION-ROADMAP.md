@@ -1159,6 +1159,13 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-22 18:2xZ 立格，R574；上一条＝R573 格「#151 证据包」＝**已完成并挂起（证据/三选项已落，用户未答，不改生产）**；本格做 carrier 1,800 运力档）
+
+**下一轮主目标：给 supply 的 carrier 加一档 36C/18M（运力 1,800、成本 3,600），让 RCL8 源房（12,900）的 `selectBody` 选到 1,800 而非 1,200，使 R570 的 `capSupplyToCarrier` 上限与 logistics 请求量 1,800 对齐；验收＝`selectBody("carrier",12,900)` 的 CARRY=36／`capSupplyToCarrier(1800,12900)=1800`／下一笔 supply op `rq=1,800` 且单趟完成（行在 dl 前消失＋预约释放＋源房 exported=1,800），同时不出现 spawn 能量饿死或超时**；⚠️硬前置＝①只加 body 模板与测试，不动 R570 的 cap/状态机；②若大 body 导致 spawn 延迟超 op deadline，回退到 24C/12M 并登记；③不改阈值/市场/war。
+
+同轮预写＝**E518** 下一笔 supply op `rq=1,800`；**E519** spawnQueue 里 carrier body 的 CARRY=36（或 `selectBody` 输出）；**E520** 单趟完成（行消失／预约释放／源房 exported=1,800）；**E521** 若大 body 的 spawn 等待 >200 拍或 body 被降级，登记并回退。
+
+
 ### 4.0（10-22 18:1xZ 立格，R573；上一条＝R571/R572＝war 入口 EXACT＋无编队；R572 观测项由既有 `warFunnel` 满足而作废；本格做 #151 证据包与选项）
 
 **下一轮主目标：把 #151（玩家/NPC 威胁分列）做成可执行的决策包——用现读 `warFunnel`（`noThreats=1 / candidates=0 / intelEntries=8：7 unowned＋1 notFact`）、`lastInvaderHostileAt=83,804,981`、war 入口 `83,807,981`、`warPlan` 缺席、`expansionAllowed=false`、war 退出沿 `83,809,981` 做证据；列出三条选项（A 入口改读 `lastPlayerHostileAt`；B no-target war 不冻扩张；C 先获取玩家 intel/目标）与各自风险/验收；不改代码、不开战、不改阈值，等属人拍板**；⚠️硬前置＝①现状四读数（漏斗/敌情/入口/编队）同轮摘全；②选项必须写清对 NPC 防御、扩张 G4/G6、外交风险的影响；③不作任何生产改动。
