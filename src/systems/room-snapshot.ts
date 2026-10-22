@@ -4,10 +4,51 @@ import { classifyThreats, isSquadThreatCreeps } from "../domain/defense/threat";
 import { preloadStructureCache, preloadStaticBlockers } from "../creeps/movement";
 import { remainsBlindCounters } from "../kernel/global-cache";
 
+/** 自有房静态部分缓存 TTL（拍）：结构/工地/矿脉在 10 拍内视为不变；creeps/hostiles 等仍每拍重读。 */
+const STATIC_TTL = 10;
+
+interface StaticParts {
+  tick: number;
+  myStructures: AnyOwnedStructure[];
+  allStructures: AnyStructure[];
+  sources: Source[];
+  minerals: Mineral[];
+}
+
+const staticCache = new Map<string, StaticParts>();
+
+/** 测试夹具复位：模块级缓存不得跨测试世界串味。 */
+export function __resetSnapshotStaticCacheForTests(): void {
+  staticCache.clear();
+}
+
+function readStaticParts(room: Room): StaticParts {
+  const myStructures = room.find(FIND_MY_STRUCTURES);
+  const allStructures = room.find(FIND_STRUCTURES);
+  const sources = room.find(FIND_SOURCES);
+  let minerals: Mineral[] = [];
+  try {
+    minerals = room.find(FIND_MINERALS);
+  } catch {
+    // FIND_MINERALS 可能在测试环境未定义。
+  }
+  return { tick: Game.time, myStructures, allStructures, sources, minerals };
+}
+
+function readStaticPartsCached(room: Room): StaticParts {
+  // 自有房才缓存；远程/观察房的结构与工地随建造变化，保持逐拍新鲜。
+  if (room.controller?.my !== true) return readStaticParts(room);
+  const hit = staticCache.get(room.name);
+  if (hit && Game.time >= hit.tick && Game.time - hit.tick < STATIC_TTL) return hit;
+  const parts = readStaticParts(room);
+  staticCache.set(room.name, parts);
+  return parts;
+}
+
 /**
- * 为单个自有房间构建 RoomSnapshot — 每 tick 唯一调用 room.find() 的地方，
+ * 为房间构建 RoomSnapshot — 自有房的静态部分按 TTL 缓存，动态部分每 tick 唯一 find，
  * 所有系统和角色都消费快照以避免重复扫描。
- * 成本：每房每 tick O(structures + sources + sites + hostiles)；必须保持廉价，
+ * 成本：每房每 tick O(dynamic)；静态 find 只有缓存到期那一拍重做。
  * 不使用 PathFinder、全房 lookAt 或地形扫描（唯一例外：站桩阻挡在位核验 ≤4 个单格 lookForAt）。
 
  * 三个 global* 参数由 Kernel 预构建（避免每房独立遍历 Game.creeps）：
@@ -20,7 +61,8 @@ export function buildRoomSnapshot(
   globalCreepEnergy?: ReadonlyMap<string, number>,
   globalPendingHarvesters?: ReadonlyMap<string, number>,
 ): RoomSnapshot {
-  const myStructures = room.find(FIND_MY_STRUCTURES);
+  const staticParts = readStaticPartsCached(room);
+  const myStructures = staticParts.myStructures;
   const spawns = myStructures.filter(isSpawn);
   const extensions = myStructures.filter(isExtension);
   const towers = myStructures.filter(isTower);
@@ -29,7 +71,7 @@ export function buildRoomSnapshot(
 
   // 一次 find 获取所有中性结构，在 JS 层按类型分组 — 比多次带 filter 的 find
   // 更高效（减少 C++ ↔ JS 边界穿越）。
-  const allStructures = room.find(FIND_STRUCTURES);
+  const allStructures = staticParts.allStructures;
   const containers = allStructures.filter(
     s => s.structureType === STRUCTURE_CONTAINER,
   ) as StructureContainer[];
@@ -51,13 +93,9 @@ export function buildRoomSnapshot(
 
   const storage = room.storage ?? undefined;
   const terminal = room.terminal ?? undefined;
-  const sources = room.find(FIND_SOURCES);
-  let minerals: Mineral[] = [];
-  try {
-    minerals = room.find(FIND_MINERALS);
-  } catch {
-    // FIND_MINERALS 可能在测试环境未定义。
-  }
+  const sources = staticParts.sources;
+  const minerals = staticParts.minerals;
+  // 工地集合不缓存：construction-manager 用它做幂等去重，10 拍旧视图会重复建 site。
   const allSites = room.find(FIND_CONSTRUCTION_SITES);
   const mySites = room.find(FIND_MY_CONSTRUCTION_SITES);
   const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);

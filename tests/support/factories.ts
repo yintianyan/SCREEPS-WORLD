@@ -7,6 +7,7 @@
  */
 import { vi } from "vitest";
 import type { Budget, CpuTier, RoomSnapshot, TickContext } from "../../src/kernel/contracts";
+import { __resetSnapshotStaticCacheForTests } from "../../src/systems/room-snapshot";
 
 // ─── 全局重置 ───────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ const objectRegistry = new Map<string, unknown>();
 
 export function resetGlobals(): void {
   objectRegistry.clear();
+  __resetSnapshotStaticCacheForTests();
 
   (globalThis as any).Game = {
     time: 1000,
