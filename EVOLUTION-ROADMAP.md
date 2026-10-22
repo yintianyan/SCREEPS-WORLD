@@ -1164,6 +1164,7 @@
 **下一轮主目标：把战后扩张阻塞做成可执行的证据包——G4 2.5（源房 +3.47／幼房 −0.88，门槛 5）、G6 constrained（usage 14.1/20，comfortable 需 ≤12；traffic-manager 3.07/拍，R487 工业/贸易的 factory 0.009/拍不是来源）、ea=true 但门集只列 G4/G6；列出最小自授权杠杆（traffic-manager CPU 剖析、幼房 flow 成熟监控、supply 1,650 续验）与属人项（#50/#153/#151），不改阈值/编制/市场**；⚠️硬前置＝①只读证据包，不改任何生产；②R575 的 E525（下一笔 1,650 新载）同轮续验；③G4/G6 数字取同轮 console（本次 `now=810,236`）；④不把单发 tier 当趋势（`since=810,206/upgradeTicks=11`）。
 
 同轮预写＝**E528** 下一笔 1,650 新载（`…-9db` cap=1,650）单趟完成（E519/E520/E525 同证）；**E529** G4 在幼房成熟后是否升过 5（只登记符号/条件，不外推）；**E530** G6 的 tier 是否在 `upgradeTicks` 后离开 constrained（usage≤12 才 comfortable）；**E531** traffic-manager 的 3.07/拍在下一轮 CPU 榜是否复现；**E532** 下一场 war 入口（若 threat 持续，since+3,000=812,963）与出口两臂。
+**加注⑴（10-22 20:3xZ 当场补＝★供给线自然闭合；G4 2.1，墙维护是主拖累）**＝①目标房现读 `needsAid=false`（`nf=193／rb=8,237／ei=183／storage 39,664`，colonyState normal、phase growth）⇒ 供给线 **自然闭合**（`agendas=[]`，无新 op）；旧 op `ca=809,272` 在 `811,204` 前消失（终端不可读；预约 TTL 清扫→blocked→retry 的路径可完成，R557 的“死路”至少是条件路径；伴随 over-delivery 风险）。②`expansionDashboard` 现读 `Pressure=HIGH(0.61)／Readiness=NOT_READY／Blocked=G4+G6／Budget=196,373/892,597／Candidates=13(Q4,R8,U1)／Plans=7`；`gateNetFlow` 源 2.63／幼房 −0.51；G4 v=2.1；G6 tier constrained。③源房 `bk.towerSpentWalls=1,500`（窗口）＝墙/rampart 维护是 G4 的主要拖累；#153（维护费是否计入扩张准备度）是属人决定。④R574/R575 的 live 验收：E518 命中（rq 1,650）；新载 `…-9db` 已观测 cap=1,650/50 部件；干净单趟 1,650 因供给线闭合不再出现；R575 cap 仅纯函数测试。⑤下一步＝#153/#50/#151 决策包。
 
 
 ### 4.0（10-22 19:5xZ 立格，R575；上一条＝R574 格「carrier 1,650 档」＝**已上线；首验 op 被部署前旧载 `…-9d5` 送成 1,200/1,650 verifying（过渡态，E519/E520 待新载）**；本格做入账前按实际载体夹请求量）
