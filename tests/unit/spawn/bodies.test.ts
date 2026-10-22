@@ -337,6 +337,19 @@ describe("Bodies — RCL7/RCL8 高档模板补充", () => {
     expect(body.filter(p => p === "move")).toHaveLength(12);
   });
 
+  it("carrier RCL8(12900) 选 [33C,17M] 极限档（50 部件内，1650 运力）", () => {
+    const body = selectBody("carrier", 12900);
+    expect(body.filter(p => p === "carry")).toHaveLength(33);
+    expect(body.filter(p => p === "move")).toHaveLength(17);
+    expect(body).toHaveLength(50);
+  });
+
+  it("carrier RCL7(1800) 仍选 [24C,12M] 大运力档", () => {
+    const body = selectBody("carrier", 1800);
+    expect(body.filter(p => p === "carry")).toHaveLength(24);
+    expect(body.filter(p => p === "move")).toHaveLength(12);
+  });
+
   it("remoteHauler RCL7(5300) 选 [16C,8M] 档", () => {
     // 5300 < 1800(RCL8档)，所以选到 RCL7 档 [16C,8M] minCapacity=1200
     const body = selectBody("remoteHauler", 1200);

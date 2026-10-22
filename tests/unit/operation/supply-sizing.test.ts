@@ -7,9 +7,9 @@ function carrierCarry(energyCapacityAvailable: number): number {
 }
 
 describe("capSupplyToCarrier — 单趟容量上限", () => {
-  it("RCL8 档：1,800 请求夹到 24C/12M 的 1,200", () => {
-    expect(carrierCarry(12900)).toBe(1200);
-    expect(capSupplyToCarrier(1800, 12900)).toBe(1200);
+  it("RCL8 档：1,800 请求夹到 33C/17M 的 1,650", () => {
+    expect(carrierCarry(12900)).toBe(1650);
+    expect(capSupplyToCarrier(1800, 12900)).toBe(1650);
   });
 
   it("请求低于容量时原样返回", () => {
