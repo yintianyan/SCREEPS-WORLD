@@ -1159,6 +1159,13 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-22 14:1xZ 立格，R570；上一条＝R569 格「姿态转换持久事件」＝已上线并换码（线上 e63fbe537b73），首枚 PostureTransition 仍待下一次姿态转换；本格转 supply op 单趟闭环）
+
+**下一轮主目标：把 supply op 做成单趟闭环——①满额送达必须走 running→verifying→completed（现状直接 markCompleted 是非法跳跃，满额会停在 running 反复入账）；②新 op 的 requestedAmount 上限＝同源房一只 carrier 的 CARRY 容量（现场 1,800 请求对 1,200 运力，只记 1,200 后进 verifying，按 checkExpiry 在 806,004 过期）；③ready/running 的 reservation 每趟 heartbeat（500 拍 TTL 短于实测 ≈900 拍往返，heartbeatReservation 目前全库无产线调用）。验收＝下一笔 supply op 在 ≤1 趟内 status=completed 且 dv==rq，且运输途中不再出现 reservation expired**；⚠️硬前置＝①当前行 `ca=804,072／rq=1,800` 已在 verifying，本补丁不追溯改它（它会按旧路径在 `806,004` 过期，只作对照组）；②新码只在新 op 上验收；③部署前先跑 typecheck／unit／integration；不碰阈值/市场/军力。
+
+同轮预写＝**E497** 下一笔 supply op 的 `requestedAmount ≤ carrier 单载`（现读 carrier 模板 24C/12M＝1,200；正证＝同发 `selectBody("carrier", 12,900)` 的 CARRY 数）／**E498** 满额那一趟 `st=running → verifying → completed` 同趟完成（正证＝`dv==rq` ∧ `ua==该议程拍` ∧ 下一趟无重复入账）／**E499** `reservations[id].expiresAt` 在 ready/running 期间随议程趟 ↑（正证＝同 id 两次读 `expiresAt` 差≈100）／**E500** 旧行在 `806,004` 后的终态（expired，dv=1,200）只作对照，不计新码命中／**E501** 同时读 `ring-dump PostureTransition`，首枚事件仍待。
+
+
 ### 4.0（10-22 13:3xZ 立格，R569；上一条＝R568 格「判 fortify→develop 是否在 803,740 到点」＝已判成并结案，见本格加注⑴：develop 到点 83,803,740，载体行被 83,803,773 的 develop→expand 覆盖，33 拍差由幼房 recovery 带单独解释）
 
 **下一轮主目标：把每一次姿态转换做成跨 boot 持久的离散事件（在 `src/kernel/event-log.ts` 末尾追加 `PostureTransition=49`，由 `src/systems/empire/empire-strategy.ts` 的唯一转换写点记录 `d=[fromCode,toCode,reasonCode]`；码表与映射写成纯函数并补单测，`from` 的 `(none)` 用 4），让 `develop` 这类 <100 拍姿态与 `war` 出口臂在事后可直接回读；代码与测试本轮完成，部署等该批 V1–V4 收口后一次进行**；⚠️硬前置＝①R487 推送/部署窗关闭且 `src` 干净（pre-push 从工作树重建，窗内改 src 会把未测内容带上线）；②本批判效窗内不做第二次部署；③console 读取避开对端在飞的 `Memory.__evalResult`，能走 peek 的只用 peek。
