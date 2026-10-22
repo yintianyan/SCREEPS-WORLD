@@ -1159,11 +1159,11 @@
 
 ## 4. 当前迭代（最近三轮）
 
-### 4.0（10-22 18:2xZ 立格，R574；上一条＝R573 格「#151 证据包」＝**已完成并挂起（证据/三选项已落，用户未答，不改生产）**；本格做 carrier 1,800 运力档）
+### 4.0（10-22 18:2xZ 立格，R574；上一条＝R573 格「#151 证据包」＝**已完成并挂起（证据/三选项已落，用户未答，不改生产）**；本格做 carrier 1,650 运力档＝50 部件上限内的最大 2:1 档）
 
-**下一轮主目标：给 supply 的 carrier 加一档 36C/18M（运力 1,800、成本 3,600），让 RCL8 源房（12,900）的 `selectBody` 选到 1,800 而非 1,200，使 R570 的 `capSupplyToCarrier` 上限与 logistics 请求量 1,800 对齐；验收＝`selectBody("carrier",12,900)` 的 CARRY=36／`capSupplyToCarrier(1800,12900)=1800`／下一笔 supply op `rq=1,800` 且单趟完成（行在 dl 前消失＋预约释放＋源房 exported=1,800），同时不出现 spawn 能量饿死或超时**；⚠️硬前置＝①只加 body 模板与测试，不动 R570 的 cap/状态机；②若大 body 导致 spawn 延迟超 op deadline，回退到 24C/12M 并登记；③不改阈值/市场/war。
+**下一轮主目标：给 supply 的 carrier 加一档 33C/17M（50 部件上限内的最大 2:1 档，运力 1,650、成本 2,500），让 RCL8 源房（12,900）的 `selectBody` 选到 1,650 而非 1,200，使 R570 的 `capSupplyToCarrier` 上限从 1,200 抬到 1,650（1,800 请求仍单趟不可能，按容量夹）；验收＝`selectBody("carrier",12,900)` 的 CARRY=33／`capSupplyToCarrier(1800,12900)=1650`／下一笔 supply op `rq=1,650` 且单趟完成（行在 dl 前消失＋预约释放＋源房 exported=1,650），同时不出现 spawn 能量饿死或超时**；⚠️硬前置＝①50 部件上限是引擎硬约束（36C/18M 的 54 部件非法）；②只加 body 模板与测试，不动 R570 的 cap/状态机；③若大 body 导致 spawn 延迟超 op deadline，回退到 24C/12M 并登记；④不改阈值/市场/war。
 
-同轮预写＝**E518** 下一笔 supply op `rq=1,800`；**E519** spawnQueue 里 carrier body 的 CARRY=36（或 `selectBody` 输出）；**E520** 单趟完成（行消失／预约释放／源房 exported=1,800）；**E521** 若大 body 的 spawn 等待 >200 拍或 body 被降级，登记并回退。
+同轮预写＝**E518** 下一笔 supply op `rq=1,650`；**E519** spawnQueue 里 carrier body 的 CARRY=33（或 `selectBody` 输出，部件数 50）；**E520** 单趟完成（行消失／预约释放／源房 exported=1,650）；**E521** 若大 body 的 spawn 等待 >200 拍、body 被降级或部件数 >50，登记并回退。
 
 
 ### 4.0（10-22 18:1xZ 立格，R573；上一条＝R571/R572＝war 入口 EXACT＋无编队；R572 观测项由既有 `warFunnel` 满足而作废；本格做 #151 证据包与选项）
