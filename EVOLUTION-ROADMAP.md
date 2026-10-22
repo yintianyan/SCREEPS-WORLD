@@ -1159,11 +1159,11 @@
 
 ## 4. 当前迭代（最近三轮）
 
-### 4.0（10-22 20:5xZ 立格，R577；上一条＝R576 格「战后 G4/G6 证据包」＝**已收口（G4 2.1／G6 17.2、供给线闭合、#153/#50/#151 属人待拍板）**；本格做自有房静态快照 TTL 缓存）
+### 4.0（10-22 20:5xZ 立格，R577；上一条＝R576 格「战后 G4/G6 证据包」＝**已收口（G4 2.1／G6 17.2、供给线闭合、#153/#50/#151 属人待拍板）**；本格做自有房静态快照 TTL 缓存，工地不缓存）
 
-**下一轮主目标：给 `buildRoomSnapshot` 的自有房静态部分加 TTL=10 缓存（`FIND_MY_STRUCTURES`／`FIND_STRUCTURES`／`FIND_CONSTRUCTION_SITES`／`FIND_MY_CONSTRUCTION_SITES`／`FIND_SOURCES`／`FIND_MINERALS` 缓存；creeps/hostiles/dropped/tombstones/ruins/nukes/energy 每拍重读；非自有房不缓存），目标把 `snapshots` 1.385/拍降下来且构造/补齐/防御无回归；验收＝unit 含 TTL／新建结构≤10／非自有不缓存／测试复位四例、integration、e2e smoke 全绿；线上 `systemCpu.snapshots` 下降、幼房 extension/工地与 tower 无卡顿；不改 G4/G6 阈值/编制/市场**；⚠️硬前置＝①只缓存静态部分，动态每拍；②TTL=10 是上限，若构造/补齐出现回归立即回滚；③测试必须复位模块缓存，跨测试世界不得串味；④部署前 typecheck／unit／integration。
+**下一轮主目标：给 `buildRoomSnapshot` 的自有房静态部分加 TTL=10 缓存（`FIND_MY_STRUCTURES`／`FIND_STRUCTURES`／`FIND_SOURCES`／`FIND_MINERALS` 缓存；工地 `FIND_CONSTRUCTION_SITES`／`FIND_MY_CONSTRUCTION_SITES` 不缓存——construction-manager 幂等去重需要逐拍新鲜，首版缓存工地导致集成 7 例重复建 site；creeps/hostiles/dropped/tombstones/ruins/nukes/energy 每拍重读；非自有房不缓存），目标把 `snapshots` 1.385/拍降下来且构造/补齐/防御无回归；验收＝unit 含 TTL／新建结构≤10／非自有不缓存／测试复位四例、integration、e2e smoke 全绿；线上 `systemCpu.snapshots` 下降、幼房 extension/工地与 tower 无卡顿、无重复 site；不改 G4/G6 阈值/编制/市场**；⚠️硬前置＝①只缓存静态部分，动态每拍；②TTL=10 是上限，若构造/补齐出现回归立即回滚；③测试必须复位模块缓存，跨测试世界不得串味；④部署前 typecheck／unit／integration。
 
-同轮预写＝**E533** 线上 `systemCpu.snapshots` 从 1.385/拍下降（同发 `cpuRate.total` 对照）；**E534** 新建 extension/工地 ≤10 拍可见（TTL 窗口）；**E535** 幼房构造、补齐、tower 防御无新失败（`spawnRejects`/`siteProgressTracker`/`TowerVolley` 对照）；**E536** 非自有/观察房 snapshots 逐拍仍新（缓存不越界）；**E537** 测试复位 `__resetSnapshotStaticCacheForTests` 后跨用例无串味。
+同轮预写＝**E533** 线上 `systemCpu.snapshots` 从 1.385/拍下降（同发 `cpuRate.total` 对照）；**E534** 新建 extension/结构 ≤10 拍可见，工地逐拍新鲜（无重复 site）；**E535** 幼房构造、补齐、tower 防御无新失败（`spawnRejects`/`siteProgressTracker`/`TowerVolley` 对照）；**E536** 非自有/观察房 snapshots 逐拍仍新（缓存不越界）；**E537** 测试复位 `__resetSnapshotStaticCacheForTests` 后跨用例无串味。
 
 
 ### 4.0（10-22 20:2xZ 立格，R576；上一条＝R575 格「按实际载体夹请求量」＝**已上线（73678f8726e7）；E525 待旧 op 到期后的 1,650 新载**；本格把战后 G4/G6 扩张阻塞做成证据包）
