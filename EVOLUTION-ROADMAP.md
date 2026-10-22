@@ -1159,6 +1159,13 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-22 17:5xZ 立格，R572；上一条＝R571 格「war 入口 807,981＋编队」＝**已判成并结案＝entry EXACT＋无编队（成因零痕迹不可读）**；本格把无目标分支落成可读事件）
+
+**下一轮主目标：把 war 的无目标分支从零痕迹变成可读事件——`selectWarTarget` 返回 undefined 时记录 `WarNoTarget`（`d=[候选总数, 合格数, warSince]`，每场 war 只记一次；新 `EventKind` 追加末尾，事件环跨 boot），不改 war 的进入/退出/编队行为；验收＝当前 war（`since=83,807,981`）在部署后的下一次规划趟（interval 10）出现一条 `WarNoTarget`，候选/合格数可读，同时 `warPlan` 仍缺席、`posture` 仍 `war`、退出沿 `809,981` 不变**；⚠️硬前置＝①这是观测，不改 #151（玩家/NPC 威胁分列仍属人）；②不新增目标获取/进攻动作；③候选计数与 `selectWarTarget` 共用同一判定，防两把尺；④部署前 typecheck／unit／integration。
+
+同轮预写＝**E508** 当前 war 的首条 `WarNoTarget`（`t` 在部署后 ≤10 拍；`d=[candidates, eligible, 83807981]`）；**E509** 合格数=0 而候选数>0 ⇒ 目标池有 intel 但被门槛滤掉；候选数=0 ⇒ intel 池空；两形状分开记；**E510** 行为不变（`warPlan` 仍缺席、posture war、exit 809,981）；**E511** 同一 `since` 只一条、换 since 再一条；**E512** 若事件不出现，先查 `war-planner` 是否在 war 姿态运行（`systemLastRun`）。
+
+
 ### 4.0（10-22 16:3xZ 立格，R571；上一条＝R570 格「supply op 单趟闭环」＝**已判成并结案＝E497/E498/E499 三项全绿**（见本格加注⑷）；本格判 war 入口 807,981 与 war 后编队）
 
 **下一轮主目标：判 war 是否在预写沿 `83,807,981` 再临（`since=83,804,981`＋`warPatience 3,000`；现读 `lh_young=83,804,981` ⇒ `threatRecent` 到 `809,981`，两房 `cs=normal`、`avgPressure=0≤0.4`、`dwell=3,000`），并判 war 后是否真立项/出兵——三形状＝「命中-EXACT」（`pt={from:"fortify",to:"war",reason:"war-enter-patience",tick:83,807,981}` ∧ `since==83,807,981`）／「沿被搬走」（起手直读两房 `lastHostileAt`＋`params.warPatience`；新目击只延长 `threatRecent`、不移动入口沿；只有 `since` 被非威胁路径改写或合成值变化才重锚，只登记重锚）／「到点但无编队」（入口命中，但 `warPlan`／`WarPlanCreated`／attacker 孵化／单位在预写窗内缺席）**；⚠️硬前置＝①认入口臂必须 `pt.from=="fortify"`（入口只有 `war-enter-patience`；危机撤资/压力止损都以 prev=war 为前提）；②入口行可能被下一跳掩蔽 ⇒ 用 `since==807,981` 独立签；③war 后编队判点分两条：`warPlan` 是否存在（Memory）与 `WarPlanCreated` 事件（环），两条都缺席才判「无编队」，不许用单条反推。
