@@ -171,3 +171,14 @@ export function applyDelivery(
   }
   return reportDelivery(next, amount, tick);
 }
+
+/**
+ * 入账前把请求量夹到实际绑定载体的容量：旧/降级小载体不能让请求超过其单趟运力。
+ */
+export function capRequestToCarrier(
+  op: OperationContext,
+  carrierCapacity: number,
+): OperationContext {
+  if (carrierCapacity >= op.requestedAmount) return op;
+  return { ...op, requestedAmount: carrierCapacity };
+}

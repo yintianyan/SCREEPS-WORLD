@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createOperation } from "../../../src/domain/operation/agenda-item";
-import { applyDelivery, markReady, markRunning } from "../../../src/domain/operation/lifecycle";
+import {
+  applyDelivery,
+  capRequestToCarrier,
+  markReady,
+  markRunning,
+} from "../../../src/domain/operation/lifecycle";
 
 const TICK = 1000;
 
@@ -37,5 +42,21 @@ describe("applyDelivery — 满额送达的状态机", () => {
     const done = applyDelivery(partial, 1200, TICK + 20);
     expect(done.status).toBe("completed");
     expect(done.deliveredAmount).toBe(1800);
+  });
+});
+
+describe("capRequestToCarrier — 入账前按实际载体容量夹", () => {
+  it("请求高于载体容量时夹到容量；不高于时原样", () => {
+    const op = runningOp(1650);
+    expect(capRequestToCarrier(op, 1200).requestedAmount).toBe(1200);
+    expect(capRequestToCarrier(op, 1650)).toBe(op);
+    expect(capRequestToCarrier(runningOp(1200), 1650).requestedAmount).toBe(1200);
+  });
+
+  it("夹后满额送达直接 completed", () => {
+    const capped = capRequestToCarrier(runningOp(1650), 1200);
+    const done = applyDelivery(capped, 1200, TICK + 10);
+    expect(done.status).toBe("completed");
+    expect(done.deliveredAmount).toBe(1200);
   });
 });

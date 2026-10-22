@@ -31,11 +31,13 @@ import {
   retryFromBlocked,
   checkExpiry,
   applyDelivery,
+  capRequestToCarrier,
 } from "../../domain/operation/lifecycle";
 import {
   createReservation,
   releaseReservation,
   heartbeatReservation,
+  adjustReservationAmount,
   sweepExpired,
   sumReservationsByRoom,
   type ReservationTable,
@@ -703,7 +705,13 @@ export const agendaManagerSystem: System = {
                   deliveredAmount = carrierCapacity;
                 }
 
-                const delivered = applyDelivery(op, deliveredAmount, ctx.tick);
+                // 部署前/降级的小载体可能小于房间最大 body：先夹请求量，避免 1,650 只送 1,200 进 verifying。
+                const capped = capRequestToCarrier(op, carrierCapacity);
+                if (capped !== op) {
+                  operations[idx] = capped;
+                  reservations = adjustReservationAmount(reservations, op.id, carrierCapacity);
+                }
+                const delivered = applyDelivery(capped, deliveredAmount, ctx.tick);
                 operations[idx] = delivered;
                 if (delivered.status === "completed") {
                   reservations = releaseReservation(reservations, op.id);

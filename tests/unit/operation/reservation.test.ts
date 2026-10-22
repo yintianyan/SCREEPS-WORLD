@@ -4,6 +4,7 @@ import {
   createReservation,
   releaseReservation,
   heartbeatReservation,
+  adjustReservationAmount,
   sweepExpired,
   sumReservationsByRoom,
   getReservationsByRoom,
@@ -141,5 +142,17 @@ describe("sumReservationsByRoom + getReservationsByRoom", () => {
 
     const list = getReservationsByRoom(table, "W1N1");
     expect(list).toHaveLength(2);
+  });
+});
+
+describe("adjustReservationAmount", () => {
+  it("存在则改 amount 且保留 TTL；缺席原表返回", () => {
+    const table = createReservation(new Map(), "op-1", "W1N1", "W2N1", 1650, TICK);
+    const before = getReservation(table, "op-1")!;
+    const next = adjustReservationAmount(table, "op-1", 1200);
+    const after = getReservation(next, "op-1")!;
+    expect(after.amount).toBe(1200);
+    expect(after.expiresAt).toBe(before.expiresAt);
+    expect(adjustReservationAmount(table, "missing", 1200)).toBe(table);
   });
 });

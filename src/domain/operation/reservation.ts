@@ -70,6 +70,21 @@ export function releaseReservation(table: ReservationTable, operationId: string)
 }
 
 /**
+ * 调整预留量 — 入账前把请求量夹到实际载体容量时同步；不存在时原表返回。
+ */
+export function adjustReservationAmount(
+  table: ReservationTable,
+  operationId: string,
+  amount: number,
+): ReservationTable {
+  const entry = table.get(operationId);
+  if (!entry) return table;
+  const next = new Map(table);
+  next.set(operationId, { ...entry, amount });
+  return next;
+}
+
+/**
  * 心跳续期 — 延长 TTL。
  * 不存在时无操作。
  */
