@@ -36,8 +36,7 @@ function readStaticParts(room: Room): StaticParts {
 }
 
 function readStaticPartsCached(room: Room): StaticParts {
-  // 自有房才缓存；远程/观察房的结构与工地随建造变化，保持逐拍新鲜。
-  if (room.controller?.my !== true) return readStaticParts(room);
+  // 所有有视野房的结构/矿脉缓存；工地不缓存（由 buildRoomSnapshot 逐拍 find）。
   const hit = staticCache.get(room.name);
   if (hit && Game.time >= hit.tick && Game.time - hit.tick < STATIC_TTL) return hit;
   const parts = readStaticParts(room);
