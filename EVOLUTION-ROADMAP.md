@@ -1159,6 +1159,13 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-22 20:5xZ 立格，R577；上一条＝R576 格「战后 G4/G6 证据包」＝**已收口（G4 2.1／G6 17.2、供给线闭合、#153/#50/#151 属人待拍板）**；本格做自有房静态快照 TTL 缓存）
+
+**下一轮主目标：给 `buildRoomSnapshot` 的自有房静态部分加 TTL=10 缓存（`FIND_MY_STRUCTURES`／`FIND_STRUCTURES`／`FIND_CONSTRUCTION_SITES`／`FIND_MY_CONSTRUCTION_SITES`／`FIND_SOURCES`／`FIND_MINERALS` 缓存；creeps/hostiles/dropped/tombstones/ruins/nukes/energy 每拍重读；非自有房不缓存），目标把 `snapshots` 1.385/拍降下来且构造/补齐/防御无回归；验收＝unit 含 TTL／新建结构≤10／非自有不缓存／测试复位四例、integration、e2e smoke 全绿；线上 `systemCpu.snapshots` 下降、幼房 extension/工地与 tower 无卡顿；不改 G4/G6 阈值/编制/市场**；⚠️硬前置＝①只缓存静态部分，动态每拍；②TTL=10 是上限，若构造/补齐出现回归立即回滚；③测试必须复位模块缓存，跨测试世界不得串味；④部署前 typecheck／unit／integration。
+
+同轮预写＝**E533** 线上 `systemCpu.snapshots` 从 1.385/拍下降（同发 `cpuRate.total` 对照）；**E534** 新建 extension/工地 ≤10 拍可见（TTL 窗口）；**E535** 幼房构造、补齐、tower 防御无新失败（`spawnRejects`/`siteProgressTracker`/`TowerVolley` 对照）；**E536** 非自有/观察房 snapshots 逐拍仍新（缓存不越界）；**E537** 测试复位 `__resetSnapshotStaticCacheForTests` 后跨用例无串味。
+
+
 ### 4.0（10-22 20:2xZ 立格，R576；上一条＝R575 格「按实际载体夹请求量」＝**已上线（73678f8726e7）；E525 待旧 op 到期后的 1,650 新载**；本格把战后 G4/G6 扩张阻塞做成证据包）
 
 **下一轮主目标：把战后扩张阻塞做成可执行的证据包——G4 2.5（源房 +3.47／幼房 −0.88，门槛 5）、G6 constrained（usage 14.1/20，comfortable 需 ≤12；traffic-manager 3.07/拍，R487 工业/贸易的 factory 0.009/拍不是来源）、ea=true 但门集只列 G4/G6；列出最小自授权杠杆（traffic-manager CPU 剖析、幼房 flow 成熟监控、supply 1,650 续验）与属人项（#50/#153/#151），不改阈值/编制/市场**；⚠️硬前置＝①只读证据包，不改任何生产；②R575 的 E525（下一笔 1,650 新载）同轮续验；③G4/G6 数字取同轮 console（本次 `now=810,236`）；④不把单发 tier 当趋势（`since=810,206/upgradeTicks=11`）。
