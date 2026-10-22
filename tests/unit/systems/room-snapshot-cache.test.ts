@@ -65,7 +65,7 @@ function extension(id: string): any {
 }
 
 describe("room-snapshot — 自有房静态 TTL 缓存", () => {
-  it("TTL 内复用静态 find，到期重取；非自有房也缓存", () => {
+  it("TTL 内复用静态 find，到期重取；非自有房逐拍清", () => {
     const room = makeRoom("W1N1", true);
     (globalThis as any).Game.time = 1000;
     buildRoomSnapshot(room);
@@ -81,7 +81,7 @@ describe("room-snapshot — 自有房静态 TTL 缓存", () => {
     (globalThis as any).Game.time = 2000;
     buildRoomSnapshot(remote);
     buildRoomSnapshot(remote);
-    expect(structuresFindCount(remote)).toBe(1);
+    expect(structuresFindCount(remote)).toBe(2);
   });
 
   it("新建结构在 TTL 到期后可见，窗口内保持旧视图", () => {

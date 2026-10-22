@@ -36,7 +36,8 @@ function readStaticParts(room: Room): StaticParts {
 }
 
 function readStaticPartsCached(room: Room): StaticParts {
-  // 所有有视野房的结构/矿脉缓存；工地不缓存（由 buildRoomSnapshot 逐拍 find）。
+  // 自有房才缓存；全量缓存实测 snapshots 反升（1.03→1.18），远程/观察房保持逐拍。
+  if (room.controller?.my !== true) return readStaticParts(room);
   const hit = staticCache.get(room.name);
   if (hit && Game.time >= hit.tick && Game.time - hit.tick < STATIC_TTL) return hit;
   const parts = readStaticParts(room);
