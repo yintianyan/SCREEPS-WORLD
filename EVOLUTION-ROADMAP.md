@@ -1164,6 +1164,7 @@
 **下一轮主目标：给 supply 的 carrier 加一档 33C/17M（50 部件上限内的最大 2:1 档，运力 1,650、成本 2,500），让 RCL8 源房（12,900）的 `selectBody` 选到 1,650 而非 1,200，使 R570 的 `capSupplyToCarrier` 上限从 1,200 抬到 1,650（1,800 请求仍单趟不可能，按容量夹）；验收＝`selectBody("carrier",12,900)` 的 CARRY=33／`capSupplyToCarrier(1800,12900)=1650`／下一笔 supply op `rq=1,650` 且单趟完成（行在 dl 前消失＋预约释放＋源房 exported=1,650），同时不出现 spawn 能量饿死或超时**；⚠️硬前置＝①50 部件上限是引擎硬约束（36C/18M 的 54 部件非法）；②只加 body 模板与测试，不动 R570 的 cap/状态机；③若大 body 导致 spawn 延迟超 op deadline，回退到 24C/12M 并登记；④不改阈值/市场/war。
 
 同轮预写＝**E518** 下一笔 supply op `rq=1,650`；**E519** spawnQueue 里 carrier body 的 CARRY=33（或 `selectBody` 输出，部件数 50）；**E520** 单趟完成（行消失／预约释放／源房 exported=1,650）；**E521** 若大 body 的 spawn 等待 >200 拍、body 被降级或部件数 >50，登记并回退。
+**加注⑴（10-22 18:5xZ 当场补＝★50 部件上限改正＋代码已上线；当前 op 是部署前旧档，下一笔才是验收）**＝①**36C/18M 非法**（54 部件 > 引擎 50 上限），R574 已改为 **33C/17M（50 部件、运力 1,650、成本 2,500）**（`9586bb8e`）；②代码＝`a361aab0`（`bodies.ts` 新增档＋2 个测试），unit 417 files·5,499／integration 30·239／typecheck／docs 全绿；build `eeccab10f3a2`（800,146 字符），CI `39833310556` 全绿、线上 sha 已 `eeccab10f3a2`；③**当前 op `ca=808,872／rq=1,200` 是部署前旧档，不作新码命中**；下一笔（`ca>808,872`）应为 `rq=1,650`，且 spawnQueue 的 carrier CARRY=33；验收 E518–E520；④watcher `r574-nextop-watch.sh` 20×5 min。
 
 
 ### 4.0（10-22 18:1xZ 立格，R573；上一条＝R571/R572＝war 入口 EXACT＋无编队；R572 观测项由既有 `warFunnel` 满足而作废；本格做 #151 证据包与选项）
