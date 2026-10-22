@@ -160,6 +160,9 @@ export enum EventKind {
    * 为什么需要它：此前这条路径只写一行 console log，而承载它的 `recoveryActionTable` 是 heap
    * —— 一次部署就把"哪项恢复失败了、试了几次"整个抹掉。明细见 Memory.kernel.escalations。 */
   RecoveryEscalation = 48,
+  /** 帝国姿态转换（empire-strategy 唯一写点）：d = [fromCode, toCode, reasonCode]；t 即转换拍。
+   * 码表见 posture.ts 的 POSTURE_EVENT_CODE / POSTURE_BRANCH_EVENT_CODE；只许追加、不得重排。 */
+  PostureTransition = 49,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

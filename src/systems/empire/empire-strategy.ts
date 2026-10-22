@@ -7,6 +7,7 @@ import { runSpecializationPlanning } from "./specialization-planner";
 import { queryRoomIntel } from "../intelligence";
 import {
   evaluateEmpirePosture,
+  postureTransitionEventData,
   DEFAULT_POSTURE_OPTIONS,
   type RoomStrategyInput,
 } from "../../domain/strategy/posture";
@@ -119,6 +120,12 @@ export const empireStrategySystem: System = {
         reason: result.reason,
         tick: Game.time,
       };
+      // 单格会被下一跳覆盖（短命姿态只有几十拍）；事件环跨 boot 留全量转换。
+      recordEvent(
+        EventKind.PostureTransition,
+        "",
+        postureTransitionEventData(prev?.posture ?? "(none)", result.posture, result.reason),
+      );
       recordPlanningDecision("empire", true);
     } else {
       recordPlanningDecision("empire", false);

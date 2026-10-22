@@ -112,6 +112,36 @@ export type PostureBranch =
   /** 无威胁记忆路径 ⇒ expand/develop 由 expandHealth 决定。 */
   | "peace";
 
+/** 事件环里的姿态码：码值随事件持久化，只许追加、不得重排。 */
+export const POSTURE_EVENT_CODE: Record<EmpirePosture | "(none)", number> = {
+  develop: 0,
+  expand: 1,
+  fortify: 2,
+  war: 3,
+  "(none)": 4,
+};
+
+/** 事件环里的分支码：与 PostureBranch 一一对应，只许追加、不得重排。 */
+export const POSTURE_BRANCH_EVENT_CODE: Record<PostureBranch, number> = {
+  "war-divest-crisis": 0,
+  "war-exit-patience": 1,
+  "war-sustain": 2,
+  "war-enter-patience": 3,
+  "threat-hold-fortify": 4,
+  "hold-min-dwell": 5,
+  "silence-elapsed": 6,
+  peace: 7,
+};
+
+/** 姿态转换事件的 d 列：[fromCode, toCode, reasonCode]。 */
+export function postureTransitionEventData(
+  from: EmpirePosture | "(none)",
+  to: EmpirePosture,
+  reason: PostureBranch,
+): number[] {
+  return [POSTURE_EVENT_CODE[from], POSTURE_EVENT_CODE[to], POSTURE_BRANCH_EVENT_CODE[reason]];
+}
+
 export interface PostureResult {
   /** 本次判定走的分支（#140）。 */
   reason: PostureBranch;

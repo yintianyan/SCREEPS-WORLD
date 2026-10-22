@@ -1,6 +1,7 @@
 /** Empire Strategy 系统测试（R6a/R7a 发布层 — 容量分档 + 议程归因）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { empireStrategySystem } from "../../../src/systems/empire/empire-strategy";
+import { EventKind } from "../../../src/kernel/event-log";
 import { CONFIG } from "../../../src/config";
 import { mockBudget, mockController, mockSnapshot, resetGlobals } from "../../support/factories";
 
@@ -368,5 +369,42 @@ describe("empire-strategy — #188 容量闸的输入落盘（capacity.inputs）
     const youngWindow = runWithStats({ cpuRate: { total: 8, windowTicks: 50, unsampledTicks: 0 } });
     expect(youngWindow.inputs.rateWindowTicks).toBe(50);
     expect(youngWindow.inputs.usage).toBe(16);
+  });
+});
+
+describe("empire-strategy — 姿态转换事件", () => {
+  it("fortify→develop 那一拍写 PostureTransition=[2,0,6]，t 与单格同拍", () => {
+    const now = (globalThis as any).Game.time;
+    (globalThis as any).Memory.kernel = {
+      strategy: { posture: "fortify", since: now - 2000 },
+      stats: { cpuAvg10: 2, cpuMax10: 4 },
+    };
+    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, bucket: 10000, getUsed: () => 0 };
+    const snap = setupRoom({ hostileAgo: 99999 });
+    empireStrategySystem.run(makeContext(snap));
+
+    const ev = events(EventKind.PostureTransition)[0];
+    expect(ev?.t).toBe(now);
+    expect(ev?.d).toEqual([2, 0, 6]);
+    expect((globalThis as any).Memory.kernel.postureTransition).toEqual({
+      from: "fortify",
+      to: "develop",
+      reason: "silence-elapsed",
+      tick: now,
+    });
+    expect((globalThis as any).Memory.kernel.strategy.since).toBe(now);
+  });
+
+  it("没有转换的那一拍不写 PostureTransition", () => {
+    const now = (globalThis as any).Game.time;
+    (globalThis as any).Memory.kernel = {
+      strategy: { posture: "develop", since: now - 2000 },
+      stats: { cpuAvg10: 2, cpuMax10: 4 },
+    };
+    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, bucket: 10000, getUsed: () => 0 };
+    const snap = setupRoom({ hostileAgo: 99999 });
+    empireStrategySystem.run(makeContext(snap));
+
+    expect(events(EventKind.PostureTransition)).toHaveLength(0);
   });
 });

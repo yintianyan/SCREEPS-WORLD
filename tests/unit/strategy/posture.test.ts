@@ -2,6 +2,9 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateEmpirePosture,
+  postureTransitionEventData,
+  POSTURE_BRANCH_EVENT_CODE,
+  POSTURE_EVENT_CODE,
   DEFAULT_POSTURE_OPTIONS,
   type PostureInput,
   type RoomStrategyInput,
@@ -519,5 +522,16 @@ describe("empire posture — #140 分支标签（转换那一拍走了哪条 ret
     });
     expect(r.posture).toBe("develop");
     expect(r.reason).toBe("silence-elapsed");
+  });
+});
+
+describe("姿态事件码表", () => {
+  it("姿态与分支码各自唯一，三元组与线上口径一致", () => {
+    const postures = Object.values(POSTURE_EVENT_CODE);
+    const branches = Object.values(POSTURE_BRANCH_EVENT_CODE);
+    expect(new Set(postures).size).toBe(postures.length);
+    expect(new Set(branches).size).toBe(branches.length);
+    expect(postureTransitionEventData("fortify", "develop", "silence-elapsed")).toEqual([2, 0, 6]);
+    expect(postureTransitionEventData("(none)", "expand", "peace")).toEqual([4, 1, 7]);
   });
 });
