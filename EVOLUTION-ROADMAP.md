@@ -1159,6 +1159,13 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-22 18:1xZ 立格，R573；上一条＝R571/R572＝war 入口 EXACT＋无编队；R572 观测项由既有 `warFunnel` 满足而作废；本格做 #151 证据包与选项）
+
+**下一轮主目标：把 #151（玩家/NPC 威胁分列）做成可执行的决策包——用现读 `warFunnel`（`noThreats=1 / candidates=0 / intelEntries=8：7 unowned＋1 notFact`）、`lastInvaderHostileAt=83,804,981`、war 入口 `83,807,981`、`warPlan` 缺席、`expansionAllowed=false`、war 退出沿 `83,809,981` 做证据；列出三条选项（A 入口改读 `lastPlayerHostileAt`；B no-target war 不冻扩张；C 先获取玩家 intel/目标）与各自风险/验收；不改代码、不开战、不改阈值，等属人拍板**；⚠️硬前置＝①现状四读数（漏斗/敌情/入口/编队）同轮摘全；②选项必须写清对 NPC 防御、扩张 G4/G6、外交风险的影响；③不作任何生产改动。
+
+同轮预写＝**E513** `warFunnel` 在 war 期持续 `noThreats=1 ∧ candidates=0`（tick 前进、intelEntries 可能变化）；**E514** war 退出沿 `809,981`（`max(since+minDwell, lh+threatWindow)`；前提窗内无新目击）；**E515** 选项 A 的预期收益/风险（NPC 沿不再触发 war；玩家威胁仍触发；需核 `lastPlayerHostileAt` 写者）；**E516** 选项 B 的预期（war 姿态保留、扩张在无 target 时放行；需改 `posture.ts` finalize，属策略改动）；**E517** 选项 C 的预期（侦察邻房玩家，涉及外交/情报成本，属人）。
+
+
 ### 4.0（10-22 17:5xZ 立格，R572；上一条＝R571 格「war 入口 807,981＋编队」＝**已判成并结案＝entry EXACT＋无编队（成因零痕迹不可读）**；本格把无目标分支落成可读事件）
 
 **下一轮主目标：把 war 的无目标分支从零痕迹变成可读事件——`selectWarTarget` 返回 undefined 时记录 `WarNoTarget`（`d=[候选总数, 合格数, warSince]`，每场 war 只记一次；新 `EventKind` 追加末尾，事件环跨 boot），不改 war 的进入/退出/编队行为；验收＝当前 war（`since=83,807,981`）在部署后的下一次规划趟（interval 10）出现一条 `WarNoTarget`，候选/合格数可读，同时 `warPlan` 仍缺席、`posture` 仍 `war`、退出沿 `809,981` 不变**；⚠️硬前置＝①这是观测，不改 #151（玩家/NPC 威胁分列仍属人）；②不新增目标获取/进攻动作；③候选计数与 `selectWarTarget` 共用同一判定，防两把尺；④部署前 typecheck／unit／integration。
