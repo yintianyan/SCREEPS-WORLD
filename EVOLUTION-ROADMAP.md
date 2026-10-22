@@ -1159,6 +1159,13 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-22 16:3xZ 立格，R571；上一条＝R570 格「supply op 单趟闭环」＝**已判成并结案＝E497/E498/E499 三项全绿**（见本格加注⑷）；本格判 war 入口 807,981 与 war 后编队）
+
+**下一轮主目标：判 war 是否在预写沿 `83,807,981` 再临（`since=83,804,981`＋`warPatience 3,000`；现读 `lh_young=83,804,981` ⇒ `threatRecent` 到 `809,981`，两房 `cs=normal`、`avgPressure=0≤0.4`、`dwell=3,000`），并判 war 后是否真立项/出兵——三形状＝「命中-EXACT」（`pt={from:"fortify",to:"war",reason:"war-enter-patience",tick:83,807,981}` ∧ `since==83,807,981`）／「沿被搬走」（起手直读两房 `lastHostileAt`＋`params.warPatience`；新目击只延长 `threatRecent`、不移动入口沿；只有 `since` 被非威胁路径改写或合成值变化才重锚，只登记重锚）／「到点但无编队」（入口命中，但 `warPlan`／`WarPlanCreated`／attacker 孵化／单位在预写窗内缺席）**；⚠️硬前置＝①认入口臂必须 `pt.from=="fortify"`（入口只有 `war-enter-patience`；危机撤资/压力止损都以 prev=war 为前提）；②入口行可能被下一跳掩蔽 ⇒ 用 `since==807,981` 独立签；③war 后编队判点分两条：`warPlan` 是否存在（Memory）与 `WarPlanCreated` 事件（环），两条都缺席才判「无编队」，不许用单条反推。
+
+同轮预写＝**E502** 入口 `83,807,981`（`pt` 行／`since`）；**E503** 入口后 200 拍内 `warPlan` 或 `WarPlanCreated`（两条都读）；**E504** 入口后 500 拍内 attacker 孵化请求/单位（`warPlan` 有而无孵化＝另一档）；**E505** 若入口未至：起手直读 `lh` 与 `params`，按三形状登记（新目击不移动沿）；**E506** 退出沿候选＝`max(since+minDwell=808,981, lh+threatWindow=809,981)`（无新目击时 809,981；新目击则重锚，只登记）；**E507** R570 的下一笔 supply op（行空之后）续验 `rq≤1,200` 与预约心跳。
+
+
 ### 4.0（10-22 14:1xZ 立格，R570；上一条＝R569 格「姿态转换持久事件」＝已上线并换码（线上 e63fbe537b73），首枚 PostureTransition 仍待下一次姿态转换；本格转 supply op 单趟闭环）
 
 **下一轮主目标：把 supply op 做成单趟闭环——①满额送达必须走 running→verifying→completed（现状直接 markCompleted 是非法跳跃，满额会停在 running 反复入账）；②新 op 的 requestedAmount 上限＝同源房一只 carrier 的 CARRY 容量（现场 1,800 请求对 1,200 运力，只记 1,200 后进 verifying，按 checkExpiry 在 806,004 过期）；③ready/running 的 reservation 每趟 heartbeat（500 拍 TTL 短于实测 ≈900 拍往返，heartbeatReservation 目前全库无产线调用）。验收＝下一笔 supply op 在 ≤1 趟内 status=completed 且 dv==rq，且运输途中不再出现 reservation expired**；⚠️硬前置＝①当前行 `ca=804,072／rq=1,800` 已在 verifying，本补丁不追溯改它（它会按旧路径在 `806,004` 过期，只作对照组）；②新码只在新 op 上验收；③部署前先跑 typecheck／unit／integration；不碰阈值/市场/军力。
