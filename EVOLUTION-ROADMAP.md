@@ -1159,6 +1159,13 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-22 20:2xZ 立格，R576；上一条＝R575 格「按实际载体夹请求量」＝**已上线（73678f8726e7）；E525 待旧 op 到期后的 1,650 新载**；本格把战后 G4/G6 扩张阻塞做成证据包）
+
+**下一轮主目标：把战后扩张阻塞做成可执行的证据包——G4 2.5（源房 +3.47／幼房 −0.88，门槛 5）、G6 constrained（usage 14.1/20，comfortable 需 ≤12；traffic-manager 3.07/拍，R487 工业/贸易的 factory 0.009/拍不是来源）、ea=true 但门集只列 G4/G6；列出最小自授权杠杆（traffic-manager CPU 剖析、幼房 flow 成熟监控、supply 1,650 续验）与属人项（#50/#153/#151），不改阈值/编制/市场**；⚠️硬前置＝①只读证据包，不改任何生产；②R575 的 E525（下一笔 1,650 新载）同轮续验；③G4/G6 数字取同轮 console（本次 `now=810,236`）；④不把单发 tier 当趋势（`since=810,206/upgradeTicks=11`）。
+
+同轮预写＝**E528** 下一笔 1,650 新载（`…-9db` cap=1,650）单趟完成（E519/E520/E525 同证）；**E529** G4 在幼房成熟后是否升过 5（只登记符号/条件，不外推）；**E530** G6 的 tier 是否在 `upgradeTicks` 后离开 constrained（usage≤12 才 comfortable）；**E531** traffic-manager 的 3.07/拍在下一轮 CPU 榜是否复现；**E532** 下一场 war 入口（若 threat 持续，since+3,000=812,963）与出口两臂。
+
+
 ### 4.0（10-22 19:5xZ 立格，R575；上一条＝R574 格「carrier 1,650 档」＝**已上线；首验 op 被部署前旧载 `…-9d5` 送成 1,200/1,650 verifying（过渡态，E519/E520 待新载）**；本格做入账前按实际载体夹请求量）
 
 **下一轮主目标：在 running op 入账前按实际绑定载体的容量夹 `requestedAmount`（并同步预约 amount），避免部署前/降级的小载体把 1,650 请求打成 1,200 部分送达→verifying→过期——纯函数 `capRequestToCarrier(op, carrierCapacity)`＋`adjustReservationAmount`，由 `agenda-manager` 在取 `carrierCapacity` 后、`applyDelivery` 前调用；验收＝纯函数测试覆盖 cap/adjust/apply；下一笔新载（`…-9db`，cap=1,650）不经夹、单趟完成 1,650（E519/E520/E525）；若再出现小载，才按夹后金额完成（E522–E524）**；⚠️硬前置＝①当前旧载 op 已在 809,7xx 送 1,200 进 verifying，E522–E524 对**这一代**不可达，只作对照；②只改入账前夹容量与预约同步，不动 cap 计算（R570）与 body 档（R574）；③夹后余量由 planner 重新立项；④部署前 typecheck/unit/integration。
