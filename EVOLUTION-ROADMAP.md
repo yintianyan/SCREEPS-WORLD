@@ -1159,11 +1159,11 @@
 
 ## 4. 当前迭代（最近三轮）
 
-### 4.0（10-22 19:4xZ 立格，R575；上一条＝R574 格「carrier 1,650 档」＝**已上线但首验受部署前旧载体阻断（E518 命中，E519/E520 待新载）**；本格做入账前按实际载体夹请求量）
+### 4.0（10-22 19:5xZ 立格，R575；上一条＝R574 格「carrier 1,650 档」＝**已上线；首验 op 被部署前旧载 `…-9d5` 送成 1,200/1,650 verifying（过渡态，E519/E520 待新载）**；本格做入账前按实际载体夹请求量）
 
-**下一轮主目标：在 running op 入账前按实际绑定载体的容量夹 `requestedAmount`（并同步预约 amount），避免部署前/降级的小载体把 1,650 请求打成 1,200 部分送达→verifying→过期——纯函数 `capRequestToCarrier(op, carrierCapacity)`＋`adjustReservationAmount`，由 `agenda-manager` 在取 `carrierCapacity` 后、`applyDelivery` 前调用；验收＝旧载体 `...-9d5`（cap=1,200）在下一次入账时把 op 夹到 1,200 并完成，或下一笔旧载体 op 完成；新 33C/17M 载体（1,650）不经夹、单趟完成 1,650**；⚠️硬前置＝①只改入账前夹容量与预约同步，不动 cap 计算（R570）与 body 档（R574）；②夹后余量由 planner 重新立项；③部署前 typecheck／unit／integration。
+**下一轮主目标：在 running op 入账前按实际绑定载体的容量夹 `requestedAmount`（并同步预约 amount），避免部署前/降级的小载体把 1,650 请求打成 1,200 部分送达→verifying→过期——纯函数 `capRequestToCarrier(op, carrierCapacity)`＋`adjustReservationAmount`，由 `agenda-manager` 在取 `carrierCapacity` 后、`applyDelivery` 前调用；验收＝纯函数测试覆盖 cap/adjust/apply；下一笔新载（`…-9db`，cap=1,650）不经夹、单趟完成 1,650（E519/E520/E525）；若再出现小载，才按夹后金额完成（E522–E524）**；⚠️硬前置＝①当前旧载 op 已在 809,7xx 送 1,200 进 verifying，E522–E524 对**这一代**不可达，只作对照；②只改入账前夹容量与预约同步，不动 cap 计算（R570）与 body 档（R574）；③夹后余量由 planner 重新立项；④部署前 typecheck/unit/integration。
 
-同轮预写＝**E522** 旧载体 op 的 `requestedAmount` 在入账前变 1,200；**E523** 预约 amount 同步 1,200；**E524** 该 op 完成（行提前消失＋预约释放＋源房 exported=1,200）；**E525** 下一个新 33C/17M 载体 op `rq=1,650` 不经夹并完成 1,650；**E526** 若旧载体先送达/过期，R575 只在新 carrier 上验。
+同轮预写＝**E522–E524** 旧载 op（已 verifying）不可达，仅作对照；**E525** 下一笔新载（`…-9db` cap=1,650）`rq=1,650` 不经夹、单趟完成 1,650（行消失＋预约释放＋源房 exported=1,650）；**E526** 若再出现小载，夹后 `rq`＝载体容量并完成；**E527** war 退出沿 809,981 同窗读。
 
 
 ### 4.0（10-22 18:2xZ 立格，R574；上一条＝R573 格「#151 证据包」＝**已完成并挂起（证据/三选项已落，用户未答，不改生产）**；本格做 carrier 1,650 运力档＝50 部件上限内的最大 2:1 档）
