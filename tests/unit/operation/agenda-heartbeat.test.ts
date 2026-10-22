@@ -1,0 +1,53 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { agendaManagerSystem } from "../../../src/systems/empire/agenda-manager";
+import { resetGlobals } from "../../support/factories";
+
+beforeEach(() => {
+  resetGlobals();
+});
+
+describe("agenda-manager — 活跃预约心跳", () => {
+  it("running op 的 reservation 在本趟被续期，不被 TTL 清扫", () => {
+    const now = (globalThis as any).Game.time;
+    const op = {
+      id: "supply:A:B:energy",
+      type: "supply",
+      status: "running",
+      sourceRoom: "A",
+      targetRoom: "B",
+      requestedAmount: 1200,
+      deliveredAmount: 0,
+      reservedAmount: 1200,
+      priority: 2,
+      resource: "energy",
+      deadline: now + 2000,
+      createdAt: now - 500,
+      updatedAt: now - 500,
+      retries: 0,
+      maxRetries: 3,
+    };
+    (globalThis as any).Memory.kernel = {
+      agendas: [op],
+      reservations: {
+        [op.id]: {
+          operationId: op.id,
+          sourceRoom: "A",
+          targetRoom: "B",
+          amount: 1200,
+          createdAt: now - 500,
+          expiresAt: now,
+          lastHeartbeat: now - 500,
+          resource: "energy",
+        },
+      },
+    };
+    const ctx: any = { tick: now, *snapshots () {}, getSnapshot: () => undefined };
+
+    agendaManagerSystem.run(ctx);
+
+    const reservation = (globalThis as any).Memory.kernel.reservations[op.id];
+    expect(reservation.expiresAt).toBe(now + 500);
+    expect(reservation.lastHeartbeat).toBe(now);
+    expect((globalThis as any).Memory.kernel.agendas[0].status).toBe("running");
+  });
+});

@@ -25,21 +25,22 @@ import {
 import {
   markReady,
   markRunning,
-  markVerifying,
   markCompleted,
   markBlocked,
   markFailed,
   retryFromBlocked,
   checkExpiry,
-  reportDelivery,
+  applyDelivery,
 } from "../../domain/operation/lifecycle";
 import {
   createReservation,
   releaseReservation,
+  heartbeatReservation,
   sweepExpired,
   sumReservationsByRoom,
   type ReservationTable,
 } from "../../domain/operation/reservation";
+import { capSupplyToCarrier } from "../../domain/operation/supply-sizing";
 import {
   shouldAbortVerification,
   shouldPartialComplete,
@@ -244,6 +245,12 @@ export const agendaManagerSystem: System = {
     });
 
     // ── 3. Reservation TTL 清扫 ──
+    // 500 拍 TTL 短于跨房往返（实测 ≈900 拍）；活跃 op 每趟续期，避免运输途中被判过期。
+    for (const op of operations) {
+      if ((op.status === "ready" || op.status === "running") && reservations.has(op.id)) {
+        reservations = heartbeatReservation(reservations, op.id, ctx.tick);
+      }
+    }
     const sweepResult = sweepExpired(reservations, ctx.tick);
     reservations = sweepResult.table;
     for (const opId of sweepResult.expired) {
@@ -424,6 +431,11 @@ export const agendaManagerSystem: System = {
       }
     }
 
+    const capFor = (roomName: string): number =>
+      ctx.getSnapshot(roomName)?.energyCapacityAvailable ??
+      Game.rooms[roomName]?.energyCapacityAvailable ??
+      300;
+
     // ── 13. 为新计划创建 Operation（TOCTOU 修复）──
     if (allocResult) {
       // 用本地 Map 追踪 transferable 递减 — TOCTOU 防护
@@ -441,16 +453,20 @@ export const agendaManagerSystem: System = {
           continue;
         }
 
-        // TOCTOU 防护：从本地 Map 检查 + 递减（不用 registry 的过时快照）
+        // TOCTOU 防护：本地 Map 检查 + 递减；请求量再夹到单载容量，避免一次卸货只记满容量。
         const localAvail = sourceTransferable.get(plan.sourceRoom) ?? 0;
-        if (localAvail < plan.amount) continue;
+        const amount = Math.min(
+          capSupplyToCarrier(plan.amount, capFor(plan.sourceRoom)),
+          localAvail,
+        );
+        if (amount <= 0) continue;
 
         const deadline = ctx.tick + DEFAULT_OPERATION_DEADLINE;
         const op = createOperation(
           plan.sourceRoom,
           plan.targetRoom,
           "energy",
-          plan.amount,
+          amount,
           plan.priority,
           deadline,
           ctx.tick,
@@ -465,11 +481,11 @@ export const agendaManagerSystem: System = {
             readyResult.op.id,
             plan.sourceRoom,
             plan.targetRoom,
-            plan.amount,
+            amount,
             ctx.tick,
           );
           // TOCTOU 防护：递减本地可调拨量
-          sourceTransferable.set(plan.sourceRoom, localAvail - plan.amount);
+          sourceTransferable.set(plan.sourceRoom, localAvail - amount);
         }
       }
     }
@@ -496,16 +512,20 @@ export const agendaManagerSystem: System = {
           continue;
         }
 
-        // TOCTOU 防护
+        // TOCTOU 防护 + 单载容量上限（同 allocation 分支）
         const localAvail = sourceTransferablePlan.get(req.source.room) ?? 0;
-        if (localAvail < req.amount) continue;
+        const amount = Math.min(
+          capSupplyToCarrier(req.amount, capFor(req.source.room)),
+          localAvail,
+        );
+        if (amount <= 0) continue;
 
         const deadline = Math.min(req.deadline, ctx.tick + DEFAULT_OPERATION_DEADLINE);
         const op = createOperation(
           req.source.room,
           req.destination.room,
           req.resource,
-          req.amount,
+          amount,
           req.priority as 0 | 1 | 2 | 3,
           deadline,
           ctx.tick,
@@ -519,10 +539,10 @@ export const agendaManagerSystem: System = {
             readyResult.op.id,
             req.source.room,
             req.destination.room,
-            req.amount,
+            amount,
             ctx.tick,
           );
-          sourceTransferablePlan.set(req.source.room, localAvail - req.amount);
+          sourceTransferablePlan.set(req.source.room, localAvail - amount);
         }
       }
     }
@@ -683,21 +703,11 @@ export const agendaManagerSystem: System = {
                   deliveredAmount = carrierCapacity;
                 }
 
-                operations[idx] = reportDelivery(op, deliveredAmount, ctx.tick);
-
-                // 检查是否完成
-                if (operations[idx]!.deliveredAmount >= op.requestedAmount) {
-                  // 全量送达 → completed
-                  const completedResult = markCompleted(operations[idx]!, ctx.tick);
-                  if (completedResult.ok) {
-                    operations[idx] = completedResult.op;
-                    reservations = releaseReservation(reservations, op.id);
-                    recordExecution("carrier", "completed");
-                  }
-                } else {
-                  // 部分送达 → verifying
-                  const verifyingResult = markVerifying(operations[idx]!, ctx.tick);
-                  if (verifyingResult.ok) operations[idx] = verifyingResult.op;
+                const delivered = applyDelivery(op, deliveredAmount, ctx.tick);
+                operations[idx] = delivered;
+                if (delivered.status === "completed") {
+                  reservations = releaseReservation(reservations, op.id);
+                  recordExecution("carrier", "completed");
                 }
               }
             }

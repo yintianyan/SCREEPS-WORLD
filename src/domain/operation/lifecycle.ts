@@ -154,3 +154,20 @@ export function reportDelivery(
   }
   return { ...op, deliveredAmount, status, updatedAt: tick };
 }
+
+/**
+ * 载体送达入账 — running 先过 verifying，再按累计量收尾。
+ * 直接 reportDelivery 会让满额送达停在 running（running→completed 非法），下一趟反复入账却永不收尾。
+ */
+export function applyDelivery(
+  op: OperationContext,
+  amount: number,
+  tick: number,
+): OperationContext {
+  let next = op;
+  if (next.status === "running") {
+    const verifying = markVerifying(next, tick);
+    if (verifying.ok) next = verifying.op;
+  }
+  return reportDelivery(next, amount, tick);
+}
