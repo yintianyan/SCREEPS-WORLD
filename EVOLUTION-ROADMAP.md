@@ -1159,6 +1159,13 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-22 21:3xZ 立格，R578；上一条＝R577 格「自有房静态快照缓存」＝**已上线（5a791325602e）；snapshots 1.030、幼房无回归；非自有 7 房 ~0.77 待扩**；本格扩到全部有视野房）
+
+**下一轮主目标：把静态快照缓存从自有房扩到全部有视野房（`readStaticPartsCached` 去掉 `controller.my` 门槛；结构/矿脉 TTL=10；工地仍逐拍新鲜），目标把 `snapshots` 1.03 再降到 ~0.3、`cpuRate` 16.82→~16.1；验收＝unit（非自有也缓存／工地仍新鲜／复位）、integration（远程修路／工地不重复）、e2e smoke 全绿；线上 `systemCpu.snapshots` 下降、远程道路/容器/运输无回归；不改 G4/G6 阈值/编制/市场**；⚠️硬前置＝①工地永不缓存；②远程新道路/结构 ≤10 拍可见，若 remote road planner 或运输回归立即回滚；③测试复位；④部署前 typecheck／unit／integration。
+
+同轮预写＝**E538** 线上 `systemCpu.snapshots` 1.03→~0.3（同发 `cpuRate.total`）；**E539** 远程新道路/结构 ≤10 拍可见（remote road planner／运输无回归）；**E540** 工地逐拍新鲜（无重复 site；`siteProgressTracker`=在世站点数）；**E541** 远程经济/运输（`remoteOps` ledger、`remoteHauler` 编成）无新增停滞；**E542** 测试复位后跨用例无串味。
+
+
 ### 4.0（10-22 20:5xZ 立格，R577；上一条＝R576 格「战后 G4/G6 证据包」＝**已收口（G4 2.1／G6 17.2、供给线闭合、#153/#50/#151 属人待拍板）**；本格做自有房静态快照 TTL 缓存，工地不缓存）
 
 **下一轮主目标：给 `buildRoomSnapshot` 的自有房静态部分加 TTL=10 缓存（`FIND_MY_STRUCTURES`／`FIND_STRUCTURES`／`FIND_SOURCES`／`FIND_MINERALS` 缓存；工地 `FIND_CONSTRUCTION_SITES`／`FIND_MY_CONSTRUCTION_SITES` 不缓存——construction-manager 幂等去重需要逐拍新鲜，首版缓存工地导致集成 7 例重复建 site；creeps/hostiles/dropped/tombstones/ruins/nukes/energy 每拍重读；非自有房不缓存），目标把 `snapshots` 1.385/拍降下来且构造/补齐/防御无回归；验收＝unit 含 TTL／新建结构≤10／非自有不缓存／测试复位四例、integration、e2e smoke 全绿；线上 `systemCpu.snapshots` 下降、幼房 extension/工地与 tower 无卡顿、无重复 site；不改 G4/G6 阈值/编制/市场**；⚠️硬前置＝①只缓存静态部分，动态每拍；②TTL=10 是上限，若构造/补齐出现回归立即回滚；③测试必须复位模块缓存，跨测试世界不得串味；④部署前 typecheck／unit／integration。
