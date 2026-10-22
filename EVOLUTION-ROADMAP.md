@@ -1164,6 +1164,7 @@
 **下一轮主目标：把 war 的无目标分支从零痕迹变成可读事件——`selectWarTarget` 返回 undefined 时记录 `WarNoTarget`（`d=[候选总数, 合格数, warSince]`，每场 war 只记一次；新 `EventKind` 追加末尾，事件环跨 boot），不改 war 的进入/退出/编队行为；验收＝当前 war（`since=83,807,981`）在部署后的下一次规划趟（interval 10）出现一条 `WarNoTarget`，候选/合格数可读，同时 `warPlan` 仍缺席、`posture` 仍 `war`、退出沿 `809,981` 不变**；⚠️硬前置＝①这是观测，不改 #151（玩家/NPC 威胁分列仍属人）；②不新增目标获取/进攻动作；③候选计数与 `selectWarTarget` 共用同一判定，防两把尺；④部署前 typecheck／unit／integration。
 
 同轮预写＝**E508** 当前 war 的首条 `WarNoTarget`（`t` 在部署后 ≤10 拍；`d=[candidates, eligible, 83807981]`）；**E509** 合格数=0 而候选数>0 ⇒ 目标池有 intel 但被门槛滤掉；候选数=0 ⇒ intel 池空；两形状分开记；**E510** 行为不变（`warPlan` 仍缺席、posture war、exit 809,981）；**E511** 同一 `since` 只一条、换 since 再一条；**E512** 若事件不出现，先查 `war-planner` 是否在 war 姿态运行（`systemLastRun`）。
+**加注⑴（10-22 18:1xZ 当场补＝★R572 作废：`warFunnel` 已存在，新事件不必要）**＝`kernel.stats.warFunnel` 已在线上给出 `noInput/notFact/unowned/mine/notNormal/candidates/noThreats/noPlan/plans/noSponsor` 全套计数（现读 `noThreats=1`、`candidates=0`）⇒ `WarNoTarget` 事件不落码；R572 的观测目标由既有漏斗满足，改为 R573 的 #151 决策包。
 
 
 ### 4.0（10-22 16:3xZ 立格，R571；上一条＝R570 格「supply op 单趟闭环」＝**已判成并结案＝E497/E498/E499 三项全绿**（见本格加注⑷）；本格判 war 入口 807,981 与 war 后编队）
@@ -1172,6 +1173,7 @@
 
 同轮预写＝**E502** 入口 `83,807,981`（`pt` 行／`since`）；**E503** 入口后 200 拍内 `warPlan` 或 `WarPlanCreated`（两条都读）；**E504** 入口后 500 拍内 attacker 孵化请求/单位（`warPlan` 有而无孵化＝另一档）；**E505** 若入口未至：起手直读 `lh` 与 `params`，按三形状登记（新目击不移动沿）；**E506** 退出沿候选＝`max(since+minDwell=808,981, lh+threatWindow=809,981)`（无新目击时 809,981；新目击则重锚，只登记）；**E507** R570 的下一笔 supply op（行空之后）续验 `rq≤1,200` 与预约心跳。
 **加注⑴（10-22 17:5xZ 当场补＝entry EXACT＋无编队；零痕迹成因不可读）**＝①入口 `pt={from:"fortify",to:"war",reason:"war-enter-patience",tick:83807981}` ∧ `since=83807981`（E502 命中）；②入口后 +228 拍现读 `warPlan` 缺席、`warStandDownUntil`／`warBlacklist` 缺席、`WarPlanCreated`／`WarOutcome` 环内零行、spawnQueue 无 attacker/healer（只有经济 roles）⇒ **到点但无编队**（E503／E504 命中；两个规划器 interval=10，已跑 ≥22 趟）；③成因按构造不可读：`demobilize` 首行 `if (!plan) return`（`war-planner.ts:371`）⇒ 无 plan 的 `REASON_NO_TARGET` 零痕迹；只能从「两规划器都跑过＋warPlan 缺席」推「无合格目标」，不得写成直读；④威胁来源＝invader（`lastInvaderHostileAt=804,981`），入口由 NPC 敌情驱动，而 war 规划器要 fact 级普通玩家房候选 ⇒ #151（玩家/NPC 威胁分列）仍是属人决定；⑤war 退出沿＝`max(since+minDwell=808,981, lh+threatWindow=809,981)=809,981`（前提：窗内不再来新目击），只登记；⑥R572＝把无目标分支做成可读事件（不改 war 行为）。
+**加注⑵（10-22 18:1xZ 当场补＝★更正加注⑴的“成因按构造不可读”：`warFunnel` 已存在且可读）**＝现读 `kernel.stats.warFunnel={tick:83808354, intelEntries:8, notFact:1, unowned:7, mine:0, notNormal:0, candidates:0, noThreats:1, noPlan:0, plans:0, noSponsor:0}` ⇒ ①canonical A5.3 终止在 `noThreats=1`（没有玩家威胁评估）；②legacy 目标池 `candidates=0`（8 条 intel：7 unowned＋1 notFact）；③“零痕迹”只适用于 `demobilize` 的无 plan 分支（war-planner.ts:371），**整条成因是可读的**；④#151（玩家/NPC 威胁分列）仍是属人决定。
 
 
 ### 4.0（10-22 14:1xZ 立格，R570；上一条＝R569 格「姿态转换持久事件」＝已上线并换码（线上 e63fbe537b73），首枚 PostureTransition 仍待下一次姿态转换；本格转 supply op 单趟闭环）
