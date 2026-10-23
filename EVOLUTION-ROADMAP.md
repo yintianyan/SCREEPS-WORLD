@@ -1165,6 +1165,8 @@
 
 同轮预写＝**E573** `83,829,405±20`（管理器 interval 20）W37S56 `state=abandoned` 且 `dangerUntil≈83,839,405`；**E574** 其远矿编制成员在 ≤1 个管理器趟内 `memory.recycle=true`，随后从 `Game.creeps` 消失（R586 首个现场正证）；**E575** `dangerUntil` 内不重开、W38S56 phase 不因该线退出跌回 crisis（其它线收入承接）。⚠️账本口径＝**终身均值**（前置 spawn/infra 摊在全程），不是边际率；若边际交付其实覆盖替换成本，这条判决会过早——本轮只观察不干预，若随后 G4/净流恶化则立案「均值→窗口率」。
 
+**同窗基建分析（00:1xZ）**＝45 只 creep 的稳态替换维持（body 造价 ÷ 名义寿命，CLAIM 600／其余 1,500）：**≈47.4 e/tick**——`remoteHauler 12.8`、`reserver 9.75`、`carrier 5.0`、`builder 4.2`、`remoteHarvester 3.3`、`hauler 2.9`、`upgrader 2.8`、`harvester 2.6`、`distributor 1.6`、`dismantler 1.2`、`labTender 0.8`、`mineralMiner 0.7`、`scout 0.03`。与本地 4 source 满采 ~40 e/tick＋远矿净（+4／+1／+1.1／−2.7）基本持平 ⇒ **净流为负主要是可支配的建造/升级支出**，不是编制严重超编；W37S56 的边际交付（1.5–3.3/tick）低于其维持 ≈8.8/tick，废弃判决成立。**待办（不本轮改）**：①reserver 若改 2-CLAIM 可省 ~3.3 e/tick（代价：新线预约爬升 2,500→5,000 拍）；②两只 labTender 全 idle（W37S58 仅 1 lab 有 5 XGH2O、无第二矿物；W38S56 无矿物）——需求门只查 labs≥3/RCL≥6/terminal，未查反应/boost 需求，属小幅浪费（~1.7 e/tick），改门需先定义 boost 需求信号。
+
 ### 4.0（10-23 23:5xZ 立格，R586；上一条＝R585 格「卸货回执」＝**E566/E567 PASS，供给记账闭环**；本格退役 abandoned 线残留 creep）
 
 **下一轮主目标：远矿管理器只回收 active 线的超额成员，op 变 abandoned 后既有 creep 会一直跑到寿终（W37S55 有 2 harvester＋1 hauler；危机房里继续吃 CPU/能量、把货送进无人回收的远矿房）。修法＝`recycleExcessRemoteCreeps` 增加一趟「明确 abandoned 线」退役：仅远矿编制角色、非在孵、非已标记；**op 缺席不判死**（集成场景会后置注入 op，误退役会让刚孵成员被回收）；scout 等非远矿角色豁免。验收＝unit（abandoned 退役／active 不动／scout 豁免／op 缺席不判死）＋integration＋typecheck／CI＋线上 W37S55 三个成员在一个管理器趟内被标记并最终消失**。
