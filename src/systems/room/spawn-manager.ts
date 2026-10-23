@@ -414,16 +414,24 @@ const REMOTE_LINE_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * R590 贫困闸：home storage 低于远矿开点地板时，暂停远矿编制的补员/新孵。
+ * R590/R591 贫困闸：home storage 低于远矿开点地板时，暂停远矿编制的**首孵/扩编**。
  * 线上实证（10-24）：19K 的房开 7 人远矿线，孵化峰把 storage 打到 2,887、进 crisis；
- * 开点门只判当拍 storage，挡不住孵化期的连续支出。`survival` 请求豁免。
+ * 开点门只判当拍 storage，挡不住孵化期的连续支出。
+ * **替换请求放行**（key 含 `:repl:`）：替换是保住现有线收入的最小支出，若一并停，
+ * 低储期成员死亡会让交付下降、反噬 storage。`survival` 请求同样豁免。
  */
 export function remoteSpawnPovertyBlocked(
   role: string,
   storageEnergy: number,
   survival: boolean,
+  key: string,
 ): boolean {
-  return !survival && REMOTE_LINE_ROLES.has(role) && storageEnergy < CONFIG.remote.roomMinStorage;
+  return (
+    !survival &&
+    REMOTE_LINE_ROLES.has(role) &&
+    !key.includes(":repl:") &&
+    storageEnergy < CONFIG.remote.roomMinStorage
+  );
 }
 
 export function trySpawn(
@@ -499,6 +507,7 @@ export function trySpawn(
         req.role,
         snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
         req.survival === true,
+        req.key,
       )
     ) {
       req.block = "poverty";
