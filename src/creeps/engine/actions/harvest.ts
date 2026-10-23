@@ -8,6 +8,7 @@ import { ACTION_RANGE_NEAR, countedIntent, runAction } from "./helpers";
 import { getSource } from "../../support/targeting";
 import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/economy/links";
 import { resolveControllerDowngradeRisk } from "../../../domain/economy/downgrade-risk";
+import { recordActionCpu } from "../../../kernel/safe-run";
 
 /**
  * 从 source 采集（通用）。resolve 过滤空 source（再生期 energy===0），避免
@@ -60,7 +61,8 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       // 健壮性（2026-08-01）：source link 只在有下游出口时可灌——storage link 存在（能量瞬移进
       // hub，hauler 排空）或 controller link 按需求驱动目标仍有需求（RCL<8 升级/RCL8 保级）。
       // 无出口时灌 link 只会积压 → container 满 → drop 衰减损失（rcl8-endgame 5000t 回归实证）。
-      const linkUsable = link !== undefined && linkHasOutlet(ac, link);
+      const linkUsable =
+        link !== undefined && prof("stationary/linkHasOutlet", () => linkHasOutlet(ac, link));
       // 站位：默认站 container 之上（range 0 倒能）或 source 旁。特例——source link 与 container
       // 分居 source 两侧、站 container 够不到 link（range>1）时，改站「贴 source 且贴 link」格，
       // 同 tick 倒进 link，能量经 link 网络瞬移入库，免去远距离 hauler 往返（source#1 病灶）。
@@ -110,7 +112,9 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         return;
       }
 
-      const harvestResult = countedIntent("harvest", () => ac.creep.harvest(source));
+      const harvestResult = prof("stationary/harvest", () =>
+        countedIntent("harvest", () => ac.creep.harvest(source)),
+      );
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, standTarget);
         return;
@@ -140,7 +144,9 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
               ? container
               : undefined;
         if (sink) {
-          countedIntent("transfer", () => ac.creep.transfer(sink, RESOURCE_ENERGY));
+          prof("stationary/transfer", () =>
+            countedIntent("transfer", () => ac.creep.transfer(sink, RESOURCE_ENERGY)),
+          );
         } else if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
           // 采集空间耗尽且身边 sink 均满 → 原地 drop 保持在位继续采（P2-7），
           // 掉落能量由 hauler 的 pickupDroppedEnergy 回收，绝不离岗去 fill/build/upgrade。
@@ -149,6 +155,15 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       }
     },
   };
+}
+
+/** profile 子步（仅 actionProfiling 开启时计量；关闭时零额外 getUsed）。 */
+function prof<T>(key: string, fn: () => T): T {
+  if (!CONFIG.debug.actionProfiling) return fn();
+  const before = Game.cpu.getUsed();
+  const out = fn();
+  recordActionCpu(key, Game.cpu.getUsed() - before);
+  return out;
 }
 
 /**
