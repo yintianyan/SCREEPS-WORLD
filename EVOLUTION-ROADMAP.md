@@ -1171,6 +1171,8 @@
 
 **平衡态（05:2xZ）**：`t=83,831,304` storage **9,212**（10.4K→9.2K，约 −9.7/拍）、phase recovery/crisis、`nf=+360`（模型口径）、`poverty=10`、38 creeps、`cpuRate.total=12.34`（win 430）、`capacity=tight／upgradeTicks 0`。⇒ 幼房在 **9–10K** 间振荡、编制缓慢自然收缩（贫困闸拦首孵、放行替换），未再出现 3K 级下探；G6 距线 **0.34**。下一轮若继续压 G6，优先做结构性快照/日程削减（而非再动编制或阈值），并在 storage 稳定 ≥10K 后再放开扩编。 **门集（05:2xZ）**＝`Blocked=G0+G2+G3+G4+G6`；`gateNetFlow` **W37S58 −7.45／W38S56 −7.05（Σ−14.5）**（较前 −11.1 恶化；核心房也转负——供给出口计消耗、且核心在为本房/远矿/供给补员）；`storage 8,732`、phase recovery/crisis、`nf=+64`、`cpu 12.78／tight`、E575 冷却保持。⇒ **G4 是比 G6 更硬的墙**：即使 CPU 压到 12，净流仍 −14.5；扩张只能等投资期结束/收入结构改善，不能再靠阈值或编制小修。
 
+**后续（05:3xZ）**：`t=83,831,457` storage **8,972**（稳 9K）、phase recovery/recovery、`nf=−486`、35 creeps（贫困闸下自然收缩，较 41 减 6）、`cpu 12.96／tight`、`gateNetFlow` W37S58 −7.85／W38S56 −6.86（Σ−14.7）。⇒ 帝国进入**低活动平衡**：编制收缩、storage 守住 9K、CPU 12–13；G4/G6 双红，扩张维持关闭。下一轮优先级不变：先稳住幼房与 G4（等投资摊销/收入结构改善），结构性 CPU 削减只在 storage ≥10K 后做。
+
 ### 4.0（10-24 00:5xZ 立格，R589；上一条＝R588 格「旧回执守卫」＝**已上线 `67901d6aa035`；守卫首次遇到真实形态（无 op 交付留下回执）**；本格把和平期塔修墙批量化）
 
 **下一轮主目标：塔的墙体维护从「每拍」改为「和平期每 10 拍批次、受袭逐拍」**。理由：`tower.repair` 每次固定 10 能量（单次可补至 800 hits），逐拍修 3 hits 的稳态衰减等于 ~3.3 e/hit；10 拍批次则 ~0.33 e/hit，能耗降 ~10×；同时省掉每拍的墙体扫描与 repair intent。受袭（`underSiege`）保持逐拍；关键结构（spawn/extension/tower/container）维修仍逐拍。验收＝unit（批次/受袭/错峰三例＋分桶旧例在批次拍）＋integration＋typecheck／CI＋线上 `tower-defense` CPU 与塔能耗下降、rampart 最低血量不塌**。
