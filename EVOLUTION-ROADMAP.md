@@ -1159,6 +1159,12 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-23 23:0xZ 立格，R585；上一条＝R584 格「失联载体摘绑」＝**已上线；现场反证后收紧为距两端 ≥2 房，`6c887516`**；本格修供给入账的采样窗漏洞）
+
+**下一轮主目标：供给 op 的入账依赖 agenda 每 100 拍检查「载体空载且在 target 房」，而载体卸完立刻回程/离开 ⇒ 连续 op `dv=0` 到 deadline（线上实证：target `imported` 在涨但 op 不结）。修法＝carrier 在 `transfer` 成功那拍把 `{amount,tick}` 写入 `creep.memory.lastDelivery`；agenda 趟优先消费回执并 `applyDelivery`（请求量按回执夹），消费后删除；旧的「空载在 target」路径保留为无回执时的回退。验收＝unit（两房夹具回执入账、回执删除）、integration、typecheck／CI＋线上下一笔交付在一个 agenda 趟内结单**。
+
+同轮预写＝**E566** 下一笔供给交付在 ≤1 个 agenda 趟内从 running 走到 verifying/completed（终态行被修剪时以 target `imported` 增量＋预约释放＋无新 op 为凭证）；**E567** 不重复入账（`deliveredAmount ≤ requestedAmount`，同一趟 `imported` 只加一次）；**E568** carrier 卸货行为不变（role 测试与 target 能量增量）。⚠️若交付发生在新码上线前，只登记「下一笔兑现」。
+
 ### 4.0（10-23 22:0xZ 立格，R584；上一条＝R583 格「远矿/预约节流」＝**已上线；remote-mining 1.01→0.26、reserver 0.07–0.15，E560 PASS；但扩张新增 1.2 抵消，total 14.41**；本格修「失联载体」）
 
 **下一轮主目标：供给 op 绑定的 carrier 可能活着却卡在端房之外 idle（线上实证 W38S58 1,069 拍不回家），现有清洗只查活体不查可用性 ⇒ op 一直 `dv=0` 到 deadline。修法＝`isLostCarrier`（`mode==="idle"` 且在 source/target 之外）连续两趟 agenda 后被摘绑定；并且**失联个体不再计入 `hasCarrierForOp`、不进兜底重绑**（否则摘了又绑回同一只）；在途中间房 `mode==="work"` 不算失联。验收＝unit（两房夹具：失联两趟摘绑定且不自绑回／在途不摘）＋integration＋typecheck／CI＋线上下一个 op 能绑到可用载体或补孵**。
