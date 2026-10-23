@@ -721,6 +721,32 @@ export const agendaManagerSystem: System = {
         }
       }
 
+      // 卸货回执优先：carrier 在 transfer 成功那拍写入 {amount,tick}。旧口径依赖
+      // 「空载且在 target 房」的 100 拍采样窗，卸完立刻回程就永久错过（线上实证：
+      // 连续 op dv=0 到 deadline，而 target imported 实际在涨）。
+      const receiptCarrier = op.carrierName ? Game.creeps[op.carrierName] : undefined;
+      const receipt = (
+        receiptCarrier?.memory as { lastDelivery?: { amount: number; tick: number } } | undefined
+      )?.lastDelivery;
+      if (receiptCarrier && receipt && receipt.amount > 0) {
+        const idx = operations.indexOf(op);
+        if (idx >= 0) {
+          const capped = capRequestToCarrier(op, receipt.amount);
+          if (capped !== op) {
+            operations[idx] = capped;
+            reservations = adjustReservationAmount(reservations, op.id, receipt.amount);
+          }
+          const delivered = applyDelivery(operations[idx]!, receipt.amount, ctx.tick);
+          operations[idx] = delivered;
+          if (delivered.status === "completed") {
+            reservations = releaseReservation(reservations, op.id);
+            recordExecution("carrier", "completed");
+          }
+        }
+        delete (receiptCarrier.memory as { lastDelivery?: unknown }).lastDelivery;
+        continue;
+      }
+
       // 检查 carrier 是否到达 target room 且空载
       const carrierName = op.carrierName;
       if (carrierName) {

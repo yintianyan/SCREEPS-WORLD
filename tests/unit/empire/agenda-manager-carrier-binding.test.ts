@@ -271,4 +271,30 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     runNow();
     expect(saved("op-f")?.carrierName).toBe("carrier-near");
   });
+
+  it("庚：卸货回执 → 同一趟直接入账（不依赖空载采样窗）", () => {
+    const op = makeOp("op-g", "carrier-rec");
+    op.requestedAmount = 3000;
+    op.deliveredAmount = 0;
+    (globalThis as any).Memory.kernel.agendas = [op];
+    squad.push({ name: "carrier-rec" });
+    creeps["carrier-rec"] = {
+      name: "carrier-rec",
+      spawning: false,
+      room: { name: "W0N2" },
+      store: { getUsedCapacity: () => 0, getCapacity: () => 1650 },
+      memory: {
+        role: "carrier",
+        home: "W0N1",
+        remoteTarget: "W0N2",
+        lastDelivery: { amount: 1650, tick: 1000 },
+      },
+    };
+
+    runNow();
+
+    // 回执入账后请求量被夹到回执金额 ⇒ 同趟完成，终态行被 pruneTerminal 摘掉。
+    expect(saved("op-g")).toBeUndefined();
+    expect(creeps["carrier-rec"].memory.lastDelivery).toBeUndefined();
+  });
 });

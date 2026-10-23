@@ -51,6 +51,13 @@ function transferTargetStorage(): ActionCandidate<StructureStorage> {
       const amount = Math.min(carryUsed, free);
       const result = ac.creep.transfer(storage, RESOURCE_ENERGY, amount);
       if (result === OK) {
+        // 卸货回执：agenda-manager 只每 100 拍看一次「空载且在 target 房」，载体卸完立刻
+        // 回程就会永久错过验证窗（线上实证：连续 op dv=0 到 deadline）。这里把金额落 Memory，
+        // 由下一趟 agenda 直接入账，不依赖采样窗。
+        (ac.creep.memory as { lastDelivery?: { amount: number; tick: number } }).lastDelivery = {
+          amount,
+          tick: Game.time,
+        };
         // 两侧同一拍成对入账（债单 #42 下半场 / #59）：收端按「目标池所在房」记 imported，
         // 发端按「背包出发的那间房」记 exported。取能时刻不记 —— storage→carry 两头都在同一房的
         // tracked 池里，先记 exported 会把"满载但还没出门"（线上实测过停滞形态）当成已发出。
