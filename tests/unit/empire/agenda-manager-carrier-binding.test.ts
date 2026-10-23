@@ -297,4 +297,31 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     expect(saved("op-g")).toBeUndefined();
     expect(creeps["carrier-rec"].memory.lastDelivery).toBeUndefined();
   });
+
+  it("辛：旧回执（tick < op.createdAt）不入账，且被清除防串单", () => {
+    const op = makeOp("op-h", "carrier-rec");
+    op.createdAt = 900;
+    op.requestedAmount = 3000;
+    op.deliveredAmount = 0;
+    (globalThis as any).Memory.kernel.agendas = [op];
+    squad.push({ name: "carrier-rec" });
+    creeps["carrier-rec"] = {
+      name: "carrier-rec",
+      spawning: false,
+      room: { name: "W9N9" },
+      store: { getUsedCapacity: () => 0, getCapacity: () => 1650 },
+      memory: {
+        role: "carrier",
+        home: "W0N1",
+        remoteTarget: "W0N2",
+        lastDelivery: { amount: 1650, tick: 800 },
+      },
+    };
+
+    runNow();
+
+    expect(saved("op-h")?.deliveredAmount).toBe(0);
+    expect(saved("op-h")?.status).toBe("running");
+    expect(creeps["carrier-rec"].memory.lastDelivery).toBeUndefined();
+  });
 });

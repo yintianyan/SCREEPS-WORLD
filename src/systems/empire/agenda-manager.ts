@@ -729,22 +729,27 @@ export const agendaManagerSystem: System = {
         receiptCarrier?.memory as { lastDelivery?: { amount: number; tick: number } } | undefined
       )?.lastDelivery;
       if (receiptCarrier && receipt && receipt.amount > 0) {
-        const idx = operations.indexOf(op);
-        if (idx >= 0) {
-          const capped = capRequestToCarrier(op, receipt.amount);
-          if (capped !== op) {
-            operations[idx] = capped;
-            reservations = adjustReservationAmount(reservations, op.id, receipt.amount);
+        // 只认「本 op 创建之后」的交付；旧回执清掉，防止串到将来的 op 造成假完成。
+        if (receipt.tick < op.createdAt) {
+          delete (receiptCarrier.memory as { lastDelivery?: unknown }).lastDelivery;
+        } else {
+          const idx = operations.indexOf(op);
+          if (idx >= 0) {
+            const capped = capRequestToCarrier(op, receipt.amount);
+            if (capped !== op) {
+              operations[idx] = capped;
+              reservations = adjustReservationAmount(reservations, op.id, receipt.amount);
+            }
+            const delivered = applyDelivery(operations[idx]!, receipt.amount, ctx.tick);
+            operations[idx] = delivered;
+            if (delivered.status === "completed") {
+              reservations = releaseReservation(reservations, op.id);
+              recordExecution("carrier", "completed");
+            }
           }
-          const delivered = applyDelivery(operations[idx]!, receipt.amount, ctx.tick);
-          operations[idx] = delivered;
-          if (delivered.status === "completed") {
-            reservations = releaseReservation(reservations, op.id);
-            recordExecution("carrier", "completed");
-          }
+          delete (receiptCarrier.memory as { lastDelivery?: unknown }).lastDelivery;
+          continue;
         }
-        delete (receiptCarrier.memory as { lastDelivery?: unknown }).lastDelivery;
-        continue;
       }
 
       // 检查 carrier 是否到达 target room 且空载
