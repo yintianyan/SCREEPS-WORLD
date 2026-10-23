@@ -1173,6 +1173,8 @@
 
 **后续（05:3xZ）**：`t=83,831,457` storage **8,972**（稳 9K）、phase recovery/recovery、`nf=−486`、35 creeps（贫困闸下自然收缩，较 41 减 6）、`cpu 12.96／tight`、`gateNetFlow` W37S58 −7.85／W38S56 −6.86（Σ−14.7）。⇒ 帝国进入**低活动平衡**：编制收缩、storage 守住 9K、CPU 12–13；G4/G6 双红，扩张维持关闭。下一轮优先级不变：先稳住幼房与 G4（等投资摊销/收入结构改善），结构性 CPU 削减只在 storage ≥10K 后做。
 
+**贫困闸实战检验（05:3xZ）**：管理器新开 **W38S58** op（`ca=83,830,965`，`haulerNeed=4`，`d=74／spawn=4,450／infra=5,000`），而 home 仍 `recovery/crisis`、storage **8,922**、34 creeps ⇒ 与 W39S55 同形（新线 ramp 在穷房）。**本轮不人工废弃**，让 R590/R591 的闸门自己守：预期 storage 触及 8,000 后 `poverty` 计数增长、首孵被暂停（替换仍放行），storage 不再出现 19K→2.9K 那种下探。判据＝①storage 不跌破 8,000 以下超过 ~500；②`poverty` 计数在 ramp 期间增长；③W38S58 的已孵成员不因闸门被误收（`recycle` 不出现）。若跌破 6,000 或出现误收，立即人工废弃该 op。 **观察结果（05:4xZ）**：`t=83,831,597` storage **8,822**（8,922→8,822，未下探）、phase **normal/growth**、`poverty=10`（未增）、`spawnQueue=0`；W38S58 op 仍 active，`spawn` 成本停在 **4,450**（≈120 拍无新孵）、已孵 3 名（remoteHauler/remoteHarvester/reserver，均未 `recycle`）。⇒ 这次新线 ramp **没有**复制 19K→2.9K：孵化在 3 名处停住（预算/能量门先于贫困闸生效），storage 守住 8.8K，phase 回 growth。**贫困闸本轮未被触发**（poverty 未增），行为证据仍待“首孵请求真正到闸且 storage<8K”的场景；但“穷房开新线”的风险已被证明可由多重闸门共同兜住。
+
 ### 4.0（10-24 00:5xZ 立格，R589；上一条＝R588 格「旧回执守卫」＝**已上线 `67901d6aa035`；守卫首次遇到真实形态（无 op 交付留下回执）**；本格把和平期塔修墙批量化）
 
 **下一轮主目标：塔的墙体维护从「每拍」改为「和平期每 10 拍批次、受袭逐拍」**。理由：`tower.repair` 每次固定 10 能量（单次可补至 800 hits），逐拍修 3 hits 的稳态衰减等于 ~3.3 e/hit；10 拍批次则 ~0.33 e/hit，能耗降 ~10×；同时省掉每拍的墙体扫描与 repair intent。受袭（`underSiege`）保持逐拍；关键结构（spawn/extension/tower/container）维修仍逐拍。验收＝unit（批次/受袭/错峰三例＋分桶旧例在批次拍）＋integration＋typecheck／CI＋线上 `tower-defense` CPU 与塔能耗下降、rampart 最低血量不塌**。
