@@ -281,7 +281,13 @@ function remoteStationaryMine(): ActionCandidate<Source> {
       // 永远不满足（resolve 时刻背包恒空），维修链死锁（集成场景实证：
       // 600 tick 零维修、container 单调衰减）。留税让节拍变为
       // 「采 N 倒 N-W、修 W」交替，维修与采集并行不断流。
-      if (container && ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+      // 批量倒能（同本地 harvester）：留出下一拍采集量再倒，减少 transfer intent。
+      const harvestRate = ac.creep.body.filter(p => p.type === WORK).length * 2;
+      if (
+        container &&
+        ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
+        (harvestRate <= 0 || ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) < harvestRate)
+      ) {
         const freeCap = container.store.getFreeCapacity(RESOURCE_ENERGY);
         if (freeCap > 0) {
           const workParts = ac.creep.body.filter(p => p.type === WORK).length;

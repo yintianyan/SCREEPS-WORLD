@@ -132,7 +132,13 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         moveToTarget(ac.creep, container.pos, 0);
       }
       // 同 tick 倒能：link 优先，其次 container（均需 range<=1 且有空位）。
-      if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+      // 批量倒能：每拍 transfer 约 0.19 CPU（本服 intent 单价），背包留出下一拍采集量
+      // 再倒 —— 5 WORK 时 40/50 才倒，transfer 次数约降到 1/4，吞吐不变。
+      const harvestRate = ac.creep.body.filter(p => p.type === WORK).length * 2;
+      if (
+        ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
+        (harvestRate <= 0 || ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) < harvestRate)
+      ) {
         const sink =
           linkUsable &&
           ac.creep.pos.getRangeTo(link) <= 1 &&

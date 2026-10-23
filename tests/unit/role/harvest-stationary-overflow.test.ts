@@ -42,6 +42,8 @@ function makeAc(opts: {
     },
     harvest: vi.fn(() => OK),
     transfer: vi.fn(() => OK),
+    getActiveBodyparts: vi.fn((t: string) => (t === WORK ? 5 : 0)),
+    body: Array.from({ length: 5 }, () => ({ type: "work", hits: 100 })),
     drop: vi.fn(() => OK),
     move: vi.fn(() => OK),
   };
@@ -118,6 +120,33 @@ describe("stationaryMine — 下游全满且无 storage 时保持背包（#41）
     stationaryMine().execute!(ac as any, { source, container, link: undefined } as any);
 
     expect(creep.drop).toHaveBeenCalled();
+  });
+
+  it("批量倒能：背包未接近满（免费 40 ≥ 每拍采集 10）时不签发 transfer", () => {
+    const { ac, creep, container, source } = makeAc({
+      carryFree: 40,
+      carryUsed: 10,
+      containerFree: 500,
+      storage: { id: "st1", pos: { x: 10, y: 10, roomName: "W8N8" }, store: {} },
+    });
+
+    stationaryMine().execute!(ac as any, { source, container, link: undefined } as any);
+
+    expect(creep.harvest).toHaveBeenCalled();
+    expect(creep.transfer).not.toHaveBeenCalled();
+  });
+
+  it("批量倒能：免费容量 < 每拍采集量（5 < 10）时签发一次 transfer", () => {
+    const { ac, creep, container, source } = makeAc({
+      carryFree: 5,
+      carryUsed: 45,
+      containerFree: 500,
+      storage: { id: "st1", pos: { x: 10, y: 10, roomName: "W8N8" }, store: {} },
+    });
+
+    stationaryMine().execute!(ac as any, { source, container, link: undefined } as any);
+
+    expect(creep.transfer).toHaveBeenCalledTimes(1);
   });
 
   it("背包仍有空位时不受影响（本来就不会走 drop 分支）", () => {

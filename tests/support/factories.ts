@@ -287,6 +287,14 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
     targetId: undefined,
   };
 
+  // 默认平衡 body（MOVE 容量 >= 总重量，非慢速 creep）。
+  const body = [
+    { type: "work", hits: 100 },
+    { type: "carry", hits: 100 },
+    { type: "move", hits: 100 },
+    { type: "move", hits: 100 },
+  ];
+
   return {
     name,
     memory,
@@ -294,13 +302,8 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
     pos,
     room: { name: home, findExitTo: vi.fn(() => 3), lookForAt: vi.fn(() => []) },
     ticksToLive,
-    // 默认平衡 body（MOVE 容量 >= 总重量，非慢速 creep）。
-    body: [
-      { type: "work", hits: 100 },
-      { type: "carry", hits: 100 },
-      { type: "move", hits: 100 },
-      { type: "move", hits: 100 },
-    ],
+    body,
+    getActiveBodyparts: (t: string) => body.filter(p => p.type === t && p.hits > 0).length,
     // Actions — 默认 OK，测试可覆盖。
     harvest: vi.fn(() => 0),
     transfer: vi.fn(() => 0),

@@ -70,7 +70,7 @@ function setup(creepX: number, creepY: number, withLink = true) {
   const creep = mockCreep({
     name: "harvester_1",
     role: "harvester",
-    used: 40,
+    used: 49,
     capacity: 50,
     mode: "work",
   });
@@ -136,7 +136,7 @@ describe("harvester — source link 挖矿站位", () => {
     const creep = mockCreep({
       name: "harvester_2",
       role: "harvester",
-      used: 40,
+      used: 49,
       capacity: 50,
       mode: "work",
     });
