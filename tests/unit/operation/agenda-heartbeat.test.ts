@@ -41,7 +41,7 @@ describe("agenda-manager — 活跃预约心跳", () => {
         },
       },
     };
-    const ctx: any = { tick: now, *snapshots () {}, getSnapshot: () => undefined };
+    const ctx: any = { tick: now, *snapshots() {}, getSnapshot: () => undefined };
 
     agendaManagerSystem.run(ctx);
 
@@ -49,5 +49,53 @@ describe("agenda-manager — 活跃预约心跳", () => {
     expect(reservation.expiresAt).toBe(now + 500);
     expect(reservation.lastHeartbeat).toBe(now);
     expect((globalThis as any).Memory.kernel.agendas[0].status).toBe("running");
+  });
+});
+
+describe("agenda-manager — verifying 预约心跳（防 over-delivery）", () => {
+  it("verifying op 的 reservation 在本趟被续期，不被 TTL 清扫打回 blocked→retry", () => {
+    const now = (globalThis as any).Game.time;
+    const op = {
+      id: "supply:A:B:energy",
+      type: "supply",
+      status: "verifying",
+      sourceRoom: "A",
+      targetRoom: "B",
+      requestedAmount: 1650,
+      deliveredAmount: 1650,
+      reservedAmount: 1650,
+      priority: 2,
+      resource: "energy",
+      deadline: now + 2000,
+      createdAt: now - 900,
+      updatedAt: now,
+      retries: 0,
+      maxRetries: 3,
+    };
+    (globalThis as any).Memory.kernel = {
+      agendas: [op],
+      reservations: {
+        [op.id]: {
+          operationId: op.id,
+          sourceRoom: "A",
+          targetRoom: "B",
+          amount: 1650,
+          createdAt: now - 900,
+          expiresAt: now,
+          lastHeartbeat: now - 500,
+          resource: "energy",
+        },
+      },
+    };
+    const ctx: any = { tick: now, *snapshots() {}, getSnapshot: () => undefined };
+
+    agendaManagerSystem.run(ctx);
+
+    const reservation = (globalThis as any).Memory.kernel.reservations[op.id];
+    expect(reservation.expiresAt).toBe(now + 500);
+    expect(reservation.lastHeartbeat).toBe(now);
+    const saved = (globalThis as any).Memory.kernel.agendas[0];
+    expect(saved.status).toBe("verifying");
+    expect(saved.deliveredAmount).toBe(1650);
   });
 });

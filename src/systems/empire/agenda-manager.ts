@@ -248,8 +248,13 @@ export const agendaManagerSystem: System = {
 
     // ── 3. Reservation TTL 清扫 ──
     // 500 拍 TTL 短于跨房往返（实测 ≈900 拍）；活跃 op 每趟续期，避免运输途中被判过期。
+    // verifying 也要续期：入账后到终态之间仍由同一载体在途，清扫会把它打回 blocked→retry，
+    // 造成同一笔需求重复配送（over-delivery）。
     for (const op of operations) {
-      if ((op.status === "ready" || op.status === "running") && reservations.has(op.id)) {
+      if (
+        (op.status === "ready" || op.status === "running" || op.status === "verifying") &&
+        reservations.has(op.id)
+      ) {
         reservations = heartbeatReservation(reservations, op.id, ctx.tick);
       }
     }
