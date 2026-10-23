@@ -939,7 +939,10 @@ export class Kernel {
     const prevEma = emaMap.get(system.name);
     const ema = prevEma === undefined ? cost : prevEma * 0.8 + cost * 0.2;
     emaMap.set(system.name, ema);
-    (gEma.systemCpuPerTick ??= {})[system.name] = cpuPerTickOfRun(ema, system.interval);
+    // 归一必须用生效 cadence：覆盖层把 interval 改了而这里读注册值，会让被降频系统
+    // 的 per-tick 榜虚高（等于把 per-run 当 per-tick）。
+    const interval = resolveInterval(this.cadenceTable, system.name, system.interval ?? 1);
+    (gEma.systemCpuPerTick ??= {})[system.name] = cpuPerTickOfRun(ema, interval);
   }
 
   private runObservabilitySystems(ctx: Context): void {
