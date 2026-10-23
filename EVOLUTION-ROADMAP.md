@@ -1159,6 +1159,12 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-24 03:5xZ 立格，R590；上一条＝R587 格「W37S56 ROI 执法」＝**E573 PASS／E574 完成／E575 成立**；同格记录了幼房濒危（storage 19K→2,887）与人工废弃 W39S55 的处置；本格做贫困感知的远矿扩编）
+
+**下一轮主目标：把远矿开点/补员与 home storage 余量绑定**。现门 `roomReadyForNewRemote` 只要求 `storage ≥ roomMinStorage(8,000)`＋当拍 `colonyState=normal`，未计新线初始编队成本（7 人 ≈15K）⇒ 19K 的房也敢开 7 人线，孵化峰把 storage 打到 2,887、phase 进 crisis。方案候选（按优先级）：①开点门槛改为 `storage ≥ roomMinStorage + 初始编队成本`（成本按候选 fleet 的 body 估）；②开点后分期补员（首期 1 harvester＋1–2 hauler，其余按 storage 余量放行）；③active op 的补员在 `storage < roomMinStorage` 时暂停（保留最老/唯一线）。验收＝unit（门槛/分期/暂停三例）＋integration＋typecheck／CI＋线上新开点期间 storage 不破 8K；任何一项导致现有线断粮或 storage 继续下探即回滚**。
+
+同轮预写＝**E583** 部署后新开远矿 op 期间 W38S56 storage 不低于 8,000（对照：本轮 19K→2,887）；**E584** 新 op 只在 `storage ≥ 8,000＋初始编队成本` 时开点（日志/Memory 可读）；**E585** 现有线（W38S55）交付不中断（`d` 继续增长），无 starvation；**E586** unit/integration 全绿。⚠️当前现场：storage 已由 2,887 回升至 **7,247**（`t=83,830,169`，nf +296、phase recovery、仅 W38S55 active、42 creeps、CPU 14.23/tight）；`W37S56/W37S55/W39S55` 均 abandoned，E575 冷却至 `83,839,405／83,839,946`。
+
 ### 4.0（10-24 00:5xZ 立格，R589；上一条＝R588 格「旧回执守卫」＝**已上线 `67901d6aa035`；守卫首次遇到真实形态（无 op 交付留下回执）**；本格把和平期塔修墙批量化）
 
 **下一轮主目标：塔的墙体维护从「每拍」改为「和平期每 10 拍批次、受袭逐拍」**。理由：`tower.repair` 每次固定 10 能量（单次可补至 800 hits），逐拍修 3 hits 的稳态衰减等于 ~3.3 e/hit；10 拍批次则 ~0.33 e/hit，能耗降 ~10×；同时省掉每拍的墙体扫描与 repair intent。受袭（`underSiege`）保持逐拍；关键结构（spawn/extension/tower/container）维修仍逐拍。验收＝unit（批次/受袭/错峰三例＋分桶旧例在批次拍）＋integration＋typecheck／CI＋线上 `tower-defense` CPU 与塔能耗下降、rampart 最低血量不塌**。
