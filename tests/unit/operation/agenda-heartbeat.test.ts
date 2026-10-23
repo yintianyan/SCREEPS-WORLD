@@ -99,3 +99,53 @@ describe("agenda-manager — verifying 预约心跳（防 over-delivery）", () 
     expect(saved.deliveredAmount).toBe(1650);
   });
 });
+
+describe("agenda-manager — 供给 op deadline 与孵化延迟对齐", () => {
+  function supplyOp(now: number) {
+    return {
+      id: "supply:A:B:energy",
+      type: "supply",
+      status: "running",
+      sourceRoom: "A",
+      targetRoom: "B",
+      requestedAmount: 1650,
+      deliveredAmount: 0,
+      reservedAmount: 1650,
+      priority: 2,
+      resource: "energy",
+      deadline: now - 100,
+      createdAt: now - 2500,
+      updatedAt: now - 2500,
+      carrierName: "carrier-1",
+      retries: 0,
+      maxRetries: 3,
+    };
+  }
+
+  it("deadline 已过但绑定载体仍活着 → 顶到 now+500，不判过期", () => {
+    const now = (globalThis as any).Game.time;
+    (globalThis as any).Memory.kernel = { agendas: [supplyOp(now)], reservations: {} };
+    (globalThis as any).Game.creeps = { "carrier-1": { name: "carrier-1", spawning: false } };
+    const ctx: any = { tick: now, *snapshots() {}, getSnapshot: () => undefined };
+
+    agendaManagerSystem.run(ctx);
+
+    const saved = (globalThis as any).Memory.kernel.agendas[0];
+    expect(saved.status).not.toBe("expired");
+    expect(saved.deadline).toBe(now + 500);
+  });
+
+  it("无载体且无孵化请求 → 按原 deadline 过期（控制组）", () => {
+    const now = (globalThis as any).Game.time;
+    const op = supplyOp(now);
+    op.carrierName = undefined as unknown as string;
+    (globalThis as any).Memory.kernel = { agendas: [op], reservations: {} };
+    (globalThis as any).Game.creeps = {};
+    const ctx: any = { tick: now, *snapshots() {}, getSnapshot: () => undefined };
+
+    agendaManagerSystem.run(ctx);
+
+    const saved = (globalThis as any).Memory.kernel.agendas[0];
+    expect(saved.status).toBe("expired");
+  });
+});

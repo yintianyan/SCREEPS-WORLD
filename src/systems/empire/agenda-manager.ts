@@ -241,7 +241,19 @@ export const agendaManagerSystem: System = {
     let reservations = loadReservations();
 
     // ── 2. 超时检查 ──
+    // 供给 op 的 2,000 拍 deadline 短于「排队孵化 + 跨房往返」的实际时延（线上实测：op
+    // 到期时载体才刚出孵，随后 op 被反复重建、重复配送）。只要载体还活着（含在孵）或
+    // 孵化请求还在队里，就把 deadline 顶到当前+500；总寿命封顶 6,000 拍，防悬挂。
     operations = operations.map(op => {
+      if (op.type === "supply" && isActive(op) && ctx.tick - op.createdAt < 6000) {
+        const carrier = op.carrierName ? Game.creeps[op.carrierName] : undefined;
+        const queued =
+          carrier !== undefined ||
+          (Memory.rooms[op.sourceRoom]?.spawnQueue ?? []).some(r => r.key === `carrier:${op.id}`);
+        if (queued && op.deadline < ctx.tick + 500) {
+          op = { ...op, deadline: ctx.tick + 500 };
+        }
+      }
       const expiry = checkExpiry(op, ctx.tick);
       return expiry.op;
     });
