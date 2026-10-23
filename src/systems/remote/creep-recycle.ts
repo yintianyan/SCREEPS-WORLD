@@ -38,6 +38,30 @@ export function recycleExcessRemoteCreeps(
     { harvester: Creep[]; hauler: Creep[]; reserver: Creep[]; defender: Creep[] }
   >();
 
+  // 废弃/失踪线的残留：本函数只处理 active 线的超额成员，op 变 abandoned 后既有 creep
+  // 会一直跑到寿终（危机房里继续吃 CPU/能量、把货送进无人回收的远矿房）。
+  // 统一标记回收；在孵个体跳过（由 spawn 侧处理，避免出场即被引导回家）。
+  const REMOTE_LINE_ROLES = new Set([
+    "remoteHarvester",
+    "remoteHauler",
+    "reserver",
+    "remoteDefender",
+    "dismantler",
+    "coreClearer",
+  ]);
+  for (const entry of querySquad({ home: homeRoom })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep || creep.spawning || creep.memory.recycle) continue;
+    // 只退役远矿编制角色：scout/侦察用 remoteTarget 指候选房，不属于任何 op。
+    if (!REMOTE_LINE_ROLES.has(creep.memory.role ?? "")) continue;
+    const target = creep.memory.remoteTarget;
+    if (!target) continue;
+    const op = remoteOps[target];
+    // 只退役**明确 abandoned** 的线；op 暂时缺席/仍在建立中的不能判死
+    // （集成场景会把 op 后置注入，误退役会让刚孵的成员被回收）。
+    if (op && op.state === "abandoned") creep.memory.recycle = true;
+  }
+
   for (const entry of querySquad({ home: homeRoom })) {
     const creep = Game.creeps[entry.name];
     if (!creep) continue;

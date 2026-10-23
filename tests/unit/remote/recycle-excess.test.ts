@@ -36,6 +36,31 @@ beforeEach(() => {
   resetGlobals();
 });
 
+describe("recycleExcessRemoteCreeps — 废弃线退役", () => {
+  it("abandoned 线的远矿残留被标记回收；active 线不动；scout 豁免", () => {
+    const ops = {
+      W7N5: { state: "active", lastSeen: 0, sources: 1 },
+      W7N6: { state: "abandoned", lastSeen: 0, sources: 1 },
+    } as any;
+    const active = remoteCreep("rh_a", "remoteHarvester", { ttl: 1400 });
+    const dead = remoteCreep("rh_b", "remoteHarvester", { ttl: 1400 });
+    dead.memory.remoteTarget = "W7N6";
+    const scout = remoteCreep("sc_1", "scout", { ttl: 1200 });
+    scout.memory.remoteTarget = "W7N7"; // 无 op：侦察目标，不得退役
+    const orphan = remoteCreep("rh_o", "remoteHauler", { ttl: 1200 });
+    orphan.memory.remoteTarget = "W7N7"; // 远矿角色但 op 缺席：不得据此判死
+    (globalThis as any).Game.creeps = { rh_a: active, rh_b: dead, sc_1: scout, rh_o: orphan };
+    syncSquadIndex();
+
+    recycleExcessRemoteCreeps("W7N4", ops);
+
+    expect(active.memory.recycle).toBe(false);
+    expect(dead.memory.recycle).toBe(true);
+    expect(scout.memory.recycle).toBe(false);
+    expect(orphan.memory.recycle).toBe(false);
+  });
+});
+
 describe("recycleExcessRemoteCreeps — 交接豁免", () => {
   it("交接重叠：垂死者（替换窗口内）+ 健康替补并存，无人被标记", () => {
     // reserver body 2 部件 → 窗口 = 6 + 15 + 50 = 71；TTL 30 在窗口内。
