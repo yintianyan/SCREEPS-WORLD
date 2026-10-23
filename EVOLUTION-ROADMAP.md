@@ -1165,6 +1165,8 @@
 
 同轮预写＝**E579** 部署后 ≥300 拍：`bySystem.tower-defense ≤0.30`（现 EMA 0.87，注意 EMA 有历史残留，另读 current-tick）且 current-tick 墙修拍不再每拍出现；**E580** W38S56 `bk.towerSpentWalls`（或 `towerSpent`）较前窗下降 ≥50%（无键时以 rampart 血量稳定＋CPU 下降替代）；**E581** 最低 3 枚 rampart hits 在 300 拍内不低于 1,400（现 1,521／1,781／2,401，衰减 3/拍）；**E582** 该改动应小幅改善 G4/nf（R576 曾记 `towerSpentWalls=1,500` 为源房主拖累）。
 
+**R589 判决（01:3xZ）＝回滚**：部署 `13948685468b` 后 (a) `tower-defense` 不在 bySystem 前六（<0.19），但**当前拍 `systemCpuPerTick=0.006`、EMA 0.87 是历史残留** ⇒ 收益未证（R576 已记「EMA 非当前 tick」，本轮我又先拿 EMA 当判据，重复旧错，登记）；(b) **E581 落空**：最低 3 枚 rampart `1,801/1,921/2,101 → 1,201/1,321/1,541`（130 拍）；但同窗 phase 由 growth 转 recovery ⇒ `colonyState` 门把墙体维护整个关掉（per-tick 与批次都不修），**跌幅不能全归因批次化**；(c) E580 无 `towerSpent` 键可对账。⇒ 收益未证＋防御余量下探，按预写回滚 `3b867e93`（unit 419·5,519／integration 30·239 绿）。教训：judging by EMA（stale）已第二次；后续 CPU 判据一律 `systemCpuPerTick` 当前拍＋同发 EMA。
+
 ### 4.0（10-24 00:3xZ 立格，R588；上一条＝R587 格「W37S56 ROI 执法观察」＝**预写中（83,829,405 待判）**；同格已查清 nf=账本窗 EMA、G4 红属投资期；本格补回执时间戳守卫）
 
 **下一轮主目标：回执机制自身的边界**——`lastDelivery` 会留在 carrier 的 Memory 里；若该 carrier 后来被绑到**新** op（或发生过超额交付而当时无 op），旧回执可能把新 op 直接“假完成”。修法＝消费前校验 `receipt.tick >= op.createdAt`；早于 op 创建的回执一律清除不入账（位置采样回退路径保留）。验收＝unit（旧回执不入账且被清除、新回执正常入账）＋integration＋typecheck／CI＋线上下一笔交付仍能正常结单**。
