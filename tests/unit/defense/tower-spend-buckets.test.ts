@@ -14,7 +14,10 @@
  * 门与阈值一个没动 —— 防御取向属人工排产（§3.5）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { towerDefenseSystem } from "../../../src/systems/military/tower-defense";
+import {
+  towerDefenseSystem,
+  wallMaintenanceDue,
+} from "../../../src/systems/military/tower-defense";
 import {
   emptyLedger,
   ledgerConsumption,
@@ -96,6 +99,11 @@ describe("#80 塔耗能用途分桶", () => {
 
   it("和平期的墙/盾维护进 walls 桶（就是幼房那笔账的那一格）", () => {
     // 维护档另有能量门：tower 能量比 > 0.7 才允许把弹药花在墙/盾上（G-DF-08）。
+    // R589：和平期墙体维护按 10 拍批次执行（受袭逐拍）⇒ 把时钟推进到该房的批次拍。
+    const g = globalThis as any;
+    let t = g.Game.time as number;
+    while (!wallMaintenanceDue("W7N4", t, false)) t++;
+    g.Game.time = t;
     const tower = makeTower("t1", 900);
     const rampart = mockStructure("rampart", { id: "rp1", hits: 100, hitsMax: 1_000_000 });
     towerDefenseSystem.run(mockContext(mockSnapshot({ towers: [tower], ramparts: [rampart] })));

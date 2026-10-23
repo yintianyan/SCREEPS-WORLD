@@ -14,6 +14,21 @@ import {
 } from "../../domain/defense/fortification";
 import { globalCache, bumpEnergyCounter, safeModeCounters } from "../../kernel/global-cache";
 
+/** 和平期墙体维护批次（拍）：每 10 拍集中修一次，受袭时逐拍。 */
+export const WALL_MAINTENANCE_INTERVAL = 10;
+
+/**
+ * 墙体维护是否到期：受袭逐拍；和平期按房名散列错峰到每 10 拍一次。
+ * 维修量本身不变（墙体衰减 ~3 hits/拍，10 拍累计 30 hits 远小于一次 repair 的上限），
+ * 但塔的扫描与 repair intent 从 1/拍降到 1/10 拍。
+ */
+export function wallMaintenanceDue(roomName: string, tick: number, underSiege: boolean): boolean {
+  if (underSiege) return true;
+  let h = 0;
+  for (let i = 0; i < roomName.length; i++) h = (h * 31 + roomName.charCodeAt(i)) >>> 0;
+  return (tick + h) % WALL_MAINTENANCE_INTERVAL === 0;
+}
+
 /** P3 L1 核算：塔动作耗能按 intent 计（attack/heal/repair 每次 TOWER_ENERGY_COST）。
  * 不可用库存差值实测 — 引擎资源结算在 tick 末，同 tick 差值恒 0（官服实证）。 */
 /**
@@ -226,9 +241,15 @@ export const towerDefenseSystem: System = {
       );
       // 分层分类上下文（与 repairFortifications 同口径）：
       // 周界全额 / 核心折扣 / container 仅地板 — 塔安全网不为低值盾浪费弹药。
-      const fortCtx = buildFortificationContext(snapshot, roomMemForSiege?.minCut?.positions);
-      // 预选 wall/rampart 维护目标（所有 tower 共用，避免重复查找）。
-      const wallRepairTarget = findWallRepairTarget(snapshot, snapshot.rcl, underSiege, fortCtx);
+      const wallMaintDue = wallMaintenanceDue(snapshot.roomName, Game.time, underSiege);
+      const fortCtx = wallMaintDue
+        ? buildFortificationContext(snapshot, roomMemForSiege?.minCut?.positions)
+        : undefined;
+      // 预选 wall/rampart 维护目标（所有 tower 共用）；和平期每 10 拍才扫一次。
+      const wallRepairTarget =
+        wallMaintDue && fortCtx
+          ? findWallRepairTarget(snapshot, snapshot.rcl, underSiege, fortCtx)
+          : undefined;
       // 关键维修目标预计算值，提升到 tower 循环外避免重复调用。
       const repairTarget = snapshot.criticalRepairTarget ?? findCriticalRepair(snapshot);
 
