@@ -1159,6 +1159,12 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-24 00:5xZ 立格，R589；上一条＝R588 格「旧回执守卫」＝**已上线 `67901d6aa035`；守卫首次遇到真实形态（无 op 交付留下回执）**；本格把和平期塔修墙批量化）
+
+**下一轮主目标：塔的墙体维护从「每拍」改为「和平期每 10 拍批次、受袭逐拍」**。理由：`tower.repair` 每次固定 10 能量（单次可补至 800 hits），逐拍修 3 hits 的稳态衰减等于 ~3.3 e/hit；10 拍批次则 ~0.33 e/hit，能耗降 ~10×；同时省掉每拍的墙体扫描与 repair intent。受袭（`underSiege`）保持逐拍；关键结构（spawn/extension/tower/container）维修仍逐拍。验收＝unit（批次/受袭/错峰三例＋分桶旧例在批次拍）＋integration＋typecheck／CI＋线上 `tower-defense` CPU 与塔能耗下降、rampart 最低血量不塌**。
+
+同轮预写＝**E579** 部署后 ≥300 拍：`bySystem.tower-defense ≤0.30`（现 EMA 0.87，注意 EMA 有历史残留，另读 current-tick）且 current-tick 墙修拍不再每拍出现；**E580** W38S56 `bk.towerSpentWalls`（或 `towerSpent`）较前窗下降 ≥50%（无键时以 rampart 血量稳定＋CPU 下降替代）；**E581** 最低 3 枚 rampart hits 在 300 拍内不低于 1,400（现 1,521／1,781／2,401，衰减 3/拍）；**E582** 该改动应小幅改善 G4/nf（R576 曾记 `towerSpentWalls=1,500` 为源房主拖累）。
+
 ### 4.0（10-24 00:3xZ 立格，R588；上一条＝R587 格「W37S56 ROI 执法观察」＝**预写中（83,829,405 待判）**；同格已查清 nf=账本窗 EMA、G4 红属投资期；本格补回执时间戳守卫）
 
 **下一轮主目标：回执机制自身的边界**——`lastDelivery` 会留在 carrier 的 Memory 里；若该 carrier 后来被绑到**新** op（或发生过超额交付而当时无 op），旧回执可能把新 op 直接“假完成”。修法＝消费前校验 `receipt.tick >= op.createdAt`；早于 op 创建的回执一律清除不入账（位置采样回退路径保留）。验收＝unit（旧回执不入账且被清除、新回执正常入账）＋integration＋typecheck／CI＋线上下一笔交付仍能正常结单**。
