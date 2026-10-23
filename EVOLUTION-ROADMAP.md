@@ -1163,7 +1163,7 @@
 
 **下一轮主目标：供给 op 的入账依赖 agenda 每 100 拍检查「载体空载且在 target 房」，而载体卸完立刻回程/离开 ⇒ 连续 op `dv=0` 到 deadline（线上实证：target `imported` 在涨但 op 不结）。修法＝carrier 在 `transfer` 成功那拍把 `{amount,tick}` 写入 `creep.memory.lastDelivery`；agenda 趟优先消费回执并 `applyDelivery`（请求量按回执夹），消费后删除；旧的「空载在 target」路径保留为无回执时的回退。验收＝unit（两房夹具回执入账、回执删除）、integration、typecheck／CI＋线上下一笔交付在一个 agenda 趟内结单**。
 
-同轮预写＝**E566** 下一笔供给交付在 ≤1 个 agenda 趟内从 running 走到 verifying/completed（终态行被修剪时以 target `imported` 增量＋预约释放＋无新 op 为凭证）；**E567** 不重复入账（`deliveredAmount ≤ requestedAmount`，同一趟 `imported` 只加一次）；**E568** carrier 卸货行为不变（role 测试与 target 能量增量）。⚠️若交付发生在新码上线前，只登记「下一笔兑现」。
+同轮预写＝**E566** 下一笔供给交付在 ≤1 个 agenda 趟内从 running 走到 verifying/completed（终态行被修剪时以 target `imported` 增量＋预约释放＋无新 op 为凭证）；**E567** 不重复入账（`deliveredAmount ≤ requestedAmount`，同一趟 `imported` 只加一次）；**E568** carrier 卸货行为不变（role 测试与 target 能量增量）。⚠️若交付发生在新码上线前，只登记「下一笔兑现」。 **R585 判决（23:3xZ）＝E566/E567 PASS**：`9rn` 在 `83,826,293` 写入 `lastDelivery={amount:1650,tick}`；下一趟 agenda 后（`83,826,398` 前）`agendas=[]／reservations={}`、回执已清除 ⇒ op 经回执入账后完成并被修剪（终端行不可读，但「预约释放＋回执消费＋无新 op」三件同发）；target `imported` 连续增长。E568＝carrier 卸货行为不变（role 单测＋线上能量增量）。至此供给链路的**记账侧**闭环：载体重开新 op 时不再需要依赖 100 拍采样窗。
 
 ### 4.0（10-23 22:0xZ 立格，R584；上一条＝R583 格「远矿/预约节流」＝**已上线；remote-mining 1.01→0.26、reserver 0.07–0.15，E560 PASS；但扩张新增 1.2 抵消，total 14.41**；本格修「失联载体」）
 
