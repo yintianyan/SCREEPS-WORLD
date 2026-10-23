@@ -214,11 +214,27 @@ function submitCarrierSpawn(op: OperationContext, tick: number): void {
  * 否则摘掉悬挂名后立刻又绑回同一只，等于永不补员。
  */
 function isLostCarrier(creep: Creep, op: OperationContext): boolean {
-  return (
-    creep.memory.mode === "idle" &&
-    creep.room.name !== op.sourceRoom &&
-    creep.room.name !== op.targetRoom
-  );
+  if (creep.memory.mode !== "idle") return false;
+  const cur = roomCoord(creep.room.name);
+  const src = roomCoord(op.sourceRoom);
+  const dst = roomCoord(op.targetRoom);
+  // 解析不了（测试房名/异形）⇒ 保守不判失联。
+  if (!cur || !src || !dst) return false;
+  // 现场反证（R584）：W38S58 在 source→target 的邻域/绕路路径上，载体 idle 了 1,069 拍
+  // 后仍自行回程并交付 ⇒ 只有「距两端都 ≥2 房」才算失联，邻房与中间房一律豁免。
+  const far = (a: { x: number; y: number }): boolean =>
+    Math.max(Math.abs(cur.x - a.x), Math.abs(cur.y - a.y)) > 1;
+  return far(src) && far(dst);
+}
+
+/** W37S58 → { x: -37, y: -58 }；解析失败返回 undefined。 */
+function roomCoord(name: string): { x: number; y: number } | undefined {
+  const m = /^([WE])(\d+)([NS])(\d+)$/.exec(name);
+  if (!m) return undefined;
+  return {
+    x: m[1] === "W" ? -Number(m[2]) : Number(m[2]),
+    y: m[3] === "N" ? -Number(m[4]) : Number(m[4]),
+  };
 }
 
 /**

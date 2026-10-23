@@ -255,4 +255,20 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     runNow();
     expect(saved("op-e")?.carrierName).toBe("carrier-transit");
   });
+
+  it("己：邻房 idle（距 target 仅 1 房）不算失联 —— 现场反证的豁免带", () => {
+    (globalThis as any).Memory.kernel.agendas = [makeOp("op-f", "carrier-near")];
+    squad.push({ name: "carrier-near" });
+    creeps["carrier-near"] = {
+      name: "carrier-near",
+      spawning: false,
+      room: { name: "W0N3" }, // target W0N2 的邻房
+      store: { getUsedCapacity: () => 0, getCapacity: () => 1000 },
+      memory: { role: "carrier", home: "W0N1", remoteTarget: "W0N2", mode: "idle" },
+    };
+
+    runNow();
+    runNow();
+    expect(saved("op-f")?.carrierName).toBe("carrier-near");
+  });
 });
