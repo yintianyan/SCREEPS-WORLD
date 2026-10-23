@@ -170,6 +170,13 @@ export const CONFIG = {
       "empire-strategy": 5,
       "spawn-manager": 5,
       "lab-manager": 10,
+      // R583：远矿管理器单趟 ~10 CPU（interval 10 ⇒ 摊 1.0/拍），决策不要求 10 拍内；
+      // 危险撤退由角色侧 per-tick 检测兜底，管理器只写 dangerUntil/道路计划。
+      "remote-mining-manager": 20,
+      // 建造/链接/侦察都是 4 拍级延迟可接受的治理系统。
+      "construction-manager": 5,
+      "link-system": 5,
+      "room-observer": 5,
     } as Record<string, number>,
   },
 

@@ -15,6 +15,9 @@ import { moveToTarget, registerAnchor, registerStaticBlocker } from "../movement
  */
 export { roomHasInvaderCore };
 
+/** 自家预约余量 ≥ 此值时不重复签发（3 CLAIM 档每次 +3、衰减 −1 ⇒ 每 3 拍一次即可维持）。 */
+const RESERVE_REFRESH_BELOW = 3000;
+
 /** 占领/攻击 controller。 */
 function reserveControllerAction(): ActionCandidate<StructureController> {
   return {
@@ -40,6 +43,20 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
         }
         // attackController 有 cooldown — 成功时返回 OK 并触发 1000 tick cooldown。
         // ERR_TIRED = cooldown 中，下次 attackController 前不应盲试。
+        return;
+      }
+
+      // 预约续期节流：3 CLAIM 的 reserver 每拍盲签 reserveController（≈0.2 CPU/次），
+      // 而 3 CLAIM 每次 +3、自然衰减 −1 ⇒ 余量 ≥3,000 时每 3 拍一次即可维持；
+      // 站桩锚照旧登记，避免被交通推离 controller 挡住矿位。
+      const reservation = controller.reservation;
+      if (
+        reservation &&
+        reservation.username === ac.creep.owner?.username &&
+        reservation.ticksToEnd >= RESERVE_REFRESH_BELOW
+      ) {
+        registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorStation);
+        registerStaticBlocker(ac.creep.room.name, ac.creep.pos);
         return;
       }
 
