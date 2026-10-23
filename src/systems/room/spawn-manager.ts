@@ -369,7 +369,8 @@ export type SpawnRejectReason =
    *  为什么必须有它：`noDegrade` 只在**已进入降级分支**时才记，所以它为零有两种互斥解释
    *  （"总能放行" vs "从没被允许进"），而 #61（预留语义）与 #73（扩张闸输入）的决策都押在这个区分上。
    *  ⚠️旧不变式"五档之和 ≈ 尝试数"作废：加总只看前四档（survivalBlock/budget/reserveOnly/noDegrade/floor）。 */
-  | "degradeGateClosed";
+  | "degradeGateClosed"
+  | "poverty";
 export type SpawnRejectStats = Record<SpawnRejectReason, number>;
 function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 1): void {
   const mem = Memory.rooms[roomName] as
@@ -382,11 +383,13 @@ function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 
     noDegrade: 0,
     floor: 0,
     degradeGateClosed: 0,
+    poverty: 0,
   });
   // `??=` 对**已存在**的对象不生效，而线上各房的 spawnRejects 是 #54 那批建的五键形状 ——
   // 直接 `stats.degradeGateClosed += 1` 会得到 NaN（JSON 落成 null，计数器永久哑火）。
   // 单测抓不到这一条：它每次新建 Memory，六键齐 ⇒ 补零必须写在产出侧。
   if (stats.degradeGateClosed === undefined) stats.degradeGateClosed = 0;
+  if (stats.poverty === undefined) stats.poverty = 0;
   stats[reason] += amount;
 }
 /**
@@ -400,6 +403,29 @@ function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 
  * @internal 导出仅供单元测试（tests/unit/spawn/try-spawn.test.ts）— 业务代码
  *           不得直接调用，唯一入口是 spawnManagerSystem.run。
  */
+/** 远矿编制角色（补员可被贫困闸暂停；现有成员照常工作）。 */
+const REMOTE_LINE_ROLES: ReadonlySet<string> = new Set([
+  "remoteHarvester",
+  "remoteHauler",
+  "reserver",
+  "remoteDefender",
+  "dismantler",
+  "coreClearer",
+]);
+
+/**
+ * R590 贫困闸：home storage 低于远矿开点地板时，暂停远矿编制的补员/新孵。
+ * 线上实证（10-24）：19K 的房开 7 人远矿线，孵化峰把 storage 打到 2,887、进 crisis；
+ * 开点门只判当拍 storage，挡不住孵化期的连续支出。`survival` 请求豁免。
+ */
+export function remoteSpawnPovertyBlocked(
+  role: string,
+  storageEnergy: number,
+  survival: boolean,
+): boolean {
+  return !survival && REMOTE_LINE_ROLES.has(role) && storageEnergy < CONFIG.remote.roomMinStorage;
+}
+
 export function trySpawn(
   snapshot: import("../../kernel/contracts").RoomSnapshot,
   queue: SpawnRequest[],
@@ -464,6 +490,19 @@ export function trySpawn(
     // 被封请求复活 —— 隔离对它们形同不存在。
     if ((Memory.rooms[snapshot.roomName]?.spawnBlacklist?.[req.key] ?? 0) > Game.time) {
       req.block = "blacklisted";
+      continue;
+    }
+
+    // R590 贫困闸（见 remoteSpawnPovertyBlocked 注释）。
+    if (
+      remoteSpawnPovertyBlocked(
+        req.role,
+        snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+        req.survival === true,
+      )
+    ) {
+      req.block = "poverty";
+      countSpawnReject(snapshot.roomName, "poverty");
       continue;
     }
 
