@@ -205,6 +205,20 @@ export function recordActionCpu(key: string, cost: number): void {
   } else {
     g.actionCpu.set(key, { count: 1, totalCpu: cost, maxCpu: cost });
   }
+
+  // boot 内累计窗口：单拍 Map 噪声太大，热点排序要跨多拍读。
+  if (!g.actionCpuWindow) {
+    g.actionCpuWindow = new Map();
+    g.actionCpuWindowSince = Game.time;
+  }
+  const win = g.actionCpuWindow.get(key);
+  if (win) {
+    win.count++;
+    win.totalCpu += cost;
+    if (cost > win.maxCpu) win.maxCpu = cost;
+  } else {
+    g.actionCpuWindow.set(key, { count: 1, totalCpu: cost, maxCpu: cost });
+  }
 }
 
 /** 获取当前 tick 的 action profiling 数据（按 totalCpu 降序排序）。 */

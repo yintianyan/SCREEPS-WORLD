@@ -253,6 +253,10 @@ export interface GlobalCache {
   actionCpu?: Map<string, ActionCpuEntry>;
   /** actionCpu 上次重置所在的 tick（惰性按 tick 重置）。 */
   actionCpuTick?: number;
+  /** 同一份 profiling 的 boot 内累计窗口（不按 tick 重置，供一次读取热点排序）。 */
+  actionCpuWindow?: Map<string, ActionCpuEntry>;
+  /** actionCpuWindow 的起始拍。 */
+  actionCpuWindowSince?: number;
   /** Traffic Manager 的 per-tick 移动意图/锚定账本（intent.ts 构建，traffic-manager 消费）。 */
   __moveIntents?: import("../creeps/movement/intent").IntentLedger;
   /** P0-A：per-tick 全局 site 创建计数器（construction-manager 与 remote-mining-manager 共享）。
