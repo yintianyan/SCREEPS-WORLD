@@ -163,8 +163,14 @@ export const CONFIG = {
      * 窗口内真实超支仍由逐 tick 硬上限兜底。 */
     pixelGraceTicks: 700,
     /** 【F1/G-A】cadence 覆盖层：按系统名覆盖注册时的 interval（空=全用注册值）。
-     * 真相源仍是各系统注册值；本表只做治理性覆盖，kernel 消费。 */
-    cadenceOverrides: {} as Record<string, number>,
+     * 真相源仍是各系统注册值；本表只做治理性覆盖，kernel 消费。
+     * G6 降耗（10-23 R580）：按现读 `cpuPerTickBySystem` 只放缓决策类系统，
+     * 姿态/孵化/实验室的判定规则不变，仅更新节律延迟 ≤4～9 拍。 */
+    cadenceOverrides: {
+      "empire-strategy": 5,
+      "spawn-manager": 5,
+      "lab-manager": 10,
+    } as Record<string, number>,
   },
 
   pixel: {
