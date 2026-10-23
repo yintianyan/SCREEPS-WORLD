@@ -1165,6 +1165,8 @@
 
 同轮预写＝**E569** 部署后 ≤1 个 `remote-mining-manager` 趟（20 拍）内 W37S55 的 2 harvester／1 hauler `memory.recycle=true`；**E570** 其在后续若干百拍内被 spawn 回收、`Game.creeps` 中消失；**E571** active 线（W38S55／W37S56）成员不被标记；**E572** 角色 CPU 相应下降（remoteHarvester/remoteHauler 合计 ≥0.2），远矿交付无断崖。
 
+**R586 现场（23:5xZ）**＝部署 `03413f03d411` 后 90 秒读：**W37S55 已无任何成员**（原 2 harvester＋1 hauler 已消失——早于/伴随部署自然退出，无法据此正签退役路径）⇒ **E569/E570 未获现场**（成员先没了），只保留 unit/integration 覆盖；**E571 成立**（active 线 W38S55／W37S56 成员均在）；`tot=15.22／win=636`、`capacity=constrained`。同读 `home=W38S56` 孵化已停（spawnQueue 空）、新 op 6 名成员到位 ⇒ 净流负值的「孵化尖峰」假设可检验：`bk.spawned` 应回落。
+
 ### 4.0（10-23 23:0xZ 立格，R585；上一条＝R584 格「失联载体摘绑」＝**已上线；现场反证后收紧为距两端 ≥2 房，`6c887516`**；本格修供给入账的采样窗漏洞）
 
 **下一轮主目标：供给 op 的入账依赖 agenda 每 100 拍检查「载体空载且在 target 房」，而载体卸完立刻回程/离开 ⇒ 连续 op `dv=0` 到 deadline（线上实证：target `imported` 在涨但 op 不结）。修法＝carrier 在 `transfer` 成功那拍把 `{amount,tick}` 写入 `creep.memory.lastDelivery`；agenda 趟优先消费回执并 `applyDelivery`（请求量按回执夹），消费后删除；旧的「空载在 target」路径保留为无回执时的回退。验收＝unit（两房夹具回执入账、回执删除）、integration、typecheck／CI＋线上下一笔交付在一个 agenda 趟内结单**。
