@@ -1159,6 +1159,20 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-23 03:4xZ 立格，R580；上一条＝R579 格「verifying 预约续期」＝**已上线（`6e2cba9b`／sha `b0d573626398`）；E543/E544 待下一个 verifying op**；本格按 CPU 榜放缓决策类系统，削 G6）
+
+**下一轮主目标：用 `CONFIG.cpu.cadenceOverrides` 把 `empire-strategy` 1→5、`spawn-manager` 1→5、`lab-manager` 1→10（判定规则/阈值/编制一律不动，只降更新节律，最坏决策延迟 4～9 拍），目标把 `cpuRate.total` 15.29 砍下 ≥0.7；验收＝unit（config-tables cadence 契约）＋integration 30·239＋typecheck／CI＋线上 `bySystem` 三行降到预写值、姿态/孵化/实验室无行为回归**。
+
+同轮预写＝**E546** 部署后 ≥300 拍窗：`bySystem.empire-strategy ≤0.15`（现 0.64）、`spawn-manager ≤0.10`（0.37）、`lab-manager ≤0.03`（0.14），`cpuRate.total` 至少下降 0.7（同发窗长）；**E547** 行为面：姿态转换仍写 `postureTransition`／`strategy.since`，spawn 队列仍推进（`spawns` 有孵化），实验室反应/boost 无新停滞；**E548** 回滚条件＝任一系统 miss 预写值 2 倍或出现行为回归 ⇒ 覆盖表回滚。⚠️接受代价＝war 入口/姿态沿的检测最坏晚 4 拍，绝对拍号预测须把 0～4 拍相位差算进区间。
+
+**同格观察（03:5xZ）＝war 条件入口精确命中**：`postureTransition={from:"fortify",to:"war",reason:"war-enter-patience",tick:83,812,963}` ∧ `strategy.since=83,812,963` ⇒ R578 轮尾预写的条件沿（`since 83,809,963 + 3,000`）**误差 0**；同发 `warPlan=null`、`warFunnel{tick:83,816,494,noThreats:1,candidates:0,plans:0}`、`lh=[83,807,634, 83,813,874]` ⇒ 又一次「有姿态无编队」（`demobilize()` 无计划时零痕迹）；入口威胁目击来自当场活敌，不能拿事后 `noThreats=1` 反推入口假。**新预写 E549**＝war 出口若在 `lastHostileAt 83,813,874 + threatWindow 5,000 = 83,818,874` 前发生，走 `war-divest-crisis`/`war-sustain` 之一并覆盖 `postureTransition` 单格 ⇒ 须在窗口内逐拍/近沿抓行，或由 `strategy.since` 变化反推；出口后 G6/G4 门集重评。
+
+### 4.0（10-23 03:2xZ 立格，R579；上一条＝R578 格「全房快照缓存」＝**已收口（E538 落空 1.182 对 1.030；回滚上线 sha `5a791325602e`）**；本格做 verifying 预约续期，堵 TTL 清扫造成的重复配送）
+
+**下一轮主目标：`agenda-manager` 的预约心跳从 `ready/running` 扩到 `verifying`，使在途交付不会被 500 拍 TTL 清扫打回 `blocked→retry`（over-delivery）；验收＝unit（verifying 续期用例：`expiresAt=now+500`、状态仍 verifying、`deliveredAmount` 不变）＋既有 ready/running 用例不回归＋typecheck/build／CI；线上核验＝下一个进入 verifying 的 op 的预约 `lastHeartbeat` 持续前移、`expiresAt=lastHeartbeat+500`，且不被清扫置 blocked；不改阈值/编制/市场**。
+
+同轮预写＝**E543** 下一个 verifying op 的预约在 verifying 期间仍被续期（`expiresAt=lastHeartbeat+500`），不出现 `reservation expired` 的 blocked；**E544** 同一 op 不重复配送（`deliveredAmount ≤ requestedAmount`，账本增量 ≤ 1,650）；**E545** ready/running 心跳与清扫行为不变（现有用例＋线上旧路径）。**E525 不可判**＝supply op（`createdAt=83,811,472`）在 `83,811,772`（running／dv=0）到 `83,816,111`（agendas 空）之间消失，终端行已修剪、无账本凭证 ⇒ 不许反推单趟成功或失败。
+
 ### 4.0（10-22 21:3xZ 立格，R578；上一条＝R577 格「自有房静态快照缓存」＝**已上线（5a791325602e）；snapshots 1.030、幼房无回归；非自有 7 房 ~0.77 待扩**；本格扩到全部有视野房）
 
 **下一轮主目标：把静态快照缓存从自有房扩到全部有视野房（`readStaticPartsCached` 去掉 `controller.my` 门槛；结构/矿脉 TTL=10；工地仍逐拍新鲜），目标把 `snapshots` 1.03 再降到 ~0.3、`cpuRate` 16.82→~16.1；验收＝unit（非自有也缓存／工地仍新鲜／复位）、integration（远程修路／工地不重复）、e2e smoke 全绿；线上 `systemCpu.snapshots` 下降、远程道路/容器/运输无回归；不改 G4/G6 阈值/编制/市场**；⚠️硬前置＝①工地永不缓存；②远程新道路/结构 ≤10 拍可见，若 remote road planner 或运输回归立即回滚；③测试复位；④部署前 typecheck／unit／integration。
