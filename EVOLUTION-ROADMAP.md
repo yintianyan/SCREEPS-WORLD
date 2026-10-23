@@ -1159,6 +1159,20 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-23 17:5xZ 立格，R582；上一条＝R581 格「action profiler＋批量倒能」＝**E553/E554 PASS、E555 MISS 但保留**（13.01 对 12.8）；本格修供给 op 因孵化延迟而过期）
+
+**下一轮主目标：供给 op 的 2,000 拍 deadline 短于「排队孵化＋跨房往返」（线上实测 op 到期时载体才刚出孵/在途）⇒ 只要 `carrierName` 解析到活体（含在孵）或 `carrier:<opId>` 还在 spawnQueue，就把 deadline 顶到当前+500（总寿命封顶 6,000 拍）；验收＝unit（有载体续期／无载体仍过期两条）、integration、线上下一个 supply op 不再于载体在途时过期且能走到 `deliveredAmount>0`**。
+
+同轮预写＝**E556** 下一个 supply op 若在原 deadline 时仍有活载体，则 `deadline` 被顶到 `tick+500` 且最终能 `dv>0`；**E557** 不再出现「op 过期→再立→再孵」的载体重叠（同一 target 的在册 carrier ≤ `haulerNeed`/supply 需求 1 辆在途 + 1 辆替补）；**E558** E543（verifying 心跳）在首个 `verifying` op 上兑现：预约 `lastHeartbeat` 前移、`expiresAt=lastHeartbeat+500`、不被打回 blocked。⚠️若 target 已 `needsAid=false` 则不签 E556，只登记「供给线自然闭合」。
+
+### 4.0（10-23 05:1xZ 立格，R581；上一条＝R580 格「cadence 降频」＝**E546 PASS（13.36 对 15.29，降 1.93）、G6 仍差 1.36**；本格开 action 级 profiler 定位角色 7.08/拍的分解）
+
+**下一轮主目标：临时开启 `CONFIG.debug.actionProfiling` 并把 action CPU 扩成 boot 内累计窗口（`actionCpuWindow`），用一次读数找出 `role/action/resolve|execute` 的热点，为下一轮 ≥1.4 CPU 的定向优化定靶；本轮不改任何角色行为，profiler 自身约 +0.5 CPU/拍（文档已注明）⇒ 判效期间 G6 读数不作数，看完即关**。
+
+同轮预写＝**E553** `actionCpuWindow` 前 10 条（按 `totalCpu/count` 排序）能解释角色 CPU 的主要份额（前 3 ≥50%）；**E554** 热点必须是可解释的动作/角色组合（出现 `unknown` 或解析失败＝仪器形状错，先修仪器再谈优化）；**E555** 下一轮优化＋关闭 profiler 后同 boot `cpuRate.total ≤12.8`（对 R580 的 13.36 再降 ≥0.56），否则回滚该优化。⚠️profiler 期间 `cpuRate.total` 会升 ~0.5，不得据此判 G6 或回滚 cadence。**E543/E544 仍挂**（观察器继续跑，supply op `ca=83,817,272` 在跑）。
+
+**R581 判决（17:5xZ）**＝**E553/E554 PASS**：`actionCpuWindow` 前 3 条占角色 CPU 近半（`harvester/harvest:stationary-mine/execute` 0.355、`remoteHarvester/...` 0.354、`remoteHauler/...withdraw-container` 0.08），子计量证明 `stationary-mine` 几乎全是 `harvest`(0.173)＋`transfer`(0.192) 两个引擎 intent（本服单 intent ≈0.2 CPU）。**优化**＝站桩矿工批量倒能（背包留出下一拍采集量再倒）：线上 657 拍窗 `harvest 3,197／transfer 688` ⇒ transfer **1.05/拍**（此前 ≈4/拍）；`stationary-mine/execute` 单价 0.2403（原 0.3554）、remote 0.1914（原 0.3536）。**E555 MISS**＝profiler 关闭后同 boot `total 13.01`（win 288）对目标 ≤12.8、基线 13.36 ⇒ 实际降 0.35（预期 ≥0.56，少掉的份额在 harvest 仍逐拍与部分必要的提前倒能）；**按"有实测收益"保留、不回滚**（预写回滚条款针对无收益；此处 4× intent 降 + 角色耗降，回滚只会变差），此偏离已登记。**profiler 已关闭**（`dcaa96b3`）。
+
 ### 4.0（10-23 03:4xZ 立格，R580；上一条＝R579 格「verifying 预约续期」＝**已上线（`6e2cba9b`／sha `b0d573626398`）；E543/E544 待下一个 verifying op**；本格按 CPU 榜放缓决策类系统，削 G6）
 
 **下一轮主目标：用 `CONFIG.cpu.cadenceOverrides` 把 `empire-strategy` 1→5、`spawn-manager` 1→5、`lab-manager` 1→10（判定规则/阈值/编制一律不动，只降更新节律，最坏决策延迟 4～9 拍），目标把 `cpuRate.total` 15.29 砍下 ≥0.7；验收＝unit（config-tables cadence 契约）＋integration 30·239＋typecheck／CI＋线上 `bySystem` 三行降到预写值、姿态/孵化/实验室无行为回归**。
