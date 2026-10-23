@@ -1165,6 +1165,8 @@
 
 同轮预写＝**E556** 下一个 supply op 若在原 deadline 时仍有活载体，则 `deadline` 被顶到 `tick+500` 且最终能 `dv>0`；**E557** 不再出现「op 过期→再立→再孵」的载体重叠（同一 target 的在册 carrier ≤ `haulerNeed`/supply 需求 1 辆在途 + 1 辆替补）；**E558** E543（verifying 心跳）在首个 `verifying` op 上兑现：预约 `lastHeartbeat` 前移、`expiresAt=lastHeartbeat+500`、不被打回 blocked。⚠️若 target 已 `needsAid=false` 则不签 E556，只登记「供给线自然闭合」。
 
+**R582 判决（18:0xZ）**＝**修复已上线**（`fae052f2`／`30eb53b1504c`；unit 61·677、integration 239 绿）。**物理供给已到账**：目标 `bk.imported` 1,750→1,925、`nf=+2,047`、storage 回升；载体 `…-9mx` 在 W38S56 卸空（0），另一辆 `…-9nw` 早前也送了 1,650 ⇒ **legacy 重复配送**（旧 op 过期留下的两辆）仍在。**E556 未走到**＝绑定载体在原 deadline 前就送达（续期分支未被触发）；**E557 观察到 1 例 legacy 重叠**（修复前的 spawn 遗留），需下个周期验「不再新增」；**E543/E558 仍未兑现**＝未捕捉到 `verifying` 行（op 在两次 100 拍 agenda 趟之间完成/消失，终端不可读）。同发 `posture` 于 `83,821,979` 由 war→fortify（`war-divest-crisis`），`ea=true`；`capacity={constrained, usage 12.98, upgradeTicks 169}` ⇒ G6 差 0.98，观察战后 usage 是否自然压到 ≤12。
+
 ### 4.0（10-23 05:1xZ 立格，R581；上一条＝R580 格「cadence 降频」＝**E546 PASS（13.36 对 15.29，降 1.93）、G6 仍差 1.36**；本格开 action 级 profiler 定位角色 7.08/拍的分解）
 
 **下一轮主目标：临时开启 `CONFIG.debug.actionProfiling` 并把 action CPU 扩成 boot 内累计窗口（`actionCpuWindow`），用一次读数找出 `role/action/resolve|execute` 的热点，为下一轮 ≥1.4 CPU 的定向优化定靶；本轮不改任何角色行为，profiler 自身约 +0.5 CPU/拍（文档已注明）⇒ 判效期间 G6 读数不作数，看完即关**。
