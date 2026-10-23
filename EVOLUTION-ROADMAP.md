@@ -1165,7 +1165,7 @@
 
 同轮预写＝**E569** 部署后 ≤1 个 `remote-mining-manager` 趟（20 拍）内 W37S55 的 2 harvester／1 hauler `memory.recycle=true`；**E570** 其在后续若干百拍内被 spawn 回收、`Game.creeps` 中消失；**E571** active 线（W38S55／W37S56）成员不被标记；**E572** 角色 CPU 相应下降（remoteHarvester/remoteHauler 合计 ≥0.2），远矿交付无断崖。
 
-**R586 现场（23:5xZ）**＝部署 `03413f03d411` 后 90 秒读：**W37S55 已无任何成员**（原 2 harvester＋1 hauler 已消失——早于/伴随部署自然退出，无法据此正签退役路径）⇒ **E569/E570 未获现场**（成员先没了），只保留 unit/integration 覆盖；**E571 成立**（active 线 W38S55／W37S56 成员均在）；`tot=15.22／win=636`、`capacity=constrained`。同读 `home=W38S56` 孵化已停（spawnQueue 空）、新 op 6 名成员到位 ⇒ 净流负值的「孵化尖峰」假设可检验：`bk.spawned` 应回落。
+**R586 现场（23:5xZ）**＝部署 `03413f03d411` 后 90 秒读：**W37S55 已无任何成员**（原 2 harvester＋1 hauler 已消失——早于/伴随部署自然退出，无法据此正签退役路径）⇒ **E569/E570 未获现场**（成员先没了），只保留 unit/integration 覆盖；**E571 成立**（active 线 W38S55／W37S56 成员均在）；`tot=15.22／win=636`、`capacity=constrained`。同读 `home=W38S56` 孵化已停（spawnQueue 空）、新 op 6 名成员到位 ⇒ 净流负值的「孵化尖峰」假设可检验：`bk.spawned` 应回落。 **后续读数（00:1xZ）**＝W38S56 已回到 **`colonyState=normal／phase=growth／drainScore=0`**；`bk.built` 2,350→**380**（修路尖峰消退）、`bk.spawned` 仍 **3,850**（孵化/替换是当前主要支出）；`gateNetFlow` W38S56 **−9.09**（慢尺仍负）、W37S58 0.20；`posture=fortify`、`ea=true`（war 已退出）；`usage=12.7／tot=13.52／win=83`（新 boot 瞬态）、creeps=45。**判读**：crisis 消退、投资继续；慢尺 netFlow 由孵化支出主导，等 spawn 峰过后再看 G3/G4。**决策线**＝storage 跌破 10K 或 phase 重回 crisis 且 storageDrainAccum 增 → 再收缩（暂停该房新孵/最低 ROI 线）；否则不干预。
 
 ### 4.0（10-23 23:0xZ 立格，R585；上一条＝R584 格「失联载体摘绑」＝**已上线；现场反证后收紧为距两端 ≥2 房，`6c887516`**；本格修供给入账的采样窗漏洞）
 
