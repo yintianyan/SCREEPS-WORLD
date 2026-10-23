@@ -1165,6 +1165,8 @@
 
 同轮预写＝**E576** 线上下一笔 supply 交付仍按回执正常结单（`agendas` 消失＋预约释放，不因守卫卡住）；**E577** 不出现「无交付却完成」：结单前后 target `imported` 增量 ≥ 回执额（至少方向为正）；**E578** 单测三例（新回执入账／旧回执不入账并清除／在途不误摘）全绿。
 
+**R588 现场（00:4xZ，win=583）**＝部署 `67901d6aa035` 后：`agendas=[]／reservations={}`（上一笔 op 已结单）；carrier `9t5` 在 W38S56 空载、Memory 留 `lastDelivery={1650,tick:83,827,324}`——**这次交付发生时无 op 可入账**（同路多载体超额交付：9sz 另载 1,650 在途）⇒ 正是守卫要防的串单源：该 carrier 下次绑新 op 时 `receipt.tick < createdAt` 会被清除、不入账。E576 方向成立（op 正常结单）；E577 无法精确对账（终端行已修剪、超额交付使 imported 增量 > 单张回执），只登记方向。**同发**：W38S56 `nf=−688`、`imported=520`、phase 在 growth↔crisis 间摆（本轮读到 crisis）、`usage 14.7`。
+
 ### 4.0（10-24 00:1xZ 立格，R587；上一条＝R586 格「退役 abandoned 残留」＝**已上线 `03413f03d411`；E569/E570 未获（成员先退出）、E571 成立**；本格判 W37S56 的 ROI 执法）
 
 **下一轮主目标：观察远矿管理器对 W37S56 的自动 ROI 判决**。现读 `W37S56={state:active, ca:83,824,405, d:7,633, spawn:19,200, infra:10,000}`；`enforceMeasuredEconomics` 门槛 `minDuration=5000／closeNetRate=0.5` ⇒ 在 `ca+5,000=83,829,405` 那趟将按 `opNetRate=(d−s−i)/age≈−2.7 <0.5` 废弃（写 `dangerUntil=tick+10,000`）。边际交付现约 1.5–3.3 e/tick（不升反降），低于替换维持成本 ⇒ 废弃方向上合理。**同轮验证 R586 的退役路径**（这次会有明确 abandoned 的成员在场）。
