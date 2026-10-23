@@ -1159,6 +1159,16 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-23 20:5xZ 立格，R583；上一条＝R582 格「供给 deadline 续期」＝**已上线（`fae052f2`）；能量已送达（imported 1,925／nf +2,047），E556 未触发、E543 仍未兑现**；本格削角色/系统 intent 冲 G6）
+
+**下一轮主目标：①reserver 预约续期节流（自家预约 `ticksToEnd ≥3,000` 时跳过 `reserveController`；3 CLAIM 每次 +3、衰减 −1 ⇒ 每 3 拍一次即可维持，站桩锚照旧登记）；②cadence 再降：`remote-mining-manager` 10→20（单趟 ~10 CPU）、`construction-manager` 1→5、`link-system` 1→5、`room-observer` 1→5；目标把 `usage` 从 13.2 压到 ≤12.0 并维持 300 拍让 G6 翻 comfortable；验收＝unit（reserver 三例）＋integration＋typecheck／CI＋线上 `bySystem` 四项下降、预约 TTL 不破 2,900、远矿/建造/链接/侦察无回归**。
+
+同轮预写＝**E559** 部署后 ≥300 拍同 boot：`bySystem` 中 `remote-mining-manager ≤0.55`（现 1.01）、`construction-manager ≤0.10`（0.34）、`room-observer ≤0.03`（0.09）、`link-system ≤0.03`（0.09）；`byRole.reserver ≤0.12`（现 0.26）；`cpuRate.total ≤12.6`（现 13.16）。**E560** 三个远矿 controller 自家预约 `ticksToEnd` 始终 ≥2,900，不掉预约。**E561** 行为面：远矿 op 仍 active、roadSite 进度前进、link 有传输、observer 情报更新、construction 仍在 5 拍内建 site；任一 miss ⇒ 回滚对应覆盖。**E562** 若 `usage ≤12.0` 连续 300 拍，`capacity.tier` 由 tight 升 comfortable（G6 清）；否则只登记距门槛差。
+
+**加注⑴（21:1xZ，CI 回归当场收口）**＝`construction-manager: 5` **已撤回**：CI `39957460909` 的 integration 挂在 `rcl2-development-recovery` 场景 9（500 拍内无 extension site），本地复现；二分定位到该项（撤掉即绿）⇒ construction-manager 必须每拍跑（紧急/普通槽位通道依赖每拍扫描），保留 `remote-mining-manager: 20`／`link-system: 5`／`room-observer: 5` 与 reserver 节流；**E559 的 construction 一项作废**（`construction-manager` 仍为 1），其余预写不变。修正提交 `5c5e23f8`；unit 419·5,513／integration 30·239 全绿。
+
+**R583 判决（21:4xZ，win=231）**＝**E559 部分 PASS**：`remote-mining-manager` 1.01→**0.26**、`reserver` role 0.26→**0.07–0.15**；`construction-manager` 保持 1（不降）；`link/observer` 不在前 10（<0.11）。**E560 PASS**＝三个远矿 controller 预约 `2,999／3,002／3,430`（节流后稳定在 3,000 一线，未掉预约）。**E562 MISS**＝`total 14.41`（usage 14.41、tier constrained）反而高于部署前 13.16；归因：W38S56 新开远矿 op（`W37S56` active、`W37S55` abandoned）带来的远程角色 `remoteHarvester 1.78→2.25／remoteHauler 0.91→1.16／builder 0.10→0.23／dismantler 0.11`、traffic 2.96→3.28、snapshots 1.33→1.42 ⇒ **cadence 省下的 ~0.9 被扩张新增的 ~1.2 抵消**。⇒ 下一轮不撤 cadence/reserver（实测有效），转查新远矿 op 的 ROI 与 CPU 代价：若净收益低于门槛则让管理器自然废弃，否则接受 G6 延后、不再靠削编制硬压。
+
 ### 4.0（10-23 17:5xZ 立格，R582；上一条＝R581 格「action profiler＋批量倒能」＝**E553/E554 PASS、E555 MISS 但保留**（13.01 对 12.8）；本格修供给 op 因孵化延迟而过期）
 
 **下一轮主目标：供给 op 的 2,000 拍 deadline 短于「排队孵化＋跨房往返」（线上实测 op 到期时载体才刚出孵/在途）⇒ 只要 `carrierName` 解析到活体（含在孵）或 `carrier:<opId>` 还在 spawnQueue，就把 deadline 顶到当前+500（总寿命封顶 6,000 拍）；验收＝unit（有载体续期／无载体仍过期两条）、integration、线上下一个 supply op 不再于载体在途时过期且能走到 `deliveredAmount>0`**。
