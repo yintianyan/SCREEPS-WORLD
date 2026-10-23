@@ -209,12 +209,25 @@ function submitCarrierSpawn(op: OperationContext, tick: number): void {
 }
 
 /**
- * 检查 Operation 是否已有 carrier 在场。
+ * 失联载体：活着、空载 idle、却在 source/target 之外的房间 —— 既不会交付、也不会自己回家
+ * （线上实证：W38S58 卡 1,069 拍）。这种个体不得计入「本 op 已有载体」，也不得被兜底重绑，
+ * 否则摘掉悬挂名后立刻又绑回同一只，等于永不补员。
+ */
+function isLostCarrier(creep: Creep, op: OperationContext): boolean {
+  return (
+    creep.memory.mode === "idle" &&
+    creep.room.name !== op.sourceRoom &&
+    creep.room.name !== op.targetRoom
+  );
+}
+
+/**
+ * 检查 Operation 是否已有可用 carrier 在场。
  */
 function hasCarrierForOp(op: OperationContext): boolean {
   if (op.carrierName) {
     const creep = Game.creeps[op.carrierName];
-    if (creep && !creep.spawning) return true;
+    if (creep && !creep.spawning && !isLostCarrier(creep, op)) return true;
   }
   const roomMem = Memory.rooms[op.sourceRoom];
   if (roomMem?.spawnQueue) {
@@ -226,8 +239,12 @@ function hasCarrierForOp(op: OperationContext): boolean {
   // 队列时，清租约后的在场 carrier 会「查无此人」→ 每 100t 重孵一只、满载旧 carrier
   // 原地堆积（线上实证：单 op 叠出 6 只 1200/1200 满载 carrier）。carrier 与 op 的
   // 稳定绑定是 spawn 时写入的 home/remoteTarget，租约清理不动它们。
-  return (
-    querySquad({ role: "carrier", home: op.sourceRoom, remoteTarget: op.targetRoom }).length > 0
+  // 在孵个体仍计入「已有载体」（补404 的既有契约），只排除失联个体。
+  return querySquad({ role: "carrier", home: op.sourceRoom, remoteTarget: op.targetRoom }).some(
+    e => {
+      const c = Game.creeps[e.name];
+      return c !== undefined && !isLostCarrier(c, op);
+    },
   );
 }
 
@@ -623,6 +640,26 @@ export const agendaManagerSystem: System = {
       // 一处自审缺口，roadmap 补341）。清在这里：悬挂名一摘，补孵分支与两段兜底绑定同趟可达。
       pruneStaleCarrierBinding(op, liveCarrierNames);
 
+      // 失联载体：活着、空载 idle、却在 source/target 之外的房间连续两趟 —— 既不会交付
+      // 也不会自己回家（线上实证：W38S58 卡 1,069 拍）。摘掉绑定让本趟重绑/补孵；
+      // 原载体仍按自己的 flee/ensureHome 走，不额外下发指令。
+      const boundCarrier = op.carrierName ? Game.creeps[op.carrierName] : undefined;
+      if (
+        boundCarrier &&
+        !boundCarrier.spawning &&
+        boundCarrier.memory.mode === "idle" &&
+        boundCarrier.room.name !== op.sourceRoom &&
+        boundCarrier.room.name !== op.targetRoom
+      ) {
+        op.carrierIdleTicks = (op.carrierIdleTicks ?? 0) + 1;
+        if (op.carrierIdleTicks >= 2) {
+          delete op.carrierName;
+          delete op.carrierIdleTicks;
+        }
+      } else if (op.carrierIdleTicks) {
+        delete op.carrierIdleTicks;
+      }
+
       const carrierExists = hasCarrierForOp(op);
       if (!carrierExists) {
         const roomMem = Memory.rooms[op.sourceRoom];
@@ -639,7 +676,7 @@ export const agendaManagerSystem: System = {
       // op.carrierName 永不落账、hasCarrierForOp 持续误判缺员。
       if (!op.carrierName) {
         for (const [name, creep] of Object.entries(Game.creeps)) {
-          if (creep.memory.assignment?.id === op.id) {
+          if (creep.memory.assignment?.id === op.id && !isLostCarrier(creep, op)) {
             const idx = operations.indexOf(op);
             if (idx >= 0) operations[idx]!.carrierName = name;
             break;
@@ -655,8 +692,13 @@ export const agendaManagerSystem: System = {
         const entry =
           bound.find(e => {
             const c = Game.creeps[e.name];
-            return c !== undefined && !c.spawning;
-          }) ?? bound[0];
+            return c !== undefined && !c.spawning && !isLostCarrier(c, op);
+          }) ??
+          bound.find(e => {
+            const c = Game.creeps[e.name];
+            // 保留「无健康载体时绑在孵那只」的既有契约（补404），只排除失联个体。
+            return c !== undefined && !isLostCarrier(c, op);
+          });
         if (entry) {
           const idx = operations.indexOf(op);
           if (idx >= 0) operations[idx]!.carrierName = entry.name;

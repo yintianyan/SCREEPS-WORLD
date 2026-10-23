@@ -92,6 +92,11 @@ export interface OperationContext {
    * 用于 carrier 死亡检测和重规划。
    */
   carrierName?: string;
+  /**
+   * 绑定载体连续在端房之外 idle 的 agenda 趟数（每趟 100 拍）。
+   * 用于识别「活得着但回不了家」的失联载体：2 趟后摘绑定并重绑/补孵。
+   */
+  carrierIdleTicks?: number;
 }
 
 /**

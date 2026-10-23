@@ -220,4 +220,39 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     );
     expect(kept).toHaveLength(0);
   });
+
+  it("丁：绑定载体在端房之外 idle 连续两趟 ⇒ 摘绑定且不被兜底重绑", () => {
+    (globalThis as any).Memory.kernel.agendas = [makeOp("op-d", "carrier-lost")];
+    squad.push({ name: "carrier-lost" });
+    creeps["carrier-lost"] = {
+      name: "carrier-lost",
+      spawning: false,
+      room: { name: "W9N9" },
+      store: { getUsedCapacity: () => 0, getCapacity: () => 1000 },
+      memory: { role: "carrier", home: "W0N1", remoteTarget: "W0N2", mode: "idle" },
+    };
+
+    runNow();
+    expect(saved("op-d")?.carrierIdleTicks).toBe(1);
+    expect(saved("op-d")?.carrierName).toBe("carrier-lost");
+
+    runNow();
+    expect(saved("op-d")?.carrierName).toBeUndefined();
+  });
+
+  it("戊：端房之外但 mode=work（在途中间房）⇒ 不算失联，不摘绑定", () => {
+    (globalThis as any).Memory.kernel.agendas = [makeOp("op-e", "carrier-transit")];
+    squad.push({ name: "carrier-transit" });
+    creeps["carrier-transit"] = {
+      name: "carrier-transit",
+      spawning: false,
+      room: { name: "W9N9" },
+      store: { getUsedCapacity: () => 1650, getCapacity: () => 1650 },
+      memory: { role: "carrier", home: "W0N1", remoteTarget: "W0N2", mode: "work" },
+    };
+
+    runNow();
+    runNow();
+    expect(saved("op-e")?.carrierName).toBe("carrier-transit");
+  });
 });
