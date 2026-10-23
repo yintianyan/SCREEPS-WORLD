@@ -1159,6 +1159,12 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-23 22:0xZ 立格，R584；上一条＝R583 格「远矿/预约节流」＝**已上线；remote-mining 1.01→0.26、reserver 0.07–0.15，E560 PASS；但扩张新增 1.2 抵消，total 14.41**；本格修「失联载体」）
+
+**下一轮主目标：供给 op 绑定的 carrier 可能活着却卡在端房之外 idle（线上实证 W38S58 1,069 拍不回家），现有清洗只查活体不查可用性 ⇒ op 一直 `dv=0` 到 deadline。修法＝`isLostCarrier`（`mode==="idle"` 且在 source/target 之外）连续两趟 agenda 后被摘绑定；并且**失联个体不再计入 `hasCarrierForOp`、不进兜底重绑**（否则摘了又绑回同一只）；在途中间房 `mode==="work"` 不算失联。验收＝unit（两房夹具：失联两趟摘绑定且不自绑回／在途不摘）＋integration＋typecheck／CI＋线上下一个 op 能绑到可用载体或补孵**。
+
+同轮预写＝**E563** 线上失联 carrier 在 ≤2 个 agenda 趟（≈200 拍）内被摘绑定，且不被兜底绑回；**E564** 该 op 随后拿到可用载体（route 匹配）或进入补孵，最终 `dv>0` 或干净失败（终端不可读时以预约释放＋下一 op 为凭证）；**E565** 控制组：在途 `mode=work` 的中间房载体不被摘绑定。⚠️若 op 在新码上线前已到 deadline，则只登记「下一 op 兑现」。
+
 ### 4.0（10-23 20:5xZ 立格，R583；上一条＝R582 格「供给 deadline 续期」＝**已上线（`fae052f2`）；能量已送达（imported 1,925／nf +2,047），E556 未触发、E543 仍未兑现**；本格削角色/系统 intent 冲 G6）
 
 **下一轮主目标：①reserver 预约续期节流（自家预约 `ticksToEnd ≥3,000` 时跳过 `reserveController`；3 CLAIM 每次 +3、衰减 −1 ⇒ 每 3 拍一次即可维持，站桩锚照旧登记）；②cadence 再降：`remote-mining-manager` 10→20（单趟 ~10 CPU）、`construction-manager` 1→5、`link-system` 1→5、`room-observer` 1→5；目标把 `usage` 从 13.2 压到 ≤12.0 并维持 300 拍让 G6 翻 comfortable；验收＝unit（reserver 三例）＋integration＋typecheck／CI＋线上 `bySystem` 四项下降、预约 TTL 不破 2,900、远矿/建造/链接/侦察无回归**。
