@@ -1159,6 +1159,12 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-24 12:3xZ 立格，R593；上一条＝R590/R591 贫困闸＝**已上线**；本格启动监测循环并修复供给断链）
+
+**下一轮主目标：供给断链（越援助越不能援助）**。新监测器 `tmp/observe/r593-monitor.sh`（单实例 300s×36；记 G4/G6/幼房/远矿/贫困/市场/供给）首发即抓到危机：W38S56 storage **31.8K→1,986**、`poverty=261`、W39S56 新线（spawn 11,630）、W37S55 再废弃、**`agendas=[]` 供给线完全空闲**。根因＝`canExportEnergy` 要求 `netFlowPositive`：核心房对外供能后 `exported` 计入消耗、nf 转负 ⇒ 核心 618K/62% 拒绝向 2.9K 的幼房供能。处置＝①人工废弃 W39S56（`dangerUntil=83,853,612`）；②`503023d0` 深贫困闸（storage<4,000 连替换也停）；③`0465e30f` 导出闸去掉 `netFlowPositive`（只留 `isStruggling`＋`storageRatio≥0.3`）。unit 420·5,525／integration 30·239 全绿。
+
+同轮预写＝**E587** 部署后 ≤2 个 agenda 趟出现 core→young 的 supply op（`agendas` 非空）；**E588** storage 止跌回升（≥4,000 于 ~500 拍内）；**E589** 深贫困期 `poverty` 继续增长、无新远矿 op 开点；**E590** 导出闸改动后有储备的核心房仍正常外供（无过度导出：storageRatio 不低于 0.3）。
+
 ### 4.0（10-24 03:5xZ 立格，R590；上一条＝R587 格「W37S56 ROI 执法」＝**E573 PASS／E574 完成／E575 成立**；同格记录了幼房濒危（storage 19K→2,887）与人工废弃 W39S55 的处置；本格做贫困感知的远矿扩编）
 
 **下一轮主目标：把远矿开点/补员与 home storage 余量绑定**。现门 `roomReadyForNewRemote` 只要求 `storage ≥ roomMinStorage(8,000)`＋当拍 `colonyState=normal`，未计新线初始编队成本（7 人 ≈15K）⇒ 19K 的房也敢开 7 人线，孵化峰把 storage 打到 2,887、phase 进 crisis。方案候选（按优先级）：①开点门槛改为 `storage ≥ roomMinStorage + 初始编队成本`（成本按候选 fleet 的 body 估）；②开点后分期补员（首期 1 harvester＋1–2 hauler，其余按 storage 余量放行）；③active op 的补员在 `storage < roomMinStorage` 时暂停（保留最老/唯一线）。验收＝unit（门槛/分期/暂停三例）＋integration＋typecheck／CI＋线上新开点期间 storage 不破 8K；任何一项导致现有线断粮或 storage 继续下探即回滚**。
