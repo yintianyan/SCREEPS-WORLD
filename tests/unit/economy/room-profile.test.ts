@@ -308,8 +308,12 @@ describe("canExportEnergy", () => {
     expect(canExportEnergy(profile({ hasStorage: false }))).toBe(false);
   });
 
-  it("净流为负 → false", () => {
-    expect(canExportEnergy(profile({ netFlowPositive: false }))).toBe(false);
+  it("净流为负但储备充足 → true（自败回路修复：供能会让 nf 转负）", () => {
+    expect(canExportEnergy(profile({ netFlowPositive: false }))).toBe(true);
+  });
+
+  it("净流为负且储备不足 → false（仍由 0.3 水位兜底）", () => {
+    expect(canExportEnergy(profile({ netFlowPositive: false, storageRatio: 0.2 }))).toBe(false);
   });
 
   it("storage 水位 < 0.3 → false", () => {

@@ -341,7 +341,9 @@ export function buildRoomEconomicProfile(
 export function canExportEnergy(profile: RoomEconomicProfile): boolean {
   if (profile.isStruggling) return false;
   if (!profile.hasStorage) return false;
-  if (!profile.netFlowPositive) return false;
+  // 不用 `netFlowPositive` 作导出闸：核心房对外供能时 `exported` 计入消耗、nf 会转负，
+  // 于是“越援助越不能援助”（10-24 现场：618K/62% 的核心房拒绝向 2.9K 的幼房供能，
+  // 供给线完全空闲）。导出权限只看困难态与储备余量。
   if (profile.storageRatio < 0.3) return false;
   return true;
 }
