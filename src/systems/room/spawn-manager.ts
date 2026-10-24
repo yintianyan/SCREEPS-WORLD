@@ -426,12 +426,11 @@ export function remoteSpawnPovertyBlocked(
   survival: boolean,
   key: string,
 ): boolean {
-  return (
-    !survival &&
-    REMOTE_LINE_ROLES.has(role) &&
-    !key.includes(":repl:") &&
-    storageEnergy < CONFIG.remote.roomMinStorage
-  );
+  if (survival || !REMOTE_LINE_ROLES.has(role)) return false;
+  // 深贫困（<4,000）：连替换也停 —— 2026-10-24 现场：2,886 storage 时替换仍在补员，
+  // 维持成本把 storage 继续往下拉。轻度贫困（4,000–8,000）只拦首孵/扩编。
+  if (storageEnergy < 4000) return true;
+  return !key.includes(":repl:") && storageEnergy < CONFIG.remote.roomMinStorage;
 }
 
 export function trySpawn(

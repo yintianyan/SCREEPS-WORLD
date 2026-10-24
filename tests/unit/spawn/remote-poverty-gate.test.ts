@@ -30,10 +30,18 @@ describe("remoteSpawnPovertyBlocked", () => {
     expect(remoteSpawnPovertyBlocked("builder", 0, false, "builder:A:0")).toBe(false);
   });
 
-  it("替换请求（key 含 :repl:）在低储期放行 —— 保住现有线收入", () => {
+  it("替换请求：轻度贫困（4,000–8,000）放行，深贫困（<4,000）也停", () => {
+    // 轻度贫困：替换放行，保住现有线收入。
+    expect(
+      remoteSpawnPovertyBlocked("remoteHauler", 5000, false, "remoteHauler:A:B:repl:old-creep"),
+    ).toBe(false);
+    // 深贫困：连替换也停，避免维持成本把 storage 继续往下拉。
     expect(
       remoteSpawnPovertyBlocked("remoteHauler", 0, false, "remoteHauler:A:B:repl:old-creep"),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      remoteSpawnPovertyBlocked("remoteHauler", 3999, false, "remoteHauler:A:B:repl:old-creep"),
+    ).toBe(true);
   });
 
   it("survival 请求豁免（生存优先）", () => {
