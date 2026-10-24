@@ -23,7 +23,9 @@ export function __resetSnapshotStaticCacheForTests(): void {
 }
 
 function readStaticParts(room: Room): StaticParts {
-  const myStructures = room.find(FIND_MY_STRUCTURES);
+  // 非自有房不可能有我们的建筑（所有权随 controller）⇒ 跳过 FIND_MY_STRUCTURES。
+  const owned = room.controller?.my === true;
+  const myStructures = owned ? room.find(FIND_MY_STRUCTURES) : [];
   const allStructures = room.find(FIND_STRUCTURES);
   const sources = room.find(FIND_SOURCES);
   let minerals: Mineral[] = [];
@@ -97,7 +99,8 @@ export function buildRoomSnapshot(
   const minerals = staticParts.minerals;
   // 工地集合不缓存：construction-manager 用它做幂等去重，10 拍旧视图会重复建 site。
   const allSites = room.find(FIND_CONSTRUCTION_SITES);
-  const mySites = room.find(FIND_MY_CONSTRUCTION_SITES);
+  // 同一份本站列表派生“我方工地”，省一次 FIND_MY_CONSTRUCTION_SITES；仍是本拍新鲜数据。
+  const mySites = allSites.filter(s => s.my === true);
   const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
   // 威胁分级：仅具备攻击/治疗/拆迁/claim 部件且非联盟者才算威胁（P0-2）。
   const threatCreeps = classifyThreats(hostileCreeps, CONFIG.defense.allies);
