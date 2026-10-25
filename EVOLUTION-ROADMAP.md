@@ -1171,6 +1171,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 18:1xZ 立格，R607；上一条＝R606 格「traffic 跟车快路径」＝**E623 PASS（2.64）**；本格验 E624、并实证 G4 自锁，策略改动回滚）
+
+**下一轮主目标：验证 R606 的 CPU 收益，并把“G4 到不了 5”的成因钉死**。`win=291` 时：`traffic-manager` **3.0~3.16 → 2.64**（E623 PASS，−0.4）；`cpuRate.total 12.78`（E624 的 ≤12.7 **未达**，且该窗含 boot 首拍，须等 win≥600 再判）。**G4 自锁实证**：`win=291` 同拍有 **2 只 upgrader** 在跑、`ΣgateNetFlow = −0.07`；把 4 小时的门和逐段拉出来——**+1.48（14:37）→+1.22（16:36）→−0.35（17:23）→−0.07（18:02）**，始终在 0~1.5 徘徊、从未接近 5。机制＝R594 的升级刹车以 `Σgate < 0` 为界：**盈余一出现就被升级吃掉，慢 EMA 被钉在 0** ⇒ **即便 CPU Unlock 清掉 G6，G4 仍按构造到不了**。
+
+**本格尝试并回滚的一项策略改动（留档）**：把升级刹车抬到 `upgradeReserveNetFlow=5`（与 G4 同值，为扩张预留盈余）。**测试当场否证**：unit **10 例**＋integration **5 例** 失败（RCL 冲刺/站桩取能链/claim-secure 等被"净流<5 即停升级"整体压掉）⇒ **这不是局部优化而是策略级改动**，已 `git checkout` 全部回滚，工作区回到 R606 已验证状态。结论：**G4 的解锁必须由属人拍板**（是否允许"暂停升级、为扩张预留净流"），与 CPU Unlock 一起构成扩张的两项前置决策。
+
+同轮预写＝**E627** win≥600 后 `cpuRate.total` 落在 **12.4~12.8**（R606 的 −0.4 已被 E623 证实；若 window 稳定后 ≤12.4 则再谈 G6 的 0.4 尾巴）；**E628** 若用户授权升级预留策略，将以"净流<5 且扩张计划 EVALUATED 时暂停升级"为**限定条件**重做（不再全局生效），并要求 unit/integration 全绿后才上线；**E629** 在两项属人决策落地前，G4/G6 维持双红、扩张维持关闭。
+
 ### 4.0（10-25 17:4xZ 立格，R606；上一条＝R605 格「G6 安全边界」＝**不再自砍产能、只等 CPU Unlock**；本格做最后一项不损收入的 traffic 优化）
 
 **下一轮主目标：traffic 快路径支持“一级跟车”，把密集房的解算器调用再降一档**。现状（退役后）：`cpuRate.total 12.82`（win 965，G6 差 0.82）、`traffic-manager 3.0~3.16` 仍是最大单项；而 R599 的多意图快路径要求“**所有**目标格都空”，核心房的跟车链（A→B 的格、B 自己正要离开）每次都被打回 `resolveAndDispatch`。修法＝在 `tryFastDispatch` 放行一级跟车：目标格被占时，占用者必须是**本拍有意图、`to≠from`、非不可动**的 mover，且**它自己的目标格为空、非阻挡格**——两笔 move 同拍结算，引擎允许驶入被让出的格。该条件同时否掉互换与任何环（环里每个 blocker 的目标必是另一个 mover 的 from，必被占），仍坚持“目标互不重复”。不涉及锚定/推挤语义（有锚定仍走 resolver）。
