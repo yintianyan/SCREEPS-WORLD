@@ -1171,6 +1171,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 17:4xZ 立格，R606；上一条＝R605 格「G6 安全边界」＝**不再自砍产能、只等 CPU Unlock**；本格做最后一项不损收入的 traffic 优化）
+
+**下一轮主目标：traffic 快路径支持“一级跟车”，把密集房的解算器调用再降一档**。现状（退役后）：`cpuRate.total 12.82`（win 965，G6 差 0.82）、`traffic-manager 3.0~3.16` 仍是最大单项；而 R599 的多意图快路径要求“**所有**目标格都空”，核心房的跟车链（A→B 的格、B 自己正要离开）每次都被打回 `resolveAndDispatch`。修法＝在 `tryFastDispatch` 放行一级跟车：目标格被占时，占用者必须是**本拍有意图、`to≠from`、非不可动**的 mover，且**它自己的目标格为空、非阻挡格**——两笔 move 同拍结算，引擎允许驶入被让出的格。该条件同时否掉互换与任何环（环里每个 blocker 的目标必是另一个 mover 的 from，必被占），仍坚持“目标互不重复”。不涉及锚定/推挤语义（有锚定仍走 resolver）。
+
+测试＝`traffic-manager.test.ts` 新增 2 例（一级跟车两只都签发／目标被静止者占用 ⇒ 回退 resolver 推挤），movement+systems 16 文件·133 例；unit **420·5,542**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E623** 部署后 ≥600 拍 `bySystem.traffic-manager ≤2.8`（前 3.0~3.16）；**E624** `cpuRate.total ≤12.7`；**E625** 无移动退化：`traffic/shove:*`/stuck 不上升、远矿交付与存量不降、integration 全绿；**E626**（条件）若 usage 连续 300 拍 ≤12.0，G6 翻 comfortable。
+
 ### 4.0（10-25 17:2xZ 立格，R605；上一条＝R604 格「W38S57 ROI 废弃」＝**E620 PASS、编制 42→36**；本格收 G6 的安全优化边界并做运行健康审计）
 
 **下一轮主目标：确认 G6 已到“不改策略/不砍产能就削不动”的边界，并给出唯一剩余路径**。退役后实测：在册 **36**（W38S57 尚余 2 只在归航）、`cpuRate.total=13.04`、`capacity=tight`、`upgradeTicks` 因 target=tight 归零 ⇒ **G6 门槛仍是 usage ≤12.0，差 1.04**。系统榜剩 `traffic-manager 3.1`（≈18 个移动者 × move 调用）＋ `snapshots 1.37`；角色榜 `creeps` 相位 ~5.7。R598 的动作级标定已证 **成本随“活跃 creep × API 调用”线性**、resolve 只占 0.03–0.08 ⇒ 再削 1.0 CPU 只能靠**少 ~8 只编制**（≈−15~20% 收入）或 **CPU Unlock**。**决定：不再自砍产能**；G6 等属人杠杆，即买 1 个 `cpuUnlock`（市场 48M/个 vs 现有 credits ~93.8M）→ limit 20→30、门槛变 18。
