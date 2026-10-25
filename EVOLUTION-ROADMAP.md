@@ -1178,6 +1178,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 19:5xZ 立格，R614；上一条＝R613 格「首次稳定 <12、机制纠正」；本格修 upgradeTicks 的单位错配）
+
+**下一轮主目标：把 G6 升档窗口从“评估次数”改回“拍”**。R613 实测 `upgradeTicks` 只以 **~0.19/拍** 推进（147 拍 +28）——`evaluateCapacity` 每次只 `+1`，而调用它的 `empire-strategy` 是 **5 拍 cadence** ⇒ `upgradeWindowTicks=300` 的有效窗口被拉成 **1,500 拍（≈1.75h）**，任一次评估 `usage>12` 还会清零。这不是阈值问题，是**单位错配**，也是 G6 历史上长期为红的机制原因之一。修法＝`evaluateCapacity` 增加第 5 参 `elapsedTicks`（默认 1，纯函数旧调用零改动），`empire-strategy` 用 heap 记上次评估拍、传真实间隔（reset 后首趟按 1）。
+
+测试＝`capacity.test.ts` 新增 2 例（5 拍 cadence 下 60 次评估 ×5 才翻档；不传 `elapsedTicks` 仍按 1）；unit **420·5,545**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E645** 部署后 `upgradeTicks` 每趟 +≈5（≈1/拍），若 `usage` 持续 ≤12 则在 **~300 拍（≈21 分钟）** 内翻 `comfortable`；**E646** 迟滞语义不变（仍是 300 拍窗口，降档立即），不出现 tight↔comfortable 抖动；**E647** 单次评估 >12 仍清零（窗口连续性要求不变）。⚠️G4 仍红（core −2.94），G6 翻档不产生扩张执行。
+
 ### 4.0（10-25 19:1xZ 立格，R613；上一条＝R612 格「贴门 12.14」；本格拿到首次稳定低于门槛的读数）
 
 **下一轮主目标：确认 G6 能否自然翻 `comfortable`（无需新改动）**。R611 在 ~18:47 激活（`win` 重置 52）；`t=83,869,149`、**`win=352`** 时：`cpuRate.total` **11.88**（首次稳定低于 12.0）、`capacity=[tight, 11.88, upgradeTicks 9]` ⇒ 升档计数已开始，若连续 300 拍 ≤12.0，约 **19:30Z** 翻 `comfortable`。分项：`traffic 2.79 / snapshots 1.31 / tower-defense 0.37 / remote-mining 0.19 / spawn 0.16 / telemetry 0.13 / layout 0.12 / expectations 0.12 / room-state 0.11 / construction 0.10`；`agenda-manager` 不在榜内（E638 方向成立）。**注意**：`gateNetFlow` core **−3.25**（Σ 更负）⇒ 即便 G6 翻档，**扩张仍被 G4 挡死**，与 R608 结论一致；这枚翻档的意义是“证明结构项可被自然漂移压到门槛下”，不是扩张解锁。
