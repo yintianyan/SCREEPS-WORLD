@@ -1169,6 +1169,8 @@
 
 **R597 判效（10:12Z）＝部署 `7e0d4a1e`／线上 sha `6d897ee4f9d9`（804,779B）＝本地 dist 同值；CI `40183112406` success**。**E599 PASS**：`t=83,861,676`、`agendas=[]`，4 只 carrier 中 **3 只空载 idle 全部 `recycle=1`**（TTL 147／647／1,052），唯一满载者（1,650、work）保持未标记 ⇒ 规则按设计区分“孤儿”与“在途”。**E600/E601 待收**：需下一次供给 op 开启/结束的对照窗；本轮只有落空一侧。**E602 待收**：CPU 收益预计 ≤0.2/tick，不改变 G6 结论（仍差 ≈1.07，下一步需从 `creeps` 5.52／`post` 3.70 找结构项，不再靠零散编制）。
 
+**配套守卫（已提交、下一轮随部署上线）**：已标记回收的 carrier 不再计入“可用载体”——`liveCarrierNames`（供 `pruneStaleCarrierBinding`）、`hasCarrierForOp` 两处、以及两段兜底绑定全部排除 `memory.recycle`；否则新 op 会绑到正被引导回家的将死者、空等一趟。测试＝同文件 13 例（新增“丑：标记回收者触发补孵不绑将死者”）；`makeOp` 夹具的 type 由虚构的 `carrier-supply` 对齐真实 `supply`。unit 420·5,534／integration 30·239／typecheck 0。
+
 ### 4.0（10-25 05:5xZ 立格，R596；上一条＝R595 格「demand 闸＋闲置退役」＝**已上线 13df4480/005580a36804；upgrader 计数归零**；本格修「两只 harvester 挤同一 source」）
 
 **下一轮主目标：远矿 source 槽位冲突（一只 source 满矿无人采）**。现场（t=83,857,9xx–83,858,057）四条 active 远矿线：W37S58→W37S57 `sources=2/haulerNeed=3`、W37S58→W36S58 `2/3`、W38S56→W38S55 `1/2`、W38S56→W38S58 `2/4`；存活 hauler 3/3/2/4＝**配额逐线配平**，harvester 2/2/1/2、reserver 1/2/1/1（W37S57 的 2 只是交接重叠）、remoteDefender 2（`dangerUntil` 仍在未来）。W37S57 两只 harvester 的 `sourceSlot` **都是 0**、都绑 `sourceId=63288c`（sources[0]），而同拍 `sources=[0, 3000]` ⇒ **source[1] 满矿 3,000 无人采**，按单源 10 e/tick 估 ≈**10 e/tick 持续损失**（约收入 8%）。根因＝替补孵化时继承濒死者的 `dyingSlot`，绑定路径 `bindInitialSource` 又无条件信任 `sourceSlot`，两边都没有“同槽已有健康兄弟”的守卫 ⇒ 重复槽位可跨代传播。
