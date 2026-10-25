@@ -771,8 +771,9 @@ export const CONFIG = {
     statusLight: false,
     /** Action 级 CPU profiling 开关：每个 action 的 resolve/execute 调用都用
      * Game.cpu.getUsed() 测量（约 0.001 CPU/次；50 creep × 5 actions × 2 calls
-     * ≈ 0.5 CPU/tick），数据在 globalCache 中按 tick 聚合。仅定位热点时开启。 */
-    actionProfiling: false,
+     * ≈ 0.5 CPU/tick），数据在 globalCache 中按 tick 聚合。仅定位热点时开启。
+     * ⚠️R598 临时开启做一次标定（G6 缺口 ~1.65），读完热点后**必须随即关回 false**。 */
+    actionProfiling: true,
   },
 
   remote: {
