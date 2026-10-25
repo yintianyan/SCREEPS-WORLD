@@ -172,10 +172,14 @@ export const CONFIG = {
       "lab-manager": 10,
       // R583：远矿管理器单趟 ~10 CPU（interval 10 ⇒ 摊 1.0/拍），决策不要求 10 拍内；
       // 危险撤退由角色侧 per-tick 检测兜底，管理器只写 dangerUntil/道路计划。
-      "remote-mining-manager": 20,
+      // R602：20→30（单趟实测已降到 ~7 CPU ⇒ 均摊 0.37/拍）。脱离/ROI 判决的延迟上限
+      // 由 20 变 30 拍，对小时级决策无影响；角色侧危险撤退仍是每拍。
+      "remote-mining-manager": 30,
       // 链接/侦察是 4 拍级延迟可接受的治理系统；construction-manager 保持 1
       // （R583 实测：interval 5 会让 RCL2 紧急通道场景 500 拍内建不出 extension site）。
-      "link-system": 5,
+      // R602：link-system 5→10 —— link 有 400~800 能量缓冲，source link 产 10/拍，
+      // 10 拍窗口最多积 100，不会溢出；控制器 link 被 upgrader 连续抽，10 拍补一次足够。
+      "link-system": 10,
       "room-observer": 5,
     } as Record<string, number>,
   },
@@ -378,8 +382,12 @@ export const CONFIG = {
   layout: {
     /** 布局模式：constraint = 约束推导放置（默认），template = 固定模板（compact-core-v2，fallback）。 */
     mode: "constraint" as "template" | "constraint",
-    /** 布局规划器的运行间隔（tick）。 */
-    planInterval: 50,
+    /** 布局规划器的重规划间隔（tick）。
+     * R602：50→100。布局只在 RCL 变化/人工 proposed/nextPlanTick 到期时重算，而 RCL 变化
+     * 走 shouldPlan 的即时触发分支（不受本间隔限制）⇒ 翻倍只是让「无变化的周期重扫」
+     * 减半。实测 layout-planner 均摊 0.41 CPU/拍（两房 4-stage 规划），是本轮 G6 缺口
+     * （usage 12.8→12.0）里最大的一块可削项之一。 */
+    planInterval: 100,
     road: {
       /** 采样窗口内位置被判定为高频的最小通行次数。
        * 5：RCL2-3 仅 2-3 个 hauler 时每格每窗口约 3-6 次通行，阈值 10 会让最该修路的
