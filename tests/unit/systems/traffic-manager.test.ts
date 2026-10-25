@@ -299,7 +299,7 @@ describe("traffic-manager — 解算与签发", () => {
     tracker.set("W7N4:cb", { lastSuccessTick: 100, consecutiveFailures: 4 });
     g.pathFailureTracker = tracker;
 
-    // 两个意图 ⇒ 不走单意图快路径，进 resolveAndDispatch（完整解算）。
+    // 两个意图且目标格全空 ⇒ 多意图快路径直接签发（本测钉 move 与成功记录）。
     registerMove(a, RIGHT as DirectionConstant, 60);
     registerMove(b, TOP as DirectionConstant, 60);
     trafficManagerSystem.run(mockContext());
@@ -308,6 +308,27 @@ describe("traffic-manager — 解算与签发", () => {
     expect(b.move).toHaveBeenCalled();
     expect(tracker.get("W7N4:ca")!.consecutiveFailures).toBe(0);
     expect(tracker.get("W7N4:cb")!.consecutiveFailures).toBe(0);
+  });
+
+  it("多意图同目标格：快路径拒绝，回退 resolver 仲裁只签一个", () => {
+    setTraffic(true);
+    const a = trafficCreep("ca", 25, 25, undefined);
+    const b = trafficCreep("cb", 26, 26, undefined);
+    const room = flatRoom([a, b]);
+    a.room = room;
+    b.room = room;
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.ca = a;
+    g.Game.creeps.cb = b;
+
+    // a RIGHT: (25,25)→(26,25)；b TOP: (26,26)→(26,25) —— 同一目标格。
+    registerMove(a, RIGHT as DirectionConstant, 60);
+    registerMove(b, TOP as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    expect(a.move).toHaveBeenCalled();
+    expect(b.move).not.toHaveBeenCalled();
   });
 
   it("引擎拒绝签发：不记成功（失败计数留给 recordPathFailure 那条道）", () => {

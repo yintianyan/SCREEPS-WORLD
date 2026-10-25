@@ -84,36 +84,10 @@ export const trafficManagerSystem: System = {
 
     // 逐房解算并签发。
     for (const [roomName, batch] of batches) {
-      // 快路径：单房仅 1 个移动意图且无锚定时，目标格未被占 → 直接签发，跳过完整解算。
-      if (batch.intents.length <= 1 && batch.anchors.size === 0) {
-        if (batch.intents.length === 1) {
-          const intent = batch.intents[0]!;
-          const creep = Game.creeps[intent.name];
-          if (creep && !batch.immovable.has(intent.name)) {
-            const occupied = batch.occupancy.get(intent.to);
-            if (occupied === undefined) {
-              const tx = Math.floor(intent.to / 50);
-              const ty = intent.to % 50;
-              const dir = creep.pos.getDirectionTo(tx, ty);
-              if (dir) {
-                const result = creep.move(dir);
-                recordIntent("move", result);
-                if (result === OK || result === ERR_TIRED) {
-                  recordTraffic(creep);
-                  // 快路径与完整解算路径是同一条判据的两个出口：两处都必须记成功，
-                  // 否则单意图房（最常见形态）里的 creep 永远没有成功记录 —— 见 #39。
-                  recordPathSuccess(creep);
-                } else if (result !== ERR_BUSY) {
-                  invalidateCreepPath(intent.name);
-                }
-              }
-              continue;
-            }
-          }
-        }
-        // 无可签发意图或目标被占 → 走完整解算。
-        if (batch.intents.length === 0) continue;
-      }
+      // 快路径（多意图）：目标格全空、互不重复、非阻挡结构格且无锚定时无冲突可解，
+      // 直接逐条签发，跳过完整解算器（同格仲裁/推挤/环传播此时全为空操作）。
+      if (tryFastDispatch(batch, ctx.getSnapshot(roomName))) continue;
+      if (batch.intents.length === 0) continue;
       safeRun(
         `room/${roomName}/traffic`,
         // ⚠️必须套 measuredRun：safeRun 只管错误处理与冷却，**不记 CPU 跨度**，
@@ -127,6 +101,45 @@ export const trafficManagerSystem: System = {
     }
   },
 };
+
+/**
+ * 快路径（多意图）：本房全部移动意图的目标格都未被占用、互不重复、不是阻挡结构格，
+ * 且无锚定声明/疲劳个体时，逐条直接签发 move。完整解算器要做的同格仲裁、推挤与
+ * 环传播在这种形状下全为空操作。任一条件不满足即回退 resolver——互换、跟车、
+ * 目标被占、目标落到墙内结构格等旧形状仍走原路径（保守优先）。
+ */
+function tryFastDispatch(batch: RoomBatch, snapshot: RoomSnapshot | undefined): boolean {
+  if (batch.anchors.size > 0) return false;
+  const active = batch.intents.filter(it => it.to !== it.from);
+  if (active.length === 0) return true;
+  const parkData = snapshot ? getParkRoomData(snapshot) : undefined;
+  const seen = new Set<number>();
+  for (const it of active) {
+    if (batch.immovable.has(it.name)) return false;
+    if (batch.occupancy.has(it.to)) return false;
+    if (parkData?.blocking.has(it.to)) return false;
+    if (seen.has(it.to)) return false; // 同目标格必须先经 resolver 仲裁。
+    seen.add(it.to);
+  }
+  for (const it of active) {
+    const creep = Game.creeps[it.name];
+    if (!creep) continue;
+    const tx = Math.floor(it.to / 50);
+    const ty = it.to % 50;
+    const dir = creep.pos.getDirectionTo(tx, ty);
+    if (!dir) continue;
+    const result = creep.move(dir);
+    recordIntent("move", result);
+    if (result === OK || result === ERR_TIRED) {
+      recordTraffic(creep);
+      // 与完整解算路径同一条判据的两个出口：两处都必须记成功（#39）。
+      recordPathSuccess(creep);
+    } else if (result !== ERR_BUSY) {
+      invalidateCreepPath(it.name);
+    }
+  }
+  return true;
+}
 
 function resolveAndDispatch(
   roomName: string,
