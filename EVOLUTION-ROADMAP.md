@@ -1167,6 +1167,8 @@
 
 **R593 判决（12:5xZ）＝E587/E588/E589 PASS**：部署 `15a07814c1d1`（CI `40094961364` success）后 `t=83,843,897` 读——`agendas=[[running, W37S58→W38S56, 1650, 0, carrier…a9e]]`、预约存在 ⇒ **供给线恢复**；storage **1,986→6,429**、phase **normal/growth**、core 625,520；`poverty=496`（深贫困闸在拦首孵与替换）。`cpuRate.total=22.98／win=8` 是新 boot 瞬态，待稳定窗复核。E590 由 `storageRatio≥0.3` 单测兜底。⇒ “越援助越不能援助”的自败回路已闭合；下一步盯 storage 回到 8K+ 与 CPU 稳定值。
 
+**后续（10-25 04:1xZ，跨 ~12,000 拍）**：storage **20,060→44,481**（幼房持续积累）；**W39S57 已被管理器按 ROI 废弃**（`d=30,163／spawn=38,200`，净负）；当前仅 **W38S55 active**（d 3.02M／spawn 2.46M），其余全部 abandoned；`poverty=584` 未增（未再触发闸门）；`capacity=tight／CPU 14.22（win 12,845）`、38 creeps；`gateNetFlow` W37S58 **−11.56**（供给出口计消耗）／W38S56 **−0.83**（大幅改善）。⇒ 新线风险由 ROI 执法自行收敛；幼房存量健康，G4 仍被慢 EMA 与出口记账压制。
+
 ### 4.0（10-24 03:5xZ 立格，R590；上一条＝R587 格「W37S56 ROI 执法」＝**E573 PASS／E574 完成／E575 成立**；同格记录了幼房濒危（storage 19K→2,887）与人工废弃 W39S55 的处置；本格做贫困感知的远矿扩编）
 
 **下一轮主目标：把远矿开点/补员与 home storage 余量绑定**。现门 `roomReadyForNewRemote` 只要求 `storage ≥ roomMinStorage(8,000)`＋当拍 `colonyState=normal`，未计新线初始编队成本（7 人 ≈15K）⇒ 19K 的房也敢开 7 人线，孵化峰把 storage 打到 2,887、phase 进 crisis。方案候选（按优先级）：①开点门槛改为 `storage ≥ roomMinStorage + 初始编队成本`（成本按候选 fleet 的 body 估）；②开点后分期补员（首期 1 harvester＋1–2 hauler，其余按 storage 余量放行）；③active op 的补员在 `storage < roomMinStorage` 时暂停（保留最老/唯一线）。验收＝unit（门槛/分期/暂停三例）＋integration＋typecheck／CI＋线上新开点期间 storage 不破 8K；任何一项导致现有线断粮或 storage 继续下探即回滚**。
