@@ -1159,6 +1159,16 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-25 14:0xZ 立格，R598；上一条＝R597 格「孤儿 carrier 退役」＝**E599 PASS**；本格做 G6 的动作级 CPU 标定）
+
+**下一轮主目标：G6 缺口的实测标定（先把热点量出来，再谈削谁）**。现场（t=83,864,738–848）：`cpuRate.total=13.65`、`capacity=tight`、limit=**20**（GCL 5 不提供额外限）⇒ comfortable 门槛 usage≤12，缺口 **≈1.65**；相位 `creeps 5.72 / post 3.39 / systems 1.98 / snapshots 1.40`；系统榜 `traffic-manager 4.04 / logistics 0.42 / remote-mining 0.41 / layout-planner 0.41 / construction 0.35`；角色榜 `remoteHarvester 1.75（11 只含在孵）/ harvester 1.16 / remoteHauler 1.02`（0.29 vs 0.085 CPU/只，差 3.4 倍，静态读码找不到对应的每拍扫描：矿工全部站在 container 格上、无每拍重寻路）。按既册纪律「CPU 优化先实测定标」（静态榜单曾错排约 1,000 倍），本轮**临时**把 `CONFIG.debug.actionProfiling` 置 true（自述 ≈0.5 CPU/tick），部署后在 heap `globalThis.actionCpu` 按 `roleName/action/resolve|execute` 读热点，下一步据此只改一处。
+
+**扩张侧的现状（不改阈值）**：`expansionDashboard` 逐字 `Blocked=G3+G4+G6`（`netFlow=-2.0|≥5`、`tier=tight|≤comfortable`），计划 `W39S56@83,406,284` 仍 `EVALUATED`（score 0.6／payback 20,409t），候选 `W39S55 QUALIFIED`；预算 172,181/465,351 充足。G4 是慢 EMA（近 7,900 拍 −10.08→−4.17），而快流已转正（core nf +15.4、two-room 物理存量 8 小时 +2.8/tick）⇒ **G4 只能等 EMA 收敛，本轮不动阈值**。同轮发现第 5 条 active 远矿线（W38S56→W38S57，`ca≈83,864,054`）已自主开出，编制还会增长 ⇒ CPU 削减压更有必要。
+
+**同轮随部署上线的既有件**：R597 的 carrier 生命周期配套守卫（`liveCarrierNames`／`hasCarrierForOp`／两段兜底绑定均排除 `memory.recycle`；测试 13 例、unit 420·5,534、integration 30·239、typecheck 0）。
+
+同轮预写＝**E603** 部署后 ≤300 拍，`globalThis.actionCpu` 的 top-5 键能点名“某角色/某动作 resolve|execute”且其单次成本可复算（多次采样一致）；**E604** profiling 自身开销使 total 上升 ≤0.6/tick（仅记录，不作判据）；**E605** 热点确定后，R599 必须同轮把 `actionProfiling` 关回 false（进程判据，防调试开关长期驻留）。
+
 ### 4.0（10-25 10:0xZ 立格，R597；上一条＝R596 格「源槽冲突」＝**E595/E596/E597 PASS、E598 长窗 PASS（Σgate +0.71）**；本格退孤儿 carrier）
 
 **下一轮主目标：孤儿 carrier 退役（供给 op 结束后仍持续搬运）**。现场（09:56Z）：幼房存量已 87.7K、`agendas=1`，但 `carrier@W38S56` **4 只**（TTL 1,228／628／28／在孵 ⇒ 约每 600 拍由一次供给 op 各孵一只，**从不退役**）。`carrier` 角色按 `home/remoteTarget` 自行取送、**从不读 op**（`roles/carrier.ts` 的 acquire/work 只有 storage 取卸），而 `carrier` 虽在 `CONFIG.roles` 白名单里（`index.ts:704`，minCount 0）却没有生命周期回收 ⇒ op 结束后它们继续把核心能量搬去幼房（06:06Z 实测 `ag=0` 时仍有 3 只满载 1,650 在途），既白烧运力/CPU（creeps 相位 5.52），又让核心 `exported` 长期为负、压住 G4。hauler 侧的“超配”已核清：W37S57 4 只＝2 健康＋1 濒死＋1 在孵、W38S58 5 只＝1 在孵＋2 濒死＋2 健康，均 ≤ 配额，不动。
