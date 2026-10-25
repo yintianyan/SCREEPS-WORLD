@@ -433,3 +433,34 @@ describe("remote-harvester — sourceSlot 预分配", () => {
     expect(h1.memory.sourceId).toBeDefined();
   });
 });
+
+// 重复 sourceSlot — 替补继承濒死者槽位时可能与健康兄弟撞槽。
+// 硬按槽位绑定会让另一 source 无人采（线上实证 W37S57：两只 slot 0、source1 满矿 3000）。
+describe("remote-harvester — 重复 sourceSlot 冲突", () => {
+  it("槽位已有兄弟占用 → 改绑空缺 source", () => {
+    const g = globalThis as any;
+    const srcA = mockSource("srcA");
+    const srcB = mockSource("srcB");
+    const hLocal = makeHarvester("rh-local", [srcA, srcB]);
+    hLocal.memory.sourceId = "srcA";
+    const h1 = makeHarvester("rh-1", [srcA, srcB]);
+    h1.memory.sourceSlot = 0; // 与 hLocal 同槽
+    g.Game.creeps = { "rh-local": hLocal, "rh-1": h1 };
+
+    const chosen = getRemoteSource(h1);
+
+    expect(chosen?.id).toBe("srcB");
+    expect(h1.memory.sourceId).toBe("srcB");
+  });
+
+  it("槽位无冲突 → 仍按预分配绑定（控制组）", () => {
+    const g = globalThis as any;
+    const srcA = mockSource("srcA");
+    const srcB = mockSource("srcB");
+    const h1 = makeHarvester("rh-1", [srcA, srcB]);
+    h1.memory.sourceSlot = 1;
+    g.Game.creeps = { "rh-1": h1 };
+
+    expect(getRemoteSource(h1)?.id).toBe("srcB");
+  });
+});

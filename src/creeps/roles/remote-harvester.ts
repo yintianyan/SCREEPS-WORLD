@@ -114,10 +114,22 @@ function bindInitialSource(creep: Creep): Source | undefined {
     return sources[0]!;
   }
 
-  // sourceSlot 预分配优先：直接选第 N 个 source。
+  // sourceSlot 预分配优先，但槽位冲突时让位给空缺 source：替补继承濒死者的 slot，
+  // 若同槽位已有健康兄弟，硬按槽位绑定会让另一 source 无人采（线上实证 W37S57：
+  // 两只都 slot 0 ⇒ source1 满矿 3000）。无冲突才走预分配，冲突时退回占用分配。
   const slot = creep.memory.sourceSlot as number | undefined;
   if (slot !== undefined && slot >= 0 && slot < sources.length) {
     const target = sources[slot]!;
+    const slotOccupancy = countSiblingOccupancy(creep, sources);
+    if ((slotOccupancy.get(target.id) ?? 0) === 0) {
+      creep.memory.sourceId = target.id;
+      return target;
+    }
+    const vacant = sources.find(s => (slotOccupancy.get(s.id) ?? 0) === 0);
+    if (vacant) {
+      creep.memory.sourceId = vacant.id;
+      return vacant;
+    }
     creep.memory.sourceId = target.id;
     return target;
   }
