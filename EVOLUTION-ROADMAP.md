@@ -1147,6 +1147,8 @@
 - **#196 G4：升级预留策略（策略阈值，二选一）**。证据：`ΣgateNetFlow` 4 小时只在 −0.71~+1.48 徘徊、从未近 5；2 只 upgrader 在跑时 `Σgate=−0.07`，盈余一出现就被升级吃掉（升级刹车以 0 为界）⇒ **即便 #195 落地，G4 仍按构造到不了**。**方案 A（推荐）**：限定条件版“净流<5 且扩张计划 `EVALUATED` 时才暂停升级”（R607 的全局版已因 15 例测试红被回滚；限定版须 unit/integration 全绿才上线）。**方案 B**：接受不扩张，保留升级。**验收（A）**：上线后 2,000 拍内 `Σgate` 升过 5、`expansionDashboard.failedGates` 去掉 G4，且无 RCL/降级回归。
 - **#197 周界目标与维护预算（防御政策）**。证据：`getWallTargetHits(rcl7_8)` = **10,000,000**（core 3,000,000），实测最低核心 rampart **10,901**（2.9h 内 16,541→10,901 净减 5,640）、幼房 1,101（utility 地板 1,000）；塔能量 640~1,000、两座按 `>70%` 规则跳修；和平期修墙预算每窗几十能量。**方案 A**：周界目标降到可维护档（如 **300K**）＋固定维护预算；**方案 B**：明确接受薄壳（`posture=fortify` 不代表外壳就绪）。**验收（A）**：改后 1,000 拍内最低周界 hits 止跌回升、`towerSpendWalls` 稳定在预算内且不挤压 spawn/升级。
 
+- **#198（10-25 R615）NPC 骚扰把帝国长期钉在 `war` ⇒ G0/`expansionAllowed` 恒假（扩张第四道门）**。证据：`posture=war / branch=war-sustain / since 83,865,399（4,691 拍）/ warPressureTicks=0`，五房当场 0 活敌，但 `lastHostileAt` 距核心 **3,086 拍**、幼房 **2,303 拍**（< `threatWindow=5,000`），远矿 3 条 `dangerUntil` 仍在计时 ⇒ `threatRecent` 合法为真；`warPressureTicks=0`（压力低于 `warMaxPressure`）⇒ 走 `war-sustain` 而非 `war-exit-patience`。**这不是闩锁 bug，是设计税（#151/#184 族）**：war 期 `expansionAllowed` 被合取折成恒假，扩张要等两房 `lastHostileAt` 都静默 >5,000 拍。**可选方案（属人）**：A) 维持现状（接受 NPC 骚扰支配扩张时机）；B) 把「war 姿态」与「扩张禁令」解耦（war 只管军事/防御，不折 `expansionAllowed`，需重审 G0 语义）；C) 调整 `threatWindow`/`warMaxPressure` 的 NPC 权重（#151 按来源降尾税）。**验收（B/C 任一）**：实施后 `expansionAllowed` 不再被单次 NPC 进犯压 5,000 拍；且 `posture=war` 期间的防御编队/塔仍按现状工作。
+
 ## 3.6 判等效外部事件（不是我的修没生效）
 
 - **#48 / #35 跨房交付成对入账**：本窗证据——两房 `exported` 皆空、在场 9 只跨房 creep **全是远矿角色**
