@@ -1178,6 +1178,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 20:1xZ 立格，R615；上一条＝R614 格「upgradeTicks 单位修正」＝**E645 PASS**；本格定位 G0 的持续红因）
+
+**下一轮主目标：把 G0（`expansionAllowed=false`）的成因钉死**。R614 激活后 `failedGates` 出现 **G0**；`t=83,870,090` 读：`posture=war`、`branch=war-sustain`、`since=83,865,399`（**已 4,691 拍**）、`warPressureTicks=0`，而同一刻五房 `FIND_HOSTILE_CREEPS` **全 0**。继续拆威胁窗口：`Memory.rooms[*].lastHostileAt` 距当前 **W37S58=3,086 拍、W38S56=2,303 拍**（均 < `threatWindow=5,000`），远矿 `dangerUntil` 还在计时（W36S58 +1,037、W38S58 +1,737、W38S57 +7,417）⇒ **`threatRecent` 合法为真，war 由“周期性 NPC 骚扰”持续续期，不是闩锁缺陷**；`warPressureTicks=0` 表示压力低于 `warMaxPressure`，因此走 `war-sustain` 而不是 `war-exit-patience`。**后果**：war 期 `expansionAllowed` 被合取折成恒假 ⇒ **G0 的持续红是设计税（#151/#184 族）**，与 G4/G6 一起构成扩张的第四道门。
+
+同轮预写＝**E648** 下一次 G0 转绿需 `lastHostileAt` 两房都静默 >5,000 拍（即约 2,000~4,700 拍内无新 NPC 进犯）；**E649** 在那之前 `posture` 应为 war/fortify、`branch` 为 `*-sustain|*-hold`，不得拿 `posture=fortify` 当“可扩张”证据；**E650** G6 升档计数在 20:13 重置后从 0 重来（usage 12.1，需 300 拍 ≤12）。
+
 ### 4.0（10-25 19:5xZ 立格，R614；上一条＝R613 格「首次稳定 <12、机制纠正」；本格修 upgradeTicks 的单位错配）
 
 **下一轮主目标：把 G6 升档窗口从“评估次数”改回“拍”**。R613 实测 `upgradeTicks` 只以 **~0.19/拍** 推进（147 拍 +28）——`evaluateCapacity` 每次只 `+1`，而调用它的 `empire-strategy` 是 **5 拍 cadence** ⇒ `upgradeWindowTicks=300` 的有效窗口被拉成 **1,500 拍（≈1.75h）**，任一次评估 `usage>12` 还会清零。这不是阈值问题，是**单位错配**，也是 G6 历史上长期为红的机制原因之一。修法＝`evaluateCapacity` 增加第 5 参 `elapsedTicks`（默认 1，纯函数旧调用零改动），`empire-strategy` 用 heap 记上次评估拍、传真实间隔（reset 后首趟按 1）。
@@ -1187,8 +1193,6 @@
 同轮预写＝**E645** 部署后 `upgradeTicks` 每趟 +≈5（≈1/拍），若 `usage` 持续 ≤12 则在 **~300 拍（≈21 分钟）** 内翻 `comfortable`；**E646** 迟滞语义不变（仍是 300 拍窗口，降档立即），不出现 tight↔comfortable 抖动；**E647** 单次评估 >12 仍清零（窗口连续性要求不变）。⚠️G4 仍红（core −2.94），G6 翻档不产生扩张执行。
 
 **R614 判效（20:1xZ）＝E645 PASS（单位修正生效），翻档被一次全局重置打断**：线上 sha `53f95f497738`（806,280B，CI `40228239899`）；重置前实测 `upgradeTicks` **173→233（63 拍 +60，≈1/拍）**——旧码下同样 63 拍只会 +12。随后在 ~20:13 发生全局重置（`win` 回到 87），计数清零重来；重置后早期 `usage=12.5`（avg10 回退，窗未稳），暂未翻档。重置后 `failedGates` 变为 **G0（posture.expansionAllowed=false）＋G4（0.0）＋G6（tight）**——G0 的回归需下一轮读 posture/branch（可能是重置瞬态或真转入非 expand 姿态）。
-
-### 4.0（10-25 19:5xZ 立格，R614；上一条＝R613 格「首次稳定 <12、机制纠正」；本格修 upgradeTicks 的单位错配）
 
 ### 4.0（10-25 19:1xZ 立格，R613；上一条＝R612 格「贴门 12.14」；本格拿到首次稳定低于门槛的读数）
 
