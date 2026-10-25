@@ -179,6 +179,10 @@ export const spawnManagerSystem: System = {
             t => t.state === "queued",
           ).length ?? 0,
       };
+      const empireGateSum = Object.values(Memory.kernel?.gateNetFlow ?? {}).reduce(
+        (a, b) => a + b,
+        0,
+      );
       const demandResult = evaluateDemand(
         snapshot,
         queue,
@@ -187,6 +191,7 @@ export const spawnManagerSystem: System = {
         spawning,
         roomCtx,
         ctx.tick,
+        empireGateSum,
       );
       const { requests, nextHysteresis } = demandResult;
       // #85：把需求阶梯的**结构钳位**抄进 Memory.kernel.demandClamps，供调优器判断

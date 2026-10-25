@@ -288,6 +288,8 @@ export function evaluateDemand(
   spawning: readonly SpawningSummary[],
   roomCtx: RoomDemandContext,
   tick: number,
+  /** 全帝国 gateNetFlow 之和（system 层现读后传入；domain 保持纯函数）。 */
+  empireGateSum = 0,
 ): DemandResult {
   const requests: SpawnRequest[] = [];
   const home = snapshot.roomName;
@@ -837,11 +839,15 @@ export function evaluateDemand(
   // 门禁：RCL6+（有 lab 才有意义）且 lab ≥ 3（能组成三元组）且有 terminal（买入化合物落点）；
   // maxCount=1，无料可搬时它 park，成本是一个 4C4M 身子 + <0.1 CPU/tick。
   // bootstrap 与 recovery 不开：保命孵化优先，工业是投资不是救生索。
+  // R595：无“可反应”条件时（<2 个带矿物 lab）不补孵 labTender —— 现场 2 只全 idle，
+  // 4C4M 身子 + 维持纯属浪费；实验室能工作时再放开。
+  const labWorkPossible = snapshot.labs.filter(l => l.mineralAmount > 0).length >= 2;
   if (
     colonyState === "normal" &&
     snapshot.rcl >= 6 &&
     snapshot.labs.length >= 3 &&
-    snapshot.terminal !== undefined
+    snapshot.terminal !== undefined &&
+    labWorkPossible
   ) {
     const tenderConfig = getRoleBounds("labTender", home);
     const tenderTotal = (counts.labTender ?? 0) + countPending(queue, "labTender", home);
@@ -882,8 +888,12 @@ export function evaluateDemand(
   // 真正的缺能保护不在这儿：下面的 `!hasStorage` 压力阶梯（pressure>0.7 ⇒ target 0）与
   // spawn 侧 body 降级才是连续的、按实际能量说话的那把闸。
   const earlyRoom = snapshot.storage === undefined;
+  // R595：帝国失血期（gateNetFlow 和为负）不补孵 upgrader —— 角色闸会把它 idle，
+  // 补出来只会白付孵化与维持；降级风险/无 storage 早房仍豁免。RCL8 另由 rcl8NoUpgrade 关。
   const allowUpgrader =
-    (colonyState === "normal" || hasDowngradeRisk || earlyRoom) && !rcl8NoUpgrade;
+    (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
+    !rcl8NoUpgrade &&
+    (empireGateSum >= 0 || hasDowngradeRisk || earlyRoom);
 
   // #85：本 tick 需求阶梯对 upgrader **实际生效的结构钳位**（undefined = 该分支直接用 maxCount）。
   // 存在的理由：调优器只看"在场数 ≥ 当前上限"就提 upgrader.maxCount ↑，而很多分支根本不用 maxCount

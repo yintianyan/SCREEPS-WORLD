@@ -1349,6 +1349,13 @@ describe("hauler 积压信号接收端可达性闸门（无 storage 防移动仓
 describe("labTender 孵化门禁（反应链最后一公里的执行人）", () => {
   const terminal = mockStructure("terminal", { id: "term1", energy: 10000, capacity: 300000 });
   const labs = [1, 2, 3, 4].map(i => mockStructure("lab", { id: `lab${i}` }));
+  // R595：只有 ≥2 个带矿物的 lab 才可能反应，才补孵 labTender。
+  const richLabs = [1, 2, 3, 4].map(i =>
+    Object.assign(mockStructure("lab", { id: `lab${i}` }), {
+      mineralAmount: 100,
+      mineralType: "XGH2O",
+    }),
+  );
 
   function labSnap(overrides = {}): never {
     return stationSnapshot({
@@ -1373,14 +1380,20 @@ describe("labTender 孵化门禁（反应链最后一公里的执行人）", () 
     return requests.filter(r => r.role === "labTender");
   }
 
-  it("RCL8 + lab≥3 + terminal → 孵 1 个，且身子只有 carry+move（不参与能量分配）", () => {
-    const tenders = reqsFor("normal", labSnap());
+  it("RCL8 + lab≥3 + terminal + 可反应 → 孵 1 个，且身子只有 carry+move", () => {
+    const tenders = reqsFor("normal", labSnap({ labs: richLabs as never }));
     expect(tenders).toHaveLength(1);
     expect(tenders[0]!.body.every(p => p === "carry" || p === "move")).toBe(true);
   });
 
   it("lab 凑不出三元组（只有 2 座）→ 不孵化", () => {
-    expect(reqsFor("normal", labSnap({ labs: [labs[0], labs[1]] as never }))).toHaveLength(0);
+    expect(reqsFor("normal", labSnap({ labs: [richLabs[0], richLabs[1]] as never }))).toHaveLength(
+      0,
+    );
+  });
+
+  it("lab≥3 但无带矿物 lab（无法反应）→ 不孵化（R595）", () => {
+    expect(reqsFor("normal", labSnap())).toHaveLength(0);
   });
 
   it("无 terminal（化合物没有落点）→ 不孵化", () => {
