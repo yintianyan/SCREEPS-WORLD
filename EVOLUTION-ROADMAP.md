@@ -1169,6 +1169,8 @@
 
 **后续（10-25 04:1xZ，跨 ~12,000 拍）**：storage **20,060→44,481**（幼房持续积累）；**W39S57 已被管理器按 ROI 废弃**（`d=30,163／spawn=38,200`，净负）；当前仅 **W38S55 active**（d 3.02M／spawn 2.46M），其余全部 abandoned；`poverty=584` 未增（未再触发闸门）；`capacity=tight／CPU 14.22（win 12,845）`、38 creeps；`gateNetFlow` W37S58 **−11.56**（供给出口计消耗）／W38S56 **−0.83**（大幅改善）。⇒ 新线风险由 ROI 执法自行收敛；幼房存量健康，G4 仍被慢 EMA 与出口记账压制。
 
+**⚠️帝国失血确认（10-25 04:1xZ）**：两房总存量 `631,949→455,441（−13.75/tick，跨 ~12,800 拍）`——核心房 **625,520→411,360**，幼房的 44K 是核心库存的转移而非净收入。支出构成（`bk` 100 拍桶）：幼房 **upgraded 1,403＝14/tick**（最大 discretionary 项）、核心 **towerSpendWalls 600＝6/tick**、spawn 6/tick、built 2.5/tick；收入 harvest 17.8/tick ⇒ 真实净 ≈−10.7/tick。两个房间各自 phase 都 `normal`（核心 storageRatio 41%、幼房 growth）⇒ **房间级恢复不会触发**，这是帝国级失血的盲区。核心 411K 约 30h 见底。**下一轮首要目标（R594）**：恢复帝国净流——优先“暂停/减半幼房升级（14/tick）”并评估核心塔修墙（6/tick，属 #153 政策面）与孵化支出；验收＝总存量日差转正、G4 慢 EMA 回升。
+
 ### 4.0（10-24 03:5xZ 立格，R590；上一条＝R587 格「W37S56 ROI 执法」＝**E573 PASS／E574 完成／E575 成立**；同格记录了幼房濒危（storage 19K→2,887）与人工废弃 W39S55 的处置；本格做贫困感知的远矿扩编）
 
 **下一轮主目标：把远矿开点/补员与 home storage 余量绑定**。现门 `roomReadyForNewRemote` 只要求 `storage ≥ roomMinStorage(8,000)`＋当拍 `colonyState=normal`，未计新线初始编队成本（7 人 ≈15K）⇒ 19K 的房也敢开 7 人线，孵化峰把 storage 打到 2,887、phase 进 crisis。方案候选（按优先级）：①开点门槛改为 `storage ≥ roomMinStorage + 初始编队成本`（成本按候选 fleet 的 body 估）；②开点后分期补员（首期 1 harvester＋1–2 hauler，其余按 storage 余量放行）；③active op 的补员在 `storage < roomMinStorage` 时暂停（保留最老/唯一线）。验收＝unit（门槛/分期/暂停三例）＋integration＋typecheck／CI＋线上新开点期间 storage 不破 8K；任何一项导致现有线断粮或 storage 继续下探即回滚**。
