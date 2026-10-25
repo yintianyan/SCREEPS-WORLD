@@ -324,4 +324,56 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     expect(saved("op-h")?.status).toBe("running");
     expect(creeps["carrier-rec"].memory.lastDelivery).toBeUndefined();
   });
+
+  it("壬：无活跃 supply op ⇒ 空载 carrier 标记回收（孤儿不再持续搬运）", () => {
+    (globalThis as any).Memory.kernel.agendas = [];
+    squad.push({ name: "carrier-orphan" });
+    creeps["carrier-orphan"] = {
+      name: "carrier-orphan",
+      spawning: false,
+      room: { name: "W0N1" },
+      store: { getUsedCapacity: () => 0, getCapacity: () => 1650 },
+      memory: { role: "carrier", home: "W0N1", remoteTarget: "W0N2", mode: "acquire" },
+    };
+
+    runNow();
+
+    expect(creeps["carrier-orphan"].memory.recycle).toBe(true);
+  });
+
+  it("癸：有活跃 supply op ⇒ 同形空载 carrier 不回收（控制组）", () => {
+    const op = makeOp("op-k");
+    op.type = "supply";
+    op.createdAt = 900;
+    op.requestedAmount = 3000;
+    (globalThis as any).Memory.kernel.agendas = [op];
+    squad.push({ name: "carrier-live" });
+    creeps["carrier-live"] = {
+      name: "carrier-live",
+      spawning: false,
+      room: { name: "W0N1" },
+      store: { getUsedCapacity: () => 0, getCapacity: () => 1650 },
+      memory: { role: "carrier", home: "W0N1", remoteTarget: "W0N2", mode: "acquire" },
+    };
+
+    runNow();
+
+    expect(creeps["carrier-live"].memory.recycle).toBeUndefined();
+  });
+
+  it("子：孤儿但载货 ⇒ 不回收（先送完这一趟，回收会销毁货物）", () => {
+    (globalThis as any).Memory.kernel.agendas = [];
+    squad.push({ name: "carrier-loaded" });
+    creeps["carrier-loaded"] = {
+      name: "carrier-loaded",
+      spawning: false,
+      room: { name: "W0N2" },
+      store: { getUsedCapacity: () => 900, getCapacity: () => 1650 },
+      memory: { role: "carrier", home: "W0N1", remoteTarget: "W0N2", mode: "work" },
+    };
+
+    runNow();
+
+    expect(creeps["carrier-loaded"].memory.recycle).toBeUndefined();
+  });
 });

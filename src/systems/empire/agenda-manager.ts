@@ -264,6 +264,28 @@ function hasCarrierForOp(op: OperationContext): boolean {
   );
 }
 
+/**
+ * 孤儿载体退役：carrier 按 home/remoteTarget 自行取送、从不读 op，供给 op 结束后
+ * 仍会继续从 home 取能送往 target（线上实证：op 间隙里多只 carrier 持续满载搬运，
+ * 幼房存量被推到 87K）。无活跃 supply op 匹配它的 home→target 时，空载者标记回收；
+ * 载货/在孵/已标记的不动——先把这一趟送完（回收会销毁随身货物）。
+ */
+function retireOrphanCarriers(operations: readonly OperationContext[]): void {
+  for (const entry of querySquad({ role: "carrier" })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep || creep.spawning || creep.memory.recycle) continue;
+    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) continue;
+    const home = creep.memory.home;
+    const target = creep.memory.remoteTarget;
+    if (!home || !target) continue;
+    const hasOp = operations.some(
+      op =>
+        op.type === "supply" && isActive(op) && op.sourceRoom === home && op.targetRoom === target,
+    );
+    if (!hasOp) creep.memory.recycle = true;
+  }
+}
+
 export const agendaManagerSystem: System = {
   name: "agenda-manager",
   priority: 1 as Priority,
@@ -832,6 +854,9 @@ export const agendaManagerSystem: System = {
 
     // ── 16. 清理终态 Operation ──
     operations = pruneTerminal(operations);
+
+    // ── 16b. 孤儿载体退役：终态清理之后再判，completed 行已不在列表里 ──
+    retireOrphanCarriers(operations);
 
     // ── 17. 构建 final Network Snapshot + Health ──
     const finalSnapshot = buildNetworkSnapshot(
