@@ -15,6 +15,7 @@ import {
   type DevelopmentGateReason,
   type DevelopmentLaneReason,
 } from "../../domain/construction/queue";
+import { shouldRunConstruction } from "../../domain/construction/cadence";
 import { getRoomLayoutData, markLayoutDirty } from "../../kernel/segment-store";
 import { getRemoteSiteTotal, getTickSiteCounters } from "../site-quota";
 import { markLinkConstrained, clearDeadAssetLink } from "./link-system";
@@ -63,6 +64,24 @@ export const constructionManagerSystem: System = {
 
       const queue = roomMem.buildQueue ?? [];
 
+      // R603：常态建造按 normalInterval 降频；紧急重建（spawn/storage/tower/source
+      // container 缺失）仍每拍跑 —— R583 的回归教训（interval 5 让 RCL2 紧急通道
+      // 500 拍内建不出 site）只适用于“把紧急也降频”，不是降常态。
+      const emergency = assessEmergencyRebuild(snapshot);
+      const g = globalCache() as { __constructionLastRun?: Record<string, number> };
+      const lastRuns = (g.__constructionLastRun ??= {});
+      if (
+        !shouldRunConstruction(
+          emergency.any,
+          ctx.tick,
+          lastRuns[snapshot.roomName],
+          CONFIG.construction.normalInterval,
+        )
+      ) {
+        continue;
+      }
+      lastRuns[snapshot.roomName] = ctx.tick;
+
       // 1. 同步任务状态与实际 site（纯函数 — domain/construction/queue）。
       syncTaskStates(queue, snapshot);
 
@@ -88,8 +107,7 @@ export const constructionManagerSystem: System = {
         recordConstructionSkip(snapshot.roomName, "stale-evict", queue, snapshot);
       }
 
-      // 3. 评估紧急重建状态。
-      const emergency = assessEmergencyRebuild(snapshot);
+      // 3. 紧急重建状态 — 已在循环顶部算过（降频闸需要它），此处复用。
 
       // 4. 开发门禁（结构化原因码 — R2 可观测性）。
       //    注意：normal 槽位永远按「发展规则」严格判定（emergencyAny=false）—

@@ -302,6 +302,12 @@ export const CONFIG = {
   },
 
   construction: {
+    /** R603：常态建造跑动间隔（tick）。紧急重建（spawn/storage/tower/source container
+     * 缺失）不受此限、仍每拍跑。实测 construction-manager 每拍实付 0.318 CPU（含
+     * queue sync + 门禁 + site 创建），是 G6 缺口（12.8→12.0）里的最大实时项；
+     * 常态下 site 创建延迟 2 拍对 builder 无感（R583 的 interval=5 回归只发生在
+     * 把**紧急**也降频时）。 */
+    normalInterval: 3,
     /** 每房最大活跃建造 site 数（普通）。3：让 priority-1 的 controller container
      * 无需等待 extension 完工即可插队入场，加速 RCL2→RCL3 站桩升级链路成型。 */
     maxNormalSitesPerRoom: 3,
