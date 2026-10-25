@@ -1159,6 +1159,16 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-25 05:5xZ 立格，R596；上一条＝R595 格「demand 闸＋闲置退役」＝**已上线 13df4480/005580a36804；upgrader 计数归零**；本格修「两只 harvester 挤同一 source」）
+
+**下一轮主目标：远矿 source 槽位冲突（一只 source 满矿无人采）**。现场（t=83,857,9xx–83,858,057）四条 active 远矿线：W37S58→W37S57 `sources=2/haulerNeed=3`、W37S58→W36S58 `2/3`、W38S56→W38S55 `1/2`、W38S56→W38S58 `2/4`；存活 hauler 3/3/2/4＝**配额逐线配平**，harvester 2/2/1/2、reserver 1/2/1/1（W37S57 的 2 只是交接重叠）、remoteDefender 2（`dangerUntil` 仍在未来）。W37S57 两只 harvester 的 `sourceSlot` **都是 0**、都绑 `sourceId=63288c`（sources[0]），而同拍 `sources=[0, 3000]` ⇒ **source[1] 满矿 3,000 无人采**，按单源 10 e/tick 估 ≈**10 e/tick 持续损失**（约收入 8%）。根因＝替补孵化时继承濒死者的 `dyingSlot`，绑定路径 `bindInitialSource` 又无条件信任 `sourceSlot`，两边都没有“同槽已有健康兄弟”的守卫 ⇒ 重复槽位可跨代传播。
+
+**修法**：`bindInitialSource` 在 `sourceSlot` 有效时先做占用校验——槽位无冲突仍走预分配（保留原子性），冲突且有空缺 source 时改绑空缺，无空缺才回退原槽。测试＝`remote-source-assign.test.ts` 新增 2 例（冲突改绑／无冲突控制组），该文件 18 例；unit **420 文件·5,530 例**、integration **30·239**、typecheck 0。**线上定向写（可逆）**：t=83,858,057 把 `remoteHarvester-W37S58-3-83857864-aor` 的 `sourceSlot` 0→1，并清 `sourceId`/`sourceContainerId` 触发重绑（只动 spawn 期分配字段与派生缓存）。
+
+**R595 编制右尺寸＝现场否证，不硬砍**：44 只、body 总成本 **70,360** ⇒ 替换维持 ≈**45 e/tick**（寿命 ≈1500+3×部件数）；收入侧核心 `harvested 850 + imported 2,000`、幼房 `harvested 1,000 + imported 451`（同一 `bk` 窗）≈**51 e/tick**，且 `mineralMiner` 2 只**都有效**（两房 extractor 各 1、矿量 O 31,770／Z 48,516）、carrier 3 只全在 `supply:W37S58:W38S56` 活跃 op 上（`running`，其中 2 只满载 1,650 在途）、W38S58 两座 container 工地已到 **4,306/3,829（/5,000）**⇒ 该线即将产出。结论＝按“25–30 只”硬砍会直接砍收入，不作；右尺寸改为“只退役真正闲置/低值项”，本轮无可退役项（scout 已标 recycle）。**R595 判效**：`upgrader` 存活 **0**（demand 闸成立，`u=[]`）；两房总存量 t=83,857,963 读 **442,861（核心 392,176＋幼房 50,685）**，较 `448,930→443,244（−48/tick）` 那一窗明显收窄（方向；拍号未逐字成对 ⇒ 不签斜率）。
+
+同轮预写＝**E595** `…864-aor` 进入 W37S57 后 `sourceId == sources[1].id`；**E596** 500 拍内 W37S57 不再持续出现「一源满 3,000、另一源 0」的同时观测；**E597** 各 target 的存活 harvester `sourceSlot` 分布逐 target 唯一（无同槽双绑）；**E598** 与 R595 共同验收：500–1,000 拍内两房总存量日差转正或降幅 ≤5/tick。
+
 ### 4.0（10-25 04:2xZ 立格，R594；上一条＝R593 格「供给断链修复＋监测循环」＝**E587/E588/E589 PASS；storage 44K；W39S57 被 ROI 废弃**；本格止帝国失血）
 
 **下一轮主目标：暂停无近期回报的升级支出**。实测帝国总存量 `631,949→455,441（−13.75/tick，跨 ~12,800 拍）`，核心房 625,520→411,360；支出构成＝幼房 `upgraded 14/tick`、核心 `towerSpendWalls 6/tick`、spawn 6/tick、built 2.5/tick。幼房 RCL8 需 **10.9M** progress（当前 257K）⇒ 升级在数周内无回报。修法＝`upgraderGate` 增加帝国失血闸：全帝国 `gateNetFlow` 之和 <0 时暂停升级（降级风险/claimSecure 已在上方豁免）。验收＝unit（负和停/正和放行/降级豁免）＋integration＋CI＋线上 `upgrade` intent 与 `upgraded` 计数归零、总存量降幅收窄**。
