@@ -1171,6 +1171,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 17:2xZ 立格，R605；上一条＝R604 格「W38S57 ROI 废弃」＝**E620 PASS、编制 42→36**；本格收 G6 的安全优化边界并做运行健康审计）
+
+**下一轮主目标：确认 G6 已到“不改策略/不砍产能就削不动”的边界，并给出唯一剩余路径**。退役后实测：在册 **36**（W38S57 尚余 2 只在归航）、`cpuRate.total=13.04`、`capacity=tight`、`upgradeTicks` 因 target=tight 归零 ⇒ **G6 门槛仍是 usage ≤12.0，差 1.04**。系统榜剩 `traffic-manager 3.1`（≈18 个移动者 × move 调用）＋ `snapshots 1.37`；角色榜 `creeps` 相位 ~5.7。R598 的动作级标定已证 **成本随“活跃 creep × API 调用”线性**、resolve 只占 0.03–0.08 ⇒ 再削 1.0 CPU 只能靠**少 ~8 只编制**（≈−15~20% 收入）或 **CPU Unlock**。**决定：不再自砍产能**；G6 等属人杠杆，即买 1 个 `cpuUnlock`（市场 48M/个 vs 现有 credits ~93.8M）→ limit 20→30、门槛变 18。
+
+**E621/E622 状态（部分兑现，仍需窗口）**：Σgate **−0.51→−0.35**（core **+0.04**、young **−0.39**，慢 EMA 滞后于快流：同窗 `nf` core **+4.64**、young **+21.4**，`dr` +2,203/+1,809；两房 `harvested` 20/t、远矿 `imported` 38/t）；`cpuRate.total 13.17→13.04`（2 只未离场，降幅未满 0.3）。
+
+**运行健康审计（同拍）**：`globalThis.errorLog` 不存在（boot 至今 safe-run 零异常）；两房 `normal/steady|growth`；`spawnQueue` 均空；**两房 hostiles=0**；1 只 upgrader 在跑；核心 378,311＋幼房 95,345＝**473,656**。矿工保留（`sellReserve=3,000`，两房矿库存 5,780＞储备 ⇒ 有实际卖出，不是死库存）。
+
 ### 4.0（10-25 17:1xZ 立格，R604；上一条＝R603 格「construction 降频」＝**E616/E617/E619 PASS、G6 差 0.51**；本格收 W38S57 的 ROI 判决与编制收缩）
 
 **下一轮主目标：验证自主 ROI 执法在 W38S57 上端到端生效，并确认它解开的 CPU/净流是否把 G6/G4 推向门槛**。W38S57（home W38S56，1 source）`createdAt=83,862,525`，在 `t=83,867,555`（age **5,030**，刚过 `minDuration=5,000`）被判 **`abandoned`**，`dangerUntil=83,877,555`（+10,000）：账本 `d=25,604 / s=39,150 / i=5,600 / r=0` ⇒ 净额 **−19,146**、速率 **−3.81 e/tick**（门槛 `≥0.5`）。成因不是敌情（该房 hostiles=0、reservation 3,000、source 1,990、container 570 全正常），而是 **reserver 3-CLAIM 每 600 拍换代（≈3.25 e/tick）＋hauler/harvester 长距离换代**压过 1-source 的 ~10 e/tick 产能。R586 退役随即接上：`t=83,867,616` 剩余 3 名成员 **全部 `recycle=1`**，在册总数 42→39。
