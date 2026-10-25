@@ -1171,6 +1171,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 14:4xZ 立格，R600；上一条＝R599 格「traffic 多意图快路径」＝**E605 PASS／E606 方向 −0.50**；本格修 op 间隙的“回收+新孵”对撞）
+
+**下一轮主目标：新 supply op 出现时复用已标记回收的空载 carrier，而不是新孵一只**。现场（t=83,865,401）：`74-avh` 空载 idle、`recycle=1` 正在归航，同刻新 op `supply:W37S58:W38S56`（1,650）触发补孵 `74-avz` ⇒ 旧载体回收返还 ≈760（剩余寿命比例）×新孵 1,650 ＝ **净烧 ≈890 能量/次**，还多付一次孵化时延。R597 的退役规则按“空载无 op 即退役”是对的（op 间隙常有数千拍、老载体活不到下一次 op），缺的是**反向钩子**：当新 op 明确需要载体、而场上有自己的“待回收”空载载体时，应先撤销标记复用之。
+
+**修法**：`agenda-manager` 步 15 的 `!carrierExists` 分支先调 `tryReactivateCarrier(op)`——同 `home→target`、非在孵、`recycle===true`、**空载**的 carrier ⇒ `delete memory.recycle`、`op.carrierName = name`，跳过补孵；载货者不复活（先把这趟送完）。测试＝`agenda-manager-carrier-binding.test.ts` 14 例：丑改为“复活复用（撤标记/绑名/不补孵）”、新增寅“已标记但载货 ⇒ 不复用、走补孵”；unit **420·5,536**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E609** 下一次供给 op 若场上存在“已标记回收的空载 carrier”，该 op 的 `carrierName` 落到它身上且**不提交新载体 spawn 请求**（在册 carrier 数不增）；**E610** 复用后该 op 仍能完成（deliveredAmount 到 1,650、终态被摘）；**E611** 后续 24h 的 `bk.spawned` 因少孵载体而方向性下降（**不复用**的情形＝场上无空载标记者，仍应正常补孵）。
+
 ### 4.0（10-25 14:1xZ 立格，R599；上一条＝R598 格「动作级 CPU 标定」＝**E603 PASS，热点不可微优**；本格扩 traffic 快路径并关回 profiling）
 
 **下一轮主目标：traffic 快路径从“单意图”扩到“多意图且目标全空”**。依据：`traffic-manager` 是最大系统项（3.33–4.04），而旧快路径只在“本房 ≤1 个意图且无锚定”时生效 ⇒ 远矿房常态 2–5 个移动者、目标格通常全空，仍在跑完整解算器（同格仲裁/推挤/环传播全是空操作）。修法＝`tryFastDispatch`：`anchors.size===0`、所有意图目标格**未被占/非阻挡结构格/互不重复**、移动者不在 `immovable` ⇒ 逐条直接签发；任一不满足回退 `resolveAndDispatch`（互换、跟车、目标被占、同目标格仲裁等旧形状一律走原路，保守优先）。顺带修正旧快路径缺少的 `parkData.blocking` 检查（目标落在墙内结构格时旧路径会盲发、靠引擎拒绝）。
@@ -1193,7 +1201,7 @@
 
 同轮预写＝**E599** 部署后 ≤200 拍内孤儿空载 carrier 被标记，≤1,500 拍内退场（在册 carrier 数回落）；**E600** 有活跃 supply op 时空载 carrier 不被误标（控制组）；**E601** 无 op 窗内核心 `bk.exported` 归零（不再有 op 外的跨房搬运）；**E602** `creeps` 相位 / 总 CPU 的可见下降 ≤0.2/tick（不作 G6 主杠杆；G6 仍差 ≈1.07，需另找结构项）。
 
-**R597 判效（10:12Z）＝部署 `7e0d4a1e`／线上 sha `6d897ee4f9d9`（804,779B）＝本地 dist 同值；CI `40183112406` success**。**E599 PASS**：`t=83,861,676`、`agendas=[]`，4 只 carrier 中 **3 只空载 idle 全部 `recycle=1`**（TTL 147／647／1,052），唯一满载者（1,650、work）保持未标记 ⇒ 规则按设计区分“孤儿”与“在途”。**E600/E601 待收**：需下一次供给 op 开启/结束的对照窗；本轮只有落空一侧。**E602 待收**：CPU 收益预计 ≤0.2/tick，不改变 G6 结论（仍差 ≈1.07，下一步需从 `creeps` 5.52／`post` 3.70 找结构项，不再靠零散编制）。
+**R597 判效（10:12Z）＝部署 `7e0d4a1e`／线上 sha `6d897ee4f9d9`（804,779B）＝本地 dist 同值；CI `40183112406` success**。**E599 PASS**：`t=83,861,676`、`agendas=[]`，4 只 carrier 中 **3 只空载 idle 全部 `recycle=1`**（TTL 147／647／1,052），唯一满载者（1,650、work）保持未标记 ⇒ 规则按设计区分“孤儿”与“在途”。**E600/E601 补判 PASS（10:06/10:12Z 对照）**：`ag=1` 时 4 只 carrier 无一被标记（规则只认孤儿）；op 结束后 `ag=[]` 同窗 3 只空载 idle 全部 `recycle=1` ⇒ E600 的控制组成立。同窗核心 `economy.bk` **无 `exported` 键**（op 外无跨房搬运）⇒ E601 方向成立（后续供给 op 仍会正常产生 exported，属预期）。**E602 待收**：CPU 收益预计 ≤0.2/tick，不改变 G6 结论（仍差 ≈1.07，下一步需从 `creeps` 5.52／`post` 3.70 找结构项，不再靠零散编制）。
 
 **配套守卫（已提交、下一轮随部署上线）**：已标记回收的 carrier 不再计入“可用载体”——`liveCarrierNames`（供 `pruneStaleCarrierBinding`）、`hasCarrierForOp` 两处、以及两段兜底绑定全部排除 `memory.recycle`；否则新 op 会绑到正被引导回家的将死者、空等一趟。测试＝同文件 13 例（新增“丑：标记回收者触发补孵不绑将死者”）；`makeOp` 夹具的 type 由虚构的 `carrier-supply` 对齐真实 `supply`。unit 420·5,534／integration 30·239／typecheck 0。
 
