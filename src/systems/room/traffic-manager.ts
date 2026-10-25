@@ -113,13 +113,29 @@ function tryFastDispatch(batch: RoomBatch, snapshot: RoomSnapshot | undefined): 
   const active = batch.intents.filter(it => it.to !== it.from);
   if (active.length === 0) return true;
   const parkData = snapshot ? getParkRoomData(snapshot) : undefined;
+  const byName = new Map(batch.intents.map(it => [it.name, it] as const));
   const seen = new Set<number>();
   for (const it of active) {
     if (batch.immovable.has(it.name)) return false;
-    if (batch.occupancy.has(it.to)) return false;
     if (parkData?.blocking.has(it.to)) return false;
     if (seen.has(it.to)) return false; // 同目标格必须先经 resolver 仲裁。
     seen.add(it.to);
+    const blocker = batch.occupancy.get(it.to);
+    if (blocker === undefined) continue;
+    // 一级跟车：目标格被“本拍正要离开的 mover”占着，且它自己的目标格是空的、
+    // 非阻挡格、非不可动 —— 两笔 move 同拍结算，引擎允许驶入被让出的格。
+    // 只放行一级：blocker 的目标必须空 ⇒ 互换(A→B,B→A)与任何环都被这条件否掉
+    // （环里每个 blocker 的目标都是另一个 mover 的 from，必被占）。
+    const bi = byName.get(blocker);
+    if (
+      !bi ||
+      bi.to === bi.from ||
+      batch.immovable.has(blocker) ||
+      batch.occupancy.has(bi.to) ||
+      parkData?.blocking.has(bi.to)
+    ) {
+      return false;
+    }
   }
   for (const it of active) {
     const creep = Game.creeps[it.name];

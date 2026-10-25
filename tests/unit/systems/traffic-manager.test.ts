@@ -331,6 +331,48 @@ describe("traffic-manager — 解算与签发", () => {
     expect(b.move).not.toHaveBeenCalled();
   });
 
+  it("一级跟车：目标格被「正要离开的 mover」占用 ⇒ 快路径放行、两只都签发", () => {
+    setTraffic(true);
+    const a = trafficCreep("ca", 25, 25, undefined);
+    const b = trafficCreep("cb", 26, 25, undefined);
+    const room = flatRoom([a, b]);
+    a.room = room;
+    b.room = room;
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.ca = a;
+    g.Game.creeps.cb = b;
+
+    // a RIGHT: (25,25)→(26,25)（b 的格）；b RIGHT: (26,25)→(27,25)（空格）。
+    registerMove(a, RIGHT as DirectionConstant, 60);
+    registerMove(b, RIGHT as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    expect(a.move).toHaveBeenCalled();
+    expect(b.move).toHaveBeenCalled();
+  });
+
+  it("目标格被静止者占用 ⇒ 快路径拒绝，回退 resolver 推挤静止者", () => {
+    setTraffic(true);
+    const a = trafficCreep("ca", 25, 25, undefined);
+    const b = trafficCreep("cb", 26, 25, undefined); // 无意图的静止者
+    const room = flatRoom([a, b]);
+    a.room = room;
+    b.room = room;
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.ca = a;
+    g.Game.creeps.cb = b;
+
+    registerMove(a, RIGHT as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    // resolver 把静止者推到相邻空格，再放行 mover —— 两条 move 都发生；
+    // 若快路径误放行，b 不会移动、a 的 move 会被引擎拒绝。
+    expect(b.move).toHaveBeenCalled();
+    expect(a.move).toHaveBeenCalled();
+  });
+
   it("引擎拒绝签发：不记成功（失败计数留给 recordPathFailure 那条道）", () => {
     setTraffic(true);
     const creep = trafficCreep("c1", 25, 25, undefined);
