@@ -99,6 +99,10 @@ export function evaluateCapacity(
   prev: CapacityState | undefined,
   tick: number,
   options: CapacityOptions = DEFAULT_CAPACITY_OPTIONS,
+  /** 距上次评估经过的拍数（默认 1）。调用方若按 cadence 抽样评估，必须传真实间隔，
+   * 否则 `upgradeWindowTicks` 的单位会从“拍”变成“评估次数”——R613 实测：
+   * empire-strategy 每 5 拍评估一次，300 的窗口被拉成 1,500 拍（历史 G6 长期红的机制）。 */
+  elapsedTicks = 1,
 ): CapacityResult {
   const limit = Math.max(1, Math.min(input.cpuLimit, input.tickLimit));
   const usage = Math.min(Math.max(0, input.cpuUsagePerTick), limit);
@@ -120,7 +124,7 @@ export function evaluateCapacity(
   // 升档（abundant ← …）需持续窗口；降档（… → constrained）立即。
   const isUpgrade = TIER_RANK[target] < TIER_RANK[prevTier];
   if (isUpgrade) {
-    const next = upgradeTicks + 1;
+    const next = upgradeTicks + Math.max(1, elapsedTicks);
     if (next < options.upgradeWindowTicks) {
       return { tier: prevTier, since, upgradeTicks: next, headroom };
     }

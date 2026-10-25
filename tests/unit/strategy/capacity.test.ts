@@ -5,6 +5,7 @@ import {
   evaluateCapacity,
   pickCpuUsagePerTick,
   type CapacityInput,
+  type CapacityState,
 } from "../../../src/domain/strategy/capacity";
 
 const TICK = 1000;
@@ -185,5 +186,44 @@ describe("pickCpuUsagePerTick — 用哪一份 CPU 均值分档", () => {
         TICK,
       ).tier,
     ).toBe("tight");
+  });
+});
+
+// R614：升档窗口的单位是“拍”，不是“评估次数”。
+// empire-strategy 每 5 拍评估一次；若逐次 +1，300 的窗口会被拉成 1,500 拍
+// （R613 实测：147 拍只推进 28，历史 G6 长期红的机制）。
+describe("evaluateCapacity — elapsedTicks 按真实拍数累加", () => {
+  it("5 拍 cadence：60 次评估 ×5 = 300 拍才翻档（不是 60 拍）", () => {
+    let tick = TICK;
+    let state: CapacityState = { tier: "tight", since: TICK - 1000, upgradeTicks: 0 };
+    for (let i = 0; i < 59; i++) {
+      tick += 5;
+      state = evaluateCapacity(
+        input({ cpuUsagePerTick: 11 }),
+        state,
+        tick,
+        DEFAULT_CAPACITY_OPTIONS,
+        5,
+      );
+    }
+    expect(state.tier).toBe("tight"); // 295/300
+    tick += 5;
+    state = evaluateCapacity(
+      input({ cpuUsagePerTick: 11 }),
+      state,
+      tick,
+      DEFAULT_CAPACITY_OPTIONS,
+      5,
+    );
+    expect(state.tier).toBe("comfortable"); // 300/300
+  });
+
+  it("不给 elapsedTicks 时仍按 1 拍（旧调用方零改动）", () => {
+    const r = evaluateCapacity(
+      input({ cpuUsagePerTick: 11 }),
+      { tier: "tight", since: TICK - 100, upgradeTicks: 10 },
+      TICK + 1,
+    );
+    expect(r.upgradeTicks).toBe(11);
   });
 });

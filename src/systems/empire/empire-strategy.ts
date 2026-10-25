@@ -208,6 +208,12 @@ export const empireStrategySystem: System = {
     };
     const cpuUsagePerTick = pickCpuUsagePerTick(cpuUsageMeasurement);
     const capacityLimit = Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20);
+    // R614：按真实间隔累加升档窗口（empire-strategy 是 5 拍 cadence，逐次 +1 会把
+    // 300 拍窗口拉成 1,500 拍）。heap 记录上次评估拍，reset 后首趟按 1 计。
+    const g = globalCache() as { __capacityLastEvalTick?: number };
+    const lastEval = g.__capacityLastEvalTick;
+    const elapsedTicks = lastEval === undefined ? 1 : Math.max(1, ctx.tick - lastEval);
+    g.__capacityLastEvalTick = ctx.tick;
     const capacity = evaluateCapacity(
       {
         cpuLimit: Game.cpu.limit,
@@ -224,6 +230,7 @@ export const empireStrategySystem: System = {
         constrainedRatio: CONFIG.capacity.constrainedRatio,
         upgradeWindowTicks: CONFIG.capacity.upgradeWindowTicks,
       },
+      elapsedTicks,
     );
     // ── 态势评估（认知层增量）：散落事实 → 命名条件 + 对手画像 ──
     // 消费方：当前仅观测（Memory.kernel.situation + SituationChange 事件）；
