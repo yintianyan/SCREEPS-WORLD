@@ -64,11 +64,12 @@ vi.mock("../../../src/domain/spawn/queue", () => ({
 }));
 
 const { agendaManagerSystem } = await import("../../../src/systems/empire/agenda-manager");
+const { submitRequest } = await import("../../../src/domain/spawn/queue");
 
 function makeOp(id: string, carrierName?: string) {
   return {
     id,
-    type: "carrier-supply",
+    type: "supply",
     status: "running",
     priority: 1,
     sourceRoom: "W0N1",
@@ -375,5 +376,32 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     runNow();
 
     expect(creeps["carrier-loaded"].memory.recycle).toBeUndefined();
+  });
+
+  it("丑：已标记回收的载体不计入可用 ⇒ op 触发补孵、不绑将死者", () => {
+    const op = makeOp("op-r");
+    op.type = "supply";
+    op.createdAt = 900;
+    (globalThis as any).Memory.kernel.agendas = [op];
+    squad.push({ name: "carrier-doomed" });
+    creeps["carrier-doomed"] = {
+      name: "carrier-doomed",
+      spawning: false,
+      room: { name: "W0N1" },
+      store: { getUsedCapacity: () => 0, getCapacity: () => 1650 },
+      memory: {
+        role: "carrier",
+        home: "W0N1",
+        remoteTarget: "W0N2",
+        mode: "idle",
+        recycle: true,
+      },
+    };
+    vi.mocked(submitRequest).mockClear();
+
+    runNow();
+
+    expect(saved("op-r")?.carrierName).toBeUndefined();
+    expect(submitRequest).toHaveBeenCalled();
   });
 });

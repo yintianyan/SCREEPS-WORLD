@@ -243,7 +243,7 @@ function roomCoord(name: string): { x: number; y: number } | undefined {
 function hasCarrierForOp(op: OperationContext): boolean {
   if (op.carrierName) {
     const creep = Game.creeps[op.carrierName];
-    if (creep && !creep.spawning && !isLostCarrier(creep, op)) return true;
+    if (creep && !creep.spawning && !creep.memory.recycle && !isLostCarrier(creep, op)) return true;
   }
   const roomMem = Memory.rooms[op.sourceRoom];
   if (roomMem?.spawnQueue) {
@@ -259,7 +259,7 @@ function hasCarrierForOp(op: OperationContext): boolean {
   return querySquad({ role: "carrier", home: op.sourceRoom, remoteTarget: op.targetRoom }).some(
     e => {
       const c = Game.creeps[e.name];
-      return c !== undefined && !isLostCarrier(c, op);
+      return c !== undefined && !c.memory.recycle && !isLostCarrier(c, op);
     },
   );
 }
@@ -664,7 +664,9 @@ export const agendaManagerSystem: System = {
       querySquad({ role: "carrier" })
         .filter(e => {
           const c = Game.creeps[e.name];
-          return c !== undefined && !c.spawning;
+          // 已标记回收的个体不再算“活体”：它正被引导回家消融，绑定它只会让 op
+          // 空等一趟（R597 退役规则引入后的配套口径）。
+          return c !== undefined && !c.spawning && !c.memory.recycle;
         })
         .map(e => e.name),
     );
@@ -714,7 +716,11 @@ export const agendaManagerSystem: System = {
       // op.carrierName 永不落账、hasCarrierForOp 持续误判缺员。
       if (!op.carrierName) {
         for (const [name, creep] of Object.entries(Game.creeps)) {
-          if (creep.memory.assignment?.id === op.id && !isLostCarrier(creep, op)) {
+          if (
+            creep.memory.assignment?.id === op.id &&
+            !creep.memory.recycle &&
+            !isLostCarrier(creep, op)
+          ) {
             const idx = operations.indexOf(op);
             if (idx >= 0) operations[idx]!.carrierName = name;
             break;
@@ -730,12 +736,12 @@ export const agendaManagerSystem: System = {
         const entry =
           bound.find(e => {
             const c = Game.creeps[e.name];
-            return c !== undefined && !c.spawning && !isLostCarrier(c, op);
+            return c !== undefined && !c.spawning && !c.memory.recycle && !isLostCarrier(c, op);
           }) ??
           bound.find(e => {
             const c = Game.creeps[e.name];
             // 保留「无健康载体时绑在孵那只」的既有契约（补404），只排除失联个体。
-            return c !== undefined && !isLostCarrier(c, op);
+            return c !== undefined && !c.memory.recycle && !isLostCarrier(c, op);
           });
         if (entry) {
           const idx = operations.indexOf(op);
