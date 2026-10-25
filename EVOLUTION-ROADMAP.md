@@ -1165,6 +1165,8 @@
 
 同轮预写＝**E591** 部署后 1–2 个 `bk` 桶内幼房 `upgraded` 计数→0、`telemetry.intents.upgrade.ok=0`；**E592** 500 拍内两房总存量降幅从 ~−13.75/tick 收窄（目标 ≥−5/tick，理想转正）；**E593** 降级风险时仍升级（单测豁免，线上观察 controller `ticksToDowngrade`）；**E594** 剩余出血项（towerSpendWalls 6/tick、spawn 6/tick）作为下一轮候选，不本轮动（#153 政策面）。
 
+**R594 现场（04:3xZ）＝已上线但未受检**：`0380e81558d3`、boot `83,856,916`、gate 和 **−12.44**（<0）。但**没有任何 upgrader 存活**（`up=[]`，唯一一只 TTL 96 已寿终）⇒ `upgraded=0`／无 upgrade intent 不能证明闸门生效，**E591 不可签**；且 demand 仍会补孵 upgrader（补出来会被闸门 idle，白付维持）⇒ 需补 demand 侧闸或 tuning。**E592 本窗落空**：storage 仍快速下降（短窗 −38/tick），主因是 `bkY.spawned=2,150`（21.5/tick，编制替换）＋核心 towerSpendWalls 2.6/tick，升级当时本身就是 0。⇒ **真正主因＝编制替换维持成本**（35–50 creeps、约 40 e/tick）> 收入（harvest ~18＋远矿），下一轮 R595＝**编制右尺寸**（闲置/低值角色退役＋demand 闸），并给 upgrader demand 加帝国失血闸。⚠️工具教训：手工 console 探针与监测器并发会撞 `Memory.__evalResult`（本轮取到监测器载荷）⇒ 手工探针前先暂停轮询器。
+
 ### 4.0（10-24 12:3xZ 立格，R593；上一条＝R590/R591 贫困闸＝**已上线**；本格启动监测循环并修复供给断链）
 
 **下一轮主目标：供给断链（越援助越不能援助）**。新监测器 `tmp/observe/r593-monitor.sh`（单实例 300s×36；记 G4/G6/幼房/远矿/贫困/市场/供给）首发即抓到危机：W38S56 storage **31.8K→1,986**、`poverty=261`、W39S56 新线（spawn 11,630）、W37S55 再废弃、**`agendas=[]` 供给线完全空闲**。根因＝`canExportEnergy` 要求 `netFlowPositive`：核心房对外供能后 `exported` 计入消耗、nf 转负 ⇒ 核心 618K/62% 拒绝向 2.9K 的幼房供能。处置＝①人工废弃 W39S56（`dangerUntil=83,853,612`）；②`503023d0` 深贫困闸（storage<4,000 连替换也停）；③`0465e30f` 导出闸去掉 `netFlowPositive`（只留 `isStruggling`＋`storageRatio≥0.3`）。unit 420·5,525／integration 30·239 全绿。
