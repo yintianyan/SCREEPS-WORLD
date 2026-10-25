@@ -1171,6 +1171,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 16:0xZ 立格，R603；上一条＝R602 格「节奏优化」＝**layout/remote/link 降频已证、修墙为脉冲、boot 窗未稳**；本格降 construction 常态节奏）
+
+**下一轮主目标：construction-manager 常态 3 拍一跑（紧急仍每拍）**。现读（当前拍、非 EMA）：`traffic-manager 3.11` 之外，**`construction-manager 0.318` 是唯一仍在每拍实付的大项**（`tower-defense` 当前拍只有 0.0056，1.09 是修墙脉冲的 EMA 残留——stale-EMA 第四次）。R583 的回归（interval 5 让 RCL2 紧急通道 500 拍内建不出 site）只证明**紧急**不能降频；本格把节奏判据抽成纯函数 `shouldRunConstruction(emergency, tick, lastRun, interval)`：紧急恒每拍，常态每 `normalInterval=3` 拍，`lastRun` 存 heap（reset 后首拍必跑）。site 创建延迟 ≤2 拍，builder 施工不受影响；两房当前 RCL8/RCL7、无关键缺口。
+
+测试＝新增 `tests/unit/construction/construction-cadence.test.ts` 4 例（紧急豁免／首轮／间隔边界／非法间隔）；unit **420·5,540**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E616** 部署后 ≥600 拍 `bySystem.construction-manager ≤0.15`（前 0.318）；**E617** `cpuRate.total ≤12.8`（若 boot 窗已稳，理想 ≤12.4）；**E618** 无建造退化：常态 site 仍按 ≤3 拍延迟创建、全局 site 计数不被饿死、integration 全绿；**E619** 紧急房（spawn/storage/tower/source container 缺失）仍每拍跑（纯函数用例钉住）。
+
 ### 4.0（10-25 15:2xZ 立格，R602；上一条＝R601 格「扩张双门结案」＝**E610 PASS、CPU Unlock 属人杠杆**；本格用三处低风险降频收 G6 缺口）
 
 **下一轮主目标：把 G6 的 0.8 CPU 缺口坐实到系统节奏上（不砍产能）**。G6 门槛＝`usage ≤ 0.6×limit = 12.0`，现读 **12.8**；系统榜里三处“每拍/高频”系统是可安全降频的：`layout-planner 0.41`（每 50 拍一次 4-stage 规划，RCL 变化走即时触发分支，不受间隔限制）、`remote-mining-manager 0.37`（interval 20；危险撤退由角色每拍兜底）、`link-system 0.09`（link 有 400~800 缓冲）。修法：`CONFIG.layout.planInterval 50→100`、cadence `remote-mining-manager 20→30`、`link-system 5→10`。预计合计 −0.35~−0.45；叠加 W38S57 在 age 5,000 的 ROI 判决（若退役 ≈−0.5 CPU）有机会把 usage 压到 12 以下。**不改任何阈值、不砍产能。**
@@ -1182,8 +1190,6 @@
 **R602 判效（15:38–15:47Z，部署 `c4864f89`／线上 sha `3d4f939c7b84`；运行时 15:33 全局重置后生效）**：**E612 PASS（layout/link）**——`layout-planner` 从 **0.41** 落到榜外（<0.06，−0.35+），`link-system` 也从榜上消失（<0.06）；`remote-mining-manager` 仍报 0.37（窗口仅 ~200 拍、只含 ~7 次运行，未签）。**E613 FAIL/被混淆**：`cpuRate.total` 反升到 **14.27~14.35**，主因不是降频失败，而是 **`tower-defense` 报 1.08 CPU**。⚠️**该数被一次追赶爆发污染，不能当持续项**：同拍两房无敌情、墙体 16,541/6,201 健康，幼房 `bk.towerSpendWalls` 在加固窗一次 **1,500/50 拍（单窗 30 e/tick 爆发）**，**下一窗回落到 30/50 拍（0.6 e/tick）** ⇒ 和平期修墙是**脉冲式补齐**，不是持续 30/tick；`tower-defense 1.08` 很可能同样是该爆发的 EMA 残留（R589 的 stale-EMA 教训第三次复现）。**E614 PASS**：integration 30·239 全绿、建造/link/远矿交付未见退化。**E615 未触发**。且 `cpuRate` 窗仅 ~307 拍、含 boot 首拍 24.94 → 均值仍偏高，**须等 win≥600~1000 再判**。
 
 ⇒ 结论：**降频本身有效（layout −0.35、link −0.03）**；G6 的当轮读数不可用（boot 瞬态＋修墙脉冲）。当前唯一确定的结构性事实仍是 **limit 恒 20、GCL 加成需购买 CPU Unlock**；工事支出是脉冲而非持续，暂不列为杠杆。
-
-### 4.0（10-25 15:2xZ 立格，R602；上一条＝R601 格「扩张双门结案」＝**E610 PASS、CPU Unlock 属人杠杆**；本格用三处低风险降频收 G6 缺口）
 
 ### 4.0（10-25 15:0xZ 立格，R601；上一条＝R600 格「op 间隙 carrier 复用」＝**已上线、E609/E610 待窗**；本格结案“扩张双门”的耦合分析，不做盲交易）
 
