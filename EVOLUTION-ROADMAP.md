@@ -1159,6 +1159,12 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-25 04:2xZ 立格，R594；上一条＝R593 格「供给断链修复＋监测循环」＝**E587/E588/E589 PASS；storage 44K；W39S57 被 ROI 废弃**；本格止帝国失血）
+
+**下一轮主目标：暂停无近期回报的升级支出**。实测帝国总存量 `631,949→455,441（−13.75/tick，跨 ~12,800 拍）`，核心房 625,520→411,360；支出构成＝幼房 `upgraded 14/tick`、核心 `towerSpendWalls 6/tick`、spawn 6/tick、built 2.5/tick。幼房 RCL8 需 **10.9M** progress（当前 257K）⇒ 升级在数周内无回报。修法＝`upgraderGate` 增加帝国失血闸：全帝国 `gateNetFlow` 之和 <0 时暂停升级（降级风险/claimSecure 已在上方豁免）。验收＝unit（负和停/正和放行/降级豁免）＋integration＋CI＋线上 `upgrade` intent 与 `upgraded` 计数归零、总存量降幅收窄**。
+
+同轮预写＝**E591** 部署后 1–2 个 `bk` 桶内幼房 `upgraded` 计数→0、`telemetry.intents.upgrade.ok=0`；**E592** 500 拍内两房总存量降幅从 ~−13.75/tick 收窄（目标 ≥−5/tick，理想转正）；**E593** 降级风险时仍升级（单测豁免，线上观察 controller `ticksToDowngrade`）；**E594** 剩余出血项（towerSpendWalls 6/tick、spawn 6/tick）作为下一轮候选，不本轮动（#153 政策面）。
+
 ### 4.0（10-24 12:3xZ 立格，R593；上一条＝R590/R591 贫困闸＝**已上线**；本格启动监测循环并修复供给断链）
 
 **下一轮主目标：供给断链（越援助越不能援助）**。新监测器 `tmp/observe/r593-monitor.sh`（单实例 300s×36；记 G4/G6/幼房/远矿/贫困/市场/供给）首发即抓到危机：W38S56 storage **31.8K→1,986**、`poverty=261`、W39S56 新线（spawn 11,630）、W37S55 再废弃、**`agendas=[]` 供给线完全空闲**。根因＝`canExportEnergy` 要求 `netFlowPositive`：核心房对外供能后 `exported` 计入消耗、nf 转负 ⇒ 核心 618K/62% 拒绝向 2.9K 的幼房供能。处置＝①人工废弃 W39S56（`dangerUntil=83,853,612`）；②`503023d0` 深贫困闸（storage<4,000 连替换也停）；③`0465e30f` 导出闸去掉 `netFlowPositive`（只留 `isStruggling`＋`storageRatio≥0.3`）。unit 420·5,525／integration 30·239 全绿。
