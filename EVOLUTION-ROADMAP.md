@@ -1171,6 +1171,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 15:2xZ 立格，R602；上一条＝R601 格「扩张双门结案」＝**E610 PASS、CPU Unlock 属人杠杆**；本格用三处低风险降频收 G6 缺口）
+
+**下一轮主目标：把 G6 的 0.8 CPU 缺口坐实到系统节奏上（不砍产能）**。G6 门槛＝`usage ≤ 0.6×limit = 12.0`，现读 **12.8**；系统榜里三处“每拍/高频”系统是可安全降频的：`layout-planner 0.41`（每 50 拍一次 4-stage 规划，RCL 变化走即时触发分支，不受间隔限制）、`remote-mining-manager 0.37`（interval 20；危险撤退由角色每拍兜底）、`link-system 0.09`（link 有 400~800 缓冲）。修法：`CONFIG.layout.planInterval 50→100`、cadence `remote-mining-manager 20→30`、`link-system 5→10`。预计合计 −0.35~−0.45；叠加 W38S57 在 age 5,000 的 ROI 判决（若退役 ≈−0.5 CPU）有机会把 usage 压到 12 以下。**不改任何阈值、不砍产能。**
+
+测试＝unit **420·5,536**、integration **30·239**、typecheck 0（layout 用例按 `CONFIG.layout.planInterval` 符号取值，自动跟随）。
+
+同轮预写＝**E612** 部署后 ≥600 拍，`bySystem` 的 `layout-planner ≤0.25`、`remote-mining-manager ≤0.28`、`link-system ≤0.06`（各自前值 0.41/0.37/0.09）；**E613** `cpuRate.total` 落到 **≤12.4**（理想 ≤12.0）；**E614** 无行为退化：建造工地仍按 50→100 拍节奏创建、link 传输继续、远矿交付不降、integration 全绿；**E615**（条件）若 usage 连续 300 拍 ≤12，G6 翻 `comfortable`——翻档则只剩 G4，扩张进入“可预算竞争”阶段。
+
 ### 4.0（10-25 15:0xZ 立格，R601；上一条＝R600 格「op 间隙 carrier 复用」＝**已上线、E609/E610 待窗**；本格结案“扩张双门”的耦合分析，不做盲交易）
 
 **下一轮主目标：把扩张的两道门算清楚，停止用“暂停升级”去赌 G4**。现读：`expansionDashboard` 只剩 **G4（netFlow 0.6~1.5，需 ≥5）＋G6（usage 12.8，需 ≤12）**；**CPU limit 恒 20**（`Game.cpu.shardLimits={shard3:20}`；官服规则＝基础 20，GCL 的 +10/级只有在购买 **CPU Unlock** 后才生效）。幼房 **RCL7 进度 288,983**（距 RCL8 约 1.5M）、GCL **11.40M**（距 6 级 19.7M）⇒ 升级在数天内无回报；当前 1 只 upgrader 在跑，`Σgate` 在 ~1,740 拍内由 **+1.48→+1.02** ⇒ 升级确实在吃掉盈余、把 G4 的慢 EMA 压在低位。但**即便暂停升级让 G4 过线，G6（12.8>12）仍会挡死扩张** ⇒ “暂停升级换 G4”是**无回报的交易**，本轮不执行、也不改任何阈值。
