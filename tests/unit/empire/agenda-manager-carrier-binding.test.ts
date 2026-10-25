@@ -378,7 +378,7 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     expect(creeps["carrier-loaded"].memory.recycle).toBeUndefined();
   });
 
-  it("丑：已标记回收的载体不计入可用 ⇒ op 触发补孵、不绑将死者", () => {
+  it("丑：已标记回收的空载载体被新 op 复活复用（撤标记、绑名、不补孵）", () => {
     const op = makeOp("op-r");
     op.type = "supply";
     op.createdAt = 900;
@@ -401,7 +401,36 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
 
     runNow();
 
-    expect(saved("op-r")?.carrierName).toBeUndefined();
+    expect(creeps["carrier-doomed"].memory.recycle).toBeUndefined();
+    expect(saved("op-r")?.carrierName).toBe("carrier-doomed");
+    expect(submitRequest).not.toHaveBeenCalled();
+  });
+
+  it("寅：已标记但载货的载体不复活（回收会销毁货物）⇒ 走补孵", () => {
+    const op = makeOp("op-r2");
+    op.type = "supply";
+    op.createdAt = 900;
+    (globalThis as any).Memory.kernel.agendas = [op];
+    squad.push({ name: "carrier-loaded-marked" });
+    creeps["carrier-loaded-marked"] = {
+      name: "carrier-loaded-marked",
+      spawning: false,
+      room: { name: "W0N2" },
+      store: { getUsedCapacity: () => 500, getCapacity: () => 1650 },
+      memory: {
+        role: "carrier",
+        home: "W0N1",
+        remoteTarget: "W0N2",
+        mode: "work",
+        recycle: true,
+      },
+    };
+    vi.mocked(submitRequest).mockClear();
+
+    runNow();
+
+    expect(creeps["carrier-loaded-marked"].memory.recycle).toBe(true);
+    expect(saved("op-r2")?.carrierName).toBeUndefined();
     expect(submitRequest).toHaveBeenCalled();
   });
 });

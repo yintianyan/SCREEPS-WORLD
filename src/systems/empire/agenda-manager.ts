@@ -286,6 +286,32 @@ function retireOrphanCarriers(operations: readonly OperationContext[]): void {
   }
 }
 
+/**
+ * 复活“已标记回收”的空载 carrier：新供给 op 出现时，撤销我们自己的回收标记并绑名，
+ * 而不是新孵一只。线上实证（t=83,865,401）：74-avh 空载 idle、recycle=1 归航途中，
+ * 同刻新 op 触发补孵 74-avz ⇒ 回收返还 ~760 + 新孵 1,650，净烧 ~890 能量/次。
+ * 只取空载、非在孵、同 home→target 的个体；载货者不复活（它该先把这趟送完）。
+ */
+function tryReactivateCarrier(op: OperationContext): boolean {
+  const candidate = querySquad({
+    role: "carrier",
+    home: op.sourceRoom,
+    remoteTarget: op.targetRoom,
+  })
+    .map(e => Game.creeps[e.name])
+    .find(
+      (c): c is Creep =>
+        c !== undefined &&
+        !c.spawning &&
+        c.memory.recycle === true &&
+        c.store.getUsedCapacity(RESOURCE_ENERGY) === 0,
+    );
+  if (!candidate) return false;
+  delete candidate.memory.recycle;
+  op.carrierName = candidate.name;
+  return true;
+}
+
 export const agendaManagerSystem: System = {
   name: "agenda-manager",
   priority: 1 as Priority,
@@ -702,6 +728,9 @@ export const agendaManagerSystem: System = {
 
       const carrierExists = hasCarrierForOp(op);
       if (!carrierExists) {
+        // 先尝试复用已标记回收的空载载体：op 间隙里标记归航的载体常与新 op 的补孵
+        // 同时发生，回收返还 + 新孵 = 净烧（线上实测 74-avh 归航中、新孵 74-avz）。
+        if (tryReactivateCarrier(op)) continue;
         const roomMem = Memory.rooms[op.sourceRoom];
         const spawnKey = `carrier:${op.id}`;
         const inQueue = roomMem?.spawnQueue?.some(r => r.key === spawnKey) ?? false;
