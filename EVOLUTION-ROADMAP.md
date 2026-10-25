@@ -1181,6 +1181,8 @@
 
 同轮预写＝**E606** 部署后 traffic 的 `bySystem` 慢 EMA 不高于前值 3.33（噪声内即算不回归）；**E607** 无移动侧退化：integration/e2e 移动场景全绿、`traffic/shove:*` 与 stuck 计数不上升；**E608** 本改动不声称清 G6（动作层标定已证 G6 是 per-active-creep 结构项），G6 仍 tight。
 
+**R599 判效（14:31Z，部署 `a259fc2b`／线上 sha `7b6146027571`，CI `40201683719` success；运行时在 14:36 的全局重置后生效）**：**E605 PASS**——`globalThis.actionCpu === undefined`（profiling 确已关闭）。**E606 方向成立**：`traffic-manager` bySystem **3.33→2.83（−0.50）**，`cpuRate.total` 首读 **12.55**（前 13.65）；但慢 EMA 窗跨部署，只记方向、不签稳态。**E607 PASS（弱证）**：`skipReasons` 中无 `traffic/*` 与 `stuck*` 条目，双房存量 104,087→105,880、远矿交付继续、`Σgate −2.0→+1.48` ⇒ 未见移动退化；e2e 未跑（本轮以 integration 30·239＋线上读数兜底）。**E608 成立**：G6 仍 `tight`（usage 12.3–12.55 vs ≤12.0），G4 由 −2.0 升至 **+0.6~+1.48**（G3 已出列）⇒ 扩张仍等 G4 慢 EMA 收敛；G6 未清且不靠砍产能去凑。⚠️部署生效在 14:36 的全局重置（`win 67`），之后的 CPU 窗口才反映新码。
+
 ### 4.0（10-25 14:0xZ 立格，R598；上一条＝R597 格「孤儿 carrier 退役」＝**E599 PASS**；本格做 G6 的动作级 CPU 标定）
 
 ### 4.0（10-25 10:0xZ 立格，R597；上一条＝R596 格「源槽冲突」＝**E595/E596/E597 PASS、E598 长窗 PASS（Σgate +0.71）**；本格退孤儿 carrier）
