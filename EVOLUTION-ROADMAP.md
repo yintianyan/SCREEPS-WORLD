@@ -1171,6 +1171,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 17:1xZ 立格，R604；上一条＝R603 格「construction 降频」＝**E616/E617/E619 PASS、G6 差 0.51**；本格收 W38S57 的 ROI 判决与编制收缩）
+
+**下一轮主目标：验证自主 ROI 执法在 W38S57 上端到端生效，并确认它解开的 CPU/净流是否把 G6/G4 推向门槛**。W38S57（home W38S56，1 source）`createdAt=83,862,525`，在 `t=83,867,555`（age **5,030**，刚过 `minDuration=5,000`）被判 **`abandoned`**，`dangerUntil=83,877,555`（+10,000）：账本 `d=25,604 / s=39,150 / i=5,600 / r=0` ⇒ 净额 **−19,146**、速率 **−3.81 e/tick**（门槛 `≥0.5`）。成因不是敌情（该房 hostiles=0、reservation 3,000、source 1,990、container 570 全正常），而是 **reserver 3-CLAIM 每 600 拍换代（≈3.25 e/tick）＋hauler/harvester 长距离换代**压过 1-source 的 ~10 e/tick 产能。R586 退役随即接上：`t=83,867,616` 剩余 3 名成员 **全部 `recycle=1`**，在册总数 42→39。
+
+**同轮否决的一项“省钱”提案（留档防重提）**：把 reserver 3-CLAIM 降为 2-CLAIM 每线省 ~1.08 e/tick。**不做**——3-CLAIM 的净 +2/tick 与 5,000 预约缓冲是**为替补间隙/断档设计**的（`bodies.ts:1242-1249` 与 `bodies.test.ts:159` 均有线上实证：单 CLAIM 净零、reservation 钉死 1）；省 1 e/tick 换来预约断档风险（单 source 收入直接腰斩 10→5）不划算。
+
+同轮预写＝**E620 PASS**（剩余成员全部 recycle=1）；**E621** 编制清空后 300~600 拍内 young 的 `gateNetFlow` 由 −0.75 回升、Σgate 由 −0.51 转正（W38S57 的 `spawn` 支出停止）；**E622** `cpuRate.total` 因 −4~5 只编制回落 ≥0.3（usage 13.04 → 目标 ≤12.5），是 G6 翻档的必要条件之一。
+
 ### 4.0（10-25 16:0xZ 立格，R603；上一条＝R602 格「节奏优化」＝**layout/remote/link 降频已证、修墙为脉冲、boot 窗未稳**；本格降 construction 常态节奏）
 
 **下一轮主目标：construction-manager 常态 3 拍一跑（紧急仍每拍）**。现读（当前拍、非 EMA）：`traffic-manager 3.11` 之外，**`construction-manager 0.318` 是唯一仍在每拍实付的大项**（`tower-defense` 当前拍只有 0.0056，1.09 是修墙脉冲的 EMA 残留——stale-EMA 第四次）。R583 的回归（interval 5 让 RCL2 紧急通道 500 拍内建不出 site）只证明**紧急**不能降频；本格把节奏判据抽成纯函数 `shouldRunConstruction(emergency, tick, lastRun, interval)`：紧急恒每拍，常态每 `normalInterval=3` 拍，`lastRun` 存 heap（reset 后首拍必跑）。site 创建延迟 ≤2 拍，builder 施工不受影响；两房当前 RCL8/RCL7、无关键缺口。
