@@ -105,6 +105,12 @@ function upgraderGate(ac: ActionContext): boolean {
   const claimSecure = Memory.rooms[ac.snapshot.roomName]?.claimSecure ?? false;
   if (claimSecure) return true;
 
+  // R594 帝国失血闸：全帝国 `gateNetFlow` 之和为负时暂停升级。
+  // 升级是最大的可支配支出（现场 14/tick），而幼房 RCL8 尚需 10.9M progress ⇒ 无近期回报；
+  // 失血期先保储备。降级风险（isEmergency）与 claimSecure 已在上方豁免。
+  const sumGate = Object.values(Memory.kernel?.gateNetFlow ?? {}).reduce((a, b) => a + b, 0);
+  if (sumGate < 0) return false;
+
   // RCL8 满级后升级零收益（controller.progress=0）：无降级风险时停烧。
   // 存量 upgrader 直接 idle（不取能不升级），demand 已停孵，自然老死后退出；
   // 背包残余能量随 creep 死亡掉落地面，hauler 回收 — 可接受的损耗。

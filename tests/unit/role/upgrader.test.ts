@@ -35,6 +35,40 @@ describe("upgrader — work 模式", () => {
     expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 
+  it("帝国净流之和为负 → 暂停升级（R594 失血闸）", () => {
+    (globalThis as any).Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
+
+    upgraderRole.run(creep, mockContext(snap));
+
+    expect(creep.upgradeController).not.toHaveBeenCalled();
+  });
+
+  it("帝国净流之和为正 → 正常升级（控制组）", () => {
+    (globalThis as any).Memory.kernel = { gateNetFlow: { A: 2, B: 3 } };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
+
+    upgraderRole.run(creep, mockContext(snap));
+
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+
   it("ERR_NOT_IN_RANGE 时移动到控制器", () => {
     const controller = mockController();
     const snap = mockSnapshot({ controller });
