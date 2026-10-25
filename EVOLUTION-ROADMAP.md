@@ -1171,6 +1171,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 18:2xZ 立格，R608；上一条＝R607 格「G4 自锁实证、策略改动回滚」＝**E623 PASS**；本格收 E624 并把“G6 差 0.23”定成不再追的尾部）
+
+**下一轮主目标：验证 R606 的完整收益并判定 G6 的剩余 0.23 是否值得继续追**。`win=491` 实测：`cpuRate.total` **12.23**（R607 时 12.78）、`traffic-manager` **2.60** ⇒ **E624 PASS（≤12.7）**；G6 门槛 12.0，差 **0.23**。同拍 `capacity=tight`、`upgradeTicks=0`（target 仍 tight）。门态：`gateNetFlow` core **−1.34**、young **+0.63** ⇒ Σ **−0.71**（供给/升级仍在把慢 EMA 压回 0 附近）。
+
+**判定：G6 的 0.23 不再用新的降频去追**。三条理由：①剩余可削项都只有 ~0.05–0.08（spawn 5→10、remote 30→40、layout 100→200、link 10→20），合计 ≈0.2，且 spawn 降频会拉长防御/替补响应；②**即便 G6 翻 comfortable，G4（−0.71）仍把扩张挡死**——两道门各有一把锁，单独清 G6 不产生任何可执行能力；③当前 CPU 仍在自然下行（退役/路网/haulerNeed 切换），等自然漂移比再叠部署风险更划算。⇒ 维持 R607 的结论：**扩张等两项属人决策**（CPU Unlock 解 G6；升级预留策略解 G4）。
+
+同轮预写＝**E630** 若自然漂移使 usage 连续 300 拍 ≤12.0，G6 自动翻 `comfortable`（无需新改动；监测器可捕获）；**E631** 在该情形出现前，`expansionDashboard.failedGates` 至少含 G4；**E632** 新增降频一律不引入（直到两项属人决策之一落地，避免"为清一个惰性门而牺牲防御/建造响应"）。
+
+**E621/E622 终判（回填 R604）**：**E622 PASS**——编制 42→36 后 `cpuRate.total` 由 13.04 降到 **12.23**（−0.81，超 ≥0.3 的目标）；**E621 落空**——Σgate 不但没转正，反而由 −0.35 走到 **−0.71**（core −1.34／young +0.63）。落空原因不是退役无效，而是（a）供给把 core 的出口计成消耗、（b）upgrader 仍按 `Σgate≥0` 放行、盈余一出现就被吃掉 ⇒ 再次印证 G4 自锁（R607）。
+
 ### 4.0（10-25 18:1xZ 立格，R607；上一条＝R606 格「traffic 跟车快路径」＝**E623 PASS（2.64）**；本格验 E624、并实证 G4 自锁，策略改动回滚）
 
 **下一轮主目标：验证 R606 的 CPU 收益，并把“G4 到不了 5”的成因钉死**。`win=291` 时：`traffic-manager` **3.0~3.16 → 2.64**（E623 PASS，−0.4）；`cpuRate.total 12.78`（E624 的 ≤12.7 **未达**，且该窗含 boot 首拍，须等 win≥600 再判）。**G4 自锁实证**：`win=291` 同拍有 **2 只 upgrader** 在跑、`ΣgateNetFlow = −0.07`；把 4 小时的门和逐段拉出来——**+1.48（14:37）→+1.22（16:36）→−0.35（17:23）→−0.07（18:02）**，始终在 0~1.5 徘徊、从未接近 5。机制＝R594 的升级刹车以 `Σgate < 0` 为界：**盈余一出现就被升级吃掉，慢 EMA 被钉在 0** ⇒ **即便 CPU Unlock 清掉 G6，G4 仍按构造到不了**。
