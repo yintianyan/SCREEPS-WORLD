@@ -1178,6 +1178,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 18:4xZ 立格，R612；上一条＝R611 格「carrier 复用回退全量扫」＝**已部署、激活待核**；本格记录 G6 贴门状态与待收窗口）
+
+**下一轮主目标：确认 R611 生效并把 G6 的“贴门状态”钉住，不再做新改动**。R611：`b9e9a9a7`／线上 sha **`6388157990ac`**（806,145B）／CI **`40221620534` success**；截至 `18:43Z` 运行时尚未切到新码（`win` 仍 791，未出现重置）。**贴门读数**：`cpuRate.total` **12.13（win 691）→12.14（win 791）**，`capacity=tight`、G6 门槛 12.0 ⇒ **差 0.13~0.14**；但 `gateNetFlow` core **−1.96**（Σ 约 −1.7）⇒ G4 反而更远，**G6 即便自然翻档也不产生扩张能力**（与 R608 结论一致）。
+
+**E636 未到窗**：现役 op `supply:W37S58:W38S56` 仍 running（`74-ayh` 已空载 idle、回执待下一趟 agenda 结算）；`74-ay3`（TTL 580）仍标记载荷 0。要等本 op 结束后、**下一次 op 启动时**才能验“索引无关复用”。
+
+同轮预写＝**E639** R611 激活后 `win` 重置；`agenda-manager` 的 bySystem 变化 ≤0.02（E638 的线上腿）；**E640** 下一次供给 op 启动时若存在“已标记空载 carrier”，`carrierName` 指向它且无新 spawn（E636 上线腿）；**E641** 在此之前不新增降频/策略改动——G6 的 0.14 留给自然漂移，避免为惰性门牺牲防御/建造响应。
+
 ### 4.0（10-25 18:3xZ 立格，R611；上一条＝R610 格「§3.5-bis 三把属人锁」；本格加固 carrier 复用，不把“索引有没有这个人”当正确性前提）
 
 **下一轮主目标：把 R600 的 carrier 复用从“索引依赖”里摘出来**。现场（t=83,868,539）：op `supply:W37S58:W38S56`（`createdAt=83,868,372`）用的载体是 **新孵的 `74-ayh`**（TTL 1,484，孵化于 ~83,868,523），而同 pair 的 **`74-ay3`**（age ~616）此刻空载 idle、`recycle=1` 却未被复用。**时间线无法排除**“op 启动那一趟 74-ay3 尚未被标记”（它可能是上一趟 op 的在途载体），因此**不把它断言成 bug**；但这也暴露一个可消除的脆弱点：`tryReactivateCarrier` 只信 `querySquad` 索引，索引若漏项，复用会静默不生效（单测里 querySquad 是 mock，覆盖不到）。
