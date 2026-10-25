@@ -1186,6 +1186,10 @@
 
 同轮预写＝**E645** 部署后 `upgradeTicks` 每趟 +≈5（≈1/拍），若 `usage` 持续 ≤12 则在 **~300 拍（≈21 分钟）** 内翻 `comfortable`；**E646** 迟滞语义不变（仍是 300 拍窗口，降档立即），不出现 tight↔comfortable 抖动；**E647** 单次评估 >12 仍清零（窗口连续性要求不变）。⚠️G4 仍红（core −2.94），G6 翻档不产生扩张执行。
 
+**R614 判效（20:1xZ）＝E645 PASS（单位修正生效），翻档被一次全局重置打断**：线上 sha `53f95f497738`（806,280B，CI `40228239899`）；重置前实测 `upgradeTicks` **173→233（63 拍 +60，≈1/拍）**——旧码下同样 63 拍只会 +12。随后在 ~20:13 发生全局重置（`win` 回到 87），计数清零重来；重置后早期 `usage=12.5`（avg10 回退，窗未稳），暂未翻档。重置后 `failedGates` 变为 **G0（posture.expansionAllowed=false）＋G4（0.0）＋G6（tight）**——G0 的回归需下一轮读 posture/branch（可能是重置瞬态或真转入非 expand 姿态）。
+
+### 4.0（10-25 19:5xZ 立格，R614；上一条＝R613 格「首次稳定 <12、机制纠正」；本格修 upgradeTicks 的单位错配）
+
 ### 4.0（10-25 19:1xZ 立格，R613；上一条＝R612 格「贴门 12.14」；本格拿到首次稳定低于门槛的读数）
 
 **下一轮主目标：确认 G6 能否自然翻 `comfortable`（无需新改动）**。R611 在 ~18:47 激活（`win` 重置 52）；`t=83,869,149`、**`win=352`** 时：`cpuRate.total` **11.88**（首次稳定低于 12.0）、`capacity=[tight, 11.88, upgradeTicks 9]` ⇒ 升档计数已开始，若连续 300 拍 ≤12.0，约 **19:30Z** 翻 `comfortable`。分项：`traffic 2.79 / snapshots 1.31 / tower-defense 0.37 / remote-mining 0.19 / spawn 0.16 / telemetry 0.13 / layout 0.12 / expectations 0.12 / room-state 0.11 / construction 0.10`；`agenda-manager` 不在榜内（E638 方向成立）。**注意**：`gateNetFlow` core **−3.25**（Σ 更负）⇒ 即便 G6 翻档，**扩张仍被 G4 挡死**，与 R608 结论一致；这枚翻档的意义是“证明结构项可被自然漂移压到门槛下”，不是扩张解锁。
