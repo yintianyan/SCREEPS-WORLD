@@ -433,4 +433,32 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     expect(saved("op-r2")?.carrierName).toBeUndefined();
     expect(submitRequest).toHaveBeenCalled();
   });
+
+  it("卯：编队索引漏项时回退全量扫，仍复用空载标记载体", () => {
+    const op = makeOp("op-r3");
+    op.type = "supply";
+    op.createdAt = 900;
+    (globalThis as any).Memory.kernel.agendas = [op];
+    // squad 故意留空 —— 模拟 querySquad 索引里查不到这个人（R611 现场的形状）。
+    creeps["carrier-idx-miss"] = {
+      name: "carrier-idx-miss",
+      spawning: false,
+      room: { name: "W0N1" },
+      store: { getUsedCapacity: () => 0, getCapacity: () => 1650 },
+      memory: {
+        role: "carrier",
+        home: "W0N1",
+        remoteTarget: "W0N2",
+        mode: "idle",
+        recycle: true,
+      },
+    };
+    vi.mocked(submitRequest).mockClear();
+
+    runNow();
+
+    expect(creeps["carrier-idx-miss"].memory.recycle).toBeUndefined();
+    expect(saved("op-r3")?.carrierName).toBe("carrier-idx-miss");
+    expect(submitRequest).not.toHaveBeenCalled();
+  });
 });

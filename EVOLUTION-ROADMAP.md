@@ -1178,7 +1178,15 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
-### 4.0（10-25 18:3xZ 立格，R609；上一条＝R608 格「E624 PASS、G6 尾部不追」；本格做 4 小时稳定性＋防御纵深审计）
+### 4.0（10-25 18:3xZ 立格，R611；上一条＝R610 格「§3.5-bis 三把属人锁」；本格加固 carrier 复用，不把“索引有没有这个人”当正确性前提）
+
+**下一轮主目标：把 R600 的 carrier 复用从“索引依赖”里摘出来**。现场（t=83,868,539）：op `supply:W37S58:W38S56`（`createdAt=83,868,372`）用的载体是 **新孵的 `74-ayh`**（TTL 1,484，孵化于 ~83,868,523），而同 pair 的 **`74-ay3`**（age ~616）此刻空载 idle、`recycle=1` 却未被复用。**时间线无法排除**“op 启动那一趟 74-ay3 尚未被标记”（它可能是上一趟 op 的在途载体），因此**不把它断言成 bug**；但这也暴露一个可消除的脆弱点：`tryReactivateCarrier` 只信 `querySquad` 索引，索引若漏项，复用会静默不生效（单测里 querySquad 是 mock，覆盖不到）。
+
+**修法**：先走索引（O(k)），查不到时**回退全量扫 `Game.creeps`**——只在“op 缺载体”的那一趟发生（~1/100 拍），并把匹配条件收窄为 `role/home/remoteTarget/recycle===true/空载/非在孵`。测试＝新增“卯：编队索引漏项时回退全量扫、仍复用”一例（squad 留空、Game.creeps 有标记载体 ⇒ 撤标记、绑名、不补孵）；unit **420·5,543**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E636** 下一次供给 op 启动时若同 pair 存在“已标记回收的空载 carrier”，无论索引是否收录，`carrierName` 都落到它身上且**不提交 spawn**；**E637** 无标记载体时仍正常补孵（寅例回归）；**E638** 该兜底只在缺载体趟触发，`agenda-manager` 的 CPU 无可见变化（≤0.02 拍）。
+
+### 4.0（10-25 18:3xZ 立格，R609；上一条＝R608 格「E624 PASS、G6 尾部不追」；本格做 4 小时稳定性＋防御纵深审计；R610 已把三把属人锁汇总到 §3.5-bis）
 
 **下一轮主目标：确认系统在“扩张双红”期间的长期稳定性，并核防御外壳是否只是名义上的**。稳定性（t=83,868,471）：双房存量 **480,576**（核心 375,524＋幼房 105,052，较 13:52 的 464,968 **+15.6K/5.5h**）；在册 **35**；`errorLog` 不存在；三条 active 线**全部长期净正**——W36S58 `d 11.02M / s 7.31M / i 0.13M`（+3.59M）、W37S57 `8.71M / 7.20M / 0.52M`（+0.99M）、W38S55 `3.10M / 2.54M / 0.11M`（+0.44M）；credits **95.27M**（较昨日 93.85M 仍在涨）。
 

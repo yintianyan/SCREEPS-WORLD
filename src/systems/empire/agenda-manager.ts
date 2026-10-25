@@ -293,19 +293,27 @@ function retireOrphanCarriers(operations: readonly OperationContext[]): void {
  * 只取空载、非在孵、同 home→target 的个体；载货者不复活（它该先把这趟送完）。
  */
 function tryReactivateCarrier(op: OperationContext): boolean {
-  const candidate = querySquad({
+  const matches = (c: Creep | undefined): c is Creep =>
+    c !== undefined &&
+    !c.spawning &&
+    c.memory.role === "carrier" &&
+    c.memory.recycle === true &&
+    c.memory.home === op.sourceRoom &&
+    c.memory.remoteTarget === op.targetRoom &&
+    c.store.getUsedCapacity(RESOURCE_ENERGY) === 0;
+  // 先走编队索引（O(k)）；索引缺项时回退全量扫（只在“op 缺载体”这趟发生，
+  // 频率 ~1/100 拍）。R611 现场：op 活跃、74-ay3 空载且 recycle=1 却未被复用，
+  // 时间线无法排除索引漏项 ⇒ 用这条兜底把“索引有没有这个人”从正确性前提里摘掉。
+  let candidate = querySquad({
     role: "carrier",
     home: op.sourceRoom,
     remoteTarget: op.targetRoom,
   })
     .map(e => Game.creeps[e.name])
-    .find(
-      (c): c is Creep =>
-        c !== undefined &&
-        !c.spawning &&
-        c.memory.recycle === true &&
-        c.store.getUsedCapacity(RESOURCE_ENERGY) === 0,
-    );
+    .find(matches);
+  if (!candidate) {
+    candidate = Object.values(Game.creeps).find(matches);
+  }
   if (!candidate) return false;
   delete candidate.memory.recycle;
   op.carrierName = candidate.name;
