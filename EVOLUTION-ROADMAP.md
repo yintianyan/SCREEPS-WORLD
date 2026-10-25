@@ -1179,6 +1179,10 @@
 
 同轮预写＝**E616** 部署后 ≥600 拍 `bySystem.construction-manager ≤0.15`（前 0.318）；**E617** `cpuRate.total ≤12.8`（若 boot 窗已稳，理想 ≤12.4）；**E618** 无建造退化：常态 site 仍按 ≤3 拍延迟创建、全局 site 计数不被饿死、integration 全绿；**E619** 紧急房（spawn/storage/tower/source container 缺失）仍每拍跑（纯函数用例钉住）。
 
+**R603 判效（16:36Z，部署 `66a72c0c`／线上 sha `abe686cfd738`；16:23 全局重置后生效）**：**E616 PASS**——`construction-manager` 从 **0.318** 跌出系统榜（<0.09）；同窗 `layout-planner 0.09`、`remote-mining-manager 0.14`、`logistics 0.10` 均低位。**E617 PASS（方向）**——`cpuRate.total` **12.51（win 265）**，较 R602 前的 12.8/13.8 明显下降，但尚未到 ≤12.4。**E618 弱 PASS**——两房当前 **0 工地 / 0 queued**（基建已完成），live 无从观察“新 site 创建”；integration 30·239 全绿、无 site 饿死迹象；等下一次 layout 任务出现再复核。**E619 PASS**（4 例纯函数用例）。**G4 首次双房同正**：`gateNetFlow` core **+0.84**、young **+0.34**（Σ **+1.17**），较 R601 的 −2.0 持续改善。
+
+⇒ **G6 只差 0.51**（12.51 vs 12.0）。下一个自然变量＝**W38S57 的 ROI 判决**（age 4,498／5,000，d 19,754 vs s 32,200，明显亏损）：若按期废弃，编制 −4~5 只，CPU 有望压进 12.0 ⇒ G6 具备翻 `comfortable` 的现实路径（需再连续 300 拍 ≤12）。
+
 ### 4.0（10-25 15:2xZ 立格，R602；上一条＝R601 格「扩张双门结案」＝**E610 PASS、CPU Unlock 属人杠杆**；本格用三处低风险降频收 G6 缺口）
 
 **下一轮主目标：把 G6 的 0.8 CPU 缺口坐实到系统节奏上（不砍产能）**。G6 门槛＝`usage ≤ 0.6×limit = 12.0`，现读 **12.8**；系统榜里三处“每拍/高频”系统是可安全降频的：`layout-planner 0.41`（每 50 拍一次 4-stage 规划，RCL 变化走即时触发分支，不受间隔限制）、`remote-mining-manager 0.37`（interval 20；危险撤退由角色每拍兜底）、`link-system 0.09`（link 有 400~800 缓冲）。修法：`CONFIG.layout.planInterval 50→100`、cadence `remote-mining-manager 20→30`、`link-system 5→10`。预计合计 −0.35~−0.45；叠加 W38S57 在 age 5,000 的 ROI 判决（若退役 ≈−0.5 CPU）有机会把 usage 压到 12 以下。**不改任何阈值、不砍产能。**
