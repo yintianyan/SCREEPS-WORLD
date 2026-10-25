@@ -1159,6 +1159,14 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（10-25 10:0xZ 立格，R597；上一条＝R596 格「源槽冲突」＝**E595/E596/E597 PASS、E598 长窗 PASS（Σgate +0.71）**；本格退孤儿 carrier）
+
+**下一轮主目标：孤儿 carrier 退役（供给 op 结束后仍持续搬运）**。现场（09:56Z）：幼房存量已 87.7K、`agendas=1`，但 `carrier@W38S56` **4 只**（TTL 1,228／628／28／在孵 ⇒ 约每 600 拍由一次供给 op 各孵一只，**从不退役**）。`carrier` 角色按 `home/remoteTarget` 自行取送、**从不读 op**（`roles/carrier.ts` 的 acquire/work 只有 storage 取卸），而 `carrier` 虽在 `CONFIG.roles` 白名单里（`index.ts:704`，minCount 0）却没有生命周期回收 ⇒ op 结束后它们继续把核心能量搬去幼房（06:06Z 实测 `ag=0` 时仍有 3 只满载 1,650 在途），既白烧运力/CPU（creeps 相位 5.52），又让核心 `exported` 长期为负、压住 G4。hauler 侧的“超配”已核清：W37S57 4 只＝2 健康＋1 濒死＋1 在孵、W38S58 5 只＝1 在孵＋2 濒死＋2 健康，均 ≤ 配额，不动。
+
+**修法**：`agenda-manager` 在 `pruneTerminal` 之后跑 `retireOrphanCarriers`——无**活跃**（`isActive`）supply op 匹配其 `home→remoteTarget` 的**空载**、**非在孵**、未标记 carrier ⇒ `memory.recycle=true`；载货者不动（回收会销毁随身货物）。测试＝`agenda-manager-carrier-binding.test.ts` 新增 3 例（孤儿标记回收／有活跃 op 控制组／载货控制组），unit **420 文件·5,533 例**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E599** 部署后 ≤200 拍内孤儿空载 carrier 被标记，≤1,500 拍内退场（在册 carrier 数回落）；**E600** 有活跃 supply op 时空载 carrier 不被误标（控制组）；**E601** 无 op 窗内核心 `bk.exported` 归零（不再有 op 外的跨房搬运）；**E602** `creeps` 相位 / 总 CPU 的可见下降 ≤0.2/tick（不作 G6 主杠杆；G6 仍差 ≈1.07，需另找结构项）。
+
 ### 4.0（10-25 05:5xZ 立格，R596；上一条＝R595 格「demand 闸＋闲置退役」＝**已上线 13df4480/005580a36804；upgrader 计数归零**；本格修「两只 harvester 挤同一 source」）
 
 **下一轮主目标：远矿 source 槽位冲突（一只 source 满矿无人采）**。现场（t=83,857,9xx–83,858,057）四条 active 远矿线：W37S58→W37S57 `sources=2/haulerNeed=3`、W37S58→W36S58 `2/3`、W38S56→W38S55 `1/2`、W38S56→W38S58 `2/4`；存活 hauler 3/3/2/4＝**配额逐线配平**，harvester 2/2/1/2、reserver 1/2/1/1（W37S57 的 2 只是交接重叠）、remoteDefender 2（`dangerUntil` 仍在未来）。W37S57 两只 harvester 的 `sourceSlot` **都是 0**、都绑 `sourceId=63288c`（sources[0]），而同拍 `sources=[0, 3000]` ⇒ **source[1] 满矿 3,000 无人采**，按单源 10 e/tick 估 ≈**10 e/tick 持续损失**（约收入 8%）。根因＝替补孵化时继承濒死者的 `dyingSlot`，绑定路径 `bindInitialSource` 又无条件信任 `sourceSlot`，两边都没有“同槽已有健康兄弟”的守卫 ⇒ 重复槽位可跨代传播。
@@ -1170,6 +1178,8 @@
 同轮预写＝**E595** `…864-aor` 进入 W37S57 后 `sourceId == sources[1].id`；**E596** 500 拍内 W37S57 不再持续出现「一源满 3,000、另一源 0」的同时观测；**E597** 各 target 的存活 harvester `sourceSlot` 分布逐 target 唯一（无同槽双绑）；**E598** 与 R595 共同验收：500–1,000 拍内两房总存量日差转正或降幅 ≤5/tick。
 
 **R596 判效（06:0xZ）＝部署 `0e15a903`／线上 sha `564f2f0a81af`（804,413B）＝本地 dist 逐字同值；CI `40167346909` success**。**E595 PASS**：`64-aor` 入 W37S57 后 `sourceSlot=1／sourceId=…288e`；**E596 PASS（同窗兑现）**：`sources=[1700,2380]`（修前 `[0,3000]`），两源同时在采；**E597 PASS**：四 target 的存活 harvester 槽位分布 `0/1`（W36S58、W37S57、W38S58）与 `0`（W38S55）**逐 target 唯一**。**E598 方向为正待收**：两房总存量 `t=83,858,263` 读 **448,317**（核心 393,575＋幼房 54,742），对 `t=83,857,963` 的 442,861 **+18.2/tick（300 拍）**；供给只是在两房之间搬运（总量不增），故这笔为正累积，但仍需下一窗复核是否持续。⚠️本轮判效只改文档、**不二次 push**：再推一次会重复部署同一构建并重置 boot，违背「一轮只在轮尾部署一次」。
+
+**E598 长窗 PASS（09:05Z 复核，跨 ~2,400 拍）**：幼房存量 **56,492→87,738（+13/tick）**，`gateNetFlow` 核心 **−10.08→−3.65**、幼房 **+4.36** ⇒ Σ **+0.71**（首次转正）；`capacity=tight／CPU 13.07`。帝国已由失血转为盈余，R594/R595/R596 三项（停升级、demand 闸、源槽修复）叠加生效。
 
 ### 4.0（10-25 04:2xZ 立格，R594；上一条＝R593 格「供给断链修复＋监测循环」＝**E587/E588/E589 PASS；storage 44K；W39S57 被 ROI 废弃**；本格止帝国失血）
 
