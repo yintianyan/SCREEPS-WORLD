@@ -1178,6 +1178,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 19:1xZ 立格，R613；上一条＝R612 格「贴门 12.14」；本格拿到首次稳定低于门槛的读数）
+
+**下一轮主目标：确认 G6 能否自然翻 `comfortable`（无需新改动）**。R611 在 ~18:47 激活（`win` 重置 52）；`t=83,869,149`、**`win=352`** 时：`cpuRate.total` **11.88**（首次稳定低于 12.0）、`capacity=[tight, 11.88, upgradeTicks 9]` ⇒ 升档计数已开始，若连续 300 拍 ≤12.0，约 **19:30Z** 翻 `comfortable`。分项：`traffic 2.79 / snapshots 1.31 / tower-defense 0.37 / remote-mining 0.19 / spawn 0.16 / telemetry 0.13 / layout 0.12 / expectations 0.12 / room-state 0.11 / construction 0.10`；`agenda-manager` 不在榜内（E638 方向成立）。**注意**：`gateNetFlow` core **−3.25**（Σ 更负）⇒ 即便 G6 翻档，**扩张仍被 G4 挡死**，与 R608 结论一致；这枚翻档的意义是“证明结构项可被自然漂移压到门槛下”，不是扩张解锁。
+
+同轮预写＝**E642** 若 300 拍内无越线，`capacity.tier` 在 ~19:30Z 前后翻 `comfortable`，`expansionDashboard.failedGates` 只剩 G4（不再含 G6）；**E643** 若中途任意阅读 >12.0，计数按 `evaluateCapacity` 规则归零（不算失败，只记首次触线时刻）；**E644** 翻档后仍不触发任何扩张执行（G4 红 + 预算策略未定）。
+
 ### 4.0（10-25 18:4xZ 立格，R612；上一条＝R611 格「carrier 复用回退全量扫」＝**已部署、激活待核**；本格记录 G6 贴门状态与待收窗口）
 
 **下一轮主目标：确认 R611 生效并把 G6 的“贴门状态”钉住，不再做新改动**。R611：`b9e9a9a7`／线上 sha **`6388157990ac`**（806,145B）／CI **`40221620534` success**；截至 `18:43Z` 运行时尚未切到新码（`win` 仍 791，未出现重置）。**贴门读数**：`cpuRate.total` **12.13（win 691）→12.14（win 791）**，`capacity=tight`、G6 门槛 12.0 ⇒ **差 0.13~0.14**；但 `gateNetFlow` core **−1.96**（Σ 约 −1.7）⇒ G4 反而更远，**G6 即便自然翻档也不产生扩张能力**（与 R608 结论一致）。
