@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 14:0xZ 立格，R633；上一条＝R632 格「CPU 余量闸」；本格判效：功能兑现、CPU 收益不显著）
+
+**下一轮主目标：验证 R632 是否真的省 CPU，并据此收口“G6 无自办解”**。部署 `e1258e97`／线上 sha **`12936927a442`**（807,097B，CI `40513391276` success）；激活后实测 **E702 PASS**：两房 upgrader 全部 `idle`（`49-bok` 35 能量、`29-bob` 10 能量，均不升级）。**E703 未兑现**：`usage` 在重置窗内 14.5→**13.13（win 175）**，与 R632 前 12.93 相比无可见下降——原因是两只 upgrader 本来就接近 idle、其 CPU 只有 ~0.1，窗口里主要成本是 37 只编制与 traffic/snapshots。**E704 成立**：G6 仍 `tight`，`failedGates` 为 **G0（瞬时，因窗口内又有进犯）＋G6**；`Σgate 5.21`（core 6.73/young −1.52），G4 稳。
+
+⇒ **结论（重要）**：R617→R632 这一串“扩张推进态”政策（升级预留、CPU 余量闸、新开远矿闸）已经把**所有可自办的自败支出**关掉，但 **G6 的 0.9–1.1 CPU 缺口来自“37 只编制的必要成本 + traffic/snapshots 结构项”**，不存在不损收入的自办解。扩张的下一步只剩 **#195 购买 CPU Unlock** 或 **砍编制（损收入）**；在用户明确选择前保持现状。
+
+同轮预写＝**E705** 维持现状时 usage 将稳定在 12.9–13.2、G6 长期 tight；**E706** 购买 1 个 Unlock（limit→30）后 G6 在下一评估拍 comfortable、`W39S56.readySince` 开始累计；**E707** 若选择砍编制，需按配额逐项核（目标总数 ≤30、远矿不低于配额）才执行。
+
 ### 4.0（10-27 13:3xZ 立格，R632；上一条＝R631 格「退役后 usage 12.90」；本格加“扩张推进态的 CPU 余量闸”）
 
 **下一轮主目标：扩张推进态且 CPU 无余量时，连“净流够”的升级也停**。现场：编制已回到 37（W38S58 归航者清空），但 `usage` 仍 **12.93（tight）**，且 **2 只 upgrader 在跑**、young `nf=−10/拍`。R617 的闸只看净流（Σgate≥5 即放行），**不看 CPU**；而 G6 正是扩张门——在 CPU 已超门槛时还花 ~0.26 CPU 与 10–20 e/tick 去升级，是**自败**（与 R626 新开远矿同构）。修法：`expansionPush` 为真时，若 `capacity.tier ∈ {tight, constrained}`，升级角色与 demand 双端都停；降级风险/claimSecure/earlyRoom 仍豁免（上方的紧急分支不变）。
