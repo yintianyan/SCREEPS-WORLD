@@ -228,3 +228,23 @@ describe("recycleExcessRemoteCreeps — 载货保留序", () => {
     delete (OPS.W7N5 as { haulerNeed?: number }).haulerNeed;
   });
 });
+
+// R626：扩张推进态下的新开远矿 CPU 预算闸。
+import { newRemoteCpuAllowed } from "../../../src/domain/remote/staffing";
+
+describe("newRemoteCpuAllowed — 新开远矿的 CPU 预算闸（R626）", () => {
+  it("非扩张推进态：任何档位都放行", () => {
+    expect(newRemoteCpuAllowed("constrained", false)).toBe(true);
+    expect(newRemoteCpuAllowed("tight", false)).toBe(true);
+  });
+
+  it("扩张推进态：abundant/comfortable 放行", () => {
+    expect(newRemoteCpuAllowed("abundant", true)).toBe(true);
+    expect(newRemoteCpuAllowed("comfortable", true)).toBe(true);
+  });
+
+  it("扩张推进态：tight/constrained 拦截（别把 G6 自己顶死）", () => {
+    expect(newRemoteCpuAllowed("tight", true)).toBe(false);
+    expect(newRemoteCpuAllowed("constrained", true)).toBe(false);
+  });
+});

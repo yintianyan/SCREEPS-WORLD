@@ -4,6 +4,8 @@ import { selectBody } from "../../config/bodies";
 import type { Priority, System, TickContext, ColonyState } from "../../kernel/contracts";
 import { selectRemoteTargets, effectiveMaxOperations } from "../../domain/remote/targeting";
 import { INVADER_USERNAME } from "../../domain/intel";
+import { newRemoteCpuAllowed } from "../../domain/remote/staffing";
+import { isExpansionPushPlan } from "../../domain/expansion/plan";
 import { evaluateRemoteDemand } from "../../domain/remote/demand";
 import { submitRequest } from "../../domain/spawn/queue";
 import {
@@ -137,6 +139,13 @@ export const remoteMiningManagerSystem: System = {
       // constrained/tight 不额外收紧（本地收缩已由 tier 看门狗与 posture 处理）。
       const capacityTier = Memory.kernel?.capacity?.tier;
       const maxOpsWithCapacity = capacityTier === "abundant" ? maxOps + 1 : maxOps;
+      // R626：扩张推进态下，CPU 档位差于 comfortable 时不再新开远矿 —— 新线常驻
+      // 0.5–0.9 CPU，会把 G6（扩张门）自己顶死（线上实证：W38S58 重开后 34→43 只、
+      // usage 11.6→13.0）。现役 op 的维护/替换不受影响。
+      const expansionPush = (Memory.kernel?.expansionPlans ?? []).some(p =>
+        isExpansionPushPlan(p.st),
+      );
+      const cpuAllowsNewOp = newRemoteCpuAllowed(capacityTier ?? "abundant", expansionPush);
 
       // 2a. 超额收缩：active 数超上限时废弃通勤最贵的。排序键优先 intel 实测 pathCost
       //     （越远越先砍 — 对应编制成本与孵化位占用），无 intel 回退 haulerNeed；
@@ -202,6 +211,7 @@ export const remoteMiningManagerSystem: System = {
       // 防 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。现役 op 维护/重估不受影响。
       if (
         newOpsAllowed &&
+        cpuAllowsNewOp &&
         roomReadyForNewRemote(snapshot, roomMem.colonyState) &&
         activeCount < maxOpsWithCapacity
       ) {

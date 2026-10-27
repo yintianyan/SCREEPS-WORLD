@@ -262,3 +262,19 @@ export function validateTransportCapacity(
     ratio,
   };
 }
+
+/**
+ * R626：新开远矿的 CPU 预算闸（纯函数）。
+ *
+ * 扩张推进态（存在 EVALUATED/… 计划）时，G6 要求 `capacity.tier ≤ comfortable`。
+ * 新开一条远矿线会常驻 ~4–7 只编制、约 0.5–0.9 CPU；若此时 tier 已差于 comfortable，
+ * 开线等于自己把扩张门顶死（线上实证：W38S58 重开后编制 34→43、usage 11.6→13.0）。
+ * 非推进态不拦（正常经济扩张不受影响）；现役 op 的维护/替换也不受影响。
+ */
+export function newRemoteCpuAllowed(
+  tier: import("../strategy/capacity").CapacityTier,
+  expansionPush: boolean,
+): boolean {
+  if (!expansionPush) return true;
+  return tier === "abundant" || tier === "comfortable";
+}
