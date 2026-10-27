@@ -122,6 +122,59 @@ describe("prospect-manager — 任务开启", () => {
   });
 });
 
+describe("prospect-manager — 侦察任务的 CPU 闸（R641）", () => {
+  function setup(expansionPlans: boolean, tier?: string): void {
+    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    setupIntel();
+    setPosture(true);
+    (globalThis as any).Game.cpu.bucket = 10000;
+    if (tier) (globalThis as any).Memory.kernel.capacity = { tier };
+    if (expansionPlans) (globalThis as any).Memory.kernel.expansionPlans = [{ st: "EVALUATED" }];
+  }
+
+  it("推进态 + tier tight → 不开新侦察任务（侦察会把 G6 顶死）", () => {
+    setup(true, "tight");
+    prospectManagerSystem.run(makeContext());
+    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+  });
+
+  it("推进态 + tier constrained → 不开新侦察任务", () => {
+    setup(true, "constrained");
+    prospectManagerSystem.run(makeContext());
+    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+  });
+
+  it("推进态 + tier comfortable → 照常开任务", () => {
+    setup(true, "comfortable");
+    prospectManagerSystem.run(makeContext());
+    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+  });
+
+  it("无推进计划（非推进态）+ tier tight → 不拦（正常找候选）", () => {
+    setup(false, "tight");
+    prospectManagerSystem.run(makeContext());
+    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+  });
+
+  it("在途任务不受此闸影响（只拦开新任务）", () => {
+    setup(true, "tight");
+    (globalThis as any).Memory.kernel.prospect = {
+      target: "W6N4",
+      sponsor: "W7N4",
+      startedAt: 990,
+      spawned: 1,
+    };
+    (globalThis as any).Game.creeps = {
+      s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
+    };
+    syncSquadIndex();
+
+    prospectManagerSystem.run(makeContext());
+
+    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+  });
+});
+
 describe("prospect-manager — 生命周期与止损", () => {
   function missionFixture(overrides: Record<string, any> = {}): void {
     (globalThis as any).Memory = {

@@ -14,6 +14,8 @@ import {
 import { selectBody } from "../../config/bodies";
 import { querySquad } from "../../kernel/global-cache";
 import { getRoomIntel, queryRoomIntel } from "../intelligence";
+import { newRemoteCpuAllowed } from "../../domain/remote/staffing";
+import { isExpansionPushPlan } from "../../domain/expansion/plan";
 
 /** ProspectOutcome 事件 outcome 编码（与 event-log 注释对齐）。 */
 const OUTCOME_SUCCESS = 0;
@@ -40,6 +42,14 @@ export const prospectManagerSystem: System = {
       if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
       if ((Game.cpu.bucket ?? 0) < CONFIG.prospect.minBucket) return;
       if (Memory.kernel.expansion) return; // claimer/拓荒已在路上，侦察让位。
+      // R641：侦察也是「新投资」—— 扩张推进态下 CPU 差于 comfortable 时不再开新任务。
+      // 线上实证（R640）：ea 转真后连续开侦察，最多 6 只 scout 在世（5 只 recycle 回程），
+      // 编制 31→41、usage 11.75→12.13，把 G6 顶在 12.0 刀口上 ⇒ 扩张门自锁。
+      // 只拦「开新任务」；在途任务的存续/收摊不受此门影响。
+      const expansionPush = (Memory.kernel.expansionPlans ?? []).some(p =>
+        isExpansionPushPlan(p.st),
+      );
+      if (!newRemoteCpuAllowed(Memory.kernel.capacity?.tier ?? "abundant", expansionPush)) return;
 
       const target = selectProspectTarget(buildCandidates(ctx.tick), ctx.tick, {
         intelFreshness: CONFIG.prospect.intelFreshness,

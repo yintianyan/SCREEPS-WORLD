@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 18:5xZ 立格，R641；上一条＝R640 格「#198-B 落地＋侦察跑步机」；本格给侦察开新任务加 CPU 闸并部署）
+
+**主目标：切断「扩张授权 → 侦察跑步机 → G6 顶死」的自败回路。** 现场（R640）：`ea` 转真后 prospect 连开任务，最多 6 只 scout（5 只 recycle 回程），编制 31→41、`usage 11.75→12.13` 卡在 12.0 上方，`upgradeTicks` 反复清零。修法沿用 R626 的同口径纯函数 `newRemoteCpuAllowed(capacity.tier, expansionPush)`：推进态（存在 EVALUATED/READY/… 计划）下 tier 差于 comfortable 时**不开新侦察任务**；在途任务存续/收摊不受影响；无计划时不拦（否则找不到候选，扩张饿死）。
+
+**实现**：`systems/empire/prospect-manager.ts` 开任务分支加门禁（tier 缺省按 abundant，保持既有行为与既有用例）；复用 R626 已测纯函数，不新增阈值。测试 `tests/unit/systems/prospect-manager.test.ts` +5：tight/constrained 不新开、comfortable 照开、无计划 tight 不拦、在途任务不被撤。**闸门**：typecheck 0；unit 421 文件·5,563 例；integration 30·239 全绿。**部署**：build sha `87126936a61c`，线上 `check-code` 现读 807,540 B / 同 sha，上传 803.9 KB（换码会再重置 G6 窗，已知代价）。
+
+同轮预写＝**E731** 换码生效后，`tight` 期间 `Memory.kernel.prospect` 保持缺席且 scout 只减不增（`sc` 长度单调降，布防读数 4→0）；**E732** scouts 归零后 `usage` 回 ≤12、`upgradeTicks` 开始累计，300 拍后 `capacity=comfortable`；**E733** 之后 `W39S56` 走 500 拍迟滞→WAITING_EXECUTION（E727 顺延），期间 `ea/post` 保持 `true/war-sustain`、G4 不长期回退（E735）；**E734** 若 comfortable 后侦察恢复又造成“翻档→回落”循环，下一轮改为复用回程 scout（不新孵），而不是再调阈值。
+
 ### 4.0（10-27 16:4xZ 立格，R640；上一条＝R639 格「否证等窗口」；本格落地 **#198-B 窄口径解耦**并部署）
 
 **主目标：#198-B —— 战争态只在「玩家敌意或来源不明」时拦扩张，确认仅 NPC 骚扰时解禁。** 依据：R639 已证 NPC 到达率与 5,000 拍静默窗不相容（war 占空比≈100%）；房级 `lastHostileAt` 把 NPC 过境与玩家宣战同价，而 #152 的分尺列（`lastInvaderHostileAt`/`lastPlayerHostileAt`）自 10-15 起就在落盘、零消费者。修法只改一条语义：`expansionAllowed = expandHealth && !liveThreat && (posture !== "war" || npcOnlyThreatRecent)`，其中 `npcOnlyThreatRecent = invader 近期 && player 不近期`（与 `threatWindow` 同尺）。**不变**：posture 仍按原逻辑进 war（防御/塔/编队/`warPressureTicks` 全部照旧）；玩家敌意与来源不明仍按原语义拦扩张；`liveThreat` 冻结优先于一切。
