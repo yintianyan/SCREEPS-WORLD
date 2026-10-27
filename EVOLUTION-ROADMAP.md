@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 16:3xZ 立格，R639；上一条＝R638 格「防御审计」；本格**否证“等窗口”选项**）
+
+**下一轮主目标：证明 G0 的 5,000 拍静默窗在当前 NPC 节奏下不可达，从而把扩张明确为“策略开关”而非“等待问题”**。监测器已加 `ea/post/lh` 三列（探针 796 字符，实测通过）。连续读数：`lh=[?,5008]` → 核心 `lastHostileAt` 年龄 **56** → 随后 `FIND_HOSTILE_CREEPS` 归 0（塔在 ~10 拍内清掉；R638 已见 5 轮 volley/EnemyCleared）。把 R637（0 拍）与 R638（10 拍事件）串起来：**核心房在几分钟内被至少 3 次 NPC 过境**，每次都会把 `lastHostileAt` 重置、把 `threatRecent` 再续 5,000 拍 ⇒ **war 姿态的占空比接近 100%，`expansionAllowed` 实际恒假**。这解释了 R615/R619/R637 的三次临门重置，也意味着 **“等一次 5,000 拍无进犯的窗口”不是低概率，而是与 NPC 到达率不相容**。
+
+同轮预写＝**E723** 若授权 #198-B/C（war/尾税只由玩家敌意或持续敌意驱动，NPC 过境只触发 defense），`G0` 会在下一次评估即转绿（三十天无玩家攻击记录），`W39S56` 500 拍后进 WAITING_EXECUTION；**E724** 若维持现状，`failedGates` 将长期只有 G0，扩张不会发生；**E725** 无论选哪条，G4/G6 已绿的状态应保持（11.7–11.9 / Σgate 5.2–5.6），不得因等待而回退。
+
 ### 4.0（10-27 16:3xZ 立格，R638；上一条＝R637 格「G0 第三次临门重置」；本格做防御实战审计并把 #198 的税量到“10 拍 vs 5,000 拍”）
 
 **下一轮主目标：确认自有房防御健康、并把 G0 的冻结成本量化成可决策的数字**。事件环现读（`ring-dump`）：`83906605 EnemyInvasion r=W37S58 d=[1,0,3,2]` → 同拍起 **5 轮 `TowerVolley`**（`[6,1,16,0,50] … [6,3,12,0,3]`）→ `83906615 EnemyCleared` ⇒ **入侵在 10 拍内被塔清掉**，自有房防御链路正常。同期 `CreepDeath`：`W36S58 age=617`、`W37S57 age=1,526`、`W36S58 age=1,553` —— **损失在远矿房**（无塔），其中 617 拍为年轻个体（NPC 击杀），1,526/1,553 为自然寿终；这正是远矿换代开销（young `spawned` 批次）的来源，不是自有房漏洞。
