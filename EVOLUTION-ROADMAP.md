@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 14:0xZ 立格，R634；上一条＝R633 格「升级闸收益不显著」；本格做无损缩编）
+
+**下一轮主目标：只回收“政策已停用、无收入贡献”的编制，不碰生产**。普查（t=83,904,631）：`remoteHarvester` 已自然回到配额 **5 只**（W36S58 2／W37S57 2／W38S55 1，无超配）；scout 仅 1 只且已 `recycle=1`；可无损回收的只剩 **2 只被 R632 暂停的 idle upgrader**（`49-bok` TTL 971、`29-bob` 826）。已置 `recycle=true`（t=83,904,639）：它们本就 idle 不升级，回收只省维持（≈1.3 e/tick·只）与 ~0.2 CPU；demand 闸（R632）在其离场期间不会补孵。**不砍任何生产编制**。
+
+同轮预写＝**E708** 两只退场后编制 37→**35**、`usage` 降至 **12.6–12.8**（仍 >12.0）；**E709** 若 G6 仍 tight，则 12.0 门槛只能由购买或生产性砍编达成（无损项已用尽）；**E710** 回收返还按剩余寿命入 L1 账（`recycledRefund`），远矿账不受影响。
+
 ### 4.0（10-27 14:0xZ 立格，R633；上一条＝R632 格「CPU 余量闸」；本格判效：功能兑现、CPU 收益不显著）
 
 **下一轮主目标：验证 R632 是否真的省 CPU，并据此收口“G6 无自办解”**。部署 `e1258e97`／线上 sha **`12936927a442`**（807,097B，CI `40513391276` success）；激活后实测 **E702 PASS**：两房 upgrader 全部 `idle`（`49-bok` 35 能量、`29-bob` 10 能量，均不升级）。**E703 未兑现**：`usage` 在重置窗内 14.5→**13.13（win 175）**，与 R632 前 12.93 相比无可见下降——原因是两只 upgrader 本来就接近 idle、其 CPU 只有 ~0.1，窗口里主要成本是 37 只编制与 traffic/snapshots。**E704 成立**：G6 仍 `tight`，`failedGates` 为 **G0（瞬时，因窗口内又有进犯）＋G6**；`Σgate 5.21`（core 6.73/young −1.52），G4 稳。
