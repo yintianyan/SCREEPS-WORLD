@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 16:3xZ 立格，R637；上一条＝R636 格「只剩 G0」；本格记录 G0 的**第三次临门重置**）
+
+**下一轮主目标：把 #198 的税量化到“窗口被重置的精确位置”，并确认它已是扩张的唯一实际阻塞**。时间线：15:35 两房年龄 4,400/4,178 → 16:19 核心 5,004、幼房 4,782 → 16:27 幼房 4,879 → **16:32 核心 `lastHostileAt` 归 0（新 NPC 进犯）**，而此刻幼房已到 **4,952/5,000**。这是本代**第三次**在静默窗完成前被打断（前两次见 R615/R619）。同拍：`capacity=comfortable 11.80`（G6 稳）、`Σgate 5.20`（G4 过）、`failedGates` 只剩 **G0**、`W39S56` 仍 `EVALUATED`。⇒ **扩张的四道门里，G4/G6 已被政策与缩编清掉；G0 是唯一实际阻塞，而它的成因是周期性 NPC 骚扰（到达间隔≈`threatWindow` 5,000 拍）**，不是我们的经济或代码缺陷。
+
+**结论/待决**：#198 的三个选项（A 维持、B 把 war 与扩张禁令解耦、C 按来源降尾税）已经从此前的“理论项”变成**扩张的开关**。机器侧能做的都已做完（R617/R624/R626/R632/R634 把自败支出与无损缩编穷尽）。在 #198 未获授权前，扩张只能等一次“NPC 恰好晚到”的窗口，概率随每次进犯重置。
+
+同轮预写＝**E717** 若维持现状，G0 的下一次可过窗口在“最后一次进犯 + 5,000 拍”，期间任一新进犯都会重置（按 R615 观测约每小时一次，窗口命中概率低）；**E718** 若授权 #198-B（war 只由玩家敌意驱动、NPC 只触发 defense），G0 会立即转绿并保持，计划进入 500 拍确认；**E719** 若授权 #198-C（按来源降尾税），NPC 进犯不再续 war，效果同上但保留战后姿态。
+
 ### 4.0（10-27 15:3xZ 立格，R636；上一条＝R635 格「G6 翻档」；本格记录**只剩 G0**）
 
 **下一轮主目标：等 G0 的 5,000 拍静默窗走完（G4/G6 已同时为真）**。`t=83,905,831`：`capacity=[comfortable, 11.87, 0]`（G6 稳）、`gateNetFlow core +5.61 / young −0.31 ⇒ Σ +5.30`（G4 过）⇒ `failedGates` **只剩 G0**（`posture=war`，`expansionAllowed=false`）。两房 `lastHostileAt` 距 **4,400/4,178**（<5,000），按当前无新进犯的节奏，再 **~600–800 拍**即可静默满窗；姿态将从 war 退出（fortify/develop），`expansionAllowed = expandHealth && !liveThreat && posture≠war` 随即转真。**这是本代第一次出现「G4+G6 同时绿、只等 G0」**——此前的自败支出（升级预留、CPU 余量、新开远矿）与无损缩编（37→31）把前两道门都清掉了。
