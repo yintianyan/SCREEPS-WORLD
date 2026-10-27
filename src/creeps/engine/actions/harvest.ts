@@ -110,7 +110,14 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         return;
       }
 
-      const harvestResult = countedIntent("harvest", () => ac.creep.harvest(source));
+      // R643：背压时跳过注定失败的 harvest。身边 sink 全满且背包满 ⇒ harvest 必返 ERR_FULL，
+      // 白付一次 intent（线上实证 10-27：幼房 4 个 container 2000/2000、link 全满，2 只满载
+      // harvester 每拍仍付 harvest+drop ≈0.8 CPU）。其余分支（倒能/drop/站位）保持原样，
+      // 世界状态与 HEAD 逐字一致，只少一次失败 API 调用。
+      const backpressured = !sinkOpen && ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
+      const harvestResult = backpressured
+        ? ERR_FULL
+        : countedIntent("harvest", () => ac.creep.harvest(source));
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, standTarget);
         return;

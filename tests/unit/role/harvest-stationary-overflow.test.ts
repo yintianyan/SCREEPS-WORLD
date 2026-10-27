@@ -109,7 +109,7 @@ describe("stationaryMine — 下游全满且无 storage 时保持背包（#41）
     expect(creep.harvest).toHaveBeenCalled();
   });
 
-  it("成熟房（有 storage）：container 暂满仍按旧行为 drop 继续采 —— 吞吐换损耗是对的", () => {
+  it("成熟房（有 storage）：container 暂满仍按旧行为 drop；R643 起不再签发注定失败的 harvest", () => {
     const { ac, creep, container, source } = makeAc({
       carryFree: 0,
       carryUsed: 200,
@@ -120,6 +120,7 @@ describe("stationaryMine — 下游全满且无 storage 时保持背包（#41）
     stationaryMine().execute!(ac as any, { source, container, link: undefined } as any);
 
     expect(creep.drop).toHaveBeenCalled();
+    expect(creep.harvest).not.toHaveBeenCalled();
   });
 
   it("批量倒能：背包未接近满（免费 40 ≥ 每拍采集 10）时不签发 transfer", () => {

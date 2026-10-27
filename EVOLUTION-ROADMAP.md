@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 20:0xZ 立格，R643；上一条＝R642 格「经济决策 #199」；本格修掉幼房满载 harvester 的「注定失败 harvest」税）
+
+**主目标：把饱和房的每拍失败 harvest 从热路径上摘掉。** 现场（R642/R643）：幼房 W38S56 四个 container 全部 `2000/2000`、link `799/799/799` 全满、地上已有 2 堆掉落物；2 只满载 harvester（50/50）仍每拍 `harvest`（必返 ERR_FULL）＋`drop`，`byRole.harvester=1.21`（≈0.30/只）。修法只摘失败调用：`backpressured = !sinkOpen && 背包满` 时不再签 `harvest`，其余分支（倒能、drop、站位、锚）逐字保留 ⇒ **世界状态与 HEAD 一致**，只少一次失败 API。⚠️先试过更强的版本（背压时连 drop 一起停、抱能等待）⇒ `edge-cases > source 枯竭后恢复` 红：该用例的房（RCL2、container 已满）依赖 drop 清空背包才能继续采；已回滚，*不要*再用“抱能”去消 drop 损耗，除非先给“有消费者”找到可判据并保留该用例。
+
+**实现**：`creeps/engine/actions/harvest.ts` 只加 `backpressured` 分支；测试 `harvest-stationary-overflow` 更新 1 例（成熟房仍 drop，但不再签 harvest）。**闸门**：typecheck 0；unit 421 文件·5,563 例；integration 30·239 全绿（含先红的 edge-case 14 例）。**部署**：sha `ce9ece5e5252`，线上 807,614 B 同 sha，上传 804.0 KB。
+
+同轮预写＝**E736** 换码生效后 300 拍内 `byRole.harvester` 由 1.21 降到 ≤0.95，`usage` 降 0.2–0.4（12.6→≤12.4），`dr`（幼房掉落物）仍在（本改动不改 drop 语义）；**E737** G6 仍红（缺口 0.6→0.2–0.4），不因此触发扩张；只有 usage 真落到 ≤12.0 才允许 G6 自然翻档，不预设；**E738** 若 G6 因此翻档，`failedGates` 清空 → `W39S56` 500 拍迟滞路径恢复生效；若仍 >12，则回到 #199（攒 credits／授权市场），不再以砍生产换闸。
+
 ### 4.0（10-27 19:4xZ 立格，R642；上一条＝R641 格「侦察 CPU 闸」；本格更正 #195 市场前提，并把扩张改为经济决策 #199）
 
 **主目标：核实扩张的唯一剩余路径（CPU）是否可用。** 现读：市场最便宜 `cpuUnlock` **378,325,313 / 1 个**（470.4M/5、480M/10），credits **117,597,960** ⇒ **买不起**（#195 的 48M/95M 前提作废）。G6 稳态 12.2–12.6（`avg10` 12.6）>12.0；非生产可减项上界 ~0.34 CPU；远矿三条 ROI 4.07/1.285/0.987 e/tick，退线换 CPU 会把 G4 打回 <5（core→~4.9 或 Σ→~4.5）。⇒ 不存在自办的「再优化一点就能扩张」路径；选择登记为 **#199**（A 攒 credits／B 赌闸退线／C 授权市场）。
