@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-25 23:2xZ 立格，R616；上一条＝R615 格「G0 成因」；本格复核 ~3 小时后的终态：**G6 已翻 comfortable**、存量↓＝credits↑ 的资源清算）
+
+**下一轮主目标：确认这三小时的存量骤降是“资产转换”而不是失血，并把 G6 的翻档钉住**。`t=83,897,045` 现读：`capacity=[comfortable, 11.53, 0]`、`failedGates` 只剩 **G0（war）＋G3（deficit netFlow −0.1）＋G4（−0.1）** ⇒ **G6 PASS**（R614 的窗口单位修正＋自然漂移共同兑现）。存量：核心 **210,402**＋幼房 **76,267**＝**286,669**（18:20 时 480,576，~21,700 拍内 **−193,907 ≈ −8.9/拍**）；同期 **credits 95.27M→111.77M（+16.5M）**，两房终端能量各 ~10K（~10,000 的 `energyTarget`），`stats.trade` 现读 `myOrders=1 / terminalEnergy=13,066 / storageEnergy=288,014 / demandsLive=1（GH2O:300/p20） / buyTried=0`。⇒ **存量下降对应 credits 大增，是终端资源清算**（交易费以能量计、从 storage 补 terminal），**不是资产损失**；`tradeFee` 计入消耗 ⇒ G3/G4 的 netFlow 被压到 −0.1（与 R607 的“升级吃盈余”是两类不同的净流压制）。
+
+**军事**：`Memory.kernel.warPlan` 现读 `{targetRoom: W37S58(自有核心房), operationType: DEFEND, warPosture: DEFENSIVE, phase: advance, squadSize: 9, a5ForceReq 全 0, spawned: 0, since: 83,896,424}`，当前五房 0 活敌、无 attacker/healer/dismantler 存活 ⇒ 是**防守型战争计划**（无编队需求），但它与 `posture=war` 一起维持 **G0 红**。这与 R615 的“NPC 骚扰续期 war”同一条链。
+
+同轮预写＝**E651** 若资源清算继续，`credits` 与 `storage` 将继续反向移动、`tradeFee` 使 G3/G4 保持负；**E652** G6 在 `usage ≤12` 期间保持 comfortable（R614 后窗口按真实拍数计）；**E653** `warPlan` 为 DEFEND 且 `a5ForceReq=0` 时不产生军事支出（spawned 0 不变），G0 只由 `posture=war` 决定。
+
 ### 4.0（10-25 20:1xZ 立格，R615；上一条＝R614 格「upgradeTicks 单位修正」＝**E645 PASS**；本格定位 G0 的持续红因）
 
 **下一轮主目标：把 G0（`expansionAllowed=false`）的成因钉死**。R614 激活后 `failedGates` 出现 **G0**；`t=83,870,090` 读：`posture=war`、`branch=war-sustain`、`since=83,865,399`（**已 4,691 拍**）、`warPressureTicks=0`，而同一刻五房 `FIND_HOSTILE_CREEPS` **全 0**。继续拆威胁窗口：`Memory.rooms[*].lastHostileAt` 距当前 **W37S58=3,086 拍、W38S56=2,303 拍**（均 < `threatWindow=5,000`），远矿 `dangerUntil` 还在计时（W36S58 +1,037、W38S58 +1,737、W38S57 +7,417）⇒ **`threatRecent` 合法为真，war 由“周期性 NPC 骚扰”持续续期，不是闩锁缺陷**；`warPressureTicks=0` 表示压力低于 `warMaxPressure`，因此走 `war-sustain` 而不是 `war-exit-patience`。**后果**：war 期 `expansionAllowed` 被合取折成恒假 ⇒ **G0 的持续红是设计税（#151/#184 族）**，与 G4/G6 一起构成扩张的第四道门。
