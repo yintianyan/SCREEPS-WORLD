@@ -1188,6 +1188,8 @@
 
 同轮预写＝**E731** 换码生效后，`tight` 期间 `Memory.kernel.prospect` 保持缺席且 scout 只减不增（`sc` 长度单调降，布防读数 4→0）；**E732** scouts 归零后 `usage` 回 ≤12、`upgradeTicks` 开始累计，300 拍后 `capacity=comfortable`；**E733** 之后 `W39S56` 走 500 拍迟滞→WAITING_EXECUTION（E727 顺延），期间 `ea/post` 保持 `true/war-sustain`、G4 不长期回退（E735）；**E734** 若 comfortable 后侦察恢复又造成“翻档→回落”循环，下一轮改为复用回程 scout（不新孵），而不是再调阈值。
 
+**判效（19:1xZ）＝E731 PASS**：`win` 自 1,626 重置到 41（19:56:21 读数为证），新码生效；此后 250 拍内 `pm` 恒缺席、`sc` 由 `[T,T,T,T]→[T,T,T]→[T,T]` **只减不增**（旧码此间会按 ~100–200 拍/任务再孵一只），`ea/post` 保持 `true/war-sustain`、`pp=[null,null]`；G4 `Σ 6.51−0.50=6.01` 未回退。剩余 2 只均为 `recycle=true` 的回程兵，按构造不会再补充；E732（`usage≤12` 累计 300 拍）预计 ~20:30–21:00Z，E733 顺延。
+
 ### 4.0（10-27 16:4xZ 立格，R640；上一条＝R639 格「否证等窗口」；本格落地 **#198-B 窄口径解耦**并部署）
 
 **主目标：#198-B —— 战争态只在「玩家敌意或来源不明」时拦扩张，确认仅 NPC 骚扰时解禁。** 依据：R639 已证 NPC 到达率与 5,000 拍静默窗不相容（war 占空比≈100%）；房级 `lastHostileAt` 把 NPC 过境与玩家宣战同价，而 #152 的分尺列（`lastInvaderHostileAt`/`lastPlayerHostileAt`）自 10-15 起就在落盘、零消费者。修法只改一条语义：`expansionAllowed = expandHealth && !liveThreat && (posture !== "war" || npcOnlyThreatRecent)`，其中 `npcOnlyThreatRecent = invader 近期 && player 不近期`（与 `threatWindow` 同尺）。**不变**：posture 仍按原逻辑进 war（防御/塔/编队/`warPressureTicks` 全部照旧）；玩家敌意与来源不明仍按原语义拦扩张；`liveThreat` 冻结优先于一切。
