@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 12:3xZ 立格，R628；上一条＝R627 格「新线强交付/预算临界」；本格判定“不提前杀”，并确认 G6 只能等编制/购买）
+
+**下一轮主目标：把 W38S58 的“沉没损失 vs 边际收益”分清，避免用沉没成本做提前处置**。`t=83,903,429`：reservation **49 拍**、房内 `src=[1340,3000]`、`con=[2000,65]`（一个源满、一个 container 满）⇒ 是**运力/预约瓶颈**不是断链；成员 7 只（2 harv、4 hauler、1 reserver TTL 182 在途）。账本 `d=3,349 / s=25,500 / i=10,000`（净 −32,151）——但 `s/i` 是**沉没成本**；**边际**看：交付 ~5–9 e/拍 vs 维持 ~4 e/拍（8 只 ≈0.9 CPU 摊成能量同价）⇒ 仍为正，且 age 5,000 时无论交付怎样都会被 ROI 判废（d 上界 ~30K < s+i 35.5K）。**因此不提前杀**：留着收边际能量，到 5,000 由 ROI 收摊（与 R604/R627 的“让法律决定”一致）。
+
+**G6 判定**：`capacity=tight / usage 13.18`、编制 43，是**唯一**扩张门。提前杀 W38S58（−0.9 CPU）也只能到 ~12.3，**仍过不了 12.0**；再砍 8–10 只才会翻档，那是砍收入。⇒ **G6 的解法只剩购买 CPU Unlock（#195）或等 W38S58 判决 + 编制自然缩**；本代不再自砍。
+
+同轮预写＝**E689** age 5,000 时 W38S58 将按 NetRateLoss 废弃（d 上界论证 30K < 35.5K），`dangerUntil=+10,000`；**E690** 废弃后编制 43→~36、usage 向 12.5 靠拢，但仍需再降 ~0.5 才可能 comfortable；**E691** 在此之前扩张停在“G0/G3/G4 全绿、仅 G6 红”。
+
 ### 4.0（10-27 12:2xZ 立格，R627；上一条＝R626 格「CPU 预算闸」；本格记录新线强交付与 reservation 临界）
 
 **下一轮主目标：判断 W38S58 这一世能否在 5,000 拍内回本，并盯住 reservation 断档风险**。`t=83,903,281`：age **1,796**，`d 1,349→3,349（210 拍 +2,000，≈9.5/拍）`，但 `s 13,550→25,500`（首孵＋换代叠加）、`i 10,000` ⇒ 净 **−32,151**。该房 **无活敌**，8 名成员 TTL 1,196–1,450（都健康，只有 1 只 TTL 50 的濒死替补），reserver TTL 322 在途；**reservation 只剩 133 拍**——若在 ~100 拍内没续上，产量会减半、ROI 判决进一步恶化。若交付维持 9.5/拍且 `s` 不再增长，到 age 5,000 时 `d≈35K` 对 `s+i≈35.5K` ⇒ **仍在临界线附近**，最终由 ROI 判（`closeNetRate=0.5`）。G6 仍是**唯一门**：`capacity=tight / usage 13.31`（编制 43）；`Σgate = core 6.67 + young −1.27 = 5.40`（G4 稳固通过）。
