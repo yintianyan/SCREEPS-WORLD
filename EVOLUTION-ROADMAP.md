@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 11:3xZ 立格，R624；上一条＝R623 格「执行=500 拍迟滞」；本格修迟滞不对称）
+
+**下一轮主目标：让 500 拍升档窗不被 G4 的正常抖动清零**。现场：11:07 时 G4 5.4（READY、`readySince=83,902,084`），11:28 时 G4 **4.8**（NOT_READY），计划 `rd` 字段被清空 ⇒ **500 拍确认窗永远走不完**。根因＝`applyHysteresis` 在任一 not-ready 拍就 `readySince: undefined`，而 `downgradeTicks=200` 的语义本来就是“降档需持续不满足”，升档计时的丢弃却没有对称迟滞。修法：not-ready 持续 **< downgradeTicks(200)** 时**保留** `readySince`（进度继续累计），持续 ≥200 才清零；`READY→EVALUATED` 的降档逻辑不变。
+
+测试＝`a3-2-contract.test.ts` 更新 1 例 + 新增 1 例（短暂 50 拍回落 → 1500 仍到点 READY；持续 210 拍 → 进度丢弃、重新起算），该文件 58 例；unit **420·5,549**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E677** 部署后 `W39S56` 在「下一次 ready 拍 + 500 拍」内进入 `READY`（中途 ≤200 拍的 G4 回落不再清零）；**E678** 随后步 8 把它推到 `WAITING_EXECUTION`（`plans waiting ≥1`），`expansion-manager` 接手产生 claim/colonize op；**E679** 持续 ≥200 拍 not-ready 仍会丢进度（控制组用例钉住，防“永远差一点”被无限容忍）。
+
 ### 4.0（10-27 11:1xZ 立格，R623；上一条＝R622 格「首次 READY」；本格找到执行延迟的 500 拍迟滞）
 
 **下一轮主目标：确认 READY 之后 500 拍迟滞走完、计划进入 WAITING_EXECUTION**。现读 `W39S56` 计划：`st=EVALUATED`、**`rd=83,902,084`**（t=83,902,195 时约 111 拍前）、`ua=83,901,984`；`plan-lifecycle.ts` 的 `applyHysteresis` 在 `isReady` 连续满 **`upgradeTicks=500`** 才把 EVALUATED→READY（`plan-lifecycle.ts:140`），随后 `expansion-planner` 步 8 才做 READY→APPROVED→WAITING_EXECUTION。⇒ **执行不是被别的门挡住，而是在跑 500 拍确认窗**；若 `isReady` 全程为真，预计 **~83,902,584（约 390 拍后）** 进入 READY，再由步 8 推进。风险＝这 500 拍内任何一次 `G0/G1`（新进犯）或 `G4` 回落都会把 `readySince` 清零重来。
