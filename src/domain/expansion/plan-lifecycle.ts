@@ -143,9 +143,18 @@ export function applyHysteresis(
     return next;
   }
 
+  // R624：对称迟滞。短暂 not-ready 不丢弃升档进度，只有持续 ≥ downgradeTicks 才清零。
+  // 线上实证：G4 在 5.0 附近 ±0.3 抖动（5.4→4.8），任一拍回落都清零 500 拍窗口 ⇒
+  // EVALUATED 永远走不到 READY（rd 被反复清空）。downgradeTicks 的语义本来就是
+  // "READY → NOT_READY 需要持续不满足的 tick 数"，对升档计时的丢弃应同口径。
   const notReadySince = plan.notReadySince ?? tick;
-  const next = { ...plan, notReadySince, readySince: undefined as number | undefined };
-  if (next.status === "READY" && tick - notReadySince >= options.downgradeTicks) {
+  const persistentNotReady = tick - notReadySince >= options.downgradeTicks;
+  const next = {
+    ...plan,
+    notReadySince,
+    readySince: persistentNotReady ? undefined : plan.readySince,
+  };
+  if (next.status === "READY" && persistentNotReady) {
     return updatePlanStatus(next, "EVALUATED", tick, "hysteresis-downgrade");
   }
   return next;

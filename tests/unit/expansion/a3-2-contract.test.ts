@@ -598,14 +598,27 @@ describe("A3.2 Plan Lifecycle", () => {
     expect(applyHysteresis(revived, true, 1699).status).toBe("EVALUATED");
   });
 
-  it("ready 中断则重新起算（防抖的本来含义）", () => {
+  it("R624：短暂 not-ready（< downgradeTicks=200）保留升档进度，不重算", () => {
+    let p = applyHysteresis(makeFullPlan(), true, 1000);
+    p = applyHysteresis(p, true, 1400);
+    p = applyHysteresis(p, false, 1450); // 仅 50 拍回落
+    expect(p.readySince).toBe(1000);
+    expect(p.notReadySince).toBe(1450);
+    p = applyHysteresis(p, true, 1460);
+    expect(p.readySince).toBe(1000);
+    expect(p.status).toBe("EVALUATED");
+    // 500 拍窗口仍从 1000 起算 ⇒ 1500 到点
+    expect(applyHysteresis(p, true, 1500).status).toBe("READY");
+  });
+
+  it("R624：not-ready 持续 ≥ downgradeTicks 才丢弃进度", () => {
     let p = applyHysteresis(makeFullPlan(), true, 1000);
     p = applyHysteresis(p, true, 1400);
     p = applyHysteresis(p, false, 1450);
+    p = applyHysteresis(p, false, 1660); // 持续 210 ≥ 200
     expect(p.readySince).toBeUndefined();
-    expect(p.notReadySince).toBe(1450);
-    p = applyHysteresis(p, true, 1460);
-    expect(p.readySince).toBe(1460);
+    p = applyHysteresis(p, true, 1670);
+    expect(p.readySince).toBe(1670);
     expect(applyHysteresis(p, true, 1900).status).toBe("EVALUATED");
   });
 
