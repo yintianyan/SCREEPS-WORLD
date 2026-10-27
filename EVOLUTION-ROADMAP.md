@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 13:2xZ 立格，R631；上一条＝R630 格「提前收摊 W38S58」；本格记录 CPU 回落与决策收口）
+
+**下一轮主目标：记录 W38S58 退场的 CPU 收益，并把“只剩 G6”的决策面交给人**。W38S58 于 `t=83,903,478` 置 `abandoned`（`dangerUntil=83,913,478`），7 名成员全部 `recycle=1`；`t=83,904,062` 复测：归航者剩 **2**、在册 43、`usage 13.34→12.90`、tier 仍 `tight`（G6 门槛 12.0，**差 0.90**）；`Σgate = core 7.43 + young −2.24 = 5.19`（G4 稳过，young 负值来自换代孵化）。⇒ **E695 部分兑现**：退役方向正确但 idle 归航者省得有限，仅 −0.44；**E696 仍成立**：要到 ≤12.0 还需 ~0.9，等价于再砍 6–8 只（≈−12~15% 收入），或购买 CPU Unlock。
+
+**决策面（已问，未获答复，保持不动）**：`cpuUnlock` 卖单 **480,000,000 credits / 10 个（≈48M/个）**，账号 114.64M ⇒ 买 1 个（limit 20→30，G6 门槛 18）即可让扩张进入 500 拍确认→WAITING_EXECUTION。备选＝砍编制换 G6（损收入）或维持现状（扩张长期停在“只差 G6”）。**在获得明确授权前，我不执行购买，也不砍生产编制。**
+
+同轮预写＝**E699** 归航者清零后 usage 约 12.7–12.9（仍 >12），G6 不会自愈；**E700** 若授权购买且 `Game.cpu.limit` 读到 30，G6 在下一个评估拍即 comfortable，`W39S56.readySince` 开始累计；**E701** 若不购买也不砍编制，扩张保持 NOT_READY（只有 G6 红），直至未来编制自然缩到能过 12.0。
+
 ### 4.0（10-27 12:4xZ 立格，R630；上一条＝R629 格「只差 G6 的稳态」；本格按 ROI 语义提前收摊 W38S58）
 
 **下一轮主目标：用“两世同型 + 当场停摆”的证据提前结束 W38S58 的试运行，腾出 CPU 并止住换代**。处置（t=83,903,478，可逆、与 `abandonOp` 同字段）：`state="abandoned"`、`stateSince=t`、`dangerUntil=t+10,000`（`econCooldown`）；账本保留 `d=4,349 / s=25,500 / i=10,000`。依据：①上一世同房已因净负被废弃（R604 前史）；②这一世 reservation 只剩 **49 拍**、交付一度 140 拍停摆、`s` 已 25,500（首孵+换代叠加），按 d 上界 ~30K < s+i 35.5K 必在 age 5,000 被 NetRateLoss 判废；③它带来 ~0.9 CPU 与持续换代支出，是 G6（唯一扩张门）的直接压力源。**同拍验证 R586 接上**：`t=83,903,516` 剩余 7 名成员**全部 `recycle=1`**（在册 43→42，另 1 只已寿终）。
