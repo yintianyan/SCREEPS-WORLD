@@ -187,6 +187,8 @@ export const spawnManagerSystem: System = {
       const expansionPush =
         (snapshot.rcl ?? 0) >= 7 &&
         (Memory.kernel?.expansionPlans ?? []).some(p => isExpansionPushPlan(p.st));
+      const capTier = Memory.kernel?.capacity?.tier ?? "abundant";
+      const cpuAllowsUpgrade = capTier === "abundant" || capTier === "comfortable";
       const demandResult = evaluateDemand(
         snapshot,
         queue,
@@ -197,6 +199,7 @@ export const spawnManagerSystem: System = {
         ctx.tick,
         empireGateSum,
         expansionPush,
+        cpuAllowsUpgrade,
       );
       const { requests, nextHysteresis } = demandResult;
       // #85：把需求阶梯的**结构钳位**抄进 Memory.kernel.demandClamps，供调优器判断

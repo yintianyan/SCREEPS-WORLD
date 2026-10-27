@@ -294,6 +294,8 @@ export function evaluateDemand(
    * 为 true 时升级补孵的净流门槛抬到 `upgradeReserveNetFlow`；缺省 false 保持原语义。
    * 由 spawn-manager 现读 Memory 后注入，domain 保持纯函数。 */
   expansionPush = false,
+  /** R632：扩张推进态下 CPU 是否有余量（tier ≤ comfortable）。false 时连净流够也停升级。 */
+  cpuAllowsUpgrade = true,
 ): DemandResult {
   const requests: SpawnRequest[] = [];
   const home = snapshot.roomName;
@@ -897,6 +899,7 @@ export function evaluateDemand(
   const allowUpgrader =
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
     !rcl8NoUpgrade &&
+    (cpuAllowsUpgrade || hasDowngradeRisk || earlyRoom) &&
     (empireGateSum >= (expansionPush ? CONFIG.economy.upgradeReserveNetFlow : 0) ||
       hasDowngradeRisk ||
       earlyRoom);

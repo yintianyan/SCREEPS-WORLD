@@ -757,3 +757,32 @@ describe("upgrader — 扩张推进态的升级预留（R617 限定版）", () =
     expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 });
+
+// R632：扩张推进态 + CPU 无余量时，连“净流够”的升级也停。
+describe("upgrader — 扩张推进态的 CPU 余量闸（R632）", () => {
+  it("有计划且 tier=tight ⇒ 即使净流 6≥5 也暂停升级", () => {
+    (globalThis as any).Memory.kernel = {
+      gateNetFlow: { A: 3, B: 3 },
+      expansionPlans: [{ st: "EVALUATED" }],
+      capacity: { tier: "tight" },
+    };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, rcl: 7 });
+    const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
+    upgraderRole.run(creep, mockContext(snap));
+    expect(creep.upgradeController).not.toHaveBeenCalled();
+  });
+
+  it("有计划且 tier=comfortable ⇒ 放行（控制组）", () => {
+    (globalThis as any).Memory.kernel = {
+      gateNetFlow: { A: 3, B: 3 },
+      expansionPlans: [{ st: "EVALUATED" }],
+      capacity: { tier: "comfortable" },
+    };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, rcl: 7 });
+    const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
+    upgraderRole.run(creep, mockContext(snap));
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+});

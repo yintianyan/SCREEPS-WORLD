@@ -115,6 +115,12 @@ function upgraderGate(ac: ActionContext): boolean {
     (Memory.kernel?.expansionPlans ?? []).some(p => isExpansionPushPlan(p.st));
   const gateFloor = expansionPush ? CONFIG.economy.upgradeReserveNetFlow : 0;
   if (sumGate < gateFloor) return false;
+  // R632：扩张推进态且 CPU 无余量（tier 差于 comfortable）时，连“净流够”的升级也停。
+  // 升级是可选的 CPU 消费者，而 G6 正是扩张门；花 CPU 升级会把门自己顶死（与 R626 同构）。
+  if (expansionPush) {
+    const tier = Memory.kernel?.capacity?.tier;
+    if (tier === "tight" || tier === "constrained") return false;
+  }
 
   // RCL8 满级后升级零收益（controller.progress=0）：无降级风险时停烧。
   // 存量 upgrader 直接 idle（不取能不升级），demand 已停孵，自然老死后退出；
