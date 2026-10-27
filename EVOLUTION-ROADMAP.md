@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 13:3xZ 立格，R632；上一条＝R631 格「退役后 usage 12.90」；本格加“扩张推进态的 CPU 余量闸”）
+
+**下一轮主目标：扩张推进态且 CPU 无余量时，连“净流够”的升级也停**。现场：编制已回到 37（W38S58 归航者清空），但 `usage` 仍 **12.93（tight）**，且 **2 只 upgrader 在跑**、young `nf=−10/拍`。R617 的闸只看净流（Σgate≥5 即放行），**不看 CPU**；而 G6 正是扩张门——在 CPU 已超门槛时还花 ~0.26 CPU 与 10–20 e/tick 去升级，是**自败**（与 R626 新开远矿同构）。修法：`expansionPush` 为真时，若 `capacity.tier ∈ {tight, constrained}`，升级角色与 demand 双端都停；降级风险/claimSecure/earlyRoom 仍豁免（上方的紧急分支不变）。
+
+测试＝upgrader 新增 2 例（有计划+净流6+tight ⇒ 暂停；有计划+净流6+comfortable ⇒ 放行控制组），upgrader 35 例；unit **420·5,554**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E702** 部署后两房 `upgraded` 计数归零、upgrader 转 idle；**E703** `usage` 降 ≥0.15（目标 12.6–12.8），young `nf` 因少花 10–20 e/tick 而改善；**E704** G6 仍 >12.0（0.6–0.8），除非再缩编或购买 Unlock —— 本闸只是把“自败支出”拿掉，不是 G6 的解。
+
 ### 4.0（10-27 13:2xZ 立格，R631；上一条＝R630 格「提前收摊 W38S58」；本格记录 CPU 回落与决策收口）
 
 **下一轮主目标：记录 W38S58 退场的 CPU 收益，并把“只剩 G6”的决策面交给人**。W38S58 于 `t=83,903,478` 置 `abandoned`（`dangerUntil=83,913,478`），7 名成员全部 `recycle=1`；`t=83,904,062` 复测：归航者剩 **2**、在册 43、`usage 13.34→12.90`、tier 仍 `tight`（G6 门槛 12.0，**差 0.90**）；`Σgate = core 7.43 + young −2.24 = 5.19`（G4 稳过，young 负值来自换代孵化）。⇒ **E695 部分兑现**：退役方向正确但 idle 归航者省得有限，仅 −0.44；**E696 仍成立**：要到 ≤12.0 还需 ~0.9，等价于再砍 6–8 只（≈−12~15% 收入），或购买 CPU Unlock。
