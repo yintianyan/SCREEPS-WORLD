@@ -1194,6 +1194,8 @@
 
 **bootstrap 现读（22:1xZ）＝老资产回用，进度好于新建房**：t=83,912,258 `expansion.state=bootstrapping / checkpointsPassed=1 / startedAt 83,912,257`；W38S58 内已有 `controller+storage+spawn`（旧拥有期遗留，回 claim 后归我们）、在建 `container+road`，本地 `worker-W38S58-0-83911149-bue` 在岗、claimer 仍活；sponsor W37S58 队列 `worker + builder×2`，房内能量 109。⇒ **回 claim 一条带 spawn/storage 的旧房**，bootstrap 不是从零起步；下一步看 `checkpoints` 推进到 `economic_startup→integrating→completed`，以及新房 `recovery→…→normal` 后 `ea/G2/G3` 才恢复。
 
+**E740 PASS（22:2xZ）**：计划表现读只有 `W38S58=EXECUTING`，其余 6 条 `WAITING_EXECUTION`、`W36S58=CANCELLED`；`lastExpansionCompletedTick=83,328,457`（冷却早已满足）⇒ 无第二次 claim。bootstrap `checkpointsPassed=1`（t=83,911,321），`Σgate` 2.98（core 4.13/young −1.16/new 0）——新房消耗与代孵把聚合净流压到 G4 线下，属过渡态；监测器 `r645` 至 ~00:55Z 继续盯 `checkpoints→economic_startup→integrating→completed`。
+
 ### 4.0（10-27 20:0xZ 立格，R643；上一条＝R642 格「经济决策 #199」；本格修掉幼房满载 harvester 的「注定失败 harvest」税）
 
 **主目标：把饱和房的每拍失败 harvest 从热路径上摘掉。** 现场（R642/R643）：幼房 W38S56 四个 container 全部 `2000/2000`、link `799/799/799` 全满、地上已有 2 堆掉落物；2 只满载 harvester（50/50）仍每拍 `harvest`（必返 ERR_FULL）＋`drop`，`byRole.harvester=1.21`（≈0.30/只）。修法只摘失败调用：`backpressured = !sinkOpen && 背包满` 时不再签 `harvest`，其余分支（倒能、drop、站位、锚）逐字保留 ⇒ **世界状态与 HEAD 一致**，只少一次失败 API。⚠️先试过更强的版本（背压时连 drop 一起停、抱能等待）⇒ `edge-cases > source 枯竭后恢复` 红：该用例的房（RCL2、container 已满）依赖 drop 清空背包才能继续采；已回滚，*不要*再用“抱能”去消 drop 损耗，除非先给“有消费者”找到可判据并保留该用例。
