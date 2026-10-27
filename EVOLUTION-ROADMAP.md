@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 21:5xZ 立格，R645；上一条＝R643 格「G6 翻档」；本格记录**计划晋升 + 首次扩张执行**）
+
+**主目标：确认 #198-B 之后的第一条扩张计划能被 readiness 晋升并由 expansion-manager 接手。** 时间线：`pl.rd=83,910,284`（G4 5.08 与 G6 comfortable 同拍）→ 500 拍后 t=83,910,850 `W39S56` 变 **WAITING_EXECUTION**；同拍 planner 把 7 条计划一起晋升（W39S56/W39S55/W39S54/W37S56/W37S54/W39S57），`tryConsumePlan` 按可见性挑了**最早且可见**的 `W38S58`（planId `W38S58@83444484`，中立/无主/0 敌，controller lv0）→ `Memory.kernel.expansion={state:preparing→claiming, target:W38S58, startedAt:83,910,857}`，计划转 EXECUTING。⇒ **E727/E733 兑现**（首个 WAITING_EXECUTION→claiming）。
+
+⚠️两条事实：①`W39S56` 当前**不可见**（无 observer、侦察冷却到 83,912,451，且 tight 下新一轮侦察被 R641 闸住）⇒ 它不会先被领；②7 条 WAITING 计划会在 10,000 拍冷却/并发 1 下排队，不是同时 claim。
+
+同轮预写＝**E739** `expansion.state` 在 ~600 拍内到 `claimed`（claimer 邻房短途 + 孵化），`Memory.rooms.W38S58` 出现且 controller.my；**E740** 其余 6 条计划保持 WAITING、不发生第二次 claim；**E741** bootstrap 期的孵化/拓荒会推高 CPU（G6 可能回 tight、G4 下探 4.5），但执行状态机只看 `budget.tier` 与 bucket，不看 ea/G4/G6 ⇒ 不被中断。
+
 ### 4.0（10-27 20:0xZ 立格，R643；上一条＝R642 格「经济决策 #199」；本格修掉幼房满载 harvester 的「注定失败 harvest」税）
 
 **主目标：把饱和房的每拍失败 harvest 从热路径上摘掉。** 现场（R642/R643）：幼房 W38S56 四个 container 全部 `2000/2000`、link `799/799/799` 全满、地上已有 2 堆掉落物；2 只满载 harvester（50/50）仍每拍 `harvest`（必返 ERR_FULL）＋`drop`，`byRole.harvester=1.21`（≈0.30/只）。修法只摘失败调用：`backpressured = !sinkOpen && 背包满` 时不再签 `harvest`，其余分支（倒能、drop、站位、锚）逐字保留 ⇒ **世界状态与 HEAD 一致**，只少一次失败 API。⚠️先试过更强的版本（背压时连 drop 一起停、抱能等待）⇒ `edge-cases > source 枯竭后恢复` 红：该用例的房（RCL2、container 已满）依赖 drop 清空背包才能继续采；已回滚，*不要*再用“抱能”去消 drop 损耗，除非先给“有消费者”找到可判据并保留该用例。
