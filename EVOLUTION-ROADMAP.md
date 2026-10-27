@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 10:1xZ 立格，R619；上一条＝R618 格「Σgate 2.95」；本格抓到 G0 的“临界被打断”与 G2 的迟滞态）
+
+**下一轮主目标：把“扩张四门”的剩余距离量到可判**。`t=83,901,421` 两房 `lastHostileAt` 恰好走到 **5,000/5,055** 拍（静默阈值），**29 拍后核心房再进犯**（`lastHostileAt` 年龄归 29），姿态 `war→fortify`（`threat-hold-fortify`）⇒ **NPC 到达间隔 ≈ `threatWindow`**，G0 的 5,000 拍静默窗按当前骚扰节奏几乎必被打断（#198 的直接证据）。但当前实现里 `expansionAllowed = expandHealth && !liveThreat && posture!==war`，**fortify 不硬关扩张**：活敌离开后 `Memory.kernel.strategy.expansionAllowed` 实测已为 **true**，而仪表盘上的 G0=false 是 readiness 取了 **27 拍前**（`readinessTick` 早于 `tick`）的旧输入。同时仪表盘出现 **G2 `struggling=1[W37S58]`**——该房 `colonyState=normal/steady`、pressure 0，判 struggling 只因 `classifyRoomEconomic` 把 defense 归 struggling，而 defense 的退出迟滞 `defenseExitHysteresis=50` 尚未走完；**G3（critical, netFlow=3.3）与 G4（3.3）是同一把 netFlow ≥5 的尺**。门态：G0（旧值/即将转绿）＋G2（迟滞）＋G3/G4（差 1.7）＋G6 已 `comfortable（11.62）`；`Σgate = core 3.50 + young −0.10 = 3.40`，两房存量 304,068。
+
+同轮预写＝**E661** 无新进犯时 G2 在 ~100 拍内自行消失（defense 迟滞退出）；**E662** 下一次 readiness 评估（`readinessTick` 追上当前）G0 转绿；**E663** G3/G4 同时转绿当且仅当 `Σgate ≥5`（当前 3.40，缺口 ~1.6；主要拖累＝终端清算的 `tradeFee` 与 young −0.10）；**E664** 若清算结束（两房终端可售库存回到 `sellReserve`）且无新进犯，Σgate 才具备持续上行条件。
+
 ### 4.0（10-27 05:4xZ 立格，R618；上一条＝R617 格「限定版升级预留」＝**E654 PASS**；本格确认 E655 趋势）
 
 **下一轮主目标：确认限定版预留确实把 Σgate 往 G4 门槛推**。`win=314` 现读 `cpuRate.total 12.37`（窗未稳）、`gateNetFlow` core **+4.62** / young **−1.67** ⇒ **Σ +2.95**；`expansionDashboard` 的 G4 值 **2.9**。四发轨迹：**1.0（R616 前）→1.9（R617 判效）→2.5→2.9**，约 +0.4/100 拍 ⇒ 若清算结束、young 继续回正，Σ 有望在 ~1 小时内摸到 5。`upgraded` 计数仍为 0（E654 持续成立）。**G0 仍红**：core/young `lastHostileAt` 距 1,183/1,238 拍（<5,000），`warPlan` 仍 `DEFEND/advance/spawned 0` ⇒ 周期性 NPC 骚扰继续支配扩张时机（#198）。**G6 回 `tight`（12.37，win 314）**：部署重置后窗口重算，usage 从 11.53 抬到 12.37，需再累积 300 拍 ≤12。
