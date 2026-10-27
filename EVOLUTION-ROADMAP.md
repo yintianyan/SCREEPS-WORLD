@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 15:3xZ 立格，R636；上一条＝R635 格「G6 翻档」；本格记录**只剩 G0**）
+
+**下一轮主目标：等 G0 的 5,000 拍静默窗走完（G4/G6 已同时为真）**。`t=83,905,831`：`capacity=[comfortable, 11.87, 0]`（G6 稳）、`gateNetFlow core +5.61 / young −0.31 ⇒ Σ +5.30`（G4 过）⇒ `failedGates` **只剩 G0**（`posture=war`，`expansionAllowed=false`）。两房 `lastHostileAt` 距 **4,400/4,178**（<5,000），按当前无新进犯的节奏，再 **~600–800 拍**即可静默满窗；姿态将从 war 退出（fortify/develop），`expansionAllowed = expandHealth && !liveThreat && posture≠war` 随即转真。**这是本代第一次出现「G4+G6 同时绿、只等 G0」**——此前的自败支出（升级预留、CPU 余量、新开远矿）与无损缩编（37→31）把前两道门都清掉了。
+
+同轮预写＝**E714** 若 600–800 拍内无新 NPC 进犯，`lastHostileAt` 双房越过 5,000，`failedGates` 清空、`Readiness=READY`；**E715** 随后 `W39S56.readySince` 起算，500 拍内 EVALUATED→READY→WAITING_EXECUTION（R624 的 200 拍对称迟滞吸收 G4/G6 的短回落）；**E716** 若下一次进犯在窗口内到达（R615 实测 NPC 间隔≈threatWindow），G0 会重置再来一次——这是 #198 的最终计费。
+
 ### 4.0（10-27 15:1xZ 立格，R635；上一条＝R634 格「无损缩编」；本格记录 **G6 首次稳定翻 comfortable**）
 
 **下一轮主目标：确认 G6 翻档后扩张门只剩 G0/G4 的贴线振荡**。过程：编制 37→31（自然死亡 + 2 只被政策暂停的 idle upgrader 回收，R634）→ `usage 13.13→12.13→12.07→11.93→11.84`；`upgradeTicks` 在 R614 的真实拍数语义下 **5→125→290→翻档**，`t=83,905,514` 实测 **`capacity=[comfortable, 11.84, 0]`**。**这是本代第一次稳定翻 comfortable**（此前每次都在 100 拍内被尖峰打断）。同拍门态：**G0（`posture=war`，窗口内又有 NPC 进犯）＋G4（4.8，young −0.45）** ⇒ `Readiness=NOT_READY`，`W39S56` 仍 `EVALUATED`。`Σgate 4.85`（core 5.30/young −0.45）。
