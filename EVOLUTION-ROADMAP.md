@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 12:1xZ 立格，R626；上一条＝R625 格「G4 通过、只剩 G6」；本格加新开远矿的 CPU 预算闸）
+
+**下一轮主目标：别让“新开远矿”把扩张的最后一道门（G6）自己顶死**。现场：G4 全过后只剩 G6；但编制 34→**43**（remoteHauler 13／remoteHarvester 7／scout 2），`cpuRate.total` 11.6→**13.04**、tier 从 comfortable 掉回 tight。增量来自 **W38S58 再开点**（`createdAt=83,901,485`，上一世同房因净负被废弃、10,000 冷却到期后重选；这一世 age 1,586 时 `d=1,349 / s=13,550 / i=10,000`，两座 container 已建但吞吐尚未起来）＋2 只 scout。**机制盲点**：`newRemoteOpsAllowed && roomReadyForNewRemote(...)` 只看姿态与房间成熟度，**不看 CPU 余量**；在扩张推进态下新开线 = 把 G6 门自己顶死。修法＝纯函数 `newRemoteCpuAllowed(tier, expansionPush)`：推进态下只有 `abundant/comfortable` 允许**新开**远矿，`tight/constrained` 跳过；非推进态不拦，现役 op 的维护/替换完全不受影响。
+
+测试＝新增 3 例（非推进态全放行；推进态 abundant/comfortable 放行；tight/constrained 拦截）；unit **420·5,552**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E683** 部署后若 tier 仍 tight，不再有新 op 打开（`remoteOps` 新增键数 0）；**E684** W38S58 到 age 5,000 按 ROI 判决（当前轨迹大概率废弃）或编制自然回落后 tier 回 comfortable，新开点自动恢复；**E685** 现役 4 条线的补员/替换不受本闸影响（E654/R584 的维护路径照常）。
+
 ### 4.0（10-27 12:0xZ 立格，R625；上一条＝R624 格「对称迟滞」；本格记录**G4 通过、只剩 G6**）
 
 **下一轮主目标：确认 G4 在部署后仍保持通过，并把 G6 等回 comfortable**。`t=83,902,918`（R624 激活后 ~150 拍）：`failedGates = ["G6: CPU tier(v=constrained|tier ≤ comfortable)"]`——**G4/G3/G0/G2 全过**；`gateNetFlow core +5.81 / young −0.44 ⇒ Σ +5.37`（G4 门槛 5）。G6 因部署重置回 `constrained`（usage 13.33，win 未稳；`upgradeTicks 180` 正在按修正后的真实拍数累计）。`W39S56` 仍 `EVALUATED`、`plans waiting 0`：readiness 尚未 READY（被 G6 挡），所以计划迟滞还没起算；一旦 G6 回 `comfortable` 并稳定，计划才开始 500 拍累积（R624 后 ≤200 拍的回落不再清零）。
