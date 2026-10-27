@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-26 13:1xZ 立格，R617；上一条＝R616 格「G6 翻档、资源清算」；本格落地 **#196 限定版**升级预留）
+
+**下一轮主目标：只在“确有扩张推进态”时把升级刹车抬到净流门槛（#196-B 限定版）**。动机：G6 已 `comfortable`、G3 已回正，门只剩 **G0（war）＋G4（1.0）**；而 R607 实测“升级把慢 EMA 钉在 0”，全局抬门槛会压掉 RCL 冲刺等 15 例测试 ⇒ 改为**限定条件**：`本房 RCL≥7` 且存在 `isExpansionPushPlan`（EVALUATED/READY/APPROVED/WAITING_EXECUTION/EXECUTING）时，升级刹车＝`upgradeReserveNetFlow=5`；其余场景（早期房/无计划/终态计划）保持原语义（`Σgate<0` 才停）。判据抽成 `domain/expansion/plan.ts::isExpansionPushPlan`（纯函数），`spawn-manager` 现读后把 `expansionPush` 注入 `evaluateDemand`（domain 保持纯）。
+
+测试＝upgrader 新增 3 例（有计划+RCL7+净流3 ⇒ 暂停；无计划同净流3 ⇒ 放行控制组；有计划+净流6 ⇒ 放行），upgrader 33 例；unit **420·5,548**、integration **30·239**、typecheck 0。
+
+同轮预写＝**E654** 部署后（当前 8 个计划均 EVALUATED、两房 RCL8/7）幼房 upgrader 转为不升级（`upgraded` 计数归零）；**E655** `Σgate` 从 ~1.0 在 ~2,000 拍内向 5 抬升（每拍腾出 ~5–10 e 的升级支出）；**E656** 早期房/无计划不回归（控制组用例 + 全量门禁）；**E657** 若随后 `G0` 因静默窗转绿且 `Σgate≥5`，扩张就绪将首次出现 G0/G3/G4/G6 全绿（执行仍等预算/人工批准）。
+
 ### 4.0（10-25 23:2xZ 立格，R616；上一条＝R615 格「G0 成因」；本格复核 ~3 小时后的终态：**G6 已翻 comfortable**、存量↓＝credits↑ 的资源清算）
 
 **下一轮主目标：确认这三小时的存量骤降是“资产转换”而不是失血，并把 G6 的翻档钉住**。`t=83,897,045` 现读：`capacity=[comfortable, 11.53, 0]`、`failedGates` 只剩 **G0（war）＋G3（deficit netFlow −0.1）＋G4（−0.1）** ⇒ **G6 PASS**（R614 的窗口单位修正＋自然漂移共同兑现）。存量：核心 **210,402**＋幼房 **76,267**＝**286,669**（18:20 时 480,576，~21,700 拍内 **−193,907 ≈ −8.9/拍**）；同期 **credits 95.27M→111.77M（+16.5M）**，两房终端能量各 ~10K（~10,000 的 `energyTarget`），`stats.trade` 现读 `myOrders=1 / terminalEnergy=13,066 / storageEnergy=288,014 / demandsLive=1（GH2O:300/p20） / buyTried=0`。⇒ **存量下降对应 credits 大增，是终端资源清算**（交易费以能量计、从 storage 补 terminal），**不是资产损失**；`tradeFee` 计入消耗 ⇒ G3/G4 的 netFlow 被压到 −0.1（与 R607 的“升级吃盈余”是两类不同的净流压制）。
