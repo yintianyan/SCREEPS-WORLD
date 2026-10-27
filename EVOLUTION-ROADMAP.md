@@ -1180,6 +1180,18 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 11:1xZ 立格，R623；上一条＝R622 格「首次 READY」；本格找到执行延迟的 500 拍迟滞）
+
+**下一轮主目标：确认 READY 之后 500 拍迟滞走完、计划进入 WAITING_EXECUTION**。现读 `W39S56` 计划：`st=EVALUATED`、**`rd=83,902,084`**（t=83,902,195 时约 111 拍前）、`ua=83,901,984`；`plan-lifecycle.ts` 的 `applyHysteresis` 在 `isReady` 连续满 **`upgradeTicks=500`** 才把 EVALUATED→READY（`plan-lifecycle.ts:140`），随后 `expansion-planner` 步 8 才做 READY→APPROVED→WAITING_EXECUTION。⇒ **执行不是被别的门挡住，而是在跑 500 拍确认窗**；若 `isReady` 全程为真，预计 **~83,902,584（约 390 拍后）** 进入 READY，再由步 8 推进。风险＝这 500 拍内任何一次 `G0/G1`（新进犯）或 `G4` 回落都会把 `readySince` 清零重来。
+
+同轮预写＝**E674** 若 500 拍内 `isReady` 不断，`plans waiting` 将 ≥1、`W39S56.st` 走到 `WAITING_EXECUTION`；**E675** 若中途被打断，`rd` 会后移（每打断一次至少再等 500 拍），这正是 #198 骚扰税对扩张的第二种计费方式；**E676** 进入 WAITING_EXECUTION 后 `expansion-manager` 应立即接手（claimer/colonize op），验收看 claim 目标与新 op 的 `id/createdAt`。
+
+### 4.0（10-27 11:0xZ 立格，R622；上一条＝R621 格「G4 拖累」；本格记录**首次 READY**）
+
+**下一轮主目标：确认扩张就绪首次为 READY，并查清“为什么计划还停在 EVALUATED”**。`t=83,902,177`：`gateNetFlow` core **+5.56** / young **−0.27** ⇒ **Σ +5.30**（G4 门槛 5 已过）；`expansionDashboard` 逐字 `Readiness=READY | Blocked=G10+G11`——**G10（tier ≤ abundant）与 G11（netFlow ≥ 15）是 STRONGLY_READY 的附加门**，READY 本体已达成，这是本代第一次。`ea=true`、`Budget 117,814/318,413`（对 `W39S56` 的 cost 61,225 充足）。**但 `W39S56` 计划仍是 `EVALUATED`，`Plans=8 active, 0 waiting`** ⇒ READY 没有自动转成执行态，需查 plan 生命周期的推进条件（谁把 EVALUATED→READY→APPROVED→WAITING_EXECUTION，是否另有审批/执行门）。
+
+同轮预写＝**E671** 若 READY 是执行的必要充分条件，下一趟 expansion-planner/expansion-manager 应把至少一个计划推进到 READY/WAITING_EXECUTION（`Plans … waiting ≥1`）；**E672** 若仍停在 EVALUATED，则存在 READY 之外的执行门（预算/审批/执行器未接线），需按 R528 的口径读 `run()` 内步序而不是只看守卫；**E673** G10/G11 只影响 STRONGLY_READY，不应阻止 READY 级执行。
+
 ### 4.0（10-27 10:4xZ 立格，R621；上一条＝R620 格「只剩 G4」；本格把 G4 的拖累归因到“孵化批次 + 清算费用”）
 
 **下一轮主目标：解释 Σgate 卡在 ~4.0 的成因（G4 缺口 ~1.1）**。`t=83,901,790`：`ea=true`、`posture=fortify`、`Blocked=G4`、`Readiness=NOT_READY`、`Budget 116,529/314,940`；`gateNetFlow` core **+4.51** / young **−0.51** ⇒ Σ **+4.00**，G4 面板 **3.9**（10 分钟前 Σ 4.01，基本走平）。同拍幼房 `economy.bk`＝`{harvested:1000, spawned:2650, imported:400}` ⇒ **单窗孵化 2,650（≈53 e/拍）**，是 young gate 为负的直接来源（远矿编制换代的批量孵化，属 R584–R587 已量过的“编制维持”结构成本）；核心侧终端仍在清算（`stats.trade.lastTick=83,901,692`，core 终端尚有 GO 8,732/G 5,000/K 4,923/O 3,000…），`tradeFee` 计入消耗。⇒ **Σgate 的缺口不是某条泄漏，而是“编制换代批次 + 清算费用”两项结构性支出**；两者都属编制/市场政策，本轮不动（市场干预需属人授权）。
