@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 05:4xZ 立格，R618；上一条＝R617 格「限定版升级预留」＝**E654 PASS**；本格确认 E655 趋势）
+
+**下一轮主目标：确认限定版预留确实把 Σgate 往 G4 门槛推**。`win=314` 现读 `cpuRate.total 12.37`（窗未稳）、`gateNetFlow` core **+4.62** / young **−1.67** ⇒ **Σ +2.95**；`expansionDashboard` 的 G4 值 **2.9**。四发轨迹：**1.0（R616 前）→1.9（R617 判效）→2.5→2.9**，约 +0.4/100 拍 ⇒ 若清算结束、young 继续回正，Σ 有望在 ~1 小时内摸到 5。`upgraded` 计数仍为 0（E654 持续成立）。**G0 仍红**：core/young `lastHostileAt` 距 1,183/1,238 拍（<5,000），`warPlan` 仍 `DEFEND/advance/spawned 0` ⇒ 周期性 NPC 骚扰继续支配扩张时机（#198）。**G6 回 `tight`（12.37，win 314）**：部署重置后窗口重算，usage 从 11.53 抬到 12.37，需再累积 300 拍 ≤12。
+
+同轮预写＝**E658** 若 Σgate 维持 +0.3~0.4/100 拍，G4 面板将在 **~1,000 拍内 ≥5**（前件：无新一轮大规模清算/孵化）；**E659** G0 的转绿仍取决于两房 `lastHostileAt` 同时静默 5,000 拍，当前节奏（~1,200 拍一次进犯）下概率低；**E660** G6 需 win≥600 且 usage ≤12 才重新翻 comfortable。
+
 ### 4.0（10-26 13:1xZ 立格，R617；上一条＝R616 格「G6 翻档、资源清算」；本格落地 **#196 限定版**升级预留）
 
 **下一轮主目标：只在“确有扩张推进态”时把升级刹车抬到净流门槛（#196-B 限定版）**。动机：G6 已 `comfortable`、G3 已回正，门只剩 **G0（war）＋G4（1.0）**；而 R607 实测“升级把慢 EMA 钉在 0”，全局抬门槛会压掉 RCL 冲刺等 15 例测试 ⇒ 改为**限定条件**：`本房 RCL≥7` 且存在 `isExpansionPushPlan`（EVALUATED/READY/APPROVED/WAITING_EXECUTION/EXECUTING）时，升级刹车＝`upgradeReserveNetFlow=5`；其余场景（早期房/无计划/终态计划）保持原语义（`Σgate<0` 才停）。判据抽成 `domain/expansion/plan.ts::isExpansionPushPlan`（纯函数），`spawn-manager` 现读后把 `expansionPush` 注入 `evaluateDemand`（domain 保持纯）。
@@ -1189,8 +1195,6 @@
 同轮预写＝**E654** 部署后（当前 8 个计划均 EVALUATED、两房 RCL8/7）幼房 upgrader 转为不升级（`upgraded` 计数归零）；**E655** `Σgate` 从 ~1.0 在 ~2,000 拍内向 5 抬升（每拍腾出 ~5–10 e 的升级支出）；**E656** 早期房/无计划不回归（控制组用例 + 全量门禁）；**E657** 若随后 `G0` 因静默窗转绿且 `Σgate≥5`，扩张就绪将首次出现 G0/G3/G4/G6 全绿（执行仍等预算/人工批准）。
 
 **R617 判效（10-27 05:2xZ）＝E654 PASS、E655 进行中**：线上 sha **`4f1cd168d4c1`**（806,684B）／CI `40453982560` success；~05:20 全局重置后生效。**E654 PASS**：幼房 upgrader `89-bix` 现为 **idle、空载**（`mode=idle / store=0`），两房 `economy.bk` 均无 `upgraded` ⇒ 升级已按限定版暂停。**E655 进行中**：`gateNetFlow` **core +4.30 / young −2.31（Σ +1.99）**，较 R616 的 Σ≈1.0 明显抬升；`expansionDashboard` 的 G4 值 **1.9**（需 ≥5）。G6 因这次重置回 `tight`（usage 13.9，窗未稳），需重新累积 300 拍。young 的 −2.31 与清算/交易费/供给口径有关，后续看它是否随清算结束回正。
-
-### 4.0（10-26 13:1xZ 立格，R617；上一条＝R616 格「G6 翻档、资源清算」；本格落地 **#196 限定版**升级预留）
 
 ### 4.0（10-25 23:2xZ 立格，R616；上一条＝R615 格「G0 成因」；本格复核 ~3 小时后的终态：**G6 已翻 comfortable**、存量↓＝credits↑ 的资源清算）
 
