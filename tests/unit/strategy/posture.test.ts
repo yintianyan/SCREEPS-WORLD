@@ -163,7 +163,7 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
     expect(r.expansionAllowed).toBe(true);
   });
 
-  it("war 姿态（即便无活威胁）→ expansionAllowed false（战争是主动冲突，不殖民）", () => {
+  it("war 姿态 + 来源不明的近期威胁（无身份分尺）→ expansionAllowed false（保守）", () => {
     const r = evaluateEmpirePosture(
       input({
         rooms: [room({ lastHostileAt: tick - 100 })],
@@ -172,7 +172,73 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
     );
     expect(r.posture).toBe("war");
     expect(r.newRemoteOpsAllowed).toBe(true); // 无活敌 → 现役远矿可继续
-    expect(r.expansionAllowed).toBe(false); // 但战争态硬性关闭新殖民
+    expect(r.expansionAllowed).toBe(false); // 无法确认来源 ⇒ 按玩家处理
+  });
+
+  // #198-B：NPC 过境间隔≈威胁窗，若与玩家宣战同价，war 占空比≈100% ⇒ 扩张永久冻结。
+  // 只在「确认仅 NPC 骚扰」时给 war 解禁；玩家敌意/来源不明仍拦。
+  it("war 姿态 + 确认仅 NPC 骚扰（invader 近期、player 无）→ expansionAllowed true", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100, lastInvaderHostileAt: tick - 100 })],
+        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war"); // 姿态本身不变（防御照常）
+    expect(r.newRemoteOpsAllowed).toBe(true);
+    expect(r.expansionAllowed).toBe(true);
+  });
+
+  it("war 姿态 + 玩家近期敌意（即便同时有 NPC）→ expansionAllowed false", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [
+          room({
+            lastHostileAt: tick - 100,
+            lastInvaderHostileAt: tick - 100,
+            lastPlayerHostileAt: tick - 50,
+          }),
+        ],
+        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+    expect(r.expansionAllowed).toBe(false);
+  });
+
+  it("war 姿态 + 玩家攻击已在窗口外、仅 NPC 近期 → expansionAllowed true", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [
+          room({
+            lastHostileAt: tick - 100,
+            lastInvaderHostileAt: tick - 100,
+            lastPlayerHostileAt: tick - DEFAULT_POSTURE_OPTIONS.threatWindow - 1,
+          }),
+        ],
+        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+    expect(r.expansionAllowed).toBe(true);
+  });
+
+  it("war 姿态 + 仅 NPC 分尺但在房活敌 → expansionAllowed false（liveThreat 冻结优先）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [
+          room({
+            lastHostileAt: tick - 100,
+            lastInvaderHostileAt: tick - 100,
+            hasLiveThreat: true,
+          }),
+        ],
+        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+    expect(r.newRemoteOpsAllowed).toBe(false);
+    expect(r.expansionAllowed).toBe(false);
   });
 
   it("war 姿态但无活威胁 → 远矿物流恢复（现役运营不受影响，仅新 op 放开）", () => {

@@ -6,6 +6,11 @@ export interface RoomStrategyInput {
   economyPressure: number;
   /** 最近一次房内出现威胁的 tick（无记录为 undefined）。带滞回的记忆。 */
   lastHostileAt?: number;
+  /** 最近一次确认由 NPC（Invader）或玩家造成的威胁 tick（#198-B）。
+   * 与 `lastHostileAt` 同拍盖章、按行凶者身份分尺（room-state 写）。
+   * 只用于「战争态下扩张是否解锁」：确认仅 NPC 骚扰时战争不拦扩张。 */
+  lastInvaderHostileAt?: number;
+  lastPlayerHostileAt?: number;
   /** 本 tick 房内是否存在真实在房威胁（snapshot.threatCreeps 非空的透传）。
    * 与 lastHostileAt 互补：lastHostileAt 是「威胁窗口内即算近期」的滞回记忆，
    * hasLiveThreat 是零滞回的「此刻是否有敌」。新远矿/扩张冻结跟随它，避免被
@@ -177,6 +182,18 @@ export function evaluateEmpirePosture(
   // 零滞回「此刻有敌」：任一房本 tick 有真实在房威胁（已剔除盟友）。这是冻结指令的
   // 真相来源——不读滞回记忆，只读当下视线。敌人撤离即清零，自治立即恢复。
   const liveThreat = rooms.some(r => r.hasLiveThreat === true);
+  // #198-B：战争态拦扩张的依据必须与「谁在打」一致。房级 `lastHostileAt` 把 NPC 过境与
+  // 玩家宣战记成同一件事（NPC 到达间隔≈威胁窗 ⇒ war 占空比≈100%，扩张被永久冻结）。
+  // 这里只在**确认仅 NPC 骚扰**时给 war 解禁；玩家敌意或来源不明仍按原语义拦住（保守），
+  // 且 liveThreat 的冻结优先于一切。war 姿态本身、防御响应与 warPressure 计数不变。
+  const invaderThreatRecent = rooms.some(
+    r =>
+      r.lastInvaderHostileAt !== undefined && tick - r.lastInvaderHostileAt < options.threatWindow,
+  );
+  const playerThreatRecent = rooms.some(
+    r => r.lastPlayerHostileAt !== undefined && tick - r.lastPlayerHostileAt < options.threatWindow,
+  );
+  const npcOnlyThreatRecent = invaderThreatRecent && !playerThreatRecent;
   const avgPressure =
     rooms.length > 0 ? rooms.reduce((sum, r) => sum + r.economyPressure, 0) / rooms.length : 1;
   const allNormal = rooms.length > 0 && rooms.every(r => r.colonyState === "normal");
@@ -225,6 +242,7 @@ export function evaluateEmpirePosture(
       0,
       liveThreat,
       expandHealth,
+      npcOnlyThreatRecent,
       "war-divest-crisis",
     );
   }
@@ -247,6 +265,7 @@ export function evaluateEmpirePosture(
           0,
           liveThreat,
           expandHealth,
+          npcOnlyThreatRecent,
           "war-exit-patience",
         );
       }
@@ -258,6 +277,7 @@ export function evaluateEmpirePosture(
         nextCounter,
         liveThreat,
         expandHealth,
+        npcOnlyThreatRecent,
         "war-sustain",
       );
     }
@@ -278,6 +298,7 @@ export function evaluateEmpirePosture(
         0,
         liveThreat,
         expandHealth,
+        npcOnlyThreatRecent,
         "war-enter-patience",
       );
     }
@@ -289,6 +310,7 @@ export function evaluateEmpirePosture(
       0,
       liveThreat,
       expandHealth,
+      npcOnlyThreatRecent,
       "threat-hold-fortify",
     );
   }
@@ -304,6 +326,7 @@ export function evaluateEmpirePosture(
         0,
         liveThreat,
         expandHealth,
+        npcOnlyThreatRecent,
         "hold-min-dwell",
       );
     }
@@ -316,6 +339,7 @@ export function evaluateEmpirePosture(
       0,
       liveThreat,
       expandHealth,
+      npcOnlyThreatRecent,
       "silence-elapsed",
     );
   }
@@ -332,6 +356,7 @@ export function evaluateEmpirePosture(
     0,
     liveThreat,
     expandHealth,
+    npcOnlyThreatRecent,
     "peace",
   );
 }
@@ -345,10 +370,12 @@ export function evaluateEmpirePosture(
  *    也恢复自治，避免一次边境路过冻结扩张却无任何产出（"恐吓税"）。
  *  现役远矿运营不受影响（newRemoteOpsAllowed 只门禁"新"远矿点，现役 op 照常）。
 
- * 扩张授权（expansionAllowed）= 扩张健康门(expandHealth) && 无活威胁 && 非战争态：
+ * 扩张授权（expansionAllowed）= 扩张健康门(expandHealth) && 无活威胁 && (非战争态 或 仅 NPC 骚扰)：
  *  - 不再要求 posture==="expand"——殖民是高承诺动作，授权门由"全面健康+无活敌"决定，
  *    与姿态显示解耦（fortify 记忆不封锁扩张）；
- *  - war 姿态仍硬性关闭扩张（战争是主动冲突，不应同时殖民）；
+ *  - war 姿态在**玩家敌意或来源不明**时硬性关闭扩张；#198-B：确认仅 NPC 过境
+ *    （invader 近期且 player 不近期）时不再拦扩张——NPC 骚扰间隔≈威胁窗，
+ *    按原语义会把扩张永久冻结（10 拍过境 → 5,000 拍冻结）。war 姿态/防御本身不变；
  *  - liveThreat 门禁保留（有活敌不打殖民，防御优先于速度）。
  */
 function finalize(
@@ -359,6 +386,7 @@ function finalize(
   warPressureTicks: number = 0,
   liveThreat: boolean = false,
   expandHealth: boolean = false,
+  npcOnlyThreatRecent: boolean = false,
   reason: PostureBranch = "peace",
 ): PostureResult {
   const since = posture === prevPosture ? prevSince : tick;
@@ -367,7 +395,7 @@ function finalize(
     reason,
     posture,
     since,
-    expansionAllowed: expandHealth && !freeze && posture !== "war",
+    expansionAllowed: expandHealth && !freeze && (posture !== "war" || npcOnlyThreatRecent),
     newRemoteOpsAllowed: !freeze,
     warPressureTicks,
   };

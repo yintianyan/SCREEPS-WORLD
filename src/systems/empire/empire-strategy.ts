@@ -56,6 +56,10 @@ export const empireStrategySystem: System = {
         colonyState: roomMem.colonyState ?? "normal",
         economyPressure: roomMem.economyPressure ?? 0,
         lastHostileAt: roomMem.lastHostileAt,
+        // #198-B：按行凶者身份分尺（room-state 同拍盖章）。战争态只在玩家敌意/
+        // 来源不明时拦扩张，确认仅 NPC 骚扰时解禁；war 姿态与防御响应不变。
+        lastInvaderHostileAt: roomMem.lastInvaderHostileAt,
+        lastPlayerHostileAt: roomMem.lastPlayerHostileAt,
         // 零滞回「此刻有敌」：snapshot.threatCreeps 已是剔除盟友的真实威胁列表。
         // 透传给姿态层，使新远矿/扩张冻结跟随真实在房威胁而非过期记忆（恐吓税修复）。
         hasLiveThreat: (snapshot.threatCreeps?.length ?? 0) > 0,

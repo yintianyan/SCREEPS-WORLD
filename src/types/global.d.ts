@@ -238,11 +238,12 @@ declare global {
      */
     lastHostileAt?: number;
     /**
-     * #152 观测专用（**当前零消费者**）：与 `lastHostileAt` 同拍盖章，但按行凶者身份分尺。
+     * 与 `lastHostileAt` 同拍盖章、按行凶者身份分尺（#152 落盘，#198-B 起有消费者）。
      * 立此因由：把 posture 钉在 `war` 的是上面那把房级尺，而段 5 的按人敌意列对 NPC 恒为 0
      * （`intelligence.ts:83-91` 显式排除 `INVADER_USERNAME`）⇒ 三十天里没有任何玩家攻击记录，
-     * 恒战的成因是 **NPC 骚扰与玩家宣战在这把尺上同价**。分尺落盘后 #151 才谈得上按来源降尾税。
-     * 两把尺都不参与任何决策，改动战争语义仍属人。
+     * 恒战的成因是 **NPC 骚扰与玩家宣战在这把尺上同价**。
+     * 消费者只有 `evaluateEmpirePosture` 的扩张门：战争态下仅当 invader 近期且 player 不近期
+     * 时解禁扩张；来源不明按玩家处理（保守）。war 姿态/防御响应/止损计数均不看这两列。
      */
     lastInvaderHostileAt?: number;
     lastPlayerHostileAt?: number;
