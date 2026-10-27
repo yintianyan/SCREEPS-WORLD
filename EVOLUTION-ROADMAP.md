@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 15:1xZ 立格，R635；上一条＝R634 格「无损缩编」；本格记录 **G6 首次稳定翻 comfortable**）
+
+**下一轮主目标：确认 G6 翻档后扩张门只剩 G0/G4 的贴线振荡**。过程：编制 37→31（自然死亡 + 2 只被政策暂停的 idle upgrader 回收，R634）→ `usage 13.13→12.13→12.07→11.93→11.84`；`upgradeTicks` 在 R614 的真实拍数语义下 **5→125→290→翻档**，`t=83,905,514` 实测 **`capacity=[comfortable, 11.84, 0]`**。**这是本代第一次稳定翻 comfortable**（此前每次都在 100 拍内被尖峰打断）。同拍门态：**G0（`posture=war`，窗口内又有 NPC 进犯）＋G4（4.8，young −0.45）** ⇒ `Readiness=NOT_READY`，`W39S56` 仍 `EVALUATED`。`Σgate 4.85`（core 5.30/young −0.45）。
+
+同轮预写＝**E711** G6 在 usage≤12 期间保持 comfortable（R614 后窗口按真实拍数、R624 的对称迟滞吸收 ≤200 拍回落）；**E712** 当 **G0 与 G4 在同一评估拍同时为真**时 `Readiness=READY`，`W39S56.readySince` 起算，500 拍后进 WAITING_EXECUTION；**E713** G4 的 4.8 是 young 孵化批次（−0.45）造成，若批次回落则回 5+；G0 受 NPC 到达间隔≈5,000 拍支配，两者同时为真的窗口可能出现也可能被下一次进犯打断。
+
 ### 4.0（10-27 14:0xZ 立格，R634；上一条＝R633 格「升级闸收益不显著」；本格做无损缩编）
 
 **下一轮主目标：只回收“政策已停用、无收入贡献”的编制，不碰生产**。普查（t=83,904,631）：`remoteHarvester` 已自然回到配额 **5 只**（W36S58 2／W37S57 2／W38S55 1，无超配）；scout 仅 1 只且已 `recycle=1`；可无损回收的只剩 **2 只被 R632 暂停的 idle upgrader**（`49-bok` TTL 971、`29-bob` 826）。已置 `recycle=true`（t=83,904,639）：它们本就 idle 不升级，回收只省维持（≈1.3 e/tick·只）与 ~0.2 CPU；demand 闸（R632）在其离场期间不会补孵。**不砍任何生产编制**。
