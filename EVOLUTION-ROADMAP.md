@@ -1190,6 +1190,8 @@
 
 同轮预写＝**E726** 换码生效后 ≤200 拍，`strategy.expansionAllowed=true` 且 `expansionDashboard.failedGates` 为空（G0 转绿），同时 `post/br` 仍是 `war/war-sustain`（证明只解扩张、未改战争语义）；**E727** `W39S56` 在 `ea=true` 起 500 拍窗口后 `EVALUATED→WAITING_EXECUTION`（R624 迟滞吸收 G4 抖动），随后 `expansion-manager` 出手（claim/colonize op 的 `id/createdAt` 可读）；**E728** 若窗口内出现玩家敌意（`lastPlayerHostileAt` 落笔且 <5,000），`ea` 必须立刻回 false——本改动的安全边界，也是唯一允许回滚的触发；**E729** G4/G6 不回退（usage ≤12.0、Σgate ≥5）；**E730** 判换码生效只认 `win` 重置或 `ea` 在 `post=war` 下翻真之一——后者本身就是新码签名（旧码该合取恒假），不得把“没生效”写成“改动无效”。
 
+**判效（16:5xZ，两发）＝E726 PASS**：①t=83,906,792（上传后首评估）`ea=true / post=war / br=war-sustain` ⇒ 新码签名成立（旧码在 war 下该合取恒假）；②t=83,906,860 `win` 由 2,375 重置到 26（换码的全局重置已发生），同发仍 `ea=true`；③t=83,906,929（rt=83,906,857 的新鲜 readiness）`failedGates=["G4: net flow(3.8)","G6: CPU tier(tight)"]` —— **G0 消失**，且姿态仍是 `war/war-sustain` ⇒ 只解扩张、未改战争语义。G4/G6 的回红是换码重置的已知代价（G4 慢 EMA 由 5.36→3.87、G6 计数从 0 且 boot 窗含 16.06 尖峰），按 R618 的 +0.4/100 拍恢复与 R635 的 11.75 稳态，E729 仍需下一窗确认（不据此改代码）。`pp` 列本代恒等于 `Game.time`＝探针 `||0` 折叠形状（未落笔），非玩家进犯；下一版探针去掉 `||0`。
+
 ### 4.0（10-27 16:3xZ 立格，R639；上一条＝R638 格「防御审计」；本格**否证“等窗口”选项**）
 
 **下一轮主目标：证明 G0 的 5,000 拍静默窗在当前 NPC 节奏下不可达，从而把扩张明确为“策略开关”而非“等待问题”**。监测器已加 `ea/post/lh` 三列（探针 796 字符，实测通过）。连续读数：`lh=[?,5008]` → 核心 `lastHostileAt` 年龄 **56** → 随后 `FIND_HOSTILE_CREEPS` 归 0（塔在 ~10 拍内清掉；R638 已见 5 轮 volley/EnemyCleared）。把 R637（0 拍）与 R638（10 拍事件）串起来：**核心房在几分钟内被至少 3 次 NPC 过境**，每次都会把 `lastHostileAt` 重置、把 `threatRecent` 再续 5,000 拍 ⇒ **war 姿态的占空比接近 100%，`expansionAllowed` 实际恒假**。这解释了 R615/R619/R637 的三次临门重置，也意味着 **“等一次 5,000 拍无进犯的窗口”不是低概率，而是与 NPC 到达率不相容**。
