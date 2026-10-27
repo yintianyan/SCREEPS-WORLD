@@ -1192,6 +1192,8 @@
 
 **判效（16:5xZ，两发）＝E726 PASS**：①t=83,906,792（上传后首评估）`ea=true / post=war / br=war-sustain` ⇒ 新码签名成立（旧码在 war 下该合取恒假）；②t=83,906,860 `win` 由 2,375 重置到 26（换码的全局重置已发生），同发仍 `ea=true`；③t=83,906,929（rt=83,906,857 的新鲜 readiness）`failedGates=["G4: net flow(3.8)","G6: CPU tier(tight)"]` —— **G0 消失**，且姿态仍是 `war/war-sustain` ⇒ 只解扩张、未改战争语义。G4/G6 的回红是换码重置的已知代价（G4 慢 EMA 由 5.36→3.87、G6 计数从 0 且 boot 窗含 16.06 尖峰），按 R618 的 +0.4/100 拍恢复与 R635 的 11.75 稳态，E729 仍需下一窗确认（不据此改代码）。`pp` 列本代恒等于 `Game.time`＝探针 `||0` 折叠形状（未落笔），非玩家进犯；下一版探针去掉 `||0`。
 
+**同轮续读（17:0xZ，无代码改动）＝恢复方向已转正、执行链前置无阻塞**：gate 三点 `core 5.463→5.881 / young −1.943→−1.832`（t=83,906,997 / 83,907,066）⇒ Σ 3.5→4.05；经济桶现读（t=83,907,079）core `nf=2649 / bk{harvested 920, repaired 159, towerSpent 420(全墙), imported 1000} / ws[4717,−6074,1200]`、young `nf=454 / bk{harvested 800, repaired 463} / ws[1716,−3589,750]` —— **本窗无孵化批次**，负 gate 是慢 EMA 尾。G6 `usage 12.53（win 226，含 boot 顶点）/ upgradeTicks=0`，pre-boot 稳态 11.75 ⇒ 等窗自然回落。执行链前置逐项现读：`kernel.tier=healthy`／`bucket 10,000`／`expansionPausedUntil=83,810,972`（早过期）／cooldown 10,000 且上次完成远早于 10k 拍／plan `W39S56 st=EVALUATED, rd=null, ua=83,906,984`。⇒ E727 ETA ≈1h（G4 再涨 ~1 需 5~6 个 pass，之后 500 拍 readySince），监测器覆盖；不改阈值、不缩短迟滞。
+
 ### 4.0（10-27 16:3xZ 立格，R639；上一条＝R638 格「防御审计」；本格**否证“等窗口”选项**）
 
 **下一轮主目标：证明 G0 的 5,000 拍静默窗在当前 NPC 节奏下不可达，从而把扩张明确为“策略开关”而非“等待问题”**。监测器已加 `ea/post/lh` 三列（探针 796 字符，实测通过）。连续读数：`lh=[?,5008]` → 核心 `lastHostileAt` 年龄 **56** → 随后 `FIND_HOSTILE_CREEPS` 归 0（塔在 ~10 拍内清掉；R638 已见 5 轮 volley/EnemyCleared）。把 R637（0 拍）与 R638（10 拍事件）串起来：**核心房在几分钟内被至少 3 次 NPC 过境**，每次都会把 `lastHostileAt` 重置、把 `threatRecent` 再续 5,000 拍 ⇒ **war 姿态的占空比接近 100%，`expansionAllowed` 实际恒假**。这解释了 R615/R619/R637 的三次临门重置，也意味着 **“等一次 5,000 拍无进犯的窗口”不是低概率，而是与 NPC 到达率不相容**。
