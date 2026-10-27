@@ -290,6 +290,10 @@ export function evaluateDemand(
   tick: number,
   /** 全帝国 gateNetFlow 之和（system 层现读后传入；domain 保持纯函数）。 */
   empireGateSum = 0,
+  /** R617：本房是否处于“扩张推进态”（RCL≥7 且存在 EVALUATED/… 计划）。
+   * 为 true 时升级补孵的净流门槛抬到 `upgradeReserveNetFlow`；缺省 false 保持原语义。
+   * 由 spawn-manager 现读 Memory 后注入，domain 保持纯函数。 */
+  expansionPush = false,
 ): DemandResult {
   const requests: SpawnRequest[] = [];
   const home = snapshot.roomName;
@@ -893,7 +897,9 @@ export function evaluateDemand(
   const allowUpgrader =
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
     !rcl8NoUpgrade &&
-    (empireGateSum >= 0 || hasDowngradeRisk || earlyRoom);
+    (empireGateSum >= (expansionPush ? CONFIG.economy.upgradeReserveNetFlow : 0) ||
+      hasDowngradeRisk ||
+      earlyRoom);
 
   // #85：本 tick 需求阶梯对 upgrader **实际生效的结构钳位**（undefined = 该分支直接用 maxCount）。
   // 存在的理由：调优器只看"在场数 ≥ 当前上限"就提 upgrader.maxCount ↑，而很多分支根本不用 maxCount

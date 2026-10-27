@@ -176,3 +176,16 @@ export function updatePlanStatus(
       newStatus === "CANCELLED" || newStatus === "BLACKLISTED" ? reason : plan.cancelReason,
   };
 }
+
+/** R617：该计划状态是否意味着“帝国处于扩张推进态”。
+ * 用途：升级预留闸（只在扩张计划已评估/待执行时，把升级刹车抬到净流门槛）。
+ * 纯函数；终态（COMPLETED/CANCELLED/BLACKLISTED）与 DISCOVERED 不算。 */
+export function isExpansionPushPlan(status: PlanStatus): boolean {
+  return (
+    status === "EVALUATED" ||
+    status === "READY" ||
+    status === "APPROVED" ||
+    status === "WAITING_EXECUTION" ||
+    status === "EXECUTING"
+  );
+}

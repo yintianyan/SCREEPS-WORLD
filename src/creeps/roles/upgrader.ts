@@ -1,6 +1,7 @@
 /** Upgrader */
 import { CONFIG } from "../../config";
 import { resolveControllerDowngradeRisk } from "../../domain/economy/downgrade-risk";
+import { isExpansionPushPlan } from "../../domain/expansion/plan";
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
@@ -105,11 +106,15 @@ function upgraderGate(ac: ActionContext): boolean {
   const claimSecure = Memory.rooms[ac.snapshot.roomName]?.claimSecure ?? false;
   if (claimSecure) return true;
 
-  // R594 帝国失血闸：全帝国 `gateNetFlow` 之和为负时暂停升级。
-  // 升级是最大的可支配支出（现场 14/tick），而幼房 RCL8 尚需 10.9M progress ⇒ 无近期回报；
-  // 失血期先保储备。降级风险（isEmergency）与 claimSecure 已在上方豁免。
+  // R594 帝国失血闸 → R617 限定版扩张预留：全帝国 `gateNetFlow` 之和为负时暂停升级；
+  // **仅当**本房 RCL≥7 且存在扩张推进态计划时，把刹车抬到 `upgradeReserveNetFlow`（5），
+  // 把盈余留给扩张门 G4。早期房/无计划/终态计划保持原语义（0），避免 RCL 冲刺被压掉。
   const sumGate = Object.values(Memory.kernel?.gateNetFlow ?? {}).reduce((a, b) => a + b, 0);
-  if (sumGate < 0) return false;
+  const expansionPush =
+    ac.snapshot.rcl >= 7 &&
+    (Memory.kernel?.expansionPlans ?? []).some(p => isExpansionPushPlan(p.st));
+  const gateFloor = expansionPush ? CONFIG.economy.upgradeReserveNetFlow : 0;
+  if (sumGate < gateFloor) return false;
 
   // RCL8 满级后升级零收益（controller.progress=0）：无降级风险时停烧。
   // 存量 upgrader 直接 idle（不取能不升级），demand 已停孵，自然老死后退出；

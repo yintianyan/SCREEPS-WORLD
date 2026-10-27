@@ -721,3 +721,39 @@ describe("upgrader — claim-secure 护栏（脆弱新房放宽取能地板）",
     expect(creep.harvest).toHaveBeenCalledWith(source);
   });
 });
+
+// R617：限定版扩张预留——只有“本房 RCL≥7 且有扩张推进态计划”才把刹车抬到 5。
+describe("upgrader — 扩张推进态的升级预留（R617 限定版）", () => {
+  it("有计划(EVALUATED) 且 RCL7、净流 3<5 ⇒ 暂停升级", () => {
+    (globalThis as any).Memory.kernel = {
+      gateNetFlow: { A: 2, B: 1 },
+      expansionPlans: [{ st: "EVALUATED" }],
+    };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, rcl: 7 });
+    const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
+    upgraderRole.run(creep, mockContext(snap));
+    expect(creep.upgradeController).not.toHaveBeenCalled();
+  });
+
+  it("无计划时同净流 3 ⇒ 按原语义放行（控制组）", () => {
+    (globalThis as any).Memory.kernel = { gateNetFlow: { A: 2, B: 1 } };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, rcl: 7 });
+    const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
+    upgraderRole.run(creep, mockContext(snap));
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+
+  it("有计划但净流达 6≥5 ⇒ 放行", () => {
+    (globalThis as any).Memory.kernel = {
+      gateNetFlow: { A: 3, B: 3 },
+      expansionPlans: [{ st: "EVALUATED" }],
+    };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, rcl: 7 });
+    const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
+    upgraderRole.run(creep, mockContext(snap));
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+});

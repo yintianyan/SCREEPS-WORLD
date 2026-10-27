@@ -422,6 +422,13 @@ export const CONFIG = {
   },
 
   economy: {
+    /** R617：扩张推进态的升级预留净流（e/tick）。**仅在**本房 RCL≥7 且存在
+     * `isExpansionPushPlan` 计划（EVALUATED/READY/APPROVED/WAITING_EXECUTION/EXECUTING）
+     * 时，升级刹车从 0 抬到本值——把盈余留给扩张门 G4（`readiness` 要求 ΣnetFlow ≥5）。
+     * 为什么限定：R607 的全局版（无条件抬到 5）会让 RCL 冲刺/站桩取能链等 15 例测试
+     * 变红，说明它是策略级而不是局部优化；限定版只在“确有扩张计划且本房已成熟”时生效，
+     * 早期房、无计划、终态计划都保持原语义（`Σgate<0` 才停）。可逆：删除该值即回到 0。 */
+    upgradeReserveNetFlow: 5,
     harvestWorkingParts: 5,
     /** 物流配额归一化的基准运力（6 CARRY = 300）：hauler 的 container 积压启发式
      * 与 distributor 的 fillTarget 折算均按此标定；实际运力更大时头数折减、更小时

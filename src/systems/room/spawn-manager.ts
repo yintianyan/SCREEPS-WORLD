@@ -1,6 +1,7 @@
 import { CONFIG } from "../../config";
 import { bodyCost, degradeBody } from "../../config/bodies";
 import { getRoleBounds } from "../../config/tuned";
+import { isExpansionPushPlan } from "../../domain/expansion/plan";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import {
   evaluateDemand,
@@ -183,6 +184,9 @@ export const spawnManagerSystem: System = {
         (a, b) => a + b,
         0,
       );
+      const expansionPush =
+        (snapshot.rcl ?? 0) >= 7 &&
+        (Memory.kernel?.expansionPlans ?? []).some(p => isExpansionPushPlan(p.st));
       const demandResult = evaluateDemand(
         snapshot,
         queue,
@@ -192,6 +196,7 @@ export const spawnManagerSystem: System = {
         roomCtx,
         ctx.tick,
         empireGateSum,
+        expansionPush,
       );
       const { requests, nextHysteresis } = demandResult;
       // #85：把需求阶梯的**结构钳位**抄进 Memory.kernel.demandClamps，供调优器判断
