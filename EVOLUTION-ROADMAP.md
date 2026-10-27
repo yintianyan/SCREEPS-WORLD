@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 12:2xZ 立格，R627；上一条＝R626 格「CPU 预算闸」；本格记录新线强交付与 reservation 临界）
+
+**下一轮主目标：判断 W38S58 这一世能否在 5,000 拍内回本，并盯住 reservation 断档风险**。`t=83,903,281`：age **1,796**，`d 1,349→3,349（210 拍 +2,000，≈9.5/拍）`，但 `s 13,550→25,500`（首孵＋换代叠加）、`i 10,000` ⇒ 净 **−32,151**。该房 **无活敌**，8 名成员 TTL 1,196–1,450（都健康，只有 1 只 TTL 50 的濒死替补），reserver TTL 322 在途；**reservation 只剩 133 拍**——若在 ~100 拍内没续上，产量会减半、ROI 判决进一步恶化。若交付维持 9.5/拍且 `s` 不再增长，到 age 5,000 时 `d≈35K` 对 `s+i≈35.5K` ⇒ **仍在临界线附近**，最终由 ROI 判（`closeNetRate=0.5`）。G6 仍是**唯一门**：`capacity=tight / usage 13.31`（编制 43）；`Σgate = core 6.67 + young −1.27 = 5.40`（G4 稳固通过）。
+
+同轮预写＝**E686** reservation 在 TTL 322 的 reserver 到岗后回升（否则 50 拍内见 0 并立刻降价产量）；**E687** age 5,000 时若 `s` 停在 ~25.5K 且 `d≥35K`，该线可能勉强通过；若 `s` 继续涨（换代死亡），按期废弃；**E688** 在此之前 G6 不会自愈（编制 43、usage>13），扩张继续停在“只差 CPU”这一步。
+
 ### 4.0（10-27 12:1xZ 立格，R626；上一条＝R625 格「G4 通过、只剩 G6」；本格加新开远矿的 CPU 预算闸）
 
 **下一轮主目标：别让“新开远矿”把扩张的最后一道门（G6）自己顶死**。现场：G4 全过后只剩 G6；但编制 34→**43**（remoteHauler 13／remoteHarvester 7／scout 2），`cpuRate.total` 11.6→**13.04**、tier 从 comfortable 掉回 tight。增量来自 **W38S58 再开点**（`createdAt=83,901,485`，上一世同房因净负被废弃、10,000 冷却到期后重选；这一世 age 1,586 时 `d=1,349 / s=13,550 / i=10,000`，两座 container 已建但吞吐尚未起来）＋2 只 scout。**机制盲点**：`newRemoteOpsAllowed && roomReadyForNewRemote(...)` 只看姿态与房间成熟度，**不看 CPU 余量**；在扩张推进态下新开线 = 把 G6 门自己顶死。修法＝纯函数 `newRemoteCpuAllowed(tier, expansionPush)`：推进态下只有 `abundant/comfortable` 允许**新开**远矿，`tight/constrained` 跳过；非推进态不拦，现役 op 的维护/替换完全不受影响。
