@@ -1180,6 +1180,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 12:4xZ 立格，R629；上一条＝R628 格「不提前杀/等判决」；本格确认“只差 G6”的稳态）
+
+**下一轮主目标：确认扩张已进入“只差 CPU”的稳态，并防止升级恒温器把 G4 压回门槛下**。`t=83,903,447`：`gateNetFlow` core **+7.08** / young **−1.25** ⇒ **Σ +5.83**；`expansionDashboard.failedGates` 仅 **G6（tight, usage 13.18）**；幼房 upgrader `59-bmm`（TTL 240）在升级——这是 R617 的**恒温器**在起作用：`Σgate≥5` 才放行升级、降回 <5 即暂停，所以 G4 会贴着 5 上下小幅波动，而 R624 的 200 拍对称迟滞正好吸收这种波动。`W39S56` 仍 `EVALUATED`（readiness 未 READY），其 500 拍迟滞尚未起算（要等 G6 comfortable）。经济侧：core 的强流入（remote imported）抵消 young 的换代孵化与清算费用；`Σ` 稳定在 5.4–5.9。
+
+**结论**：当前不存在可自办的代码项能把 G6 从 13.18 拉到 ≤12.0（需 −1.2 CPU；砍 8–10 只 = 砍收入；已有的安全降频已用尽）。⇒ **扩张的下一步只取决于 #195（买 CPU Unlock）或 W38S58 判决后编制自然缩到 ~36 以下再观察**。本轮不动代码，保持监测。
+
+同轮预写＝**E692** 若 Σgate 长期在 5.0–6.0 的恒温带内，G4 不会跌破 5 超过 200 拍（R624 迟滞可吸收），`W39S56` 不会因 G4 被清零；**E693** W38S58 age 5,000 判决后（预计 NetRateLoss），编制回落、usage 有望降至 12.4–12.7；**E694** 若届时仍 >12，则 G6 只有购买解。
+
 ### 4.0（10-27 12:3xZ 立格，R628；上一条＝R627 格「新线强交付/预算临界」；本格判定“不提前杀”，并确认 G6 只能等编制/购买）
 
 **下一轮主目标：把 W38S58 的“沉没损失 vs 边际收益”分清，避免用沉没成本做提前处置**。`t=83,903,429`：reservation **49 拍**、房内 `src=[1340,3000]`、`con=[2000,65]`（一个源满、一个 container 满）⇒ 是**运力/预约瓶颈**不是断链；成员 7 只（2 harv、4 hauler、1 reserver TTL 182 在途）。账本 `d=3,349 / s=25,500 / i=10,000`（净 −32,151）——但 `s/i` 是**沉没成本**；**边际**看：交付 ~5–9 e/拍 vs 维持 ~4 e/拍（8 只 ≈0.9 CPU 摊成能量同价）⇒ 仍为正，且 age 5,000 时无论交付怎样都会被 ROI 判废（d 上界 ~30K < s+i 35.5K）。**因此不提前杀**：留着收边际能量，到 5,000 由 ROI 收摊（与 R604/R627 的“让法律决定”一致）。
