@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 12:4xZ 立格，R630；上一条＝R629 格「只差 G6 的稳态」；本格按 ROI 语义提前收摊 W38S58）
+
+**下一轮主目标：用“两世同型 + 当场停摆”的证据提前结束 W38S58 的试运行，腾出 CPU 并止住换代**。处置（t=83,903,478，可逆、与 `abandonOp` 同字段）：`state="abandoned"`、`stateSince=t`、`dangerUntil=t+10,000`（`econCooldown`）；账本保留 `d=4,349 / s=25,500 / i=10,000`。依据：①上一世同房已因净负被废弃（R604 前史）；②这一世 reservation 只剩 **49 拍**、交付一度 140 拍停摆、`s` 已 25,500（首孵+换代叠加），按 d 上界 ~30K < s+i 35.5K 必在 age 5,000 被 NetRateLoss 判废；③它带来 ~0.9 CPU 与持续换代支出，是 G6（唯一扩张门）的直接压力源。**同拍验证 R586 接上**：`t=83,903,516` 剩余 7 名成员**全部 `recycle=1`**（在册 43→42，另 1 只已寿终）。
+
+同轮预写＝**E695** 7 只退场后（≤1,000 拍）`usage` 由 13.33 降 ≥0.6（目标 ≤12.7）；**E696** 若仍 >12.0，需再削 ~0.4–0.7（scout/超编或自然 haulerNeed 收缩）才可能翻 comfortable；**E697** 退役期间 G4 不因 young 的孵化停止而恶化（core +7.78 足以托住 Σ）；**E698** 若翻档，`W39S56` 的 `readySince` 开始累计并最终 WAITING_EXECUTION。
+
 ### 4.0（10-27 12:4xZ 立格，R629；上一条＝R628 格「不提前杀/等判决」；本格确认“只差 G6”的稳态）
 
 **下一轮主目标：确认扩张已进入“只差 CPU”的稳态，并防止升级恒温器把 G4 压回门槛下**。`t=83,903,447`：`gateNetFlow` core **+7.08** / young **−1.25** ⇒ **Σ +5.83**；`expansionDashboard.failedGates` 仅 **G6（tight, usage 13.18）**；幼房 upgrader `59-bmm`（TTL 240）在升级——这是 R617 的**恒温器**在起作用：`Σgate≥5` 才放行升级、降回 <5 即暂停，所以 G4 会贴着 5 上下小幅波动，而 R624 的 200 拍对称迟滞正好吸收这种波动。`W39S56` 仍 `EVALUATED`（readiness 未 READY），其 500 拍迟滞尚未起算（要等 G6 comfortable）。经济侧：core 的强流入（remote imported）抵消 young 的换代孵化与清算费用；`Σ` 稳定在 5.4–5.9。
