@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 10:4xZ 立格，R621；上一条＝R620 格「只剩 G4」；本格把 G4 的拖累归因到“孵化批次 + 清算费用”）
+
+**下一轮主目标：解释 Σgate 卡在 ~4.0 的成因（G4 缺口 ~1.1）**。`t=83,901,790`：`ea=true`、`posture=fortify`、`Blocked=G4`、`Readiness=NOT_READY`、`Budget 116,529/314,940`；`gateNetFlow` core **+4.51** / young **−0.51** ⇒ Σ **+4.00**，G4 面板 **3.9**（10 分钟前 Σ 4.01，基本走平）。同拍幼房 `economy.bk`＝`{harvested:1000, spawned:2650, imported:400}` ⇒ **单窗孵化 2,650（≈53 e/拍）**，是 young gate 为负的直接来源（远矿编制换代的批量孵化，属 R584–R587 已量过的“编制维持”结构成本）；核心侧终端仍在清算（`stats.trade.lastTick=83,901,692`，core 终端尚有 GO 8,732/G 5,000/K 4,923/O 3,000…），`tradeFee` 计入消耗。⇒ **Σgate 的缺口不是某条泄漏，而是“编制换代批次 + 清算费用”两项结构性支出**；两者都属编制/市场政策，本轮不动（市场干预需属人授权）。
+
+同轮预写＝**E668** 若孵化批次回落且清算收尾，Σgate 将在接下来 1,000–2,000 拍内摸到 5（G4/G3 同步转绿）；**E669** 若 Σgate 连续 2,000 拍停在 4.0±0.3，则缺口是编制维持的稳态成本（需削减编制或接受不扩张），不是等待问题；**E670** 期间任何新进犯只影响 G0/G1 的瞬时读数，不改 G4。
+
 ### 4.0（10-27 10:3xZ 立格，R620；上一条＝R619 格「G0 临界/G2 迟滞」；本格记录**只剩 G4**）
 
 **下一轮主目标：确认 G4 是扩张的最后一道门，并把它逼近 5**。`t=83,901,659` 现读 `failedGates = ["G4: net flow(v=3.8|netFlow ≥ 5)"]`——**G0/G2/G3 全部转绿**（E661/E662 兑现）：此前 27 拍前的 readiness 已通过 G0，`W37S58` 的 defense 迟滞也已退出（该房 colonyState 已回 normal）。`gateNetFlow` core **+4.35** / young **−0.34** ⇒ **Σ +4.01**（R619 时 3.40），`expansionDashboard` 的 G4 值 **3.8**。**唯一剩余缺口 ≈ 0.9–1.2**。同拍 `W38S56` 有 **1 个活敌**（`ea=false` 是瞬间态；fortify 不硬关扩张，G0 的评估已过），但若在 readiness 评估拍撞上活敌，G0 会瞬时转红——属正常门控，不是回归。
