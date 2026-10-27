@@ -1180,6 +1180,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-27 12:0xZ 立格，R625；上一条＝R624 格「对称迟滞」；本格记录**G4 通过、只剩 G6**）
+
+**下一轮主目标：确认 G4 在部署后仍保持通过，并把 G6 等回 comfortable**。`t=83,902,918`（R624 激活后 ~150 拍）：`failedGates = ["G6: CPU tier(v=constrained|tier ≤ comfortable)"]`——**G4/G3/G0/G2 全过**；`gateNetFlow core +5.81 / young −0.44 ⇒ Σ +5.37`（G4 门槛 5）。G6 因部署重置回 `constrained`（usage 13.33，win 未稳；`upgradeTicks 180` 正在按修正后的真实拍数累计）。`W39S56` 仍 `EVALUATED`、`plans waiting 0`：readiness 尚未 READY（被 G6 挡），所以计划迟滞还没起算；一旦 G6 回 `comfortable` 并稳定，计划才开始 500 拍累积（R624 后 ≤200 拍的回落不再清零）。
+
+同轮预写＝**E680** G6 在 win≥600 后回落到 ≤12（真 reset 前为 11.6），300 拍后翻 comfortable；**E681** 之后 `W39S56` 的 `readySince` 落盘并在 500 拍内到 `READY`；**E682** 若 G6 长期停在 12–13.5，则扩张被“CPU 振幅”而非收入挡住——届时需削减编制或购买解锁（#195）。
+
 ### 4.0（10-27 11:3xZ 立格，R624；上一条＝R623 格「执行=500 拍迟滞」；本格修迟滞不对称）
 
 **下一轮主目标：让 500 拍升档窗不被 G4 的正常抖动清零**。现场：11:07 时 G4 5.4（READY、`readySince=83,902,084`），11:28 时 G4 **4.8**（NOT_READY），计划 `rd` 字段被清空 ⇒ **500 拍确认窗永远走不完**。根因＝`applyHysteresis` 在任一 not-ready 拍就 `readySince: undefined`，而 `downgradeTicks=200` 的语义本来就是“降档需持续不满足”，升档计时的丢弃却没有对称迟滞。修法：not-ready 持续 **< downgradeTicks(200)** 时**保留** `readySince`（进度继续累计），持续 ≥200 才清零；`READY→EVALUATED` 的降档逻辑不变。
