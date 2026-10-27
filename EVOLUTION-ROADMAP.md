@@ -1149,6 +1149,8 @@
 
 - **#198（10-25 R615）NPC 骚扰把帝国长期钉在 `war` ⇒ G0/`expansionAllowed` 恒假（扩张第四道门）**。证据：`posture=war / branch=war-sustain / since 83,865,399（4,691 拍）/ warPressureTicks=0`，五房当场 0 活敌，但 `lastHostileAt` 距核心 **3,086 拍**、幼房 **2,303 拍**（< `threatWindow=5,000`），远矿 3 条 `dangerUntil` 仍在计时 ⇒ `threatRecent` 合法为真；`warPressureTicks=0`（压力低于 `warMaxPressure`）⇒ 走 `war-sustain` 而非 `war-exit-patience`。**这不是闩锁 bug，是设计税（#151/#184 族）**：war 期 `expansionAllowed` 被合取折成恒假，扩张要等两房 `lastHostileAt` 都静默 >5,000 拍。**可选方案（属人）**：A) 维持现状（接受 NPC 骚扰支配扩张时机）；B) 把「war 姿态」与「扩张禁令」解耦（war 只管军事/防御，不折 `expansionAllowed`，需重审 G0 语义）；C) 调整 `threatWindow`/`warMaxPressure` 的 NPC 权重（#151 按来源降尾税）。**验收（B/C 任一）**：实施后 `expansionAllowed` 不再被单次 NPC 进犯压 5,000 拍；且 `posture=war` 期间的防御编队/塔仍按现状工作。**状态（10-27 R640）＝已按 B 窄口径落地并部署**（sha `be2763b44329`）：war 只在 invader 近期且 player 不近期时解禁扩张；玩家敌意/来源不明仍拦，`liveThreat` 冻结优先；回滚＝`posture.ts` 的 `finalize` 那一行改回 `posture !== "war"`（其余接线保留无害）。
 
+- **#199（10-27 R642）扩张的经济路径（三选一，属人）**。证据：G0 已清（#198-B 落地）、G4 现 `Σgate≈5.5`、G6 稳态 `usage 12.2–12.6 > 12.0`；`cpuUnlock` 最便宜卖单 **378,325,313 credits / 1 个**（次档 470.4M/5、480M/10），账上 **117,597,960** ⇒ **买不起**；三条远矿线 ROI **4.07 / 1.285 / 0.987 e/tick** 均过 0.5 法阈，退任一条都会把 G4 打回 <5（退 W37S57：core gate 6.26→~4.9；退 W38S55：Σ 5.5→~4.5）。方案：**A（默认，推荐）** 维持产能、不扩张，把 credits 攒到 378.3M 再买 CPU Unlock（现状 +~3M/6h，需另找财富增速）；**B** 授权退一条远矿线换 ~0.5–0.7 CPU（短期少 1–1.3 e/tick，READY 只能赌慢 EMA 的暂态窗口，工程上是“赌闸”，不推荐）；**C** 授权市场卖出库存矿物/提高 credits 增速（当前市场策略为只读）。**验收**：选定后先写死对应门的判据（#195 credits／G4／G6），再执行，不以降阈值为手段。
+
 ## 3.6 判等效外部事件（不是我的修没生效）
 
 - **#48 / #35 跨房交付成对入账**：本窗证据——两房 `exported` 皆空、在场 9 只跨房 creep **全是远矿角色**
@@ -1179,6 +1181,12 @@
 同轮预写＝**E603** 部署后 ≤300 拍，`globalThis.actionCpu` 的 top-5 键能点名“某角色/某动作 resolve|execute”且其单次成本可复算（多次采样一致）；**E604** profiling 自身开销使 total 上升 ≤0.6/tick（仅记录，不作判据）；**E605** 热点确定后，R599 必须同轮把 `actionProfiling` 关回 false（进程判据，防调试开关长期驻留）。
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
+
+### 4.0（10-27 19:4xZ 立格，R642；上一条＝R641 格「侦察 CPU 闸」；本格更正 #195 市场前提，并把扩张改为经济决策 #199）
+
+**主目标：核实扩张的唯一剩余路径（CPU）是否可用。** 现读：市场最便宜 `cpuUnlock` **378,325,313 / 1 个**（470.4M/5、480M/10），credits **117,597,960** ⇒ **买不起**（#195 的 48M/95M 前提作废）。G6 稳态 12.2–12.6（`avg10` 12.6）>12.0；非生产可减项上界 ~0.34 CPU；远矿三条 ROI 4.07/1.285/0.987 e/tick，退线换 CPU 会把 G4 打回 <5（core→~4.9 或 Σ→~4.5）。⇒ 不存在自办的「再优化一点就能扩张」路径；选择登记为 **#199**（A 攒 credits／B 赌闸退线／C 授权市场）。
+
+**附：下一轮 CPU 归属候选（未验证）**：4 只本地 harvester 探针时全部满载 50/50 且 `mode=work`；`byRole.harvester=1.22`（≈0.30/只）。若满载时仍在逐拍尝试 harvest/transfer，浪费量级可达 0.3–0.5 CPU。验证方式＝短窗 `actionProfiling=true`（需两次部署，成本 ~2×1,500 拍 G6 窗，暂不做）。⇒ 在拿到 #199 决策前不改代码。
 
 ### 4.0（10-27 18:5xZ 立格，R641；上一条＝R640 格「#198-B 落地＋侦察跑步机」；本格给侦察开新任务加 CPU 闸并部署）
 
