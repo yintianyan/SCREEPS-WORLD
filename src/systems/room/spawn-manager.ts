@@ -446,6 +446,18 @@ export function remoteSpawnPovertyBlocked(
   return !key.includes(":repl:") && storageEnergy < CONFIG.remote.roomMinStorage;
 }
 
+/**
+ * R647：恢复预留在低容量房上的钳位（纯函数，导出供单测）。
+ *
+ * RCL1-2 房容量 300，而 `recoveryEnergyReserve=200`；`replacementHorizonTicks=600`
+ * 又让「采集者临近换代」近乎常真 ⇒ 除采集者外的请求全部孵不出，spawn 满能空转
+ * （线上 W38S58：Spawn7 300e idle，upgrader/hauler 分别 block=noDegrade/degradeGateClosed）。
+ * 预留机制服务于 RCL4+ 的仓储经济；<400 容量下「留 2/3 能量不花」严格劣于「出小 body」。
+ */
+export function spawnReserveFor(energyCapacityAvailable: number, computedReserve: number): number {
+  return energyCapacityAvailable < 400 ? 0 : computedReserve;
+}
+
 export function trySpawn(
   snapshot: import("../../kernel/contracts").RoomSnapshot,
   queue: SpawnRequest[],
@@ -492,6 +504,11 @@ export function trySpawn(
   if (replacementReserve) {
     reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }
+  // R647：低容量房（RCL1-2，<400）不持有恢复预留。200 的预留占掉 300 容量的 2/3，
+  // 而 replacementHorizonTicks=600 让「采集者临近换代」在这类房里近乎常真 ⇒ 除采集者外
+  // 所有请求永久落进 noDegrade/degradeGateClosed，spawn 满能空转、新房停在 RCL2
+  // （线上 W38S58：Spawn7 300e idle、队列 upgrader/hauler 双双 block）。
+  reserve = spawnReserveFor(snapshot.energyCapacityAvailable ?? 0, reserve);
 
   // 生存否决：本房有"不孵就要出事"的请求在排队时，不孵其他请求。
   // 用 survival 而不是 priority === 0 —— 跨房援运/远矿/编队也可能是 P0（帝国层面急），

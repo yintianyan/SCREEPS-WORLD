@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-28 09:2xZ 立格，R647；上一条＝R646 格「bootstrap 交接」；本格修掉**低容量房的孵化预算死锁**）
+
+**主目标：解开新房 W38S58 的「spawn 满能空转」。** 09:20Z 现场：`expansion.state=economic_startup`（cp=3）、房间 `recovery/crisis`、控制器 **RCL2 / progress 150 / ttd 2,427**、两个 container 各 `2000/2000`、3 harvester + 2 upgrader（**0 能量、acquire**）+ 1 distributor；`Spawn7` **300/300 且未孵化**，队列 `upgrader[work,carry,move,move]`（250e）`block=noDegrade`、`hauler[carry×3,move×3]`（300e）`block=degradeGateClosed`。⇒ 真因：`recoveryEnergyReserve=200` 在 300 容量房上占掉 2/3 预算，而 `replacementHorizonTicks=600` 让「采集者临近换代」在这类房里近乎常真 ⇒ 非采集者请求**永久**孵不出，upgrader 无补给、控制器在降级倒计时上。
+
+**修法（窄口径）**：新增纯函数 `spawnReserveFor(capacity, reserve)` —— `capacity < 400`（RCL1-2）时预留归零，RCL3+ 行为不变；`trySpawn` 在算完三档 reserve 后统一钳位。理由：预留机制服务 RCL4+ 的仓储经济，300 容量下「留 2/3 能量」严格劣于「出小 body」。**闸门**：typecheck 0；unit 422 文件·5,568 例；integration 30·239 全绿。**部署**：sha `7d83966fad30`（线上 807,696 B 同 sha，上传 804.1 KB）。
+
+⚠️登记设计债（L1）：**遗留 storage 让 RCL2 房的 `snapshot.storage` 非空 ⇒ `earlyRoom=false`、`econSnap` 生效**，多处「有 storage＝成熟房」的假设在回 claim 房上失真（RCL 才是成熟度真相源）。本轮只修最痛的一处（孵化预算），其余按实测再动。
+
+同轮预写＝**E742** 换码生效后 200 拍内 `Spawn7` 开始孵化（`spawning≠null`），队列 `noDegrade/degradeGateClosed` 清零，upgrader 出场后从 container 取能；**E743** 控制器进度在 500 拍内从 150 明显上升（≥1/拍级），`ttd` 回升、降级风险解除；**E744** 新房 phase 由 crisis→recovery→（RCL3 落 tower 后）growth，但 `ea` 仍 false——`youngestMature` 要求最嫩房 **RCL5**，这是设计而非缺陷，6 条 WAITING 计划继续排队。
+
 ### 4.0（10-27 21:5xZ 立格，R645；上一条＝R643 格「G6 翻档」；本格记录**计划晋升 + 首次扩张执行**）
 
 **主目标：确认 #198-B 之后的第一条扩张计划能被 readiness 晋升并由 expansion-manager 接手。** 时间线：`pl.rd=83,910,284`（G4 5.08 与 G6 comfortable 同拍）→ 500 拍后 t=83,910,850 `W39S56` 变 **WAITING_EXECUTION**；同拍 planner 把 7 条计划一起晋升（W39S56/W39S55/W39S54/W37S56/W37S54/W39S57），`tryConsumePlan` 按可见性挑了**最早且可见**的 `W38S58`（planId `W38S58@83444484`，中立/无主/0 敌，controller lv0）→ `Memory.kernel.expansion={state:preparing→claiming, target:W38S58, startedAt:83,910,857}`，计划转 EXECUTING。⇒ **E727/E733 兑现**（首个 WAITING_EXECUTION→claiming）。
