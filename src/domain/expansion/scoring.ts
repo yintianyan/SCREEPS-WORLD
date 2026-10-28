@@ -11,6 +11,10 @@ export interface ScoringOptions {
   w5: number; // rivalProximity 权重（减项）
   w6: number; // defensibility 权重
   w7: number; // layoutFitness 权重
+  /** R651：地形适配权重（wallRatio + 锚点到 controller 距离）。 */
+  w8: number;
+  /** R651：center 房加成（4 源且必有 controller）。 */
+  centerBonus: number;
   /** 合格阈值（≥ 此值 → QUALIFIED）。 */
   qualificationThreshold: number;
   /** 2/3 source 房的基准价值。 */
@@ -29,12 +33,15 @@ export interface ScoringOptions {
 
 export const DEFAULT_SCORING_OPTIONS: ScoringOptions = {
   w1: 0.25,
-  w2: 0.1,
+  // R651：mineral 与 layoutFitness（恒 0.5 的常数项）各让 0.05 给 terrainFit。
+  w2: 0.05,
   w3: 0.15,
   w4: 0.15,
   w5: 0.15,
   w6: 0.1,
-  w7: 0.1,
+  w7: 0.05,
+  w8: 0.15,
+  centerBonus: 0.1,
   qualificationThreshold: 0.5,
   twoSourceValue: 1.0,
   oneSourceValue: 0.5,
@@ -144,6 +151,17 @@ export function scoreCandidate(
   // 模板适配校验结果（未检为 undefined → 取保守 0.5）
   const layoutFitness = layoutFitnessScore ?? 0.5;
 
+  // ── 8. terrainFit（R651）──
+  // 未侦察到地形指标时取 0.5（与 layoutFitness 同待遇），不制造假优势。
+  const wallRatio = candidate.terrain.wallRatio;
+  const anchorCtrl = candidate.terrain.anchorToController;
+  const terrainFit =
+    wallRatio !== undefined && anchorCtrl !== undefined
+      ? clamp01(1 - wallRatio * 2) * clamp01(1 - anchorCtrl / 30)
+      : 0.5;
+  // center 房：4 源 + 必有 controller，是扩张的第一梯队；highway/sk 已在 buildCandidate 否决。
+  const centerBonus = candidate.kind === "center" ? options.centerBonus : 0;
+
   // ── 加权总分 ──
   // 注意：公式中 rivalProximity 是减项，但在归一化时我们将其作为
   // "负面影响"处理：score = sum(positive) - w5 * rivalProximity
@@ -156,7 +174,9 @@ export function scoreCandidate(
       options.w3 * distanceScore +
       options.w4 * neighborSafety +
       options.w6 * defensibility +
-      options.w7 * layoutFitness -
+      options.w7 * layoutFitness +
+      options.w8 * terrainFit +
+      centerBonus -
       options.w5 * rivalProximity,
   );
 
@@ -168,6 +188,7 @@ export function scoreCandidate(
     rivalProximity,
     defensibility,
     layoutFitness,
+    terrainFit,
     total: adjustedTotal,
   };
 

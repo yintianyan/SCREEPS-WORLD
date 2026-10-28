@@ -1,4 +1,6 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
+import { summarizeTerrain } from "../domain/layout/terrain-intel";
+import { classifyRoomByName } from "../domain/intel";
 import type { ColonyPhase } from "../domain/economy/phase";
 import {
   computeSealedExits,
@@ -234,6 +236,12 @@ function refreshNeighborIntel(roomName: string, tick: number): void {
  * sealedExits（被墙完全封死的出口）。采集点三处（observer 捕获 / 邻房刷新 /
  * scout 视野）共用本函数，口径一致。 */
 interface RoomVisionIntel {
+  // R651：地形选点指标（normal 且非自有房才算；地形静态）。
+  wallRatio?: number;
+  swampRatio?: number;
+  bestAnchorScore?: number;
+  anchorToController?: number;
+  anchorToSources?: number;
   sources: number;
   mineralType?: string;
   owner?: string;
@@ -280,7 +288,30 @@ function collectRoomVision(room: Room): RoomVisionIntel {
       });
     }
   }
+  // R651：选点前置指标 —— 只对「可能被 claim 的 normal 非自有房」计算一次
+  // （地形静态，落 intel 后终身复用）；highway/sk/自有房不花这份 CPU。
+  const terrainIntel = (() => {
+    if (!room.name) return {};
+    if (classifyRoomByName(room.name) !== "normal") return {};
+    if (room.controller?.my) return {};
+    if (typeof room.getTerrain !== "function") return {};
+    const sources = room.find(FIND_SOURCES) ?? [];
+    if (sources.length === 0) return {};
+    const terrain = room.getTerrain();
+    const mineral = room.find(FIND_MINERALS)[0];
+    return summarizeTerrain({
+      getTerrainValue: (x: number, y: number) => terrain.get(x, y),
+      sources: sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
+      controller: room.controller
+        ? { x: room.controller.pos.x, y: room.controller.pos.y }
+        : undefined,
+      exits: (room.find(FIND_EXIT) ?? []).map(p => ({ x: p.x, y: p.y })),
+      mineral: mineral ? { x: mineral.pos.x, y: mineral.pos.y } : undefined,
+    });
+  })();
+
   return {
+    ...terrainIntel,
     sources: findSourcesCached(room).length,
     mineralType: room.find(FIND_MINERALS)[0]?.mineralType,
     owner: room.controller?.owner?.username,

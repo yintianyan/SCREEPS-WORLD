@@ -52,6 +52,16 @@ export interface RoomIntel {
   /** home 锚点到该房中心的 PathFinder 实测成本（swampCost:5 计入地形）；地形静态、
    * 算一次终身缓存，缺失时评选方回退线性距离估算。 */
   pathCost?: number;
+  /** R651 选点前置：自然墙占比（0..1）。地形静态 ⇒ 有视野算一次后终身保留。 */
+  wallRatio?: number;
+  /** R651：沼泽占比（0..1）——通勤与道路维护成本的一阶代理。 */
+  swampRatio?: number;
+  /** R651：`selectAnchors` 最佳锚点评分（与 claim 后 `seedLayoutAnchor` 同一套尺）。 */
+  bestAnchorScore?: number;
+  /** R651：最佳锚点到 controller 的曼哈顿距离。 */
+  anchorToController?: number;
+  /** R651：最佳锚点到最近 source 的曼哈顿距离。 */
+  anchorToSources?: number;
   lastSeen: number;
 }
 
@@ -151,6 +161,12 @@ export function scanNeighborIntel(
     wallCount?: number;
     sealedExits?: number[];
     powerBank?: boolean;
+    // R651：侦察那趟顺带算的地形选点指标（有视野才算）。
+    wallRatio?: number;
+    swampRatio?: number;
+    bestAnchorScore?: number;
+    anchorToController?: number;
+    anchorToSources?: number;
   },
   prev?: RoomIntel,
 ): RoomIntel {
@@ -174,6 +190,15 @@ export function scanNeighborIntel(
     intel.sealedExits = visibleRoom.sealedExits ?? [];
     // PB 存在性：有视野即覆写（false 也写 — PB 消失/被摧毁立即反映，野采链据此收摊）。
     intel.powerBank = visibleRoom.powerBank ?? false;
+    // R651：地形选点指标（有视野才有；地形静态，数值终身有效）。
+    if (visibleRoom.wallRatio !== undefined) intel.wallRatio = visibleRoom.wallRatio;
+    if (visibleRoom.swampRatio !== undefined) intel.swampRatio = visibleRoom.swampRatio;
+    if (visibleRoom.bestAnchorScore !== undefined)
+      intel.bestAnchorScore = visibleRoom.bestAnchorScore;
+    if (visibleRoom.anchorToController !== undefined)
+      intel.anchorToController = visibleRoom.anchorToController;
+    if (visibleRoom.anchorToSources !== undefined)
+      intel.anchorToSources = visibleRoom.anchorToSources;
   } else if (prev) {
     // 无视野：沿用上次观测值（数据会随 lastSeen 保持但陈旧度由消费方判断）。
     if (prev.sources !== undefined) intel.sources = prev.sources;
@@ -185,6 +210,12 @@ export function scanNeighborIntel(
     if (prev.wallCount !== undefined) intel.wallCount = prev.wallCount;
     if (prev.sealedExits !== undefined) intel.sealedExits = prev.sealedExits;
     if (prev.powerBank !== undefined) intel.powerBank = prev.powerBank;
+    // R651：地形静态 ⇒ 无视野也沿用（与 pathCost 同待遇）。
+    if (prev.wallRatio !== undefined) intel.wallRatio = prev.wallRatio;
+    if (prev.swampRatio !== undefined) intel.swampRatio = prev.swampRatio;
+    if (prev.bestAnchorScore !== undefined) intel.bestAnchorScore = prev.bestAnchorScore;
+    if (prev.anchorToController !== undefined) intel.anchorToController = prev.anchorToController;
+    if (prev.anchorToSources !== undefined) intel.anchorToSources = prev.anchorToSources;
     // 无视野时 lastSeen 不应前移（视野数据没有更新）。
     intel.lastSeen = prev.lastSeen;
   }

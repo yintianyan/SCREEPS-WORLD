@@ -26,6 +26,16 @@ export interface TerrainSummary {
   sealedExitCount: number;
   /** 人工墙数（0 = 无前任工事）。 */
   wallCount: number;
+  /** R651：自然墙占比（0..1，undefined = 未侦察）。 */
+  wallRatio?: number;
+  /** R651：沼泽占比（0..1）。 */
+  swampRatio?: number;
+  /** R651：最佳锚点评分（与 claim 后同一套 selectAnchors）。 */
+  bestAnchorScore?: number;
+  /** R651：最佳锚点到 controller 的曼哈顿距离。 */
+  anchorToController?: number;
+  /** R651：最佳锚点到最近 source 的曼哈顿距离。 */
+  anchorToSources?: number;
 }
 
 /** 候选房控制器信息。 */
@@ -93,6 +103,8 @@ export interface CandidateScoreBreakdown {
   rivalProximity: number;
   defensibility: number;
   layoutFitness: number;
+  /** R651：地形适配（wallRatio + 锚点几何，0..1）。 */
+  terrainFit?: number;
   /** 加权总分。 */
   total: number;
 }
@@ -124,6 +136,11 @@ export function buildCandidate(
     exitCount: Math.max(0, exitCount),
     sealedExitCount: sealedExits.length,
     wallCount: intel.wallCount ?? 0,
+    wallRatio: intel.wallRatio,
+    swampRatio: intel.swampRatio,
+    bestAnchorScore: intel.bestAnchorScore,
+    anchorToController: intel.anchorToController,
+    anchorToSources: intel.anchorToSources,
   };
 
   // 控制器信息
@@ -151,6 +168,14 @@ export function buildCandidate(
   else if ((intel.enemySpawns ?? 0) > 0) vetoReason = `enemySpawns=${intel.enemySpawns}`;
   else if (owned.has(roomName)) vetoReason = "already-owned";
   else if (released.has(roomName)) vetoReason = "recently-released";
+  // R651 选点前置：地形/布局在 claim **之前** 就用同一套锚点尺否决。
+  // W38S58 实测反例：wallRatio 0.50、anchorToController 28 ⇒ 必须在立项前被拒。
+  else if (intel.wallRatio !== undefined && intel.wallRatio > 0.4)
+    vetoReason = `terrain-walls=${intel.wallRatio.toFixed(2)}`;
+  else if (intel.anchorToController !== undefined && intel.anchorToController > 25)
+    vetoReason = `anchor-far-ctrl=${intel.anchorToController}`;
+  else if (intel.bestAnchorScore !== undefined && intel.bestAnchorScore < 0)
+    vetoReason = `anchor-score=${intel.bestAnchorScore.toFixed(1)}`;
 
   // 初始状态
   let status: CandidateStatus = "DISCOVERED";

@@ -1182,6 +1182,18 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-28 10:5xZ 立格，R651；上一条＝R650 格「取消 W38S58」；本格落地**选点前置校验 + 评分 v2**）
+
+**主目标：把地形/布局从「claim 后评估」前移到「立项前否决」。**
+- **intel**：新增 `wallRatio/swampRatio/bestAnchorScore/anchorToController/anchorToSources`；侦察有视野那一趟用 `summarizeTerrain`（与 `seedLayoutAnchor` **同一套 `selectAnchors`**）计算，地形静态故终身保留；highway/sk/自有房不花这份 CPU。
+- **候选**：`buildCandidate` 新增三条否决——`wallRatio>0.4`／`anchorToController>25`／`bestAnchorScore<0`；`kind∈{highway,sk}` 的否决**原本就有**（更正 R648/R650 里"kind 未使用"的表述）。
+- **评分**：八因子——新增 `terrainFit`（未侦察取 0.5）与 `centerBonus`；`w2/w7` 各让 0.05 给 `w8=0.15`。
+- **执行门**：`isCandidateStillValid` 用同一把尺复核老计划（失败即 CANCELLED）。
+- **测试**：+13（terrain-intel 4／candidate-veto 6／scoring 3），含 **W38S58 实测反例 fixture**（wallRatio 0.50 + 28 格 ⇒ 必拒）。
+- **部署**：sha `a8967de54951`（线上 811,128 B 同 sha）；unit 426 文件·5,590 例、integration 30·239 全绿。
+
+同轮预写＝**E747** 换码后一个扫描周期内 `Memory.rooms.*.intel[target]` 出现 `wallRatio/bestAnchorScore`（仅 normal 非自有房）；**E748** 释放后的 W38S58 若再入候选池必为 `REJECTED`（wallRatio≈0.50）；**E749** 解除 `expansionPausedUntil` 后，现有 6 条 WAITING 计划会被 `isCandidateStillValid` 逐条复核，不合格者 CANCELLED。
+
 ### 4.0（10-28 10:2xZ 立格，R650；上一条＝R649 格「三层自锁解除」；本格**按用户指令取消 W38S58 占领**并定版「选点前置校验」）
 
 **W38S58 实测定性：不是好目标。** 地形墙 1,253/2,500＝**50.1%**；spawn 遗留位 (28,28) 到 controller (15,13) **曼哈顿 28 格**、到两源 (32,15)/(26,18) 13–15 格；11 段 constructedWall 是旧工事。这个布局是**旧拥有期遗留**决定的，不是 `selectAnchors` 算出来的。
