@@ -1182,6 +1182,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-28 10:1xZ 立格，R649；上一条＝R648 格「地形/走廊房定版」；本格解开**回 claim 年轻房的第三层自锁：恢复态冻结 upgrader**）
+
+**主目标：让 RCL2 新房能升级脱困。** 代码考古确认 `colonyStateFreezesRole` 在 recovery/bootstrap 冻结 P2+，upgrader（P2、未声明 recoveryEligible）被冻 ⇒ 控制器停在 150/45,000、ttd 一路掉到 1,792 ⇒ **房间永远出不了 recovery**（自锁闭环）。修法：新增自报标志 `recoveryEligibleYoungRoom`（RolePolicy→CreepRole→kernel），kernel 仅当 `0 < phase.rcl < 4` 时豁免；成熟房恢复态仍冻结以保能量链。**闸门**：typecheck 0；unit 423 文件·5,577 例；integration 30·239 全绿。**部署**：sha `5338c41bfbbe`（线上 808,333 B 同 sha）。
+
+**判效（10:1xZ）＝E745 PASS，自锁解开**：换码后三个 upgrader 均有能量并 `mode=work`；控制器 **progress 150→238（37 拍，≈2.4/拍）**、**ttd 1,792→5,189**（脱离降级倒计时），房间仍 `recovery` 但已在上行。⇒ 回 claim 房的**三层自锁**（①300 容量房持 200 恢复预留 ②source container 被物流过滤排除 ③recovery 冻结 upgrader）全部解除，根因同一族：**把「回 claim 的年轻房」当成成熟房/把恢复态当成不可升级态**。下一轮核 RCL3 落 tower 与 `crisis→growth` 相位迁移。
+
 ### 4.0（10-28 09:5xZ 立格，R648；上一条＝R647 格「低容量孵化死锁」；本格回答扩张是否考虑地形/走廊房，并定版候选评分 v2）
 
 **现读代码事实**：候选模型有 `kind`（`classifyRoomByName`：x%10==0 或 y%10==0 ⇒ highway；x,y%10==5 ⇒ center；4≤x,y%10≤6 且非中心 ⇒ sk；其余 normal）与 `terrain{wallCount,exitCount}`，但七因子评分只用 `exitCount`（defensibility）和 risk 的 `wallCount`；`layoutFitness` 在生产侧**无人计算**（默认 0.5）⇒ 地形复杂度/布局可行性实际不进排序；`kind` 只落库、不参与过滤与加权；无「临近高速」偏好。
