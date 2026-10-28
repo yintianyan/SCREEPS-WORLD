@@ -458,6 +458,18 @@ export function spawnReserveFor(energyCapacityAvailable: number, computedReserve
   return energyCapacityAvailable < 400 ? 0 : computedReserve;
 }
 
+/**
+ * R647：bootstrap/recovery 房允许**所有优先级**降级出小 body（纯函数，导出供单测）。
+ *
+ * 原先只有 P1 豁免；线上 W38S58（RCL2、容量 300）出现 P2 hauler 300e 永远凑不齐、
+ * 容器 4,000 满而 spawn 无物流可花 ⇒ `degradeGateClosed` 死锁。恢复期第一要务是把
+ * 物流泵按最小 body 放出去，小 hauler 的吞吐损失远小于零物流。
+ * 非恢复态保持原语义（P2 仍受饥饿/pressure 双条件约束），避免正常房过早出小 body。
+ */
+export function recoveryRoomDegradeAllowed(roomState: string): boolean {
+  return roomState === "bootstrap" || roomState === "recovery";
+}
+
 export function trySpawn(
   snapshot: import("../../kernel/contracts").RoomSnapshot,
   queue: SpawnRequest[],
@@ -602,6 +614,7 @@ export function trySpawn(
       const pumpOutage = req.role === "distributor" && distributorCount === 0;
       const allowDegrade =
         req.survival ||
+        recoveryRoomDegradeAllowed(roomState) ||
         (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery")) ||
         starvedP1 ||
         starvedP2 ||
