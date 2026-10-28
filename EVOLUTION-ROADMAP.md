@@ -1192,6 +1192,8 @@
 
 同轮预写＝**E753** 侦察到达后候选出现 `terrain-walls/anchor-far-ctrl/anchor-score/leftover-spawn-far` 四类 veto 中的至少一类；**E754** 解除暂停前计划表不得有 `WAITING_EXECUTION`；**E755** 若 W39S57 地形差（墙>40% 或锚点距 controller>25），其新计划会在立项／执行门被拒。
 
+**判效（11:3xZ）＝E753/E755 兑现，新门线上首咬**：侦察 W39S57 后其候选变 `REJECTED`，`vr="anchor-far-ctrl=30"`（锚点到 controller 30 > 25，`ls=83,924,897` 新鲜）；同拍仪表盘 **Q 5→4、R 5→6**。⇒ 地形门确实在 claim 前工作，且 W38S58 那类"长通勤骨架"会被同一把尺淘汰。随后为头号计划 **W39S55** 强制一次 vetting 侦察（运维写入 `prospect={target:W39S55,sponsor:W38S56,vetting:true}`，t=83,925,059），等其地形字段回填后再决定是否解除暂停。
+
 ### 4.0（10-28 11:0xZ 立格，R652；上一条＝R651 格「选点前置」；本格补上**回 claim 遗留 spawn 校验**并清掉旧计划）
 
 **主目标：补完 R651 欠项 —— 回 claim 房的布局被旧资产锚死时，立项前就拒。**
