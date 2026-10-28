@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-28 11:1xZ 立格，R653；上一条＝R652 格「遗留 spawn 校验」；本格补上**选点侦察补位**）
+
+**主目标：堵住「计划在无地形 intel 上被 claim」的洞。** 执行门若硬性要求 `wallRatio`，会与 B5-㉓「缺值≠永久否决」契约冲突（实测 11 例红：队首不可见/黑名单复检/威胁门测试）⇒ 撤掉硬门，改为**侦察补位**：`ea=false` 且存在推进态计划、其 intel 条目缺 `wallRatio` 时，prospect 允许开一次定向侦察（`prospect.vetting=true`），且不受 ea 退出计时中止；回填后 R651/R652 的地形门才可能裁决该计划。
+
+**实现**：`prospect-manager` 开任务分支 + `planNeedingTerrainVetting()` + `nearestOwnedRoom()`；`KernelMemory.prospect.vetting?`；测试 +3（缺地形开侦察／已有地形不开／超 grace 不中止）；unit 426·5,597、integration 30·239 全绿。**部署** sha `176e7f234f9c`（812,576 B，线上同 sha）。
+
+**线上（11:2xZ）**：换码后 `ea=true`（fortify），走的是 normal 侦察路径：`prospect={target:W39S57, sponsor:W38S56, spawned:1}`、sponsor 队列含 `scout→W39S57`；W38S58 已释放、7 条计划 CANCELLED、`expansionPausedUntil=83,942,722`。⇒ 侦察先把地形带回，planner 再用新评分重排；vetting 分支只在 ea=false 时兜底。
+
+同轮预写＝**E753** 侦察到达后候选出现 `terrain-walls/anchor-far-ctrl/anchor-score/leftover-spawn-far` 四类 veto 中的至少一类；**E754** 解除暂停前计划表不得有 `WAITING_EXECUTION`；**E755** 若 W39S57 地形差（墙>40% 或锚点距 controller>25），其新计划会在立项／执行门被拒。
+
 ### 4.0（10-28 11:0xZ 立格，R652；上一条＝R651 格「选点前置」；本格补上**回 claim 遗留 spawn 校验**并清掉旧计划）
 
 **主目标：补完 R651 欠项 —— 回 claim 房的布局被旧资产锚死时，立项前就拒。**
