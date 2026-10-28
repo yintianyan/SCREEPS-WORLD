@@ -59,6 +59,8 @@ export interface RolePolicy {
   pushThrough?: boolean;
   /** Recovery 豁免自报（R3a）：透传到 CreepRole.recoveryEligible，recovery 时仍执行（P1 等效预算）。 */
   recoveryEligible?: boolean;
+  /** R649：仅年轻房（RCL<4）recovery/bootstrap 下豁免冻结；透传到 CreepRole.recoveryEligibleYoungRoom。 */
+  recoveryEligibleYoungRoom?: boolean;
   /** 生命线角色自报：ESM 下仅声明 true 的角色运行。透传到 CreepRole.isLifeLine。 */
   isLifeLine?: boolean;
   /** 维修角色自报：透传到 CreepRole.isRepairWorker。 */

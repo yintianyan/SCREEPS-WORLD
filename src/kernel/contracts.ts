@@ -66,6 +66,12 @@ export interface CreepRole {
    */
   readonly recoveryEligible?: boolean;
   /**
+   * R649：仅「年轻房」（RCL<4）的 recovery/bootstrap 下豁免冻结的自报标志（与
+   * recoveryEligible 正交）。upgrader 用：升级是 RCL1-3 房脱离危机的唯一路径
+   * （RCL3 落 tower、容量抬升），成熟房在恢复态仍冻结以保能量链。
+   */
+  readonly recoveryEligibleYoungRoom?: boolean;
+  /**
    * 战斗角色标志：attacker / healer / defender / remote-defender 自报 true。
    * 用于 recovery 殖民地态门禁的紧急旁路——帝国在 war 姿态或本房有真实在房威胁时，
    * 不得冻结自己的作战单位（否则 posture=war 名存实亡、真被入侵时丢房）。

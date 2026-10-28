@@ -25,6 +25,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
     priority,
     // R3a：recovery 豁免从 RolePolicy 透传（builder/mineralMiner 自报）。
     recoveryEligible: policy.recoveryEligible === true,
+    recoveryEligibleYoungRoom: policy.recoveryEligibleYoungRoom === true,
     // 生命线角色透传：ESM 下仅此角色运行。
     isLifeLine: policy.isLifeLine === true,
     // 角色自报分类标签透传 — kernel 不硬编码角色名。

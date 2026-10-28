@@ -1056,7 +1056,9 @@ export class Kernel {
       // P0-3：combat 角色可能在远矿房作战 — 威胁检查同时看 home 和当前所在房。
       const inThreatRoom =
         liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
-      if (colonyStateFreezesRole(roomState, role, posture, inThreatRoom)) {
+      const homePhaseRcl = home ? (Memory.rooms[home]?.phase?.rcl ?? 0) : 0;
+      const youngRoom = homePhaseRcl > 0 && homePhaseRcl < 4;
+      if (colonyStateFreezesRole(roomState, role, posture, inThreatRoom, youngRoom)) {
         recordSkip(`creep/${role.name}/colony-state`);
         continue;
       }
@@ -1151,14 +1153,19 @@ export function colonyStateFreezesRole(
   role: {
     readonly priority: number;
     readonly recoveryEligible?: boolean;
+    readonly recoveryEligibleYoungRoom?: boolean;
     readonly combat?: boolean;
   },
   posture: string | undefined,
   liveThreatInRoom: boolean,
+  youngRoom = false,
 ): boolean {
   if (roomState !== "recovery" && roomState !== "bootstrap") return false;
   if (role.priority <= 1) return false; // P0/P1（能量链/防御）永远放行
   if (role.recoveryEligible === true) return false; // 生存/脱困角色豁免（builder 重建基建、mineralMiner 不耗能收入）
+  // R649：年轻房（RCL<4）的 upgrader —— 升级是它脱离危机的唯一路径（RCL3 落 tower）。
+  // 只在年轻房豁免；成熟房恢复态仍冻结以保能量链。
+  if (role.recoveryEligibleYoungRoom === true && youngRoom) return false;
   // 紧急旁路：战争或真实入侵时，作战单位必须照常运行（帝国存续所系）。
   if (role.combat === true && (posture === "war" || liveThreatInRoom)) return false;
   return true;

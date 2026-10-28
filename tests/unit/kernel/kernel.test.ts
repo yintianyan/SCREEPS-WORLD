@@ -5,6 +5,7 @@ import { colonyStateFreezesRole } from "../../../src/kernel/kernel";
 type RoleLike = {
   priority: number;
   recoveryEligible?: boolean;
+  recoveryEligibleYoungRoom?: boolean;
   combat?: boolean;
 };
 
@@ -80,5 +81,27 @@ describe("colonyStateFreezesRole — reserver/claimer 远矿豁免", () => {
 
   it("normal 下 reserver 正常放行", () => {
     expect(colonyStateFreezesRole("normal", p2ReserverExempt, "develop", false)).toBe(false);
+  });
+});
+
+describe("colonyStateFreezesRole — R649 年轻房 upgrader 豁免", () => {
+  const p2YoungUpgrader: RoleLike = { priority: 2, recoveryEligibleYoungRoom: true };
+
+  it("recovery + 年轻房（RCL<4）⇒ 不冻结（升级是脱困唯一路径）", () => {
+    expect(colonyStateFreezesRole("recovery", p2YoungUpgrader, "develop", false, true)).toBe(false);
+  });
+
+  it("bootstrap + 年轻房 ⇒ 不冻结", () => {
+    expect(colonyStateFreezesRole("bootstrap", p2YoungUpgrader, "develop", false, true)).toBe(
+      false,
+    );
+  });
+
+  it("成熟房（RCL≥4）⇒ 仍冻结（保护能量链）", () => {
+    expect(colonyStateFreezesRole("recovery", p2YoungUpgrader, "develop", false, false)).toBe(true);
+  });
+
+  it("未声明该标志的 P2 在年轻房仍被冻结（不误放行）", () => {
+    expect(colonyStateFreezesRole("recovery", { priority: 2 }, "develop", false, true)).toBe(true);
   });
 });

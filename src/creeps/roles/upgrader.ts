@@ -250,6 +250,8 @@ function upgradeAnchored(): ActionCandidate<StructureController> {
 
 const policy: RolePolicy = {
   gate: upgraderGate,
+  // R649：年轻房（RCL<4）recovery/bootstrap 下仍升级 —— 这是脱离危机的唯一路径。
+  recoveryEligibleYoungRoom: true,
   executionOrder: 3,
 
   acquire: [
