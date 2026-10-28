@@ -1192,7 +1192,9 @@
 - **测试**：+13（terrain-intel 4／candidate-veto 6／scoring 3），含 **W38S58 实测反例 fixture**（wallRatio 0.50 + 28 格 ⇒ 必拒）。
 - **部署**：sha `a8967de54951`（线上 811,128 B 同 sha）；unit 426 文件·5,590 例、integration 30·239 全绿。
 
-同轮预写＝**E747** 换码后一个扫描周期内 `Memory.rooms.*.intel[target]` 出现 `wallRatio/bestAnchorScore`（仅 normal 非自有房）；**E748** 释放后的 W38S58 若再入候选池必为 `REJECTED`（wallRatio≈0.50）；**E749** 解除 `expansionPausedUntil` 后，现有 6 条 WAITING 计划会被 `isCandidateStillValid` 逐条复核，不合格者 CANCELLED。
+同轮预写＝**E747** 换码后一个扫描周期内 intel 出现 `wallRatio/bestAnchorScore`（仅 normal 非自有房）；**E748** 释放后的 W38S58 若再入候选池必为 `REJECTED`（wallRatio≈0.50）；**E749** 解除 `expansionPausedUntil` 后，现有 6 条 WAITING 计划会被 `isCandidateStillValid` 逐条复核，不合格者 CANCELLED。
+
+**判效（10:5xZ）**：换码生效（win 35）。**W38S58 释放完成**：`controller.my=false`、`releasedRooms.W38S58=83,922,988`（重占排除生效）；planner 健康（10 候选 Q5/R5、dashboard 新鲜、`errorLog=null`），`expansionPausedUntil=83,942,722` 仍生效。⚠️E747 的读法要修正：**intel 住 heap**（`intelligenceSystem.roomEntries`），部署后清空且不可从 console 直读；候选房的 intel 只能靠新一趟侦察重建，而侦察门是 `ea`（当前 false）⇒ 地形字段对新房要在"下一次侦察周期"才落地，`expansionCandidates` 里仍是旧分数。⇒ R651 的**逻辑**已由 13 例单测（含 W38S58 反例 fixture）钉住，**线上生效**要等：解除暂停 → ea 恢复 → 侦察候选 → planner 重算。下一轮首步：确认 intel heap 在侦察后带上 `wr/ba`，再用 `expansionCandidates` 的 REJECTED 计数验收。
 
 ### 4.0（10-28 10:2xZ 立格，R650；上一条＝R649 格「三层自锁解除」；本格**按用户指令取消 W38S58 占领**并定版「选点前置校验」）
 
