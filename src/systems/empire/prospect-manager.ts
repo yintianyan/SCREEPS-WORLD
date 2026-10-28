@@ -37,8 +37,27 @@ export const prospectManagerSystem: System = {
     const mission = Memory.kernel.prospect;
 
     if (!mission) {
-      // 开新任务的门禁：姿态授权 + CPU/bucket 富余 + 无进行中的扩张行动。
-      if (Memory.kernel.strategy?.expansionAllowed !== true) return;
+      // R653：选点侦察补位 —— 有推进态计划但 intel 缺地形指标时，允许一次定向侦察。
+      // 不做这一步，计划会在「无地形数据」的 intel 上被 claim（R651 的门全部失效）。
+      if (Memory.kernel.strategy?.expansionAllowed !== true) {
+        const vet = planNeedingTerrainVetting();
+        if (!vet) return;
+        if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
+        if ((Game.cpu.bucket ?? 0) < CONFIG.prospect.minBucket) return;
+        if (Memory.kernel.expansion) return;
+        const sponsor =
+          vet.sponsor && Game.rooms[vet.sponsor] ? vet.sponsor : nearestOwnedRoom(vet.room);
+        if (!sponsor) return;
+        Memory.kernel.prospect = {
+          target: vet.room,
+          sponsor,
+          startedAt: ctx.tick,
+          spawned: 0,
+          vetting: true,
+        };
+        submitScoutRequest(ctx, Memory.kernel.prospect, hostileRooms);
+        return;
+      }
       if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
       if ((Game.cpu.bucket ?? 0) < CONFIG.prospect.minBucket) return;
       if (Memory.kernel.expansion) return; // claimer/拓荒已在路上，侦察让位。
@@ -78,8 +97,9 @@ export const prospectManagerSystem: System = {
       completeMission(ctx.tick, OUTCOME_ABORTED, 0);
       return;
     }
-    if (Memory.kernel.strategy?.expansionAllowed !== true) {
+    if (Memory.kernel.strategy?.expansionAllowed !== true && mission.vetting !== true) {
       // 瞬时翻转脱敏：累计非 expand 持续 tick，超过 grace 才中止。
+      // R653：选点侦察任务不受 ea 计时中止（它的目的就是在 ea=false 期间补地形情报）。
       if (mission.postureExitSince === undefined) mission.postureExitSince = ctx.tick;
       if (ctx.tick - mission.postureExitSince >= CONFIG.prospect.postureGraceTicks) {
         completeMission(ctx.tick, OUTCOME_ABORTED, 0);
@@ -335,4 +355,36 @@ function buildCandidates(tick: number): ProspectCandidate[] {
   }
 
   return candidates;
+}
+
+/** R653：找出「推进态计划 + intel 条目存在但缺 wallRatio」的目标（一次一个，幂等）。 */
+function planNeedingTerrainVetting(): { room: string; sponsor?: string } | undefined {
+  for (const p of Memory.kernel?.expansionPlans ?? []) {
+    if (
+      p.st !== "EVALUATED" &&
+      p.st !== "READY" &&
+      p.st !== "APPROVED" &&
+      p.st !== "WAITING_EXECUTION"
+    ) {
+      continue;
+    }
+    const intel = getRoomIntel(p.rn)?.payload;
+    if (intel && intel.wallRatio === undefined) return { room: p.rn, sponsor: p.sr };
+  }
+  return undefined;
+}
+
+/** 距目标最近的己方房（无 sponsor 时兜底）。 */
+function nearestOwnedRoom(roomName: string): string | undefined {
+  let best: string | undefined;
+  let bestD = Infinity;
+  for (const rn of Object.keys(Game.rooms)) {
+    if (!Game.rooms[rn]?.controller?.my) continue;
+    const d = roomLinearDistance(rn, roomName);
+    if (d < bestD) {
+      bestD = d;
+      best = rn;
+    }
+  }
+  return best;
 }

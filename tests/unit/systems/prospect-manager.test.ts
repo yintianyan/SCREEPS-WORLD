@@ -415,3 +415,59 @@ describe("prospect-manager — 视野外扩（horizon）", () => {
     expect(queue[0].memory.remoteTarget).toBe(mission.target);
   });
 });
+
+describe("prospect-manager — R653 选点侦察补位", () => {
+  function setupVetting(wallRatio?: number): void {
+    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    (globalThis as any).Game.rooms = {
+      W7N4: { controller: { my: true, owner: { username: "Me" } } },
+    };
+    (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: [] };
+    __resetIntelStateForTests();
+    // 采一条 W6N4 intel：有 sources（候选可立项）、地形字段按参数给。
+    globalCache().intelHandoff = [
+      {
+        subject: "W6N4",
+        home: "W7N4",
+        source: "observer",
+        payload: {
+          kind: "normal",
+          status: "normal",
+          sources: 2,
+          lastSeen: 500,
+          ...(wallRatio !== undefined ? { wallRatio } : {}),
+        } as never,
+      },
+    ];
+    intelligenceSystem.run({ tick: 1000, snapshots: () => [], budget: mockBudget() } as never);
+    setPosture(false); // ea=false
+    (globalThis as any).Game.cpu.bucket = 10000;
+    (globalThis as any).Memory.kernel.expansionPlans = [
+      { rn: "W6N4", sr: "W7N4", st: "EVALUATED" },
+    ];
+  }
+
+  it("ea=false + 计划缺 wallRatio ⇒ 开一次定向侦察（vetting=true）", () => {
+    setupVetting(undefined);
+    prospectManagerSystem.run(makeContext());
+    const mission = (globalThis as any).Memory.kernel.prospect;
+    expect(mission?.target).toBe("W6N4");
+    expect(mission?.vetting).toBe(true);
+  });
+
+  it("ea=false + 已有 wallRatio ⇒ 不开侦察", () => {
+    setupVetting(0.2);
+    prospectManagerSystem.run(makeContext());
+    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+  });
+
+  it("vetting 任务在 ea 持续 false 超过 grace 也不中止", () => {
+    setupVetting(undefined);
+    prospectManagerSystem.run(makeContext());
+    const mission = (globalThis as any).Memory.kernel.prospect;
+    mission.postureExitSince =
+      (globalThis as any).Game.time - CONFIG.prospect.postureGraceTicks - 10;
+    prospectManagerSystem.run(makeContext());
+    expect((globalThis as any).Memory.kernel.prospect?.vetting).toBe(true);
+  });
+});

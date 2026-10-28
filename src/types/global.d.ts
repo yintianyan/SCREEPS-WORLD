@@ -975,6 +975,8 @@ declare global {
       startedAt: number;
       /** 累计提交的 scout 孵化请求数（死亡上限判定）。 */
       spawned: number;
+      /** R653：选点侦察（为缺地形数据的计划补情报）——不受 ea 退出计时中止。 */
+      vetting?: boolean;
       /**
        * posture 退出（expansionAllowed=false）的持续起点 tick（Opt B 脱敏计时）。
        * 瞬时翻转（pixel 放血致 posture 临时翻 develop）不立即撤任务——累计非 expand
