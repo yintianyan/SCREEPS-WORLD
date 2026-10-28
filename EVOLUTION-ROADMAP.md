@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-29 立格，R655；上一条＝R653 格「侦察补位」；本格**按用户指令直接执行 W39S55**）
+
+**指令**：解除暂停并让 W39S55 执行。执行方式（运维写入，t=83,925,732）：计划 W39S55 `EVALUATED→EXECUTING`；`kernel.expansion={state:"preparing", target:W39S55, sponsor:W37S58, planId:"W39S55@83290684", operationId:"op:W39S55:83925732"}`；`expansionPausedUntil` 已在 R654 清除。**绕过 readiness（G4+G6 未绿）**，但执行链自身门（预算预留/claimer/claimTimeout）照常。
+
+**时间线（线上现读）**：preparing（t=83,925,732）→ 预留 5,000（t≈83,925,8xx）→ claimer 孵出 `claimer-W37S58-0-83925859-c7b` → 穿 W38S58→W38S57→W38S56→W39S55（因 `creep/claimer/budget` 被跳 186 拍，移动很慢）→ **t≈83,926,220 controller.my=true**（RCL1）→ claimed（t=83,926,4xx）→ **bootstrapping（cp=1）**，`layout.anchor=1168`（packPos ⇒ (23,18)；controller(5,21)，曼哈顿 21，符合 R651 阈值），sponsor 队列 `harvester+worker+builder×2` 已排。
+
+⇒ 这正是"新 claim 房用 `selectAnchors` 算锚点"的实证：spawn 将建在 (23,18) 而不是旧资产位置。**观察项**：`system/expansion-manager/budget` 在 CPU tight 下被跳（本代 2 次），状态推进慢了约 500 拍；`creep/claimer/budget` 186 拍也拖慢通勤——扩张状态机受 CPU 预算节流，这是后续 G6/预算优化的现实理由。
+
+同轮预写＝**E756** 600 拍内 W39S55 出现 spawn 工地并建成于锚点附近（±3 格）；**E757** 新 claim 房不再继承"spawn 距 controller>25"的骨架（锚点校验生效）；**E758** 若 CPU 继续 tight，bootstrap 的 checkpoints 推进会以每次 ≤1 档、每档 ≥100 拍的节奏前进（budget skip 所致）。
+
 ### 4.0（10-28 11:1xZ 立格，R653；上一条＝R652 格「遗留 spawn 校验」；本格补上**选点侦察补位**）
 
 **主目标：堵住「计划在无地形 intel 上被 claim」的洞。** 执行门若硬性要求 `wallRatio`，会与 B5-㉓「缺值≠永久否决」契约冲突（实测 11 例红：队首不可见/黑名单复检/威胁门测试）⇒ 撤掉硬门，改为**侦察补位**：`ea=false` 且存在推进态计划、其 intel 条目缺 `wallRatio` 时，prospect 允许开一次定向侦察（`prospect.vetting=true`），且不受 ea 退出计时中止；回填后 R651/R652 的地形门才可能裁决该计划。
