@@ -160,8 +160,9 @@ function isCandidateStillValid(roomName: string, tick: number): boolean {
   }
   // pruneBlacklist 已在本函数前跑过：还在表里就说明冷却未过。
   if (Memory.kernel?.expansionBlacklist?.[roomName] !== undefined) return false;
-  // R651 选点前置复核：老计划立项时没有地形指标，侦察补上后用**同一把尺**在执行前再判一次
-  // （wallRatio>0.4 / 锚点到 controller>25 / 锚点评分<0 / 非 normal 直接判无效 ⇒ 计划 CANCELLED）。
+  // R651/R652 选点前置复核：老计划立项时没有地形指标，侦察补上后用**同一把尺**在执行前再判一次
+  // （wallRatio>0.4 / 锚点到 controller>25 / 锚点评分<0 / 遗留 spawn 距锚点>12 / 非 normal
+  // 直接判无效 ⇒ 计划 CANCELLED）。
   const intel = getRoomIntel(roomName)?.payload;
   if (intel) {
     if (intel.kind !== "normal") return false;
