@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-28 09:5xZ 立格，R648；上一条＝R647 格「低容量孵化死锁」；本格回答扩张是否考虑地形/走廊房，并定版候选评分 v2）
+
+**现读代码事实**：候选模型有 `kind`（`classifyRoomByName`：x%10==0 或 y%10==0 ⇒ highway；x,y%10==5 ⇒ center；4≤x,y%10≤6 且非中心 ⇒ sk；其余 normal）与 `terrain{wallCount,exitCount}`，但七因子评分只用 `exitCount`（defensibility）和 risk 的 `wallCount`；`layoutFitness` 在生产侧**无人计算**（默认 0.5）⇒ 地形复杂度/布局可行性实际不进排序；`kind` 只落库、不参与过滤与加权；无「临近高速」偏好。
+
+**战略结论（官方/社区）**：highway 房**无 controller**，是 Deposit 与 Power Bank 的唯一产地 ⇒ 不能 claim，只能远征；SK 房**无 controller**、3 个 4,000 源 + 公共 extractor + Source Keeper lair ⇒ 同样不能 claim，属高危远矿；center 房有 controller、4 源，是最高价值 claim 目标。⇒ 扩张应**优先 center/优质 normal，明确排除 highway/sk 立项**；走廊收益走 Deposit/Power 车道，而不是占领。
+
+**R648 定版（下一轮主目标）**：①候选过滤——`kind∈{highway,sk}` 不立 claim 计划（无 controller，`tryConsumePlan` 也永远等不到可见 controller）；②评分 v2——新增 `swampRatio`、`openArea`（spawn 3×3 + extension 模板可行格数）并由真实模板可行性计算 `layoutFitness`，`center` 权重上调；③intel 侦察那一趟顺手落 `swampRatio/openArea`（有视野时零额外 find）；④高速邻接加成只进**远矿/Deposit 目标**评分，不进口 claim 评分；⑤测试：分类用例、地形惩罚用例、无 controller 不立项用例。
+
 ### 4.0（10-28 09:2xZ 立格，R647；上一条＝R646 格「bootstrap 交接」；本格修掉**低容量房的孵化预算死锁**）
 
 **主目标：解开新房 W38S58 的「spawn 满能空转」。** 09:20Z 现场：`expansion.state=economic_startup`（cp=3）、房间 `recovery/crisis`、控制器 **RCL2 / progress 150 / ttd 2,427**、两个 container 各 `2000/2000`、3 harvester + 2 upgrader（**0 能量、acquire**）+ 1 distributor；`Spawn7` **300/300 且未孵化**，队列 `upgrader[work,carry,move,move]`（250e）`block=noDegrade`、`hauler[carry×3,move×3]`（300e）`block=degradeGateClosed`。⇒ 真因：`recoveryEnergyReserve=200` 在 300 容量房上占掉 2/3 预算，而 `replacementHorizonTicks=600` 让「采集者临近换代」在这类房里近乎常真 ⇒ 非采集者请求**永久**孵不出，upgrader 无补给、控制器在降级倒计时上。
