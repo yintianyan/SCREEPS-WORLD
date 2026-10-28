@@ -1192,7 +1192,11 @@
 
 同轮预写＝**E753** 侦察到达后候选出现 `terrain-walls/anchor-far-ctrl/anchor-score/leftover-spawn-far` 四类 veto 中的至少一类；**E754** 解除暂停前计划表不得有 `WAITING_EXECUTION`；**E755** 若 W39S57 地形差（墙>40% 或锚点距 controller>25），其新计划会在立项／执行门被拒。
 
-**判效（11:3xZ）＝E753/E755 兑现，新门线上首咬**：侦察 W39S57 后其候选变 `REJECTED`，`vr="anchor-far-ctrl=30"`（锚点到 controller 30 > 25，`ls=83,924,897` 新鲜）；同拍仪表盘 **Q 5→4、R 5→6**。⇒ 地形门确实在 claim 前工作，且 W38S58 那类"长通勤骨架"会被同一把尺淘汰。随后为头号计划 **W39S55** 强制一次 vetting 侦察（运维写入 `prospect={target:W39S55,sponsor:W38S56,vetting:true}`，t=83,925,059），等其地形字段回填后再决定是否解除暂停。
+**判效（11:3xZ～11:4xZ）＝E753/E755 兑现，新门线上首咬，且头号候选通过复核**：
+- 侦察 **W39S57** → 候选 `REJECTED`，`vr="anchor-far-ctrl=30"`（锚点到 controller 30 > 25，`ls` 新鲜）；仪表盘 Q 5→4、R 5→6 ⇒ 地形门确实在 claim 前工作。
+- 为头号计划 **W39S55** 强制一次 vetting 侦察（运维写入 `prospect={target:W39S55,sponsor:W38S56,vetting:true}`，t=83,925,059；scout 先被两条 remoteHauler 孵化占位，约 280 拍后出发）。侦察回来后候选 `ls=83,925,422`（新鲜）、**仍 QUALIFIED**（`s=0.6 > 0.5`）⇒ 它是第一个"经过地形复核仍成立"的目标。
+- 据此**解除扩张暂停**（`expansionPausedUntil` 已清除，t=83,925,496）；计划表只剩 `W39S55=EVALUATED`，`ea=true`。当前 readiness 仍被 G4+G6 挡住（usage 12.72 tight），所以不会立刻 claim；等 READY 后计划经 500 拍晋升，执行门再用同一把地形尺复核。
+⇒ 选点重构闭环：**侦察 → 地形指标 → 立项否决 → 评分 → 执行门复核 → 才 claim**。剩余 3 个 QUALIFIED 候选（W39S56/W37S56/W37S54）尚未逐一 vetting，正常侦察会补；若它们将来成为 top plan，vetting 分支（ea=false）或正常侦察 + 执行门会兜住。
 
 ### 4.0（10-28 11:0xZ 立格，R652；上一条＝R651 格「选点前置」；本格补上**回 claim 遗留 spawn 校验**并清掉旧计划）
 
