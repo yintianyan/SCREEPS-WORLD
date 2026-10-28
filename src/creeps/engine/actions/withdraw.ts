@@ -19,6 +19,29 @@ export function withdrawRichestContainer(): ActionCandidate<StructureContainer> 
   };
 }
 
+/**
+ * R647：RCL<4 早期/回 claim 房兜底 —— 从最满 container（**含 source container**）取能。
+ *
+ * 这类房通常没有 controller container/link/storage（或有遗留 storage 但为 0），能量积压在
+ * source container 里；upgrader 若被「不抢物流源」规则排除就会直接停摆（线上 W38S58 RCL2：
+ * 控制器停在 `150/45,000`、两个 upgrader 0 能量 `acquire`、容器各 2000 满）。RCL4+ 返回
+ * undefined，成熟房保持原物流分工（hauler/upgrader 不抢同一源）。
+ */
+export function withdrawRichestContainerEarly(): ActionCandidate<StructureContainer> {
+  return {
+    name: "withdraw:richest-container-early",
+    resolve: ac => {
+      if (ac.snapshot.rcl >= 4) return undefined;
+      const best = findRichestContainer(ac.snapshot.containers);
+      if (!best || best.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
+      return best;
+    },
+    execute: (ac, best) => {
+      runAction(ac.creep, best, ACTION_RANGE_NEAR, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
+    },
+  };
+}
+
 /** 从最近有能量的 container 取能（builder 减少通勤）。 */
 export function withdrawClosestContainer(): ActionCandidate<StructureContainer> {
   return {

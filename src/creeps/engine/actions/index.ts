@@ -3,6 +3,7 @@ export { harvestSource, stationaryMine, harvestMineral } from "./harvest";
 export { pickupDroppedEnergy, pickupNearbyDroppedEnergy, lootRemains } from "./pickup";
 export {
   withdrawRichestContainer,
+  withdrawRichestContainerEarly,
   withdrawClosestContainer,
   withdrawRichestNonSourceContainer,
   withdrawClosestNonSourceContainer,

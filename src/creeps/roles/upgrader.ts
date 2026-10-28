@@ -11,6 +11,7 @@ import {
   upgradeController,
   withdrawControllerContainer,
   withdrawControllerLink,
+  withdrawRichestContainerEarly,
   withdrawRichestNonSourceContainer,
   withdrawStorageCapped,
 } from "../engine/actions";
@@ -267,6 +268,9 @@ const policy: RolePolicy = {
     withdrawStorageCapped(dynamicStorageLimit),
     // 5. 最满非物流 container（不抢 hauler 的物流源）。
     withdrawRichestNonSourceContainer(),
+    // 5b. R647：RCL<4 且无 controller 容器/link/storage 可用时，允许从 source container 取能。
+    //     成熟房返回 undefined，不改变物流分工。
+    withdrawRichestContainerEarly(),
     // 6. 兜底：所有 container 无能量时直接采集。
     harvestSource(),
     // 7. 归站兜底：取能全部落空（container 空、source 占满等）时移动到
