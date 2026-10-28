@@ -36,6 +36,8 @@ export interface TerrainSummary {
   anchorToController?: number;
   /** R651：最佳锚点到最近 source 的曼哈顿距离。 */
   anchorToSources?: number;
+  /** R651b：最佳锚点到遗留 spawn 的曼哈顿距离（回 claim 房布局校验）。 */
+  leftoverSpawnToAnchor?: number;
 }
 
 /** 候选房控制器信息。 */
@@ -141,6 +143,7 @@ export function buildCandidate(
     bestAnchorScore: intel.bestAnchorScore,
     anchorToController: intel.anchorToController,
     anchorToSources: intel.anchorToSources,
+    leftoverSpawnToAnchor: intel.leftoverSpawnToAnchor,
   };
 
   // 控制器信息
@@ -176,6 +179,10 @@ export function buildCandidate(
     vetoReason = `anchor-far-ctrl=${intel.anchorToController}`;
   else if (intel.bestAnchorScore !== undefined && intel.bestAnchorScore < 0)
     vetoReason = `anchor-score=${intel.bestAnchorScore.toFixed(1)}`;
+  // R651b：回 claim 房若遗留 spawn 离最佳锚点过远（>12），说明布局已被旧资产锚死，
+  // 新房会继承一条长通勤骨架（W38S58：spawn 28,28 vs controller 15,13 的教训）。
+  else if (intel.leftoverSpawnToAnchor !== undefined && intel.leftoverSpawnToAnchor > 12)
+    vetoReason = `leftover-spawn-far=${intel.leftoverSpawnToAnchor}`;
 
   // 初始状态
   let status: CandidateStatus = "DISCOVERED";

@@ -20,6 +20,8 @@ export interface TerrainIntelSummary {
   anchorToController?: number;
   /** 最佳锚点到最近 source 的曼哈顿距离。 */
   anchorToSources?: number;
+  /** 回 claim 房：最佳锚点到**遗留 spawn** 的曼哈顿距离（无 spawn 则 undefined）。 */
+  leftoverSpawnToAnchor?: number;
 }
 
 export interface TerrainIntelInput {
@@ -29,6 +31,8 @@ export interface TerrainIntelInput {
   controller?: { x: number; y: number };
   exits: readonly { x: number; y: number }[];
   mineral?: { x: number; y: number };
+  /** 房内**任何** spawn 的位置（含无主遗迹）——回 claim 房的布局锚点校验用。 */
+  spawns?: readonly { x: number; y: number }[];
 }
 
 const ROOM_CELLS = 50 * 50;
@@ -82,6 +86,9 @@ export function summarizeTerrain(input: TerrainIntelInput): TerrainIntelSummary 
   if (input.controller) summary.anchorToController = manhattan(best, input.controller);
   if (input.sources.length > 0) {
     summary.anchorToSources = Math.min(...input.sources.map(s => manhattan(best, s)));
+  }
+  if (input.spawns && input.spawns.length > 0) {
+    summary.leftoverSpawnToAnchor = Math.min(...input.spawns.map(s => manhattan(best, s)));
   }
   return summary;
 }

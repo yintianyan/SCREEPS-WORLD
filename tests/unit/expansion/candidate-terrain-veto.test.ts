@@ -44,6 +44,27 @@ describe("buildCandidate — R651 选点前置否决", () => {
     expect(c.terrain.anchorToController).toBe(8);
   });
 
+  it("R651b：遗留 spawn 距锚点 14 ⇒ 拒（布局被旧资产锚死）", () => {
+    const c = build({
+      wallRatio: 0.1,
+      anchorToController: 10,
+      bestAnchorScore: 20,
+      leftoverSpawnToAnchor: 14,
+    });
+    expect(c.status).toBe("REJECTED");
+    expect(c.vetoReason).toContain("leftover-spawn-far");
+  });
+
+  it("R651b：遗留 spawn 距锚点 5 ⇒ 放行（可复用旧资产）", () => {
+    const c = build({
+      wallRatio: 0.1,
+      anchorToController: 10,
+      bestAnchorScore: 20,
+      leftoverSpawnToAnchor: 5,
+    });
+    expect(c.status).toBe("DISCOVERED");
+  });
+
   it("未侦察地形（字段缺省）⇒ 不因地形否决（留给侦察后复核）", () => {
     const c = build({});
     expect(c.status).toBe("DISCOVERED");

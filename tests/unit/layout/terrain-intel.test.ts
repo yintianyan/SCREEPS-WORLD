@@ -60,6 +60,31 @@ describe("summarizeTerrain — 最佳锚点几何", () => {
     expect(s.anchorToSources).toBeTypeOf("number");
   });
 
+  it("R651b：遗留 spawn 远 ⇒ leftoverSpawnToAnchor 大（回 claim 布局校验）", () => {
+    const s = summarizeTerrain({
+      getTerrainValue: plain(),
+      sources: [
+        { x: 12, y: 25 },
+        { x: 38, y: 25 },
+      ],
+      controller: { x: 25, y: 40 },
+      exits: [{ x: 0, y: 25 }],
+      spawns: [{ x: 45, y: 5 }],
+    });
+    expect(s.leftoverSpawnToAnchor).toBeTypeOf("number");
+    expect(s.leftoverSpawnToAnchor!).toBeGreaterThan(12);
+  });
+
+  it("无 spawn ⇒ leftoverSpawnToAnchor 缺省", () => {
+    const s = summarizeTerrain({
+      getTerrainValue: plain(),
+      sources: [{ x: 20, y: 25 }],
+      controller: { x: 25, y: 30 },
+      exits: [],
+    });
+    expect(s.leftoverSpawnToAnchor).toBeUndefined();
+  });
+
   it("与 state-machine 同源：锚点评分由同一 selectAnchors 产出（平地应为正）", () => {
     const s = summarizeTerrain({
       getTerrainValue: plain(),

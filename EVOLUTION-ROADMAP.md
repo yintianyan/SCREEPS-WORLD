@@ -1182,6 +1182,18 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-28 11:0xZ 立格，R652；上一条＝R651 格「选点前置」；本格补上**回 claim 遗留 spawn 校验**并清掉旧计划）
+
+**主目标：补完 R651 欠项 —— 回 claim 房的布局被旧资产锚死时，立项前就拒。**
+- `summarizeTerrain` 新增输入 `spawns` 与输出 `leftoverSpawnToAnchor`（最佳锚点到**任何** spawn 的曼哈顿距离，含无主遗迹）；`collectRoomVision` 复用已扫的 `structures`，零额外 find。
+- `RoomIntel` 加 `leftoverSpawnToAnchor`（静态、终身保留）；`buildCandidate` 新增否决 `leftoverSpawnToAnchor > 12` ⇒ `leftover-spawn-far=N`；`isCandidateStillValid` 同尺复核。
+- 测试 +4（terrain-intel：远 spawn/无 spawn；candidate：14 拒/5 放行），全量 unit 426·5,594、integration 30·239 绿。
+- **部署**：sha `be53d3f0d803`（线上 811,712 B 同 sha）。
+
+**旧计划处置**：R651 之前晋升的 6 条 `WAITING_EXECUTION` 是在**没有地形指标**的 intel 上立的，可能绕过新门。按「不 claim 未做地形侦察的目标」原则，把它们统一置 `CANCELLED`（`expansionPausedUntil` 保留），待 readiness 恢复、侦察重建 intel 后由 planner 重新立项。
+
+同轮预写＝**E750** 解除暂停前，计划表内不得有 `WAITING_EXECUTION`；**E751** 新一轮侦察后，候选的 `vetoReason` 会成规模出现 `terrain-walls/anchor-far-ctrl/anchor-score/leftover-spawn-far` 四类，且 `expansionCandidates` 的 Q 数下降；**E752** 任何 claim 必须同时满足：intel 含地形五项 + 四项否决全过 + `ea=true`。
+
 ### 4.0（10-28 10:5xZ 立格，R651；上一条＝R650 格「取消 W38S58」；本格落地**选点前置校验 + 评分 v2**）
 
 **主目标：把地形/布局从「claim 后评估」前移到「立项前否决」。**

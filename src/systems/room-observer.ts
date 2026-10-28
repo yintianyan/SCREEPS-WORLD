@@ -307,6 +307,10 @@ function collectRoomVision(room: Room): RoomVisionIntel {
         : undefined,
       exits: (room.find(FIND_EXIT) ?? []).map(p => ({ x: p.x, y: p.y })),
       mineral: mineral ? { x: mineral.pos.x, y: mineral.pos.y } : undefined,
+      // R651b：回 claim 房布局校验 —— 房内任何 spawn（含无主遗迹）到最佳锚点的距离。
+      spawns: structures
+        .filter(s => s.structureType === STRUCTURE_SPAWN)
+        .map(s => ({ x: s.pos.x, y: s.pos.y })),
     });
   })();
 
