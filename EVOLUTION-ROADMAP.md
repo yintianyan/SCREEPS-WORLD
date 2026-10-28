@@ -1182,6 +1182,21 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-28 10:2xZ 立格，R650；上一条＝R649 格「三层自锁解除」；本格**按用户指令取消 W38S58 占领**并定版「选点前置校验」）
+
+**W38S58 实测定性：不是好目标。** 地形墙 1,253/2,500＝**50.1%**；spawn 遗留位 (28,28) 到 controller (15,13) **曼哈顿 28 格**、到两源 (32,15)/(26,18) 13–15 格；11 段 constructedWall 是旧工事。这个布局是**旧拥有期遗留**决定的，不是 `selectAnchors` 算出来的。
+
+**取消占领（已执行，t=83,922,722）**：写 `kernel.roomRelease.W38S58={startedAt, reason:0(Manual)}`（territory-manager 接管：排空→unclaim→清账→重占排除）；计划 W38S58 → `CANCELLED`；`kernel.expansion` 清零；**`expansionPausedUntil = t+20,000`** 暂停新 claim，等选点评分升级后再放行。现读：`releaseAt` 已写、6 只 home creep 全部 `recycle=true`、房仍属我们（unclaim 等排空/截止）。
+
+**选点为什么会失守**：候选评分只用 `exitCount`（defensibility）与 risk 的 `wallCount`；`layoutFitness` 恒 0.5；**布局可行性（`selectAnchors`/距离场）只在 claim 之后跑**（`seedLayoutAnchor`），而回 claim 房还会被遗留 spawn 锚死。⇒ 地形/布局是**事后**才评估的。
+
+**R651 定版（下一轮主目标）：选点前置校验**
+1. 侦察那趟在 intel 落 `wallRatio`、`bestAnchorScore`（用同一 `selectAnchors`）、`anchorToController`、`anchorToSources`、`swampRatio`；
+2. 立项门：`kind∈{highway,sk}` 直接拒（无 controller）；`wallRatio>0.4` 拒；`anchorToController.pathCost> 阈值` 拒；`bestAnchorScore` 低于地板拒；
+3. 评分加 center 权重；高速邻接只进远矿/Deposit 评分；
+4. 回 claim 房：遗留 spawn 必须贴近 `bestAnchor`（否则视为「布局已被旧资产锚死」降权/拒）；
+5. 测试：W38S58 实测参数作为反例 fixture（wallRatio 0.50 + 28 格 ⇒ 必须拒）。
+
 ### 4.0（10-28 10:1xZ 立格，R649；上一条＝R648 格「地形/走廊房定版」；本格解开**回 claim 年轻房的第三层自锁：恢复态冻结 upgrader**）
 
 **主目标：让 RCL2 新房能升级脱困。** 代码考古确认 `colonyStateFreezesRole` 在 recovery/bootstrap 冻结 P2+，upgrader（P2、未声明 recoveryEligible）被冻 ⇒ 控制器停在 150/45,000、ttd 一路掉到 1,792 ⇒ **房间永远出不了 recovery**（自锁闭环）。修法：新增自报标志 `recoveryEligibleYoungRoom`（RolePolicy→CreepRole→kernel），kernel 仅当 `0 < phase.rcl < 4` 时豁免；成熟房恢复态仍冻结以保能量链。**闸门**：typecheck 0；unit 423 文件·5,577 例；integration 30·239 全绿。**部署**：sha `5338c41bfbbe`（线上 808,333 B 同 sha）。
