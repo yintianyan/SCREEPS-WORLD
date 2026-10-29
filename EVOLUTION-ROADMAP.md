@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-29 12:4xZ 立格，R658；上一条＝R655 格「指令执行 W39S55」；本格记录 **spawn 建成 + 经济启动**）
+
+**里程碑（线上现读 t=83,942,686）**：W39S55 `expansion.state=economic_startup / checkpointsPassed=3`（bootstrapping → economic_startup 已跨过）；**spawn 落在 (23,18)＝`layout.anchor`，逐格一致**（E756 位置 PASS）；房间 `colonyState=normal / phase=growth`、RCL2（progress 15,365）、spawn 能量 300、home=W39S55 编制 12 只、无在途工地；CPU `tight 13.98`。⇒ 用户指令的链路闭环：**claim → bootstrapping → spawn@锚点 → economic_startup**，且新 claim 房不再继承"长通勤骨架"。
+
+**代价与教训**：spawn 工地跨越了一代拓荒的寿命（前一代 15 只全员寿终、空窗 ~200 拍，由 sponsor 连续补派接上）；无 spawn 房的能量链（无 container、50 carry/人、build 耗能）把 15k hits 拖成 >1,500 拍。**下一轮代码目标（供给侧）**：bootstrap 期先落 container 或按 `build-rate × 剩余 hits` 定编，避免"死一轮才建成"。
+
+同轮预写＝**E759** `economic_startup → integrating` 需要连续净流为正的 streak（按当前 tick 速度预计数小时量级）；**E760** W39S55 编制应从 12 收到 6–8（spawn 自孵 + 远矿退出后），CPU 回落到 ≤13.0；**E761** spawn 位置在后续扩展中一律等于 `layout.anchor`（新 claim 房无遗留资产时不出现偏移）。
+
 ### 4.0（10-29 立格，R655；上一条＝R653 格「侦察补位」；本格**按用户指令直接执行 W39S55**）
 
 **指令**：解除暂停并让 W39S55 执行。执行方式（运维写入，t=83,925,732）：计划 W39S55 `EVALUATED→EXECUTING`；`kernel.expansion={state:"preparing", target:W39S55, sponsor:W37S58, planId:"W39S55@83290684", operationId:"op:W39S55:83925732"}`；`expansionPausedUntil` 已在 R654 清除。**绕过 readiness（G4+G6 未绿）**，但执行链自身门（预算预留/claimer/claimTimeout）照常。
