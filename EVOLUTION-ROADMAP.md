@@ -1192,6 +1192,8 @@
 
 同轮预写＝**E756** 600 拍内 W39S55 出现 spawn 工地并建成于锚点附近（±3 格）；**E757** 新 claim 房不再继承"spawn 距 controller>25"的骨架（锚点校验生效）；**E758** 若 CPU 继续 tight，bootstrap 的 checkpoints 推进会以每次 ≤1 档、每档 ≥100 拍的节奏前进（budget skip 所致）。
 
+**R657 现场（10-29 07:2xZ）＝bootstrap 换代空窗**：spawn 工地停在 **14,692/15,000**——旧一代拓荒（9 worker+6 builder）在约 1,160 拍里**全员寿终**（前一批 TTL 339–1,032），房内 0 creep、能量 0、`colonyState` 回 `recovery`；sponsor 已连续补派（home=W39S55 的 8 只新拓荒在 W37S58/W38S56/W38S57/W38S58 途中，队列 builder×2）。⇒ **教训：bootstrap 总时长可以超过 creep 寿命（≈1,500 拍）**，完成度靠"连续补派"维持；本次补派生效但出现 ~200 拍空窗，剩余 308 hits 等新 builder 到位（~60 拍工作量）。服务器当前 ~4.5s/拍，通勤被放大。**设计债**：无 spawn 房的 bootstrap 能量链（无 container、每人 50 carry、build 耗能）让 15k hits 的 spawn 工地跨越多代 creep；下一轮评估"先建 container/或按 build-rate 定编"的 bootstrap 供给侧。
+
 **判效（10-29，+10.7k 拍）**：**E756 位置 PASS、节奏修正**。W39S55 已 **RCL2**、`colonyState=normal/growth`；**spawn 工地 (23,18)＝锚点逐格一致**，`progress 10,189/15,000`；房内 15 只拓荒（9 worker + 6 builder，home 全是 W39S55，由 sponsor 代孵）。实测当前 build 速率 **≈13.8 hits/拍**（29 拍 +400），剩余 ~4,800 hits ⇒ ETA ~350 拍。⇒ 前 10k 拍的"慢"主要是**工地晚开工/拓荒未到齐**，不是资源断链；`checkpointsPassed` 仍 1（等 spawn 建成）。观察项：15 只拓荒远超配置（2 worker + 2 builder）的稳态编制，换房期 CPU 13.6 tight，spawn 建成后应按 `bootstrap` 退出条件回收冗余。
 
 ### 4.0（10-28 11:1xZ 立格，R653；上一条＝R652 格「遗留 spawn 校验」；本格补上**选点侦察补位**）
