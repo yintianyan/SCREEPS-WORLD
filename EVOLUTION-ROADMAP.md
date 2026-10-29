@@ -1182,6 +1182,20 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-29 16:0xZ 立格，R661；上一条＝R660 格「v3 合约 + lab 修复」；本格**落地 V3 模板 + 全 RCL 稳定性模拟**）
+
+**V3 模板（`compact-core-v3.ts`）**：几何继承 v2 的偶校验棋盘（range1 约束下最密），两处功能修正——
+1. **Terminal 移到 (-2,2)**：与 storage (0,2) Chebyshev **2**（原 (4,6) 为 6），缩短终端↔仓储最后一公里；
+2. lab RCL7 批次修正（继承 R660：RCL7 上限 6，NE 反应三连保留）。
+其余 cells 与 v2 相同；controller/source link 仍不固定（位置随房变化），由 task-factory 按角色动态放置。
+
+**全 RCL 稳定性模拟（`layout-v3-fullrcl.test.ts`，12 例）**：4 种地形（open / 外围 20% 墙的真实形态 / 30% 均匀墙的敌意形态 / 全沼泽）× 3 个锚点（中心、贴边 (12,12)、`selectAnchors` 解出的锚点），按 RCL2→8 **逐批增量放置**，模板格被墙/占用时允许 ≤8 格邻近重定位，且放置时必须过**密封守卫**（等价生产 `wouldSeal`）。每批之后断言：无密封结构、每类数量 ≤ 上限、storage link 重定位后仍距 storage ≤2。
+**结果**：open/banded/swamp 全部 60 cells 放置成功、零缺口、零密封；**敌意 30% 墙：零密封，但允许 ≤20% 缺口**（生产会静默缺建）——这量化了"30% 墙仍可 claim 但布局会残缺"的风险。
+
+**合约更新**：`layout-v3-contract` 改为校验 V3（20 例），新增 terminal↔storage ≤2 断言；布局全量 **19 文件·281 例**、unit **428 文件·5,630 例**、integration **30·239** 全绿。**尚未部署**：planner/seedLayoutAnchor 目前硬绑 V2，需先加"按 `layout.templateId` 选模板"的小改动，再让下一个新 claim 走 V3；W39S55 已按 V2 落位，不迁移。
+
+**建议**：把 R651 的 `wallRatio>0.4` 门收紧到 **0.3**（与模拟的"30% 墙开始出现缺口"对齐），并给新 claim 加"锚点周围 ±6 可放率 ≥85%"的准入判据——两项都属选点策略，纳入下一轮。
+
 ### 4.0（10-29 15:0xZ 立格，R660；上一条＝R659 格「老房审计+布局深查」；本格为 v3 建立**可执行的布局合约**并抓到一枚真实模板 bug）
 
 **目标（用户要求）**：v3 必须考虑 RCL 升级批次、建筑数量/位置、每个建筑是否**真的发挥作用**；要有完整 RCL 下的稳定性、地形、锚点测试，部署前排除干扰。

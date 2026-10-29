@@ -5,7 +5,7 @@
  * 以及「storage 漂移出模板格时动态 storage-link 仍能落位」的回归（W38S56 教训）。
  */
 import { describe, expect, it } from "vitest";
-import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
+import { COMPACT_CORE_V3 } from "../../../src/domain/layout/templates/compact-core-v3";
 import { classifyLinkRole } from "../../../src/domain/economy/links";
 import { createStorageLinkTask } from "../../../src/domain/layout/task-factory";
 import { computeDistanceField } from "../../../src/domain/layout/terrain-analysis";
@@ -17,7 +17,7 @@ const abs = (dx: number, dy: number) => ({ x: ANCHOR.x + dx, y: ANCHOR.y + dy })
 
 /** 某 RCL 应存在的 cells。 */
 function cellsAt(rcl: number) {
-  return COMPACT_CORE_V2.cells.filter(c => c.minRcl <= rcl);
+  return COMPACT_CORE_V3.cells.filter(c => c.minRcl <= rcl);
 }
 
 describe("v3 合约 — 每 RCL 的数量/唯一性/走道", () => {
@@ -67,8 +67,8 @@ describe("v3 合约 — 每个结构都够得着（range1 含对角）", () => {
 });
 
 describe("v3 合约 — storage link 的角色与位置", () => {
-  const storageCell = COMPACT_CORE_V2.cells.find(c => c.structureType === STRUCTURE_STORAGE)!;
-  const linkCells = COMPACT_CORE_V2.cells.filter(c => c.structureType === STRUCTURE_LINK);
+  const storageCell = COMPACT_CORE_V3.cells.find(c => c.structureType === STRUCTURE_STORAGE)!;
+  const linkCells = COMPACT_CORE_V3.cells.filter(c => c.structureType === STRUCTURE_LINK);
 
   it("模板含 storage link cell，且依赖 storage", () => {
     expect(storageCell).toBeDefined();
@@ -99,6 +99,15 @@ describe("v3 合约 — storage link 的角色与位置", () => {
       2,
     );
     expect(role).toBe("storage");
+  });
+});
+
+describe("v3 合约 — terminal 紧贴 storage（R661 优化）", () => {
+  it("terminal 到 storage 的 Chebyshev ≤2（最后一公里）", () => {
+    const storage = COMPACT_CORE_V3.cells.find(c => c.structureType === STRUCTURE_STORAGE)!;
+    const terminal = COMPACT_CORE_V3.cells.find(c => c.structureType === STRUCTURE_TERMINAL)!;
+    const d = Math.max(Math.abs(terminal.dx - storage.dx), Math.abs(terminal.dy - storage.dy));
+    expect(d).toBeLessThanOrEqual(2);
   });
 });
 
