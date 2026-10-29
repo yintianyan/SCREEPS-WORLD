@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-29 14:0xZ 立格，R659；上一条＝R658 格「economic_startup」；本格**老房稳定性审计 + 布局深查**）
+
+**老房审计（t=83,945,988）**：W37S58 `normal/steady` RCL8、storage **99,597**（10-28 为 228,320，下降＝新房间代孵/输送的投资支出，gate +7.51 仍正）；W38S56 `normal/growth` RCL7（progress 536,860）、storage 103,525（升）、1 个工地；W39S55 RCL2（progress 24,528）、10 只、4 个工地。帝国 45 只、**CPU tight 15.7**（接近 constrained 16），`upgrader/idle-cadence` 跳 1,179 拍——老房 upgrader 被 R617/R632 刹车闲置却仍吃 CPU。**动作**：回收 W38S56 两只 idle upgrader（`-cpq` TTL 90、`-cqi` TTL 810，t=83,946,009，Memory 写入已记），保留核心 1 只（RCL8 降级维护）与新房间 3 只（rcl<7 不受刹车）。
+
+**storage-link 深查**：**工地存在**——W38S56 link site **(24,11)**，紧贴 storage (23,11)，progress **3,147/5,000（63%）**；现有 link 3 只 `(31,21)(27,19)(13,21)` + 该 site = **4 = RCL7 上限**。它**不在固定模板里**是设计使然：`compact-core-v2` 的 `core.link.02` 已因"固定位会被 classifyLink 误判为 storage link"而删除，非核心 link 由 `task-factory` 按 `source→controller→storage` 角色动态放置；`createStorageLinkTask` 用 `findAdjacentBuildable(storage, role=storage)` 找邻格，并在 `existing+site+queued < maxLinks` 时才建。⇒ "没预留位置"是错觉：位置是动态解出来的，且已被工地占用；未建成只是**建造吞吐**问题。
+
+**布局紧凑度（定量）**：v2 是**偶校验棋盘**（结构在 `(dx+dy)` 偶格，奇数格留空）⇒ 密度 **50%**，且每结构 4 正交邻格天然空闲。按 transfer/spawn **range=1（含对角）**，50% 已是"每结构至少 1 个可站邻格"约束下的**最密可行解**；「十字四连」若把 4 个结构围在中心格周围，密度降到 ≤40%（4/9），并没有更紧凑。真正可优化的是：①**link 槽位进模板**（storage/controller/source 固定格，避免动态放置延迟与抢占）；②**道路收敛**（W38S56 现有 91 条路，应按"spawn/storage→source/controller 正交脊柱"裁剪，而非铺满环）；③**填充效率**（棋盘车道上的一个站位可 range1 触及 8 个结构，已是上限）。⇒ 下一轮实现 v3：模板加 link cells + 道路脊柱，先在 W39S55 之外的**下一个新 claim** 验证，不在已建 50 extension 的 W38S56 上迁移。
+
 ### 4.0（10-29 12:4xZ 立格，R658；上一条＝R655 格「指令执行 W39S55」；本格记录 **spawn 建成 + 经济启动**）
 
 **里程碑（线上现读 t=83,942,686）**：W39S55 `expansion.state=economic_startup / checkpointsPassed=3`（bootstrapping → economic_startup 已跨过）；**spawn 落在 (23,18)＝`layout.anchor`，逐格一致**（E756 位置 PASS）；房间 `colonyState=normal / phase=growth`、RCL2（progress 15,365）、spawn 能量 300、home=W39S55 编制 12 只、无在途工地；CPU `tight 13.98`。⇒ 用户指令的链路闭环：**claim → bootstrapping → spawn@锚点 → economic_startup**，且新 claim 房不再继承"长通勤骨架"。
