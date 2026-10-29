@@ -144,7 +144,8 @@ export const COMPACT_CORE_V2: Blueprint = {
     cell("core.lab.05", 4, -6, STRUCTURE_LAB, 7, "rcl7", 2, ["core", "industry"]),
     // NW cluster（2 labs，可 boost）
     cell("core.lab.06", -6, 4, STRUCTURE_LAB, 7, "rcl7", 2, ["core", "industry"]),
-    cell("core.lab.07", -6, 6, STRUCTURE_LAB, 7, "rcl7", 2, ["core", "industry"]),
+    // R660 修复：RCL7 上限 6 —— NW 第二只 lab 下放到 RCL8（NE 反应三连 lab03/04/05 保留在 RCL7）。
+    cell("core.lab.07", -6, 6, STRUCTURE_LAB, 8, "rcl8", 2, ["core", "industry"]),
     // SW cluster（3 labs，可反应：lab08+lab09 → lab10）
     cell("core.lab.08", -6, -4, STRUCTURE_LAB, 8, "rcl8", 2, ["core", "industry"]),
     cell("core.lab.09", -6, -6, STRUCTURE_LAB, 8, "rcl8", 2, ["core", "industry"]),

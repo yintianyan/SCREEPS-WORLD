@@ -1182,6 +1182,26 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-29 15:0xZ 立格，R660；上一条＝R659 格「老房审计+布局深查」；本格为 v3 建立**可执行的布局合约**并抓到一枚真实模板 bug）
+
+**目标（用户要求）**：v3 必须考虑 RCL 升级批次、建筑数量/位置、每个建筑是否**真的发挥作用**；要有完整 RCL 下的稳定性、地形、锚点测试，部署前排除干扰。
+
+**已落地：`tests/unit/layout/layout-v3-contract.test.ts`（20 例，全绿）**
+1. 每个 RCL(2–8)：位置唯一 + 结构全在偶校验格（棋盘走道不变量）。
+2. 每个 RCL：各 structureType 数量 ≤ `CONTROLLER_STRUCTURES` 上限（**这条抓到了真 bug**）。
+3. RCL8 全布局：**每个结构至少 1 个空格邻格**（8 邻域，按 range1 含对角）。
+4. storage link：cell 存在、`requires=[storage]`、到 storage Chebyshev ≤1、`classifyLinkRole` 判为 storage（controller/source 远离时不被抢分类）。
+5. 关键结构（spawn/storage/terminal/factory/tower/lab）均有可站邻格。
+6. 地形：开阔房 100%；真实形态（核心区开阔+外围 20% 墙）锚点可解且 RCL8 可放率 ≥85%；敌意地形（30% 均匀墙、无开阔口袋）允许"锚点选择拒绝"，但若给出解则周围可放率必须 ≥70%——**不允许有解但碎**。
+7. 锚点：`selectAnchors` 在开阔地形产出锚点且 ±6 核心域不出界。
+8. **漂移回归（W38S56 教训）**：storage 不在模板格时，`createStorageLinkTask` 仍返回落在 storage 邻域（≤2）的任务；槽位满（RCL7=4）时返回 undefined。
+
+**真实缺陷修复**：模板在 **RCL7 放了 7 个 lab，超过上限 6**（`CONTROLLER_STRUCTURES.lab[7]=6`）。修复：`core.lab.07` 下放 RCL8，保留 RCL7 的 NE 反应三连（lab.03+lab.04→lab.05）；RCL8 共 10 个仍合规。该第 7 个 lab 此前在产线永远会被 `rcl` 校验拒绝（静默缺口/重复尝试），修复不改变既有已建布局。
+
+**闸门**：unit **427 文件·5,617 例**、integration **30·239** 全绿。**尚未部署**（本轮无 src 行为变更除模板批次外；模板修复随下次部署生效）。
+
+**下一步**：在此合约上做 v3 的真实优化——①道路脊柱（按 spawn/storage→source/controller 主轴，替代 91 条环形路）；②controller/source link 的**动态预留规则**（模板无法固定，因 controller/source 位置房房不同；用"锚定半径+角色优先级+失败回退"写死）；③锚点评分纳入 `wallRatio/swampRatio`（与 R651 的 intel 同尺）；④全 RCL 模拟放置（合成地形 × 多锚点）通过后再部署到新 claim。
+
 ### 4.0（10-29 14:0xZ 立格，R659；上一条＝R658 格「economic_startup」；本格**老房稳定性审计 + 布局深查**）
 
 **老房审计（t=83,945,988）**：W37S58 `normal/steady` RCL8、storage **99,597**（10-28 为 228,320，下降＝新房间代孵/输送的投资支出，gate +7.51 仍正）；W38S56 `normal/growth` RCL7（progress 536,860）、storage 103,525（升）、1 个工地；W39S55 RCL2（progress 24,528）、10 只、4 个工地。帝国 45 只、**CPU tight 15.7**（接近 constrained 16），`upgrader/idle-cadence` 跳 1,179 拍——老房 upgrader 被 R617/R632 刹车闲置却仍吃 CPU。**动作**：回收 W38S56 两只 idle upgrader（`-cpq` TTL 90、`-cqi` TTL 810，t=83,946,009，Memory 写入已记），保留核心 1 只（RCL8 降级维护）与新房间 3 只（rcl<7 不受刹车）。
