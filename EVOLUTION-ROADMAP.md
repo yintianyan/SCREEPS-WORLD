@@ -1182,6 +1182,15 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-29 19:0xZ 立格，R665；上一条＝R663/R664 格「按房引擎+重占」；本格**修掉重占竞态的设计债**并核 V3 落位签名）
+
+**代码**：`finalizeRelease` 在删除 `Memory.rooms` 之外，同时清理 **segment 里的布局冷数据**（`overrides/blocked`）并标脏——重占同一房时旧 overrides 会把新模板 cell 锚回旧位置（W39S55 实测 claim 后 planner 立刻重建 7 个旧工地）。`RawMemory` 不可用时 try/catch 跳过，不能挡住清账。
+**测试**：unit **429 文件·5,640 例**、integration **30·239** 全绿（territory 两例因测试环境无 RawMemory 一度红，已用环境守卫修复）。**部署** sha `831a0ea4dc7d`（线上 822,709 B 同 sha）。
+
+**V3 落位签名（线上现读）**：W39S55 `layout=[compact-core-v3, template, 1168(23,18)]`、`bootstrapping/cp=1`、**RCL2**；任务键为 **`core.ext.01..05`**（位置 (22,19)/(24,17)/(22,17)/(25,18)/(26,19) —— 全部是 V3 模板偏移），spawn 工地 (23,18)=锚点，source container 两个，`logistics.container.controller` 已在列。⇒ template 模式真实生效（此前 constraint 模式会把 tower 放到 storage 格等）。
+
+**下一步**：spawn 建成 → CP2/CP3；观察 `core.terminal.01` 在 RCL6 是否落在 **(-2,2)**（V3 与 V2 的唯一位置差异），作为 V3 端到端签名；同时盯 RCL 重新爬升。
+
 ### 4.0（10-29 18:0xZ 立格，R663/R664；上一条＝R662 格「V3 接线」；本格**按房布局引擎 + W39S55 重占**）
 
 **R663 按房布局引擎（已部署 sha `47d93ad5ea17`）**：`LayoutMemory.mode?: "constraint"|"template"`；`planCoreStage` 新增 `blueprint` 参数，template 分支不再硬绑 V2，改由调用方按 `layout.templateId` 注入；`layout-planner` 用 `resolveLayoutMode(layout.mode, CONFIG.layout.mode)` 选引擎。老房（初始化时）显式写 `templateId:"compact-core-v2", mode:"constraint"` 保持零改动；`seedLayoutAnchor`（新 claim）写 **compact-core-v3 + mode:"template"**。测试：`resolveLayoutMode` 2 例、V3/V2 差异面 1 例（位置差异只有 terminal、RCL 差异为空）；unit **429 文件·5,640 例**、integration **30·239** 全绿。

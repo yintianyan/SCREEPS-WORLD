@@ -23,6 +23,7 @@ import {
   type RoomReleaseDirective,
 } from "../../domain/empire/room-release";
 import { abandonOpsForReleasedHome } from "../remote/op-lifecycle";
+import { markLayoutDirty, readLayoutSegment } from "../../kernel/segment-store";
 
 /** 角色名 → 稳定编码（与 event-log 的 roleCode 无关，此处只用于日志体积控制）。 */
 const LABEL = "territory-manager";
@@ -188,6 +189,20 @@ function finalizeRelease(
   const roomMem = Memory.rooms[room];
   const opsDropped = roomMem?.remoteOps ? Object.keys(roomMem.remoteOps).length : 0;
   if (roomMem) delete Memory.rooms[room];
+  // R665：布局冷数据（overrides/blocked）住在 segment，删 Memory.rooms 不会带走它。
+  // 重占同一房时，旧 overrides 会把新模板 cell 锚回旧位置（W39S55 实测：claim 后
+  // planner 立刻按旧 override/任务重建 7 个旧工地）。释放即清，重占从零开始。
+  try {
+    if (typeof RawMemory !== "undefined") {
+      const layoutSeg = readLayoutSegment();
+      if (layoutSeg[room]) {
+        delete layoutSeg[room];
+        markLayoutDirty();
+      }
+    }
+  } catch {
+    // segment 不可用不能挡住清账（测试环境无 RawMemory；线上读取失败也只是留一份冷数据）。
+  }
   const tuning = kernel.tuning;
   if (tuning?.rooms) delete tuning.rooms[room];
   if (tuning?.lastEval) delete tuning.lastEval[room];
