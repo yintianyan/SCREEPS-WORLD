@@ -7,6 +7,7 @@
 
 import { computeDistanceField } from "./terrain-analysis";
 import { selectAnchors } from "./anchor-selection";
+import { COMPACT_CORE_V3 } from "./templates/compact-core-v3";
 
 /** 进 intel 的地形摘要（0..1 比例 + 锚点几何）。 */
 export interface TerrainIntelSummary {
@@ -22,6 +23,8 @@ export interface TerrainIntelSummary {
   anchorToSources?: number;
   /** 回 claim 房：最佳锚点到**遗留 spawn** 的曼哈顿距离（无 spawn 则 undefined）。 */
   leftoverSpawnToAnchor?: number;
+  /** R662：最佳锚点上 v3 模板格的地形可放率（0..1）——"看起来能放"变成可计算的门。 */
+  anchorPlaceableRatio?: number;
 }
 
 export interface TerrainIntelInput {
@@ -90,5 +93,14 @@ export function summarizeTerrain(input: TerrainIntelInput): TerrainIntelSummary 
   if (input.spawns && input.spawns.length > 0) {
     summary.leftoverSpawnToAnchor = Math.min(...input.spawns.map(s => manhattan(best, s)));
   }
+  // R662：模板格在锚点周围的地形可放率（1..48 且非墙）。
+  let fit = 0;
+  for (const c of COMPACT_CORE_V3.cells) {
+    const x = best.x + c.dx;
+    const y = best.y + c.dy;
+    if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+    if ((getTerrainValue(x, y) & TERRAIN_WALL) === 0) fit++;
+  }
+  summary.anchorPlaceableRatio = fit / COMPACT_CORE_V3.cells.length;
   return summary;
 }

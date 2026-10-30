@@ -98,3 +98,50 @@ describe("summarizeTerrain — 最佳锚点几何", () => {
     expect(s.bestAnchorScore!).toBeGreaterThan(0);
   });
 });
+
+describe("summarizeTerrain — R662 锚点可放率", () => {
+  it("开阔地形 ⇒ ratio = 1", () => {
+    const s = summarizeTerrain({
+      getTerrainValue: plain(),
+      sources: [
+        { x: 12, y: 25 },
+        { x: 38, y: 25 },
+      ],
+      controller: { x: 25, y: 40 },
+      exits: [{ x: 0, y: 25 }],
+    });
+    expect(s.anchorPlaceableRatio).toBeDefined();
+    expect(s.anchorPlaceableRatio!).toBeGreaterThanOrEqual(0.999);
+  });
+
+  it("外围 20% 墙 + 核心开阔 ⇒ ratio ≥ 0.85", () => {
+    const banded = (x: number, y: number) => {
+      const d = Math.max(Math.abs(x - 25), Math.abs(y - 25));
+      if (d <= 7) return 0;
+      return (x * 7 + y * 13) % 10 < 2 ? 1 : 0;
+    };
+    const s = summarizeTerrain({
+      getTerrainValue: banded,
+      sources: [
+        { x: 15, y: 25 },
+        { x: 35, y: 25 },
+      ],
+      controller: { x: 25, y: 38 },
+      exits: [],
+    });
+    expect(s.anchorPlaceableRatio!).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it("30% 均匀墙 ⇒ ratio < 1（并通常低于 0.85）", () => {
+    const hostile = (x: number, y: number) => ((x * 7 + y * 13) % 10 < 3 ? 1 : 0);
+    const s = summarizeTerrain({
+      getTerrainValue: hostile,
+      sources: [{ x: 15, y: 25 }],
+      controller: { x: 25, y: 38 },
+      exits: [],
+    });
+    if (s.anchorPlaceableRatio !== undefined) {
+      expect(s.anchorPlaceableRatio).toBeLessThan(1);
+    }
+  });
+});

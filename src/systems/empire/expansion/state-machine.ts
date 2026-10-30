@@ -24,7 +24,7 @@ import { querySquad, globalCache } from "../../../kernel/global-cache";
 import { selectAnchors } from "../../../domain/layout/anchor-selection";
 import { computeDistanceField } from "../../../domain/layout/terrain-analysis";
 import { packPos } from "../../../domain/layout/types";
-import { COMPACT_CORE_V2 } from "../../../domain/layout/templates/compact-core-v2";
+import { COMPACT_CORE_V3 } from "../../../domain/layout/templates/compact-core-v3";
 import {
   blacklistTarget,
   emitMilestone,
@@ -718,7 +718,7 @@ function seedLayoutAnchor(room: Room): boolean {
   const roomMem = Memory.rooms[room.name]!;
   roomMem.layout = {
     version: 2,
-    templateId: COMPACT_CORE_V2.id,
+    templateId: COMPACT_CORE_V3.id,
     state: "accepted",
     revision: 0,
     nextPlanTick: 0,

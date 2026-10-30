@@ -242,6 +242,7 @@ interface RoomVisionIntel {
   bestAnchorScore?: number;
   anchorToController?: number;
   anchorToSources?: number;
+  anchorPlaceableRatio?: number;
   sources: number;
   mineralType?: string;
   owner?: string;

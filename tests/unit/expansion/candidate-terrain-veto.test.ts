@@ -18,10 +18,28 @@ describe("buildCandidate — R651 选点前置否决", () => {
     expect(c.vetoReason).toMatch(/terrain-walls|anchor-far-ctrl/);
   });
 
-  it("墙占比 0.41 ⇒ 拒（阈值 0.4）", () => {
-    const c = build({ wallRatio: 0.41, anchorToController: 10, bestAnchorScore: 15 });
+  it("墙占比 0.31 ⇒ 拒（R662 阈值收紧到 0.3）", () => {
+    const c = build({ wallRatio: 0.31, anchorToController: 10, bestAnchorScore: 15 });
     expect(c.status).toBe("REJECTED");
     expect(c.vetoReason).toContain("terrain-walls");
+  });
+
+  it("锚点周围可放率 0.8 ⇒ 拒；0.9 ⇒ 放行（R662）", () => {
+    const bad = build({
+      wallRatio: 0.1,
+      anchorToController: 10,
+      bestAnchorScore: 15,
+      anchorPlaceableRatio: 0.8,
+    });
+    expect(bad.status).toBe("REJECTED");
+    expect(bad.vetoReason).toContain("anchor-fit");
+    const good = build({
+      wallRatio: 0.1,
+      anchorToController: 10,
+      bestAnchorScore: 15,
+      anchorPlaceableRatio: 0.9,
+    });
+    expect(good.status).toBe("DISCOVERED");
   });
 
   it("锚点到 controller 26 格 ⇒ 拒（阈值 25）", () => {

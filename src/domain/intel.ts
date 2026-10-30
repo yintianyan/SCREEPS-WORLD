@@ -64,6 +64,8 @@ export interface RoomIntel {
   anchorToSources?: number;
   /** R651：最佳锚点到遗留 spawn 的曼哈顿距离（无 spawn 则缺省）。 */
   leftoverSpawnToAnchor?: number;
+  /** R662：锚点上 v3 模板格的地形可放率（0..1）。 */
+  anchorPlaceableRatio?: number;
   lastSeen: number;
 }
 
@@ -170,6 +172,7 @@ export function scanNeighborIntel(
     anchorToController?: number;
     anchorToSources?: number;
     leftoverSpawnToAnchor?: number;
+    anchorPlaceableRatio?: number;
   },
   prev?: RoomIntel,
 ): RoomIntel {
@@ -204,6 +207,8 @@ export function scanNeighborIntel(
       intel.anchorToSources = visibleRoom.anchorToSources;
     if (visibleRoom.leftoverSpawnToAnchor !== undefined)
       intel.leftoverSpawnToAnchor = visibleRoom.leftoverSpawnToAnchor;
+    if (visibleRoom.anchorPlaceableRatio !== undefined)
+      intel.anchorPlaceableRatio = visibleRoom.anchorPlaceableRatio;
   } else if (prev) {
     // 无视野：沿用上次观测值（数据会随 lastSeen 保持但陈旧度由消费方判断）。
     if (prev.sources !== undefined) intel.sources = prev.sources;
@@ -223,6 +228,8 @@ export function scanNeighborIntel(
     if (prev.anchorToSources !== undefined) intel.anchorToSources = prev.anchorToSources;
     if (prev.leftoverSpawnToAnchor !== undefined)
       intel.leftoverSpawnToAnchor = prev.leftoverSpawnToAnchor;
+    if (prev.anchorPlaceableRatio !== undefined)
+      intel.anchorPlaceableRatio = prev.anchorPlaceableRatio;
     // 无视野时 lastSeen 不应前移（视野数据没有更新）。
     intel.lastSeen = prev.lastSeen;
   }

@@ -166,10 +166,11 @@ function isCandidateStillValid(roomName: string, tick: number): boolean {
   const intel = getRoomIntel(roomName)?.payload;
   if (intel) {
     if (intel.kind !== "normal") return false;
-    if (intel.wallRatio !== undefined && intel.wallRatio > 0.4) return false;
+    if (intel.wallRatio !== undefined && intel.wallRatio > 0.3) return false;
     if (intel.anchorToController !== undefined && intel.anchorToController > 25) return false;
     if (intel.bestAnchorScore !== undefined && intel.bestAnchorScore < 0) return false;
     if (intel.leftoverSpawnToAnchor !== undefined && intel.leftoverSpawnToAnchor > 12) return false;
+    if (intel.anchorPlaceableRatio !== undefined && intel.anchorPlaceableRatio < 0.85) return false;
   }
   return true;
 }

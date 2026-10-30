@@ -3,7 +3,7 @@ import type { Priority, System, TickContext, RoomSnapshot } from "../../kernel/c
 import { roomPhase } from "../../kernel/phase";
 import { globalCache } from "../../kernel/global-cache";
 import { getRoomLayoutData, markLayoutDirty } from "../../kernel/segment-store";
-import { COMPACT_CORE_V2 } from "../../domain/layout/templates/compact-core-v2";
+import { getTemplateById } from "../../domain/layout/templates";
 import type { BuildTaskCandidate } from "../../domain/layout/task-factory";
 import { planRoads } from "../../domain/layout/road-planner";
 import type { CorridorPathCacheStore } from "../../domain/layout/corridor-roads";
@@ -179,7 +179,7 @@ export const layoutPlannerSystem: System & {
     if (!roomMem.layout) {
       roomMem.layout = {
         version: 2,
-        templateId: COMPACT_CORE_V2.id,
+        templateId: "compact-core-v2",
         state: "accepted",
         revision: 0,
         nextPlanTick: ctx.tick,
@@ -249,7 +249,12 @@ function planStage0Prep(
     // 首次设置锚点，或 spawn 重建在新位置时更新锚点。
     if (layout.anchor === undefined) {
       layout.anchor = anchorPacked;
-      const candidateInput = evaluateCandidate(room, COMPACT_CORE_V2, spawn.pos.x, spawn.pos.y);
+      const candidateInput = evaluateCandidate(
+        room,
+        getTemplateById(layout.templateId),
+        spawn.pos.x,
+        spawn.pos.y,
+      );
       if (candidateInput) {
         layout.anchorScore = scoreCandidate(candidateInput);
       }
@@ -569,7 +574,7 @@ function planStage3RoadsAndFinalize(
     const roadTasks = planRoads({
       snapshot,
       room,
-      blueprint: COMPACT_CORE_V2,
+      blueprint: getTemplateById(Memory.rooms[snapshot.roomName]?.layout?.templateId),
       anchor,
       occupiedSet,
       queue,

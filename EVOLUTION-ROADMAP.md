@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-29 17:0xZ 立格，R662；上一条＝R661 格「V3 模板+全 RCL 模拟」；本格**接线 V3 + 选点门收紧并部署**）
+
+**V3 接线**：新增模板注册表 `getTemplateById(layout.templateId)`（未知/缺失回退 V2，老房不动）；`layout-planner` 的锚点评分与道路规划改为按房内 templateId 取模板；`seedLayoutAnchor`（新 claim）显式写 **compact-core-v3**。现读三房（W37S58/W38S56/W39S55）仍 `compact-core-v2` ⇒ 老房零改动。
+
+**选点门收紧（R662）**：①`wallRatio>0.4 → 0.3`（与模拟「30% 墙开始缺口」对齐）；②新增 `anchorPlaceableRatio`（最佳锚点上 V3 模板格的地形可放率）进 intel/候选，`<0.85` 直接拒（`anchor-fit=0.xx`），执行门同尺复核。
+
+**测试**：+注册表 3 例、+可放率 3 例、+候选门 2 例（0.31 拒 / 0.8 拒 0.9 放行）；unit **429 文件·5,637 例**、integration **30·239** 全绿。**部署** sha `f6f47df44daf`（线上 819,173 B 同 sha），等全局重置生效。
+
+**同轮线上进展（W39S55）**：`expansion.state=integrating`、**checkpointsPassed=4**（CP4 已过：extensions/container 达标）、**RCL3**（progress 11,079）、spawn 300、`normal/growth`；`consecutivePositiveTicks=0`（经济激活 streak 未起），age 1,035。房间 gate −0.10，核心 +7.76。⇒ 距离 `completed` 只差经济激活的连续正流；下一轮核 tower 落地与 streak。
+
 ### 4.0（10-29 16:0xZ 立格，R661；上一条＝R660 格「v3 合约 + lab 修复」；本格**落地 V3 模板 + 全 RCL 稳定性模拟**）
 
 **V3 模板（`compact-core-v3.ts`）**：几何继承 v2 的偶校验棋盘（range1 约束下最密），两处功能修正——

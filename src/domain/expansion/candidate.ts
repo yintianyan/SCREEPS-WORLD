@@ -38,6 +38,8 @@ export interface TerrainSummary {
   anchorToSources?: number;
   /** R651b：最佳锚点到遗留 spawn 的曼哈顿距离（回 claim 房布局校验）。 */
   leftoverSpawnToAnchor?: number;
+  /** R662：锚点上 v3 模板格的地形可放率（0..1）。 */
+  anchorPlaceableRatio?: number;
 }
 
 /** 候选房控制器信息。 */
@@ -144,6 +146,7 @@ export function buildCandidate(
     anchorToController: intel.anchorToController,
     anchorToSources: intel.anchorToSources,
     leftoverSpawnToAnchor: intel.leftoverSpawnToAnchor,
+    anchorPlaceableRatio: intel.anchorPlaceableRatio,
   };
 
   // 控制器信息
@@ -173,7 +176,7 @@ export function buildCandidate(
   else if (released.has(roomName)) vetoReason = "recently-released";
   // R651 选点前置：地形/布局在 claim **之前** 就用同一套锚点尺否决。
   // W38S58 实测反例：wallRatio 0.50、anchorToController 28 ⇒ 必须在立项前被拒。
-  else if (intel.wallRatio !== undefined && intel.wallRatio > 0.4)
+  else if (intel.wallRatio !== undefined && intel.wallRatio > 0.3)
     vetoReason = `terrain-walls=${intel.wallRatio.toFixed(2)}`;
   else if (intel.anchorToController !== undefined && intel.anchorToController > 25)
     vetoReason = `anchor-far-ctrl=${intel.anchorToController}`;
@@ -183,6 +186,9 @@ export function buildCandidate(
   // 新房会继承一条长通勤骨架（W38S58：spawn 28,28 vs controller 15,13 的教训）。
   else if (intel.leftoverSpawnToAnchor !== undefined && intel.leftoverSpawnToAnchor > 12)
     vetoReason = `leftover-spawn-far=${intel.leftoverSpawnToAnchor}`;
+  // R662：锚点周围模板格可放率 <85% ⇒ 布局必然残缺（30% 墙的模拟缺口 ≤20%）。
+  else if (intel.anchorPlaceableRatio !== undefined && intel.anchorPlaceableRatio < 0.85)
+    vetoReason = `anchor-fit=${intel.anchorPlaceableRatio.toFixed(2)}`;
 
   // 初始状态
   let status: CandidateStatus = "DISCOVERED";
