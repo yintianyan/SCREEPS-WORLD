@@ -719,6 +719,8 @@ function seedLayoutAnchor(room: Room): boolean {
   roomMem.layout = {
     version: 2,
     templateId: COMPACT_CORE_V3.id,
+    // R663：新 claim 用 template 引擎 —— V3 模板为唯一放置源（地形冲突走邻近重定位）。
+    mode: "template",
     state: "accepted",
     revision: 0,
     nextPlanTick: 0,

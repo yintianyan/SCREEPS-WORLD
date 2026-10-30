@@ -33,6 +33,7 @@ import {
   DEFAULT_PLACER_CONFIG,
 } from "./constraint-placer";
 import { COMPACT_CORE_V2 } from "./templates/compact-core-v2";
+import type { Blueprint } from "./types";
 
 // ─── 队列去重（makeTryAddTask 提取）──────────────────────────
 
@@ -329,8 +330,18 @@ export interface CoreStageResult {
  * relocation 直接入队（与历史行为一致，不受背景上限约束）。
  * 纯函数——terrain/room 经参数注入，segment 覆盖写由调用方落地。
  */
+/** R663：按房解析布局引擎——房内显式 mode 优先，缺省回落到全局 CONFIG。 */
+export function resolveLayoutMode(
+  roomMode: "constraint" | "template" | undefined,
+  globalMode: "constraint" | "template",
+): "constraint" | "template" {
+  return roomMode ?? globalMode;
+}
+
 export function planCoreStage(input: {
   mode: "constraint" | "template";
+  /** R663：template 模式使用的蓝图（缺省 COMPACT_CORE_V2，保持旧行为）。 */
+  blueprint?: Blueprint;
   snapshot: RoomSnapshot;
   room: Room;
   anchor: { x: number; y: number };
@@ -399,8 +410,9 @@ export function planCoreStage(input: {
   }
 
   // 模板模式（默认）：固定蓝图偏移 + relocation。
+  const blueprint = input.blueprint ?? COMPACT_CORE_V2;
   const coreCandidates = blueprintToTasks(
-    COMPACT_CORE_V2,
+    blueprint,
     anchor.x,
     anchor.y,
     snapshot.roomName,
@@ -413,13 +425,13 @@ export function planCoreStage(input: {
 
   // 禁止落子集合：全部蓝图 cell 绝对坐标 + 队列任务坐标。
   const forbidden = new Set<number>();
-  for (const cell of COMPACT_CORE_V2.cells) {
+  for (const cell of blueprint.cells) {
     forbidden.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
   }
   for (const t of queue) {
     forbidden.add(packPos(t.pos.x, t.pos.y));
   }
-  const cellByKey = new Map(COMPACT_CORE_V2.cells.map(c => [c.key, c]));
+  const cellByKey = new Map(blueprint.cells.map(c => [c.key, c]));
   const RELOCATABLE_FAILURES: ReadonlySet<string> = new Set(["terrain", "occupied", "seal"]);
 
   for (const candidate of coreCandidates) {

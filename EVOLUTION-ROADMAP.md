@@ -1182,6 +1182,12 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-29 18:0xZ 立格，R663/R664；上一条＝R662 格「V3 接线」；本格**按房布局引擎 + W39S55 重占**）
+
+**R663 按房布局引擎（已部署 sha `47d93ad5ea17`）**：`LayoutMemory.mode?: "constraint"|"template"`；`planCoreStage` 新增 `blueprint` 参数，template 分支不再硬绑 V2，改由调用方按 `layout.templateId` 注入；`layout-planner` 用 `resolveLayoutMode(layout.mode, CONFIG.layout.mode)` 选引擎。老房（初始化时）显式写 `templateId:"compact-core-v2", mode:"constraint"` 保持零改动；`seedLayoutAnchor`（新 claim）写 **compact-core-v3 + mode:"template"**。测试：`resolveLayoutMode` 2 例、V3/V2 差异面 1 例（位置差异只有 terminal、RCL 差异为空）；unit **429 文件·5,640 例**、integration **30·239** 全绿。
+
+**R664 W39S55 重占（用户指令：拆已建建筑走新占领流程）**：①停扩张（`kernel.expansion` 清、计划 CANCELLED）；②拆除：spawn 1 + extension 5 + container 3 = **9 结构**，移除 **7 个工地**，销毁 **27 条路**（`left=["controller"]`）；③`controller.unclaim()=OK`，territory-manager finalize（`releasedRooms.W39S55=83,956,518`）；④清重占排除 + 写 `kernel.expansion={preparing,target:W39S55,sponsor:W37S58,op:W39S55:83956546}`；⑤claimer 已孵出并在途（`claiming`，W38S57/TTL 500）。**claim 完成后应由 `seedLayoutAnchor` 写 V3+template 并落锚点**——下一发核 `layout.templateId/mode/anchor`、spawn 位置与 queue 里的 `core.*`（模板）任务。
+
 ### 4.0（10-29 17:0xZ 立格，R662；上一条＝R661 格「V3 模板+全 RCL 模拟」；本格**接线 V3 + 选点门收紧并部署**）
 
 **V3 接线**：新增模板注册表 `getTemplateById(layout.templateId)`（未知/缺失回退 V2，老房不动）；`layout-planner` 的锚点评分与道路规划改为按房内 templateId 取模板；`seedLayoutAnchor`（新 claim）显式写 **compact-core-v3**。现读三房（W37S58/W38S56/W39S55）仍 `compact-core-v2` ⇒ 老房零改动。

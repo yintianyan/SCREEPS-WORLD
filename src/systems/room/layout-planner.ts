@@ -4,6 +4,7 @@ import { roomPhase } from "../../kernel/phase";
 import { globalCache } from "../../kernel/global-cache";
 import { getRoomLayoutData, markLayoutDirty } from "../../kernel/segment-store";
 import { getTemplateById } from "../../domain/layout/templates";
+import { resolveLayoutMode } from "../../domain/layout/planner";
 import type { BuildTaskCandidate } from "../../domain/layout/task-factory";
 import { planRoads } from "../../domain/layout/road-planner";
 import type { CorridorPathCacheStore } from "../../domain/layout/corridor-roads";
@@ -180,6 +181,8 @@ export const layoutPlannerSystem: System & {
       roomMem.layout = {
         version: 2,
         templateId: "compact-core-v2",
+        // R663：先建布局的老房保持 constraint，直到显式迁移。
+        mode: "constraint",
         state: "accepted",
         revision: 0,
         nextPlanTick: ctx.tick,
@@ -390,7 +393,8 @@ function planStage1Core(
   // D2 归位：核心结构规划委托 domain 纯函数（constraint/template 双模式 +
   // 失效 cell relocation 决策）。segment 覆盖写由系统侧落地并统一标脏。
   const result = planCoreStage({
-    mode: CONFIG.layout.mode,
+    mode: resolveLayoutMode(Memory.rooms[snapshot.roomName]?.layout?.mode, CONFIG.layout.mode),
+    blueprint: getTemplateById(Memory.rooms[snapshot.roomName]?.layout?.templateId),
     snapshot,
     room,
     anchor: data.anchor,

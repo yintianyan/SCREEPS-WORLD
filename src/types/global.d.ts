@@ -349,6 +349,9 @@ declare global {
     layout?: {
       version: number;
       templateId: string;
+      /** R663：本房布局引擎。缺省沿用 CONFIG.layout.mode（老房 constraint 不变）；
+       *  新 claim 由 seedLayoutAnchor 写 "template"（V3 模板为唯一放置源）。 */
+      mode?: "constraint" | "template";
       state: "proposed" | "accepted" | "building" | "blocked" | "manual";
       /** 锚点的 packed 位置（x * 50 + y）。 */
       anchor?: number;
