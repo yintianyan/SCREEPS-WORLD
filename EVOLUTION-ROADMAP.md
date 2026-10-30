@@ -1182,6 +1182,17 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-30 11:3xZ 立格，R667；上一条＝R665 格「segment 清理」；本格**量化新占房发育慢的根因**）
+
+**监测（r666 13 发 + r667 首发生读，t=83,961,665）**：layout 恒 `[compact-core-v3, template, 1168]`、`core` 任务 5 条（模板正常）；RCL2 874→6,298（≈2.4/拍，升级端健康）；建造端：spawn **2,824/5,000**、container **3,490 / 641**、extension **1,491 / 555 / 996**、road 0；`in=11 / out=9`；CPU tight 13.57。
+
+**三个真实拖慢因子**：
+1. **能量链**：新房 `energyCapacity=0`（spawn 未建成）、source container 未建成（3,490/5,000）⇒ 无本地缓冲；工人 50 carry，能量要么本地采要么从 sponsor 通勤 4 房。
+2. **补员判据**：9 只 home=W39S55 的 builder 全在**房外**（W37S58/W38S56/W38S57/W38S58）0 能量 idle；`maintainPioneers` 按“存活数”判 builder≥2 已满编 ⇒ 不补员。房内实际干活的是 11 只 worker。
+3. **CPU/拍速**：tight 13.57，`expansion-manager` 被 budget skip；服务器 ~4.5s/拍 ⇒ 同样的 hits 要更久。
+
+**不是模板问题**：`core.ext.*` 坐标全部正确、无 constraint 回退。**修正方向（下一轮代码）**：`maintainPioneers` 改为**目标房内在场计数**（或对无 spawn 房的 builder 补员放宽），并回收“房外 idle 的 pioneer”；source container 建成后本地能量链会自然改善。
+
 ### 4.0（10-29 19:0xZ 立格，R665；上一条＝R663/R664 格「按房引擎+重占」；本格**修掉重占竞态的设计债**并核 V3 落位签名）
 
 **代码**：`finalizeRelease` 在删除 `Memory.rooms` 之外，同时清理 **segment 里的布局冷数据**（`overrides/blocked`）并标脏——重占同一房时旧 overrides 会把新模板 cell 锚回旧位置（W39S55 实测 claim 后 planner 立刻重建 7 个旧工地）。`RawMemory` 不可用时 try/catch 跳过，不能挡住清账。
