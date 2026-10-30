@@ -2,6 +2,7 @@
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import {
+  buildNearestSite,
   fillTarget,
   harvestSource,
   pickupDroppedEnergy,
@@ -68,7 +69,12 @@ const policy: RolePolicy = {
     repairCritical(),
     // 回退到最近 fillTarget。
     fillTarget(),
-    // 无填充目标 — 升级。
+    // R668：bootstrap 建造吞吐 —— worker 原先没有 build 动作，无 spawn 的新房
+    // 只有 2 只 builder 承建 24k hits（spawn+containers+extensions），实测 ~1–2 hits/拍。
+    // 放在 fillTarget 之后、upgradeController 之前：有填充目标先保供给；无填充
+    // （如无 spawn 的新房）时直接建造；建造完才升级。
+    buildNearestSite(),
+    // 无填充目标、无工地 — 升级。
     upgradeController(),
   ],
 };

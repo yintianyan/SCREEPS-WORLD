@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-30 12:0xZ 立格，R668；上一条＝R667 格「发育慢根因」；本格**修吞吐瓶颈：worker 无 build 动作**）
+
+**根因（代码考古）**：`worker` 角色 work 链只有 `fillAssignmentTarget → repairCritical → fillTarget → upgradeController`，**没有 build**。新房目前有 11 只 in-room worker（大多有能量、work），但建造全压在 2 只 `builder`（其中两只还在 `acquire` 饿能）⇒ 实测建造 **~1–2 hits/拍**（spawn 2,824/5,000、三个 extension 各 1,491/555/996），这才是“发育慢”的主因；能量链/补员是次因。
+
+**修法**：worker work 链在 `fillTarget()` 之后、`upgradeController()` 之前插入 `buildNearestSite()`。语义：有填充目标先保供给（成熟房行为不变）；无填充（无 spawn 的新房）时直接建造；建造完才升级。**测试**：unit **429 文件·5,640 例**、integration **30·239** 全绿。**部署** sha `1c383307f977`（线上 822,779 B 同 sha）。
+
+同轮预写＝**E762** 换码后 W39S55 建造速率由 ~1–2 升至 **≥3 hits/拍**（同发看 spawn/extension 工地增量）；**E763** spawn 建成时间显著提前（原按当前速率需 ~2,000+ 拍）；**E764** 成熟房（fillTarget 可解）行为不变——worker 仍先填充，build 只在填充目标不存在时触发。
+
 ### 4.0（10-30 11:3xZ 立格，R667；上一条＝R665 格「segment 清理」；本格**量化新占房发育慢的根因**）
 
 **监测（r666 13 发 + r667 首发生读，t=83,961,665）**：layout 恒 `[compact-core-v3, template, 1168]`、`core` 任务 5 条（模板正常）；RCL2 874→6,298（≈2.4/拍，升级端健康）；建造端：spawn **2,824/5,000**、container **3,490 / 641**、extension **1,491 / 555 / 996**、road 0；`in=11 / out=9`；CPU tight 13.57。
