@@ -1186,7 +1186,9 @@
 
 **R663 按房布局引擎（已部署 sha `47d93ad5ea17`）**：`LayoutMemory.mode?: "constraint"|"template"`；`planCoreStage` 新增 `blueprint` 参数，template 分支不再硬绑 V2，改由调用方按 `layout.templateId` 注入；`layout-planner` 用 `resolveLayoutMode(layout.mode, CONFIG.layout.mode)` 选引擎。老房（初始化时）显式写 `templateId:"compact-core-v2", mode:"constraint"` 保持零改动；`seedLayoutAnchor`（新 claim）写 **compact-core-v3 + mode:"template"**。测试：`resolveLayoutMode` 2 例、V3/V2 差异面 1 例（位置差异只有 terminal、RCL 差异为空）；unit **429 文件·5,640 例**、integration **30·239** 全绿。
 
-**R664 W39S55 重占（用户指令：拆已建建筑走新占领流程）**：①停扩张（`kernel.expansion` 清、计划 CANCELLED）；②拆除：spawn 1 + extension 5 + container 3 = **9 结构**，移除 **7 个工地**，销毁 **27 条路**（`left=["controller"]`）；③`controller.unclaim()=OK`，territory-manager finalize（`releasedRooms.W39S55=83,956,518`）；④清重占排除 + 写 `kernel.expansion={preparing,target:W39S55,sponsor:W37S58,op:W39S55:83956546}`；⑤claimer 已孵出并在途（`claiming`，W38S57/TTL 500）。**claim 完成后应由 `seedLayoutAnchor` 写 V3+template 并落锚点**——下一发核 `layout.templateId/mode/anchor`、spawn 位置与 queue 里的 `core.*`（模板）任务。
+**R664 W39S55 重占（用户指令：拆已建建筑走新占领流程）**：①停扩张（`kernel.expansion` 清、计划 CANCELLED）；②拆除：spawn 1 + extension 5 + container 3 = **9 结构**，移除 **7 个工地**，销毁 **27 条路**（`left=["controller"]`）；③`controller.unclaim()=OK`，territory-manager finalize（`releasedRooms.W39S55=83,956,518`）；④清重占排除 + 写 `kernel.expansion={preparing,target:W39S55,sponsor:W37S58,op:W39S55:83956546}`；⑤claimer 在途 → **claim 成功**；⑥发现并修掉一处重占竞态：**旧 layout 记忆（v2/constraint/anchor 1168）让 planner 在新 claim 后立刻重建了 7 个旧布局工地**（tower 23,20 等）——手工把 `layout` 预置为 `{templateId:"compact-core-v3", mode:"template", anchor:undefined}` 并移除这些工地，`planRoom` 因无锚点跳过重建；下一趟 manager 的 claimed 分支由 `seedLayoutAnchor` 重新算锚点。**判效**：`layout=[compact-core-v3, template, 1168]`、`state=bootstrapping/cp=1`、工地 `spawn(23,18)=锚点` + 两个 source container、queue 含 `constraint.spawn.01` 与 `logistics.container.source.*`。⇒ 重占流程走通，V3+template 已落到这间房。
+
+**设计债（下一轮代码项）**：重占/释放收尾时 `finalizeRelease` 应**删除该房的 `layout` 与 `buildQueue`**——本次竞态的根因是旧布局记忆跨占领生命周期残留；否则每次 re-claim 都要人工清一次。
 
 ### 4.0（10-29 17:0xZ 立格，R662；上一条＝R661 格「V3 模板+全 RCL 模拟」；本格**接线 V3 + 选点门收紧并部署**）
 
