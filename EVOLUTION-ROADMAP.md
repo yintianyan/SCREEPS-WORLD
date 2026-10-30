@@ -1182,6 +1182,19 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-30 12:3xZ 立格，R669；上一条＝R668 格「worker 加 build」；本格**spawn 工地优先 + worker 载重档**）
+
+**背景**：R668 后建造吞吐仍偏向“最近的工地”（container 以 ~9 hits/拍推进而 spawn 卡 3,017/5,000）；且 worker 模板最大只有 **1 CARRY**（50 能量/趟），bootstrap 往返是天花板。另：用户明确**非紧急不控制台干预**，本轮全部走代码。
+
+**改动**：
+1. `buildNearestSite`：**在建 spawn 工地全局优先** —— 候选池先过滤 `STRUCTURE_SPAWN`（有则只用它），缓存 `targetId` 也必须仍在池内（spawn 出现后旧 extension 目标作废）。只对“在建 spawn”生效，无 spawn 工地时行为不变。
+2. `BODY_TEMPLATES.worker`：新增高容量档 **3W6C3M@750**（carry 300）与 **2W4C2M@500**（carry 200）；RCL1 300/200 档不变。
+3. 测试 +6：spawn 优先 3 例（更近 extension 仍先 spawn／缓存 extension 后 spawn 出现改投／无 spawn 按最近）、worker body 3 例（5,600 cap ⇒ carry≥6；500 ⇒ carry≥4；300 ⇒ carry 1）。
+
+**闸门**：typecheck 0；unit **431 文件·5,646 例**、integration **30·239** 全绿。**部署**：sha `95bc389cf82d`（819.7 KB）；提交后按提交态重建再部署一次，保证线上=提交源码。
+
+**预写**：**E765** 换码后新建/重建的 worker 带 ≥4 CARRY（旧 body 需换代）；**E766** 在建 spawn 工地优先后，W39S55 spawn 进度速率 ≥ 同期其它工地速率；**E767** 成熟房（无在建 spawn）建造型为不变。
+
 ### 4.0（10-30 12:0xZ 立格，R668；上一条＝R667 格「发育慢根因」；本格**修吞吐瓶颈：worker 无 build 动作**）
 
 **根因（代码考古）**：`worker` 角色 work 链只有 `fillAssignmentTarget → repairCritical → fillTarget → upgradeController`，**没有 build**。新房目前有 11 只 in-room worker（大多有能量、work），但建造全压在 2 只 `builder`（其中两只还在 `acquire` 饿能）⇒ 实测建造 **~1–2 hits/拍**（spawn 2,824/5,000、三个 extension 各 1,491/555/996），这才是“发育慢”的主因；能量链/补员是次因。

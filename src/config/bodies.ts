@@ -472,6 +472,30 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     },
   ],
   worker: [
+    // R669：bootstrap 通勤载重档 —— 旧模板最大只有 1 CARRY（50 能量/趟），
+    // 新房建造（spawn 5,000 + container/ext ~24k hits）被往返次数卡死。
+    // 高容量 sponsor（RCL7/8，cap 5,600）应给满：3W6C3M（carry 300）/ 2W4C2M（carry 200）。
+    {
+      parts: [
+        "work",
+        "work",
+        "work",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+      ],
+      minCapacity: 750,
+    },
+    {
+      parts: ["work", "work", "carry", "carry", "carry", "carry", "move", "move"],
+      minCapacity: 500,
+    },
     // 开局优化：RCL1 起始 300 能量直接用满，2 WORK 采集翻倍，大幅缩短 bootstrap。
     { parts: ["work", "work", "carry", "move"], minCapacity: 300 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },

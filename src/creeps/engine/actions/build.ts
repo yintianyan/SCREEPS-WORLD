@@ -61,16 +61,22 @@ export function buildNearestSite(
         : ac.snapshot.myConstructionSites;
       if (sites.length === 0) return undefined;
 
-      // 优先复用持久化目标 — 验证它仍在当前候选列表中。
+      // R669：spawn 工地全局优先 —— 新房里 spawn = 能量容量/自孵的唯一解锁项，
+      // 按"最近"选点会让 extension/container 一直抢工时（W39S55 实测 spawn 卡
+      // 3,017/5,000 而同窗 container 以 ~9 hits/拍推进）。只对**在建 spawn** 生效。
+      const spawnSites = sites.filter(s => s.structureType === STRUCTURE_SPAWN);
+      const pool = spawnSites.length > 0 ? spawnSites : sites;
+
+      // 优先复用持久化目标 — 验证它仍在当前候选池中（spawn 出现后旧目标作废）。
       if (ac.creep.memory.targetId) {
         const cached = getObjectById(ac.creep.memory.targetId as Id<ConstructionSite>);
-        if (cached && sites.some(s => s.id === cached.id)) {
+        if (cached && pool.some(s => s.id === cached.id)) {
           return cached;
         }
       }
 
-      // 无有效缓存目标 — 重新选择最近的。
-      const site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
+      // 无有效缓存目标 — 在候选池里选最近的。
+      const site = ac.creep.pos.findClosestByRange(pool as ConstructionSite[]);
       if (site) {
         ac.creep.memory.targetId = site.id as Id<ConstructionSite>;
         return site;
