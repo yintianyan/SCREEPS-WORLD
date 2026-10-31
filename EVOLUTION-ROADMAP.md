@@ -1182,6 +1182,20 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-01 07:3xZ 立格，R679/R680；上一条＝R678 格「目标级配额」；本格**幼房死亡螺旋的连续止血**）
+
+**现场（t≈83,994,145）**：W39S55 人口 **11→4**（0 upgrader/builder），spawnQueue 5 个 P2 请求全部 `degradeGateClosed`；room `phase=crisis`、`liquidityTrapTicks=239`、storage=0。两层根因叠加：
+1. **R679**：`starvedP2` 要求 `economyPressure>0.5`，而该值由 storage 水位派生 —— 无 storage 的 RCL3 房结构性为 0 ⇒ P2 饥饿降级永不成立，请求只能等 TTL 重排。修法：无 storage 的 **RCL3** 房在等待 10×spawnTime 后允许 P2 降级并豁免成本地板；RCL1-2 保持原路径（低容量钳位 + 集成覆盖；首版 RCL<4 曾打红 RCL1 survival，已收窄）。
+2. **R680**：crisis 下 `haulFillTarget` 仍把 hauler 锁在低半满 CC（R672 的跳过只在有工地时启用）⇒ spawn 饿死、源容器积压、harvester idle。修法：无工地但 `phase∈{crisis,recovery,bootstrap}` 时启用 non-CC 填充；账本同阶段把 `fill-cc` 降到 50（核心 70–95）。正常房 CC 优先语义保留（既有 33 例 hauler 测试零改动）。
+
+**部署与判效**：R679 sha `c93c0663af4b`、R680 sha `3bcaaaad20c7`。R679 生效后队列从 `degradeGateClosed` 变为 `noDegrade`（门已开，能量仍不足）；R680 生效后：
+- `phase` **crisis→growth**、`liquidityTrapTicks` **239→27**、reserve 4,495→4,189；
+- 人口 **4→6**（harvester 3、upgrader 1、hauler 2），RCL 进度 117,894→**118,096**；
+- 剩余队列为少量 `noDegrade/degradeGateClosed`（P1 hauler wait 71 将触发降级、P2 等 10×阈值），未再新增 dgc 尖峰。
+- 其他两房未受影响（phase steady/growth，R680 只在 crisis/recovery/bootstrap 启用）。
+
+**测试**：R679 +3、R680 +2；最终 unit **439 文件·5,699 例**、integration 30·239、typecheck 0。**预写**：**E792** W39S55 在 1,000 拍内保持非 crisis、人口回升 ≥8、RCL 进度继续增长；**E793** 其他房无回归（storage/编制/CPU 同窗不恶化）；**E794** spawnQueue 不靠人工干预自然清空或只余正常替换请求。
+
 ### 4.0（11-01 02:5xZ 立格，R678；上一条＝R677 格「spawn 降级门」；本格**P3 配额：lab/矿物目标级租约**）
 
 **动机**：R674b 已证明「多人同修一个目标」会饿死其它任务（3/3 builder 同修一容器）。效用评分解决了“选哪类任务”，但同一目标仍可能被多名 creep 同时选中。P3 给两个会成批出现的目标加**每 tick 每目标 1 人**的占用：lab 按 `labId:resource`（不同 load 可并行）、矿物按 containerId。
