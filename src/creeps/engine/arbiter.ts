@@ -12,6 +12,7 @@
  * 不允许被分数改写。
  */
 import { CONFIG } from "../../config";
+import { globalCache } from "../../kernel/global-cache";
 import type { ActionContext, ActionCandidate } from "./action-types";
 
 /** 参与评分的目标缓存键 — resolve 会写这些字段，批量评分时必须先存后还。
@@ -29,6 +30,39 @@ function saveTargetCaches(creep: Creep): TargetCache {
 
 function restoreTargetCaches(creep: Creep, saved: TargetCache): void {
   for (const key of TARGET_CACHE_KEYS) creep.memory[key] = saved[key];
+}
+
+/** 评分阶段的全局副作用快照：fill 预约是跨 creep 共享的 Set，评分时逐个候选执行
+ * getHaulFillTarget/getDistributorFillTarget 会各自占用一个目标；若不在每个候选前
+ * 还原，落选候选会偷走赢家/其他 creep 的目标。 */
+interface ScoringSideEffects {
+  readonly target: TargetCache;
+  readonly fillTick: number | undefined;
+  readonly fillIds: readonly string[] | undefined;
+}
+
+function saveSideEffects(creep: Creep): ScoringSideEffects {
+  const g = globalCache();
+  return {
+    target: saveTargetCaches(creep),
+    fillTick: g.fillReservationTick,
+    fillIds: g.fillReservations ? [...g.fillReservations] : undefined,
+  };
+}
+
+function restoreSideEffects(creep: Creep, saved: ScoringSideEffects): void {
+  const g = globalCache();
+  restoreTargetCaches(creep, saved.target);
+  if (saved.fillIds === undefined) {
+    delete g.fillReservations;
+  } else {
+    g.fillReservations = new Set(saved.fillIds);
+  }
+  if (saved.fillTick === undefined) {
+    delete g.fillReservationTick;
+  } else {
+    g.fillReservationTick = saved.fillTick;
+  }
 }
 
 /** 稳定的字符串哈希（FNV-1a 32 位）— 同分时按 creep 名 + 候选名散布，
@@ -76,12 +110,13 @@ export function scoreCandidates(
   state: CreepMemory["utility"],
 ): ScoredCandidate[] {
   const tick = Game.time;
-  const saved = saveTargetCaches(ac.creep);
+  const saved = saveSideEffects(ac.creep);
   const scoredList: ScoredCandidate[] = [];
   for (const candidate of candidates) {
-    // 每个候选独立评估：先还原到决策前的缓存，避免前一个候选写的目标缓存
-    // 改变后一个候选的 resolve 结果（它们共享 repairTargetId/targetId 等字段）。
-    restoreTargetCaches(ac.creep, saved);
+    // 每个候选独立评估：先还原到决策前的缓存/预约状态，避免前一个候选写的目标缓存
+    // 或 fill 预约改变后一个候选的 resolve 结果（它们共享 repairTargetId/targetId 与
+    // 全房 fillReservations）。
+    restoreSideEffects(ac.creep, saved);
     const target = candidate.resolve(ac);
     if (target === undefined) continue;
     const base = candidate.utility?.(ac, target) ?? 1;
@@ -100,7 +135,7 @@ export function scoreCandidates(
       score: base * aging * sticky,
     });
   }
-  restoreTargetCaches(ac.creep, saved);
+  restoreSideEffects(ac.creep, saved);
   scoredList.sort(
     (a, b) =>
       b.score - a.score ||

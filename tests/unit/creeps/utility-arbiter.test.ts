@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { runUtilityArbitration } from "../../../src/creeps/engine/arbiter";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { resetGlobals } from "../../support/factories";
 
 interface CandidateOpts {
@@ -252,5 +253,27 @@ describe("效用仲裁 — 目标缓存隔离", () => {
     ];
     runUtilityArbitration(ac, cands);
     expect(ac.creep.memory.fillTargetId).toBeUndefined();
+  });
+
+  it("评分不消耗共享 fill 预约：落选者预约被还原，只留赢家目标", () => {
+    const { ac } = makeAc();
+    const log: string[] = [];
+    const withReservation = (name: string, id: string, utility: number) => ({
+      name,
+      resolve: () => {
+        const g = globalCache();
+        if (!g.fillReservations || g.fillReservationTick !== (globalThis as any).Game.time) {
+          g.fillReservations = new Set();
+          g.fillReservationTick = (globalThis as any).Game.time;
+        }
+        g.fillReservations.add(id);
+        return id;
+      },
+      execute: () => log.push(name),
+      utility: () => utility,
+    });
+    runUtilityArbitration(ac, [withReservation("a", "ta", 10), withReservation("b", "tb", 20)]);
+    expect(log).toEqual(["b"]);
+    expect([...(globalCache().fillReservations ?? [])]).toEqual(["tb"]);
   });
 });

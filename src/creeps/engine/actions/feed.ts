@@ -37,8 +37,12 @@ export function transferToLowBuilder(): ActionCandidate<Creep> {
       if (ac.snapshot.myConstructionSites.length === 0) return undefined;
       if (!coreFillNearlySatisfied(ac.snapshot)) return undefined;
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
-      const nearby = ac.creep.pos.findInRange(FIND_MY_CREEPS, 4) as Creep[] | undefined;
-      if (!nearby || nearby.length === 0) return undefined;
+      // 用 room.find + 距离过滤（indexed findInRange 在部分测试/私服环境缺失；
+      // 每 5 拍决策一次、同房 creep 数有限，成本可接受）。
+      const nearby = ac.creep.room
+        .find(FIND_MY_CREEPS)
+        .filter(c => ac.creep.pos.getRangeTo(c) <= 4);
+      if (nearby.length === 0) return undefined;
       let best: Creep | undefined;
       let bestD = Infinity;
       for (const c of nearby) {

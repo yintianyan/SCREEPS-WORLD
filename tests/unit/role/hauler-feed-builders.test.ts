@@ -29,10 +29,10 @@ function makeAc(opts: {
     memory: {},
     store: { getUsedCapacity: () => opts.energy },
     pos: {
-      findInRange: () => opts.nearby ?? [],
       getRangeTo: (t: any) => (t === site ? (opts.siteRange ?? 99) : t.range),
       isEqualTo: () => false,
     },
+    room: { find: () => opts.nearby ?? [] },
     transfer: () => OK,
     drop: () => OK,
   };
@@ -203,7 +203,6 @@ describe("施工期 hauler 填充顺序 — R672", () => {
       pos: mockPos(26, 25),
     };
     const pos = mockPos(25, 25);
-    (pos as any).findInRange = vi.fn(() => [mate]);
     const creep = mockCreep({
       name: "hauler_x",
       role: "hauler",
@@ -212,6 +211,7 @@ describe("施工期 hauler 填充顺序 — R672", () => {
       mode: "work",
       pos,
     });
+    (creep.room as any).find = vi.fn(() => [mate]);
 
     haulerRole.run(creep, mockContext(snap));
 

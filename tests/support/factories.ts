@@ -56,6 +56,9 @@ export function resetGlobals(): void {
   delete g.fillReservationTick;
   delete g.repairReservations;
   delete g.repairReservationTick;
+  delete g.roomTaskLedger;
+  delete g.labDemands;
+  delete g.boostAssignments;
   delete g.roomTraffic;
   delete g.errorLog;
   delete g.errorCounts;

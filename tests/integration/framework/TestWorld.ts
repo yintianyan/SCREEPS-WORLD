@@ -925,6 +925,8 @@ class MockRoom {
       case C.FIND_CONSTRUCTION_SITES:
       case C.FIND_MY_CONSTRUCTION_SITES:
         return w._sites.filter(s => s.room === this);
+      case C.FIND_MY_CREEPS:
+        return w._creeps.filter(c => c.room === this);
       case C.FIND_HOSTILE_CREEPS:
         return w._hostiles.filter(h => h.room === this);
       case C.FIND_DROPPED_RESOURCES:

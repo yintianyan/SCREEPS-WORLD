@@ -1,5 +1,6 @@
 /** 工业链接线测试（TD-023 ~ TD-028）。 */
 import { beforeEach, describe, expect, it } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { supplyLabs } from "../../../src/creeps/engine/actions/industry";
 import { computeLabDemands } from "../../../src/systems/room/lab-system";
 import { reclaimExpeditionCreeps } from "../../../src/systems/empire/expansion-manager";
@@ -207,8 +208,23 @@ describe("supplyLabs — 按需求表搬运（TD-023 回归 + TD-024）", () => 
     expect(target.resource).toBe("energy");
   });
 
-  it("需求表 tick 过期：不动作（防陈旧需求驱动搬运）", () => {
-    setDemands([{ labId: "L1", resource: "XUH2O", amount: 150 }], [], 99);
+  it("需求表在 TTL 内的旧表仍可用（修复每 10 拍只有 1 拍可达）", () => {
+    setDemands(
+      [{ labId: "L1", resource: "XUH2O", amount: 150 }],
+      [],
+      100 - CONFIG.economy.labDemandTtl,
+    );
+    const ac = makeAc({ creepStore: { XUH2O: 100 } });
+    const target = supplyLabs().resolve!(ac as never) as Record<string, unknown>;
+    expect(target.phase).toBe("deposit");
+  });
+
+  it("需求表超过 TTL：不动作（防陈旧需求驱动搬运）", () => {
+    setDemands(
+      [{ labId: "L1", resource: "XUH2O", amount: 150 }],
+      [],
+      100 - CONFIG.economy.labDemandTtl - 1,
+    );
     const ac = makeAc({ creepStore: { XUH2O: 100 } });
     expect(supplyLabs().resolve!(ac as never)).toBeUndefined();
   });

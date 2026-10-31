@@ -18,6 +18,8 @@ import {
 import { countedIntent } from "../engine/actions/helpers";
 import { selectHaulSourceContainer, pickHaulFillTargetInRange } from "../support/targeting";
 import { defineRole } from "../engine/role-runner";
+import { scored } from "../engine/arbiter";
+import { getRoomTaskLedger, ledgerValue } from "../support/task-ledger";
 import { transferToLowBuilder, dropNearConstruction } from "../engine/actions/feed";
 import { haulFillTargetExcludingControllerContainer } from "../engine/actions/fill";
 import { moveToTarget, stepToward } from "../movement";
@@ -153,11 +155,25 @@ function haulerGate(ac: ActionContext): boolean {
   return true;
 }
 
+/** fill 目标的账本价值：核心 / 塔 / CC 分档（CC 在施工期自动降档，见 task-ledger）。 */
+function fillValue(ac: ActionContext, t: AnyOwnedStructure): number {
+  const ledger = getRoomTaskLedger(ac.snapshot);
+  if (t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION) {
+    return ledgerValue(ledger, "fill-core", 70);
+  }
+  if (t.structureType === STRUCTURE_TOWER) return ledgerValue(ledger, "fill-tower", 85);
+  return ledgerValue(ledger, "fill-cc", 50);
+}
+
 const policy: RolePolicy = {
   park: true,
   isHauler: true,
   isLifeLine: true,
   executionOrder: 2,
+  // R675：work 模式走房间任务账本 + 效用仲裁。acquire 保持链式（取能安全次序）。
+  // 账本给出「核心/storage/CC/施工/lab/矿物」的基础价值；老化由 arbiter 统一叠加，
+  // 因此 storage 不再因为「永远有空位」把 lab 供料/矿物补仓永久饿死。
+  arbitration: "utility",
   gate: haulerGate,
   onFlee: haulerOnFlee,
   acquire: [
@@ -198,25 +214,28 @@ const policy: RolePolicy = {
 
   work: [
     // 倒已携带矿物（高价值资源不滞留）；仅 deposit 相——取矿补仓见下方 haulMineralTopUp。
-    haulMineralsToStorage(),
-    // RCL4+: 优先填充 storage（distributor 从 storage 分发到 spawn/extension）；RCL1-3 无
-    // storage → fallthrough。修复 storage 空置死锁：旧顺序 haulFillTarget 在前，spawn 不满时
-    // hauler 永远直送 spawn，storage 永远空、distributor 永远 idle。
-    fillStorage(),
-    // R672b：核心供给接近饱和（spawn/extension 空闲≤25%）时，先把能量供建造
-    // （附近缺能 builder / 路过工地），再回填核心与 container —— 否则施工期
-    // 核心永远有空位，feed 车道永远轮不到（R672 实测不可达）。
-    transferToLowBuilder(),
-    dropNearConstruction(),
-    // 填 spawn/extension/tower（排除 controller container 的持续抽能优先档）。
-    haulFillTargetExcludingControllerContainer(),
+    scored(haulMineralsToStorage(), () => 140),
+    // RCL4+: 优先填充 storage（distributor 从 storage 分发）；RCL1-3 无 storage → fallthrough。
+    // R675：值来自任务账本（95，低水位 100）——它不再因为「永远有空位」压死 lab/矿物。
+    scored(fillStorage(), ac => ledgerValue(getRoomTaskLedger(ac.snapshot), "store-energy", 95)),
+    // R672b：核心接近满时先供建造；R675 由账本给出 feed 价值，老化保证 CC/矿物轮转。
+    scored(transferToLowBuilder(), ac =>
+      ledgerValue(getRoomTaskLedger(ac.snapshot), "feed-construction", 75),
+    ),
+    scored(dropNearConstruction(), ac =>
+      Math.max(0, ledgerValue(getRoomTaskLedger(ac.snapshot), "feed-construction", 75) - 10),
+    ),
+    // 填 spawn/extension/tower（施工期排除 CC 优先档）；CC 仍由普通 haulFillTarget 兜底。
+    scored(haulFillTargetExcludingControllerContainer(), fillValue),
     // spawn/extension 回退 + controller container 兜底（升级不断粮）。
-    haulFillTarget(),
-    // 矿物补仓（能量已入库后）：有余量才取矿，避免取矿相位抢在 fillStorage 前导致
-    // 能量滞留背包 + hauler 卡取矿循环不回 acquire 排空 storage link（线上实证 storage-link 满）。
-    haulMineralTopUp(),
-    // 化合物供料到 lab。
-    supplyLabs(),
+    scored(haulFillTarget(), fillValue),
+    // 矿物补仓（能量已入库后）：账本按 backlog 给值，老化防止永久饿死。
+    scored(haulMineralTopUp(), ac =>
+      ledgerValue(getRoomTaskLedger(ac.snapshot), "haul-minerals", 65),
+    ),
+    // 化合物/能量供料到 lab。R675：账本按 lab 搬运条目数提权，lab 供料不再被
+    // fillStorage 永久遮蔽；同时修了 lab 需求表只在发布拍可读的 1/10 断供。
+    scored(supplyLabs(), ac => ledgerValue(getRoomTaskLedger(ac.snapshot), "supply-labs", 90)),
     // 所有 sink 均满 — 原地待命。hauler 无 WORK 部件不能升级（upgradeController 会
     // ERR_NO_BODYPART）；空闲是正确信号：供给 > 需求，demand 系统据此减少 hauler 孵化。
   ],

@@ -15,6 +15,8 @@ import {
 } from "../engine/actions";
 import { countedIntent } from "../engine/actions/helpers";
 import { defineRole } from "../engine/role-runner";
+import { scored } from "../engine/arbiter";
+import { getRoomTaskLedger, ledgerValue } from "../support/task-ledger";
 import { moveToTarget } from "../movement";
 import { computeDistributorTier, hasDistributorFillDemand } from "../support/targeting";
 import type { DistributorTier } from "../support/targeting";
@@ -86,10 +88,22 @@ function distributorGate(ac: ActionContext): boolean {
   return true;
 }
 
+/** 投放目标价值：distributor 的本职是保 spawn/extension，故核心档固定高于账本基础值。 */
+function distributorFillValue(ac: ActionContext, t: AnyOwnedStructure): number {
+  const ledger = getRoomTaskLedger(ac.snapshot);
+  if (t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION) {
+    return Math.max(105, ledgerValue(ledger, "fill-core", 70));
+  }
+  if (t.structureType === STRUCTURE_TOWER) return ledgerValue(ledger, "fill-tower", 85);
+  return ledgerValue(ledger, "fill-cc", 50);
+}
+
 const policy: RolePolicy = {
   park: true,
   isDistributor: true,
   isLifeLine: true,
+  // R675：work 模式走任务账本 + 效用仲裁；acquire 保持链式（storage 取能/需求门禁）。
+  arbitration: "utility",
   gate: distributorGate,
   acquire: [
     // nuke 资产抢救（nuke 警报房才激活，常态零开销）：storage → terminal 搬运，
@@ -122,28 +136,28 @@ const policy: RolePolicy = {
 
   work: [
     // nuke 资产抢救（deposit 相）— 置顶理由同 acquire 链。
-    salvageStorageToTerminal(),
+    scored(salvageStorageToTerminal(), () => 200),
     // distributor 专用填充：spawn/extension 绝对优先 > tower > controller container（仅无 link 兜底）。
     // 不复用 haulFillTarget — 避免被 divert 去喂 controller container 而饿死 spawn。
-    distributorFillTarget(),
+    scored(distributorFillTarget(), distributorFillValue),
     // terminal 能量备货（deposit 相）— 排在经济 sink 之后、lab 供料之前：
     // 携能状态下 supplyLabs 的取料相无法执行（背包已满），先卸给 terminal。
-    stockTerminalEnergy(),
+    scored(stockTerminalEnergy(), () => 40),
     // factory battery 回收（投放相）— 先于投料 deposit，避免携 battery 与投料互相顶占背包。
     // crisis 时此 action 也会把 factory 内解压产出的能量 deposit 到 storage。
-    reclaimFactoryOutput(),
+    scored(reclaimFactoryOutput(), () => 110),
     // factory battery 解压原料补给（deposit 相，crisis 时触发）。
-    stockFactoryBattery(),
+    scored(stockFactoryBattery(), () => 100),
     // factory 压缩原料备货（deposit 相，仅满仓时触发）。
-    stockFactoryEnergy(),
+    scored(stockFactoryEnergy(), () => 85),
     // commodity 生产补料（deposit 相）。
-    stockFactoryComponents(),
-    // 化合物供料到 lab。
-    supplyLabs(),
+    scored(stockFactoryComponents(), () => 95),
+    // 化合物供料到 lab。R675：账本按搬运条目数提权（90–130），不再被 fillTarget 永久遮蔽。
+    scored(supplyLabs(), ac => ledgerValue(getRoomTaskLedger(ac.snapshot), "supply-labs", 90)),
     // powerSpawn 原料投放相。
-    stockPowerSpawn(),
+    scored(stockPowerSpawn(), () => 45),
     // nuker 威慑备弹投放相。
-    stockNuker(),
+    scored(stockNuker(), () => 35),
     // 所有 sink 均满 — 原地待命。注意：distributor 没有 fillStorage — 架构约束，
     // 加上就会重新引入 storage→storage 循环。
   ],

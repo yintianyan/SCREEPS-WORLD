@@ -126,7 +126,12 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
       if (!storage) return undefined;
 
       const demands = globalCache().labDemands;
-      const table = demands?.tick === Game.time ? demands.byRoom[ac.snapshot.roomName] : undefined;
+      // R675：lab-manager 每 10 拍发布一次，原先要求同拍 ⇒ 供料 9/10 拍不可达。
+      // 允许 TTL 内的旧表；执行侧按 lab 当前容量 clamp。
+      const table =
+        demands && Game.time - demands.tick <= CONFIG.economy.labDemandTtl
+          ? demands.byRoom[ac.snapshot.roomName]
+          : undefined;
       if (!table) return undefined;
 
       const store = ac.creep.store;

@@ -1182,6 +1182,22 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-31 19:1xZ 立格，R675；上一条＝R674b 格「维修配额」；本格**P2：hauler/distributor 接入任务账本**）
+
+**问题**：hauler work 链的 `fillStorage` 只要 storage 有空位就命中（成熟房 100k/1M 永远有空位）⇒ 链尾 `supplyLabs`/`haulMineralTopUp` 永不执行，才需要 lab-tender 补丁角色；同时 `supplyLabs` 要求需求表 `tick === Game.time`，而 lab-manager 每 10 拍才发布一次 ⇒ lab 供料另有 1/10 可达性断供。
+
+**实现**：
+1. 新增 [task-ledger.ts](src/creeps/support/task-ledger.ts)：每房每 tick 一次汇总核心/塔/CC/storage/施工/lab 搬运/矿物积压，产出带基础价值的任务表（`fill-core 70–90 / fill-tower 85 / fill-cc 50（施工期）或 90（和平期<半满）/ store-energy 95（低水位100）/ feed-construction 75 / supply-labs 90+5×loads / haul-minerals 65`）。角色效用只读结论，避免各自扫描与口径打架。
+2. hauler：work 模式改 utility，8 个候选全部按账本给值；`haulMineralsToStorage` 140 置顶。storage 仍高于核心（先入库、distributor 再分发），但低于 lab 供料（2 条以上需求）——结构性遮蔽消除。
+3. distributor：work 模式改 utility；spawn/extension 固定 105（生命线不低于工业），lab 90–130、factory 回收 110、battery 100、组件 95、terminal 40、powerSpawn 45、nuker 35；acquire 仍链式。
+4. `supplyLabs` 需求表改为 **TTL 20 拍**（`CONFIG.economy.labDemandTtl`），覆盖 lab-manager 的 10 拍发布周期；执行侧仍按 lab 当前容量 clamp。
+5. arbiter 增加 **fill 预约隔离**：评分每个候选前还原 `globalCache.fillReservations`，落选候选不会偷走赢家/其他 creep 的目标；赢家重解析后再正式预约。
+6. feed 车道改用 `room.find(FIND_MY_CREEPS)` + 距离过滤（`pos.findInRange` 在部分测试/私服环境缺失；集成 harness 补 `FIND_MY_CREEPS`）。
+
+**测试**：+15（账本 5、hauler/distributor lab 竞争 4、arbiter 预约隔离 1、lab TTL 2、feed 兼容 3 处调整）。**unit 437 文件·5,685 例、integration 30·239 全绿；typecheck 0**。既有 hauler 33 / distributor 21 例零改动通过（storage 优先、CC 半满优先、threat tower 优先、reservation 去重等旧语义均保留）。
+
+**预写判据**：**E779** 部署后 ≤300 拍，hauler/distributor 的 `Memory.creeps[*].utility` 出现，task 至少覆盖 3 类；**E780** 有 lab 搬运需求的房间出现 `haul:supply-labs` 被选中（不再只靠 lab-tender），且 lab 需求不长期挂起；**E781** W39S55 建造速率仍 ≥3/拍、掉落堆不积压；**E782** CPU 增量 ≤0.5/拍、error 0；若持续 constrained 则把 hauler/distributor 改回 chain 或关闭 `arbitration.enabled`。
+
 ### 4.0（10-31 18:1xZ 立格，R674；上一条＝R672b 格「feed 车道可达」；本格**调度重构 P1：work 模式效用仲裁 + builder/worker 灰度**）
 
 **问题**：动作链是「第一个可执行者胜」，每来一个新需求必须插到正确位置，插错就饿死链尾。证据：R672 feed 车道不可达、builder 常规修路被建造饿死（16 条路 8 条破 40%）、hauler 的 supplyLabs 被 fillStorage 遮蔽（催生 lab-tender 补丁角色）。**修法不是再插一个动作，而是把「排序」换成「调度」。**

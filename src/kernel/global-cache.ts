@@ -245,6 +245,11 @@ export interface GlobalCache {
     tick: number;
     byRoom: Record<string, import("../domain/industry/types").LabDemandTable>;
   };
+  /** R675：本 tick 的房间任务账本（每房一次，角色效用函数共享）。 */
+  roomTaskLedger?: {
+    tick: number;
+    byRoom: Record<string, import("../creeps/support/task-ledger").RoomTaskLedger>;
+  };
   /** 归位：每房每 tick 推导的关键格/道路/阻挡格集合（parking.ts 构建）。 */
   __parkRoomData?: Record<string, { tick: number; data: unknown }>;
   /** 归位：本 tick 已被预约的停车位（packed pos 集合，防聚堆）。 */

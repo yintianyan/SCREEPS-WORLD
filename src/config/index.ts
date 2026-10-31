@@ -445,6 +445,11 @@ export const CONFIG = {
   },
 
   economy: {
+    /** R675：lab 搬运需求表 TTL（tick）。lab-manager 每 10 拍才发布一次需求表，
+     * 而 supplyLabs 原先要求 `tick === Game.time` ⇒ lab 供料每 10 拍只有 1 拍可达
+     * （结构性断供，与 fillStorage 遮蔽叠加）。20 拍覆盖两个发布周期；执行侧仍会按
+     * lab 当前容量 clamp，陈旧需求不会超灌。 */
+    labDemandTtl: 20,
     /** R617：扩张推进态的升级预留净流（e/tick）。**仅在**本房 RCL≥7 且存在
      * `isExpansionPushPlan` 计划（EVALUATED/READY/APPROVED/WAITING_EXECUTION/EXECUTING）
      * 时，升级刹车从 0 抬到本值——把盈余留给扩张门 G4（`readiness` 要求 ΣnetFlow ≥5）。
