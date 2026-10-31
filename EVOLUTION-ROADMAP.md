@@ -1194,6 +1194,11 @@
 
 **预写判据**：**E783** 部署后 ≥2,000 拍，`cpuAvg10` 窗口均值 ≤ 部署前 +0.5，且不再出现 ≥19 的连续样本；**E784** 1,000 拍内不再出现 `repairIntentAmount` 目标消失类 error；**E785** lab 供料仍被选中、W39S55 建造/维修吞吐不降（built+repaired 增量 ≥ 部署前同窗）。
 
+**部署与早期判效（sha `12186a038733`，生效 ≈83,984,6xx）**：
+- **E783 早期 PASS**：部署后四发 `cpuAvg10` **16.1→12.4→13.0→12.6**（部署前 15.47–17.8，limit 20）；降幅远超预期，说明 distributor 10 候选的重复全量扫描是主成本之一。仍需满 2,000 拍确认。
+- **E784 观察中**：`lastError` 仍是部署前 `creep/builder-W39S55-2-83983809-dq7@83,984,453`，部署后未新增；差值已 ~330 拍，继续等 1,000 拍。
+- **E785 早期 PASS**：12:50/12:55/13:00 仍有 `hauler/distributor:haul:supply-labs`；W39S55 工地数 2→0（本轮施工队列全部建成），builder 转入 ramp/road/container 维修与填充，无掉落积压。
+
 ### 4.0（10-31 19:1xZ 立格，R675；上一条＝R674b 格「维修配额」；本格**P2：hauler/distributor 接入任务账本**）
 
 **问题**：hauler work 链的 `fillStorage` 只要 storage 有空位就命中（成熟房 100k/1M 永远有空位）⇒ 链尾 `supplyLabs`/`haulMineralTopUp` 永不执行，才需要 lab-tender 补丁角色；同时 `supplyLabs` 要求需求表 `tick === Game.time`，而 lab-manager 每 10 拍才发布一次 ⇒ lab 供料另有 1/10 可达性断供。
