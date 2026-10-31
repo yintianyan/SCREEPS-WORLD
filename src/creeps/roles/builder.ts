@@ -20,6 +20,7 @@ import {
 } from "../engine/actions";
 import { releaseAssignment } from "../support/assignment-adapter";
 import { getObjectById } from "../support/obj-cache";
+import { claimedRepair } from "../support/repair-reservations";
 import { defineRole } from "../engine/role-runner";
 import { scored } from "../engine/arbiter";
 
@@ -110,9 +111,9 @@ const policy: RolePolicy = {
   work: [
     // 急救：新生 rampart 灌血过生存线（建成仅 1 hit，100 tick 内必死于衰减）。
     // 效用最高档：灌血十几 tick，建 site 上百 tick；顺序反了就是「建了就塌」死循环。
-    scored(repairFreshRampart(), () => 180),
+    scored(claimedRepair(repairFreshRampart()), () => 180),
     // 急救：血量 < 15% 的危路（塌毁重建耗能 6 倍 + site 占建造名额）。
-    scored(repairUrgentRoads(), (_ac, r) => 80 + 120 * hpDeficit(r)),
+    scored(claimedRepair(repairUrgentRoads()), (_ac, r) => 80 + 120 * hpDeficit(r)),
     // 建造 assignment 指定的 site / 最近 site。
     scored(buildAssignmentSite({ recoverySkip: true }), (ac, s) => 60 + siteUtility(ac, s)),
     // 有 build 租约且目标仍存在时让位给 assignment（保留任务池的 maxWorkers/去向语义）；
@@ -123,16 +124,22 @@ const policy: RolePolicy = {
         : 50 + siteUtility(ac, s),
     ),
     // 紧急：修复衰减中的 container（< 80% 血量）— 失去 container = 物流链断裂。
-    scored(repairContainerDecay(), (_ac, c) => 60 + 80 * hpDeficit(c)),
+    // R674b：按缺口缩放（80% 时≈40，50%≈85，20%≈130），避免「刚破 80%」就压过建造；
+    // claimedRepair 保证每目标每 tick 至多 1 人（线上实证 3/3 builder 同修一个容器）。
+    scored(claimedRepair(repairContainerDecay()), (_ac, c) => {
+      const ratio = c.hitsMax > 0 ? c.hits / c.hitsMax : 1;
+      const pressure = Math.max(0, 0.8 - ratio) / 0.8;
+      return 40 + 120 * pressure;
+    }),
     // 紧急：修复血量 < 50% 的关键结构。
-    scored(repairCritical(), (_ac, t) => 130 + 100 * hpDeficit(t)),
+    scored(claimedRepair(repairCritical()), (_ac, t) => 130 + 100 * hpDeficit(t)),
     // fallback: 填充 spawn/extension。
     scored(fillTarget(), () => 35),
     // fallback: 修复衰减中的道路（< 40% 血量）。常规修路礼让建造（< 15% 的危路由
     // repairUrgentRoads 接管），但老化会把它周期性提到链首，防「永远没人修路」。
-    scored(repairRoads(), (_ac, r) => 15 + 35 * hpDeficit(r)),
+    scored(claimedRepair(repairRoads()), (_ac, r) => 15 + 35 * hpDeficit(r)),
     // fallback: 防御工事维修（盈余门禁 + 无威胁时）。
-    scored(repairFortifications(), (_ac, f) => 10 + 15 * hpDeficit(f)),
+    scored(claimedRepair(repairFortifications()), (_ac, f) => 10 + 15 * hpDeficit(f)),
     // 所有候选均不匹配 → park 待命。builder 不 fallback 到升级 — 升级是 upgrader 的职责，
     // 等待新 construction site 出现而非消耗能量去升级。
   ],

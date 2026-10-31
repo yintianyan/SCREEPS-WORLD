@@ -107,6 +107,9 @@ export interface ActionCpuEntry {
  * `g.xxx` 访问点，属纯类型增强，可工作在大批量、独立提交上进行。 */
 export interface GlobalCache {
   errorLog?: Map<string, number>;
+  /** R674b：本 tick 的修复目标占用（targetId → creepName），每 tick 自动清空。 */
+  repairReservations?: Map<string, string>;
+  repairReservationTick?: number;
   /** 每个 label 的连续错误计数（用于冷却跟踪）。 */
   errorCounts?: Map<string, number>;
   /** 每个 label 的冷却到期 tick（非关键插件在反复报错后暂停）。 */

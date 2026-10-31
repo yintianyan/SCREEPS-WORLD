@@ -13,6 +13,7 @@ import { countedIntent } from "../engine/actions/helpers";
 import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 import { releaseAssignment } from "../support";
+import { claimedRepair } from "../support/repair-reservations";
 import { defineRole } from "../engine/role-runner";
 import { scored } from "../engine/arbiter";
 
@@ -103,7 +104,7 @@ const policy: RolePolicy = {
     // 优先使用 assignment 指定的 target。
     scored(fillAssignmentTarget(), (_ac, t) => 60 + fillBonus(t)),
     // 紧急：修复血量 < 50% 的关键结构。
-    scored(repairCritical(), (_ac, t) => 130 + 100 * hpDeficit(t)),
+    scored(claimedRepair(repairCritical()), (_ac, t) => 130 + 100 * hpDeficit(t)),
     // 回退到最近 fillTarget；有 fill 租约且目标仍存在时让位给 assignment（保留 maxWorkers
     // 语义），assignment 目标满时会先释放租约，本候选随即恢复可用。
     scored(fillTarget(), (ac, t) =>

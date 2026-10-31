@@ -1202,6 +1202,13 @@
 
 **预写判据**：**E775** 部署后 ≤300 拍，线上 `Memory.creeps[*].utility` 出现，builder/worker 的 `task` 至少覆盖 2 个候选类；**E776** W39S55 工地总进度速率不低于 3/拍（与 R672b 后同尺窗口），不出现无工地完成却进度倒退；**E777** 成熟房 `dc/dy/sc=0`、CC 2000/2000，errorLog `er=0`；**E778** CPU 增量 ≤0.5/拍，若 tier 持续 tight→constrained 则关闭 `arbitration.enabled` 回退。**P2（下一格）**：hauler/distributor 接入 + 房间级任务账本，消除 `fillStorage` 遮蔽 lab 的结构性根因。
 
+**首发现场（10:18–10:24Z，R674 生效后）＝E775 PASS，但暴露配额缺口**：`Memory.creeps` 的 utility task 覆盖 3 类（build/fill/repair-container）；同时 W39S55 三名 builder **全部选中同一个 40–50% 容器**，站点总进度在 1,507 冻了 150+ 拍。评分只比较价值、没有「目标已有人」概念——链式同样没有，只是被高优先任务掩盖。⇒ **R674b**：
+1. 容器修复效用改为按缺口缩放：`40 + 120 × (0.8 − ratio)/0.8`（80%≈40、50%≈85、20%≈130），刚跌破阈值不再压过建造；
+2. 新增 `support/repair-reservations.ts`：每 tick 每修复目标至多 1 人（resolve 跳过他人占用、execute 占用），`claimedRepair()` 统一包住 builder 全部维修候选 + worker 的 repairCritical；跨 tick 自动清空，无租约死锁。
+3. 测试 +3（78% 不抢建造 / 40% 抢修 / 两名 builder 同 tick 不抢同一容器）；unit **435 文件·5,674 例**、integration 30·239、typecheck 0。
+
+**部署链事故（已修）**：`tmp/tools/official/deploy-screeps.js` 的默认产物路径仍是迁移前的 `__dirname/../../dist`，实际指向 `tmp/dist/main.js`（陈旧 R672 副本）⇒ 部署命令返回 ✓、线上却回滚到旧码（10:05–10:07Z）。修法：改为 `process.cwd()/dist/main.js`（与 check-code.mjs 同口径）；**上线核对必须带 `branch=default` 参数并比对 dist sha**（不带参数会读到旧缓存）。
+
 ### 4.0（10-31 09:0xZ 立格，R672b；上一条＝R672 格「供能车道」；本格**让车道真的可达：核心饱和门 + 顺序前移**）
 
 **发现（用户要求“检查方案是否实现、并不影响其它” → 只读监测器 + 代码复核）**：R672 的三条动作都在代码里、单测全绿，但**产线不可达**——hauler work 链把 `haulFillTargetExcludingControllerContainer` 排在 feed 之前，而施工期 spawn/extension 永远有空位（每次 transfer 后又有新空位）⇒ non-CC fill 几乎每趟都 resolve，feed 两条动作轮不到。线上佐证（r672 监测器 08:37–08:58Z，t=83,980,835–83,981,146）：`d:[]`（从未出现工地旁掉落堆）、builder 能量合计仅 50→150、工地进度靠 builder 自运（~3/拍），E769 字面上“无堆”而不是“堆被捡走”。

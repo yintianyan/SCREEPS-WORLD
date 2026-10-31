@@ -5,6 +5,7 @@ import type { ActionCandidate } from "../action-types";
 import { ACTION_RANGE_FAR, repairIntentAmount, runCountedAction } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
+import { claimRepairTarget, repairTargetClaimedByOther } from "../../support/repair-reservations";
 import {
   buildFortificationContext,
   classifyFortification,
@@ -60,17 +61,18 @@ export function repairContainerDecay(): ActionCandidate<StructureContainer> {
         if (
           cached &&
           cached.structureType === STRUCTURE_CONTAINER &&
-          cached.hits < cached.hitsMax * 0.8
+          cached.hits < cached.hitsMax * 0.8 &&
+          !repairTargetClaimedByOther(ac.creep.name, cached.id)
         ) {
           return cached;
         }
       }
-      // 无有效缓存目标 — 修血量最低的 container。
+      // 无有效缓存目标 — 修血量最低且未被他人占用的 container。
       let worst: StructureContainer | undefined;
       let worstRatio = 1;
       for (const c of ac.snapshot.containers) {
         const ratio = c.hits / c.hitsMax;
-        if (ratio < 0.8 && ratio < worstRatio) {
+        if (ratio < 0.8 && ratio < worstRatio && !repairTargetClaimedByOther(ac.creep.name, c.id)) {
           worstRatio = ratio;
           worst = c;
         }
@@ -81,6 +83,7 @@ export function repairContainerDecay(): ActionCandidate<StructureContainer> {
       return worst;
     },
     execute: (ac, worst) => {
+      claimRepairTarget(ac.creep.name, worst.id);
       runCountedAction(
         ac.creep,
         worst,
