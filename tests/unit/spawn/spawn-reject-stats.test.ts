@@ -8,7 +8,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { trySpawn, type SpawnRejectStats } from "../../../src/systems/room/spawn-manager";
-import { mockSnapshot, resetGlobals, mockPos } from "../../support/factories";
+import { mockSnapshot, resetGlobals, mockPos, mockStructure } from "../../support/factories";
 
 const ROOM = "W7N4";
 
@@ -84,6 +84,7 @@ describe("#54 拒因计数 — 降级分支的两档", () => {
 
   it("降级产物低于饥饿地板且在 normal 态 ⇒ 记 floor", () => {
     const spawn = mockSpawn(250);
+    const storage = mockStructure("storage", { id: "st", energy: 1000, capacity: 100000 });
     const req = makeRequest({
       body: [
         "carry",
@@ -97,7 +98,7 @@ describe("#54 拒因计数 — 降级分支的两档", () => {
       ] as BodyPartConstant[],
       createdAt: (globalThis as any).Game.time - 200, // 8 件 → spawnTime 24，starvedP1 需 ≥48
     });
-    trySpawn(mockSnapshot({ spawns: [spawn] }), [req], 3, 1, false);
+    trySpawn(mockSnapshot({ spawns: [spawn], storage }), [req], 3, 1, false);
     expect(rejects()?.floor).toBe(1);
     expect(rejects()?.noDegrade).toBe(0);
     expect(spawn.spawnCreep).not.toHaveBeenCalled();
@@ -229,6 +230,83 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
     (Memory.rooms[ROOM] as any).phase = { phase: "growth" };
     const spawn = mockSpawn(150);
     trySpawn(mockSnapshot({ spawns: [spawn] }), [makeRequest()], 3, 1, false);
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(rejects()?.degradeGateClosed).toBe(1);
+  });
+
+  it("R679：无 storage 的 RCL<4 幼房，P2 饥饿可降级（pressure 结构性为 0 不再挡）", () => {
+    const spawn = mockSpawn(300);
+    const req = makeRequest({
+      priority: 2,
+      body: [
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ] as BodyPartConstant[],
+      createdAt: (globalThis as any).Game.time - 400, // spawnTime 36 ⇒ 10×=360
+    });
+    // 默认 mockSnapshot：rcl=3、storage=undefined、economyPressure=0。
+    trySpawn(mockSnapshot({ spawns: [spawn] }), [req], 3, 1, false);
+    expect(spawn.spawnCreep).toHaveBeenCalled();
+    expect(rejects()?.degradeGateClosed ?? 0).toBe(0);
+  });
+
+  it("R679 控制组：有 storage 的成熟房仍要求 economyPressure（幼房豁免不外溢）", () => {
+    const spawn = mockSpawn(300);
+    const storage = mockStructure("storage", { id: "st", energy: 1000, capacity: 100000 });
+    const req = makeRequest({
+      priority: 2,
+      body: [
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ] as BodyPartConstant[],
+      createdAt: (globalThis as any).Game.time - 400,
+    });
+    trySpawn(mockSnapshot({ spawns: [spawn], storage }), [req], 3, 1, false);
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(rejects()?.degradeGateClosed).toBe(1);
+  });
+
+  it("R679 控制组：幼房但未饥饿 ⇒ 不提前降级", () => {
+    const spawn = mockSpawn(300);
+    const req = makeRequest({
+      priority: 2,
+      body: [
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ] as BodyPartConstant[],
+      createdAt: (globalThis as any).Game.time - 100,
+    });
+    trySpawn(mockSnapshot({ spawns: [spawn] }), [req], 3, 1, false);
     expect(spawn.spawnCreep).not.toHaveBeenCalled();
     expect(rejects()?.degradeGateClosed).toBe(1);
   });

@@ -613,11 +613,20 @@ export function trySpawn(
       // P1 是恢复路径，应立即允许降级。
       const economyPhase = roomMem?.phase?.phase;
       const bootstrapPhase = economyPhase === "bootstrap" || economyPhase === "recovery";
+      // R679：无 storage 的 RCL3 房，economyPressure 结构性为 0（压力由 storage 水位派生），
+      // 旧的 starvedP2 双条件在此永远不成立 ⇒ P2 请求只能等 TTL 过期重排，形成死亡螺旋。
+      // 线上 W39S55：人口 11→4、0 upgrader/builder，2 个 hauler + 3 个 upgrader 请求
+      // 全部 degradeGateClosed。RCL1-2 有 spawnReserveFor 的低容量钳位与既有集成覆盖，
+      // 不纳入本次豁免（避免 RCL1 新手期被 P2 小 body 吃掉孵化能量）。
+      const noStorageYoung = snapshot.storage === undefined && snapshot.rcl === 3;
       const economyPressure = roomMem?.economyPressure ?? 0;
       const spawnTime = req.body.length * 3;
       const waitTicks = Game.time - (req.createdAt ?? Game.time);
       const starvedP1 = req.priority === 1 && waitTicks >= spawnTime * 2;
-      const starvedP2 = req.priority === 2 && waitTicks >= spawnTime * 10 && economyPressure > 0.5;
+      const starvedP2 =
+        req.priority === 2 &&
+        waitTicks >= spawnTime * 10 &&
+        (economyPressure > 0.5 || noStorageYoung);
       const pumpOutage = req.role === "distributor" && distributorCount === 0;
       const allowDegrade =
         req.survival ||
@@ -652,8 +661,13 @@ export function trySpawn(
         // 饥饿降级成本地板：starved 路径产物低于地板时继续排队等能量 — 等能量不是
         // 失败，不递增 retries（避免烧穿 maxRetries 进黑名单）；生存路径豁免。
         // R677：economy phase 已 bootstrap/recovery 时按生存路径处理（P1 恢复优先）。
+        // R679：仅 P2 在无 storage 幼房豁免地板（P1/泵断供仍守地板，避免 RCL1-3 铸残废采集/泵）。
         const survivalPath =
-          req.survival || roomState === "bootstrap" || roomState === "recovery" || bootstrapPhase;
+          req.survival ||
+          roomState === "bootstrap" ||
+          roomState === "recovery" ||
+          bootstrapPhase ||
+          (noStorageYoung && req.priority === 2);
         if (!survivalPath && bodyCost(degraded) < CONFIG.spawn.starvationDegradeFloor) {
           // ⚠️读数口径：地板在 bootstrap/recovery 被 survivalPath **豁免** ⇒ 这一档只在
           //    colonyState=normal 时才涨。所以"floor=0" 既可能是"没被地板挡"，也可能是
