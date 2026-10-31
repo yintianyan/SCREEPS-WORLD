@@ -606,6 +606,13 @@ export function trySpawn(
       countSpawnReject(snapshot.roomName, cost > energyBudget ? "budget" : "reserveOnly");
       const roomMem = Memory.rooms[snapshot.roomName];
       const roomState = roomMem?.colonyState ?? "normal";
+      // R677：colonyState 与 economy phase 是两套维度的状态（前者回答"这房会不会出事"，
+      // 后者回答"经济处在哪个阶段"），二者不同步。线上 W39S55：colonyState=normal 而
+      // phase=bootstrap，P1 harvester 因 allowDegrade 全假被迫等 2×spawnTime 才降级
+      // （spawnRejects.degradeGateClosed 累计 2,214）。phase 已 bootstrap/recovery 时
+      // P1 是恢复路径，应立即允许降级。
+      const economyPhase = roomMem?.phase?.phase;
+      const bootstrapPhase = economyPhase === "bootstrap" || economyPhase === "recovery";
       const economyPressure = roomMem?.economyPressure ?? 0;
       const spawnTime = req.body.length * 3;
       const waitTicks = Game.time - (req.createdAt ?? Game.time);
@@ -616,6 +623,7 @@ export function trySpawn(
         req.survival ||
         recoveryRoomDegradeAllowed(roomState) ||
         (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery")) ||
+        (req.priority === 1 && bootstrapPhase) ||
         starvedP1 ||
         starvedP2 ||
         pumpOutage;
@@ -643,7 +651,9 @@ export function trySpawn(
         }
         // 饥饿降级成本地板：starved 路径产物低于地板时继续排队等能量 — 等能量不是
         // 失败，不递增 retries（避免烧穿 maxRetries 进黑名单）；生存路径豁免。
-        const survivalPath = req.survival || roomState === "bootstrap" || roomState === "recovery";
+        // R677：economy phase 已 bootstrap/recovery 时按生存路径处理（P1 恢复优先）。
+        const survivalPath =
+          req.survival || roomState === "bootstrap" || roomState === "recovery" || bootstrapPhase;
         if (!survivalPath && bodyCost(degraded) < CONFIG.spawn.starvationDegradeFloor) {
           // ⚠️读数口径：地板在 bootstrap/recovery 被 survivalPath **豁免** ⇒ 这一档只在
           //    colonyState=normal 时才涨。所以"floor=0" 既可能是"没被地板挡"，也可能是

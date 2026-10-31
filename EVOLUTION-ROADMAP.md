@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-31 20:3xZ 立格，R677；上一条＝R676 格「P2 CPU 收口」；本格**修复 spawn 降级门与 economy phase 脱节**）
+
+**现场（只读 Memory）**：W39S55 `spawnRejects.degradeGateClosed` 累计 **2,214**；一次 P1 harvester 补员在 `colonyState=normal`、`phase=bootstrap` 下排队 46 拍仍 `block=degradeGateClosed`，直到 `starvedP1`（wait ≥ 2×spawnTime=48）才降级孵出（t≈83,987,915 队列清空、hcount 1→2）。根因：spawn-manager 的 `allowDegrade` 只读 `colonyState`，而 `colonyState`（会不会出事）与 `phase`（经济阶段）是两套维度，二者不同步；R647 的「bootstrap 允许降级」在 `colonyState=normal` 时失效。
+
+**改动**：`allowDegrade` 增加 `req.priority===1 && phase∈{bootstrap,recovery}`；饥饿地板 `survivalPath` 同口径豁免。P2 不变（仍受 starvedP2/压力双条件约束），无 phase 的旧房行为逐字不变。
+
+**测试**：+2（phase=bootstrap/colony=normal ⇒ P1 立即降级且 `degradeGateClosed=0`；phase=growth 控制组仍记该档）。unit **438 文件·5,691 例**、integration 30·239、typecheck 0。
+
+**预写判据**：**E786** 部署后 1,000 拍内，若再出现「P1 请求 + phase=bootstrap + 付不起全 body」，其 `block` 不再停在 `degradeGateClosed`，且 W39S55 该档增量 ≤ 个位数（对照累计 2,214）；**E787** 同窗 `noDegrade/floor` 不异常增加、spawn 失败/黑名单不增加；**E788** phase=growth 的成熟房 spawn 行为不变（控制组）。
+
 ### 4.0（10-31 20:4xZ 立格，R676；上一条＝R675 格「P2 任务账本」；本格**P2 CPU 收口 + 修复目标消失防护**）
 
 **CPU 归因（段1 环，按部署拍 83,983,250 切窗）**：pre avg **15.47** / post **16.57**（+1.10）；系统 traffic 3.75→4.16、snapshots 1.43→1.98，远程采矿反而 1.62→1.10；角色 hauler 0.16→0.52、distributor 0.05→0.15、harvester 1.80→2.04。⇒ 仲裁全量评分与新增物流活是真实增量，但总量抬升还叠加了人口 50、rampart 维修与快照成本；后续样本 avg10 曾到 19.6（含 remote-mining 5.3 尖峰），距 limit 20 过近。

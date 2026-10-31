@@ -215,4 +215,21 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
     expect(rejects()?.noDegrade).toBe(1);
     expect(rejects()?.degradeGateClosed).toBe(0);
   });
+
+  it("R677：colonyState=normal 但 economy phase=bootstrap ⇒ P1 立即降级（不等饥饿计时）", () => {
+    (Memory.rooms[ROOM] as any).phase = { phase: "bootstrap" };
+    const spawn = mockSpawn(150);
+    const req = makeRequest(); // P1 hauler，200 能量，createdAt=now（wait < 48）
+    trySpawn(mockSnapshot({ spawns: [spawn] }), [req], 3, 1, false);
+    expect(spawn.spawnCreep).toHaveBeenCalled();
+    expect(rejects()?.degradeGateClosed ?? 0).toBe(0);
+  });
+
+  it("R677 控制组：phase=growth 且未饥饿 ⇒ 仍记 degradeGateClosed", () => {
+    (Memory.rooms[ROOM] as any).phase = { phase: "growth" };
+    const spawn = mockSpawn(150);
+    trySpawn(mockSnapshot({ spawns: [spawn] }), [makeRequest()], 3, 1, false);
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(rejects()?.degradeGateClosed).toBe(1);
+  });
 });
