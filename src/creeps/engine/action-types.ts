@@ -23,6 +23,15 @@ export interface ActionCandidate<T = unknown> {
   readonly resolve: (ac: ActionContext) => T | undefined;
   /** 执行行为。target 为 resolve 返回值，类型由泛型 T 保证。 */
   execute(ac: ActionContext, target: T): void;
+  /**
+   * R674 效用仲裁：该候选在当前上下文的价值（>0，越大越优先）。
+   * 仅当 RolePolicy.arbitration === "utility" 且工作在 work 模式时读取；
+   * 未声明时按 1 计（仍参与评分，但不会凭空压过有明确价值的候选）。
+   * 返回 0/负数 = 当前不值得做（等价于 resolve 返回 undefined）。
+   * 用方法签名（而非属性函数）以保持与 execute 相同的参数双变，避免
+   * ActionCandidate<具体类型> 无法赋给 ActionCandidate<any>。
+   */
+  utility?(ac: ActionContext, target: T): number;
 }
 
 /**
@@ -36,6 +45,13 @@ export interface RolePolicy {
   acquire: readonly ActionCandidate<any>[];
   /** work 模式候选（消耗能量）。异构列表，使用 any 宽化。 */
   work: readonly ActionCandidate<any>[];
+  /**
+   * R674：work 模式的选择方式。
+   * - "chain"（默认）：按列表顺序，第一个 resolve 成功者执行（旧行为）。
+   * - "utility"：所有候选参与评分，按价值 × 老化选最高者；承诺窗/切换余量见 CONFIG.arbitration。
+   * acquire 永远走 chain —— 取能的安全次序不允许被分数改写。
+   */
+  arbitration?: "chain" | "utility";
   /**
    * flee 钩子：威胁检测后、通用 flee 移动之前调用。
    * 返回 true=角色已自行处理（如 hauler 防御圈内安全充能），false=需要通用 flee 接管。

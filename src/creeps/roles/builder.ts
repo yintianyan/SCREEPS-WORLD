@@ -19,7 +19,31 @@ import {
   withdrawStorageCapped,
 } from "../engine/actions";
 import { releaseAssignment } from "../support/assignment-adapter";
+import { getObjectById } from "../support/obj-cache";
 import { defineRole } from "../engine/role-runner";
+import { scored } from "../engine/arbiter";
+
+/** 血量缺口（0=满血，1=归零）— 维修类效用的共同尺度。 */
+function hpDeficit(s: { hits: number; hitsMax: number }): number {
+  if (!(s.hitsMax > 0)) return 0;
+  return Math.max(0, 1 - s.hits / s.hitsMax);
+}
+
+/** 建造类效用加成：存在性阻塞（spawn/tower）> 关键 container > 临近完工。 */
+function siteUtility(ac: ActionContext, site: ConstructionSite): number {
+  let bonus = 0;
+  if (site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER) {
+    bonus += 50;
+  }
+  if (site.structureType === STRUCTURE_CONTAINER) {
+    const near = (p?: { x: number; y: number }) =>
+      p !== undefined && Math.abs(site.pos.x - p.x) <= 1 && Math.abs(site.pos.y - p.y) <= 1;
+    if (near(ac.snapshot.controller?.pos) || ac.snapshot.sources.some(s => near(s.pos)))
+      bonus += 20;
+  }
+  if (site.progressTotal > 0 && site.progress / site.progressTotal >= 0.8) bonus += 15;
+  return bonus;
+}
 
 /** recovery tier 门禁：释放 assignment（不建造）。 */
 function builderGate(ac: ActionContext): boolean {
@@ -55,6 +79,9 @@ const policy: RolePolicy = {
   park: true,
   isRepairWorker: true,
   executionOrder: 4,
+  // R674：work 模式效用仲裁 —— 用分数而不是链序分配注意力，避免建造永远命中、
+  // 修路/工事被链尾饿死（历史实测 16 条路 8 条破 40%）。acquire 仍走链式。
+  arbitration: "utility",
   // R3a：builder 声明生存豁免 — recovery 重建被毁基建 + bootstrap 建造关键基建
   // 都是生存行为，不是发展。colonyStateFreezesRole 读此标志放行。
   recoveryEligible: true,
@@ -82,32 +109,30 @@ const policy: RolePolicy = {
 
   work: [
     // 急救：新生 rampart 灌血过生存线（建成仅 1 hit，100 tick 内必死于衰减）。
-    // 必须排在 build 之前 — 灌血十几 tick，建 site 上百 tick；顺序反了就是
-    // 「建了就塌、塌了再建」死循环，防线永远立不起来。
-    repairFreshRampart(),
-    // 急救：血量 < 15% 的危路（塌毁重建耗能 6 倍 + site 占建造名额）。与 rampart 急救同层
-    // 排在 build 之前 — construction 流水线持续放行 site 时建造永远命中，链尾常规修路被饿死
-    // （线上实测 16 条路 8 条破 40%、最烂 4%）。急救只拉出险区（40%）即放手，不霸占建造工时。
-    repairUrgentRoads(),
-    // 建造 assignment 指定的 site（recovery 跳过）。
-    buildAssignmentSite({ recoverySkip: true }),
-    // 建造最近 site（recovery 跳过）。conserve 下不再过滤 criticalOnly —
-    // construction-manager 的 developmentGate 已控制哪些 site 该存在，builder 只需去建。
-    buildNearestSite(false, { recoverySkip: true }),
-    // 紧急：修复衰减中的 container（< 80% 血量）。
-    // 优先级高于 fill — 失去 container = 物流链断裂 = 经济崩溃。
-    repairContainerDecay(),
-    // 紧急：修复血量 < 50% 的关键结构（spawn/tower/extension/container）。
-    // P2 修复：原位于 fillTarget 之后，现提前 — 结构快塌了比填能量更紧急。
-    repairCritical(),
+    // 效用最高档：灌血十几 tick，建 site 上百 tick；顺序反了就是「建了就塌」死循环。
+    scored(repairFreshRampart(), () => 180),
+    // 急救：血量 < 15% 的危路（塌毁重建耗能 6 倍 + site 占建造名额）。
+    scored(repairUrgentRoads(), (_ac, r) => 80 + 120 * hpDeficit(r)),
+    // 建造 assignment 指定的 site / 最近 site。
+    scored(buildAssignmentSite({ recoverySkip: true }), (ac, s) => 60 + siteUtility(ac, s)),
+    // 有 build 租约且目标仍存在时让位给 assignment（保留任务池的 maxWorkers/去向语义）；
+    // 目标消失时租约即将被回收，本候选立即接管，避免空等。急救维修仍可抢占。
+    scored(buildNearestSite(false, { recoverySkip: true }), (ac, s) =>
+      ac.assignment?.targetId && getObjectById(ac.assignment.targetId)
+        ? 0
+        : 50 + siteUtility(ac, s),
+    ),
+    // 紧急：修复衰减中的 container（< 80% 血量）— 失去 container = 物流链断裂。
+    scored(repairContainerDecay(), (_ac, c) => 60 + 80 * hpDeficit(c)),
+    // 紧急：修复血量 < 50% 的关键结构。
+    scored(repairCritical(), (_ac, t) => 130 + 100 * hpDeficit(t)),
     // fallback: 填充 spawn/extension。
-    fillTarget(),
-    // fallback: 修复衰减中的道路（< 40% 血量）。
-    // P1 修复：原先道路无任何维修覆盖，塌毁后交通变慢浪费 CPU。
-    repairRoads(),
-    // fallback: 防御工事维修（B3：盈余门禁 + 无威胁时，修 wall/rampart 至分级血量）。
-    // 维修权从塔移交 creep —— 塔修墙是能量黑洞，creep 修是 1 energy/100 hits/WORK。
-    repairFortifications(),
+    scored(fillTarget(), () => 35),
+    // fallback: 修复衰减中的道路（< 40% 血量）。常规修路礼让建造（< 15% 的危路由
+    // repairUrgentRoads 接管），但老化会把它周期性提到链首，防「永远没人修路」。
+    scored(repairRoads(), (_ac, r) => 15 + 35 * hpDeficit(r)),
+    // fallback: 防御工事维修（盈余门禁 + 无威胁时）。
+    scored(repairFortifications(), (_ac, f) => 10 + 15 * hpDeficit(f)),
     // 所有候选均不匹配 → park 待命。builder 不 fallback 到升级 — 升级是 upgrader 的职责，
     // 等待新 construction site 出现而非消耗能量去升级。
   ],

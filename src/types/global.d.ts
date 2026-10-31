@@ -98,6 +98,18 @@ declare global {
     /** Distributor 水位分级档位（0-3），由 distributor gate 每 tick 按 storage 水位计算。 */
     distributorTier?: 0 | 1 | 2 | 3;
     /**
+     * R674 效用仲裁状态（仅 arbitration:"utility" 的角色写）：
+     * task=当前胜出候选名，since=该任务开始 tick，lastAt=上次完整评分 tick，
+     * neglect=候选名→连续未被选中的 tick 当量（老化提权用，选中即清零）。
+     * per-creep 运行时状态，无需迁移（无该字段时按首次决策处理）。
+     */
+    utility?: {
+      task: string;
+      since: number;
+      lastAt: number;
+      neglect?: Record<string, number>;
+    };
+    /**
      * 任务标记（PB 野采链，审计缺口 2）："powerBank"（战斗编队，attacker/healer
      * 分流：不集结直接推进 + 专用 PB 攻击候选）/"powerCollect"（collector 捡运）。
      * undefined = 常规角色（war 编队走 warPlan 相位机）。

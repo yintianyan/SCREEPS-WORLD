@@ -1182,6 +1182,26 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-31 18:1xZ 立格，R674；上一条＝R672b 格「feed 车道可达」；本格**调度重构 P1：work 模式效用仲裁 + builder/worker 灰度**）
+
+**问题**：动作链是「第一个可执行者胜」，每来一个新需求必须插到正确位置，插错就饿死链尾。证据：R672 feed 车道不可达、builder 常规修路被建造饿死（16 条路 8 条破 40%）、hauler 的 supplyLabs 被 fillStorage 遮蔽（催生 lab-tender 补丁角色）。**修法不是再插一个动作，而是把「排序」换成「调度」。**
+
+**P1 实现（本格完成）**：
+1. `ActionCandidate.utility?(ac,target)`（方法签名保双变）+ `RolePolicy.arbitration:"chain"|"utility"`；**只作用于 work 模式，acquire 保持链式**（取能安全次序不允许被分数改写）。
+2. 新模块 [arbiter.ts](src/creeps/engine/arbiter.ts)：
+   - `score = utility × aging × sticky`；aging = `1 + min(neglect, agingCap)/agingDivisor`（当前 200/100 ⇒ 最高 3 倍）；
+   - **硬性公平**：任何可执行任务等待达 `agingCap` 后无条件插队（有界饥饿的最终保证，与 base 差距无关）；
+   - 承诺窗 40 拍（sticky 1.35）+ 切换余量 1.15（防振荡/省通勤）；
+   - **决策降频**：每 5 拍完整评分，其余拍只复核当前任务（CPU 可控）；
+   - **目标缓存隔离**：评分时逐候选还原 `targetId/fillTargetId/repairTargetId/urgentRoadId`，落选者不污染缓存；赢家重解析后落盘。
+3. builder：9 个 work 候选全部标注 utility（急救 180 / 危路 80+ / 建造 60+/50+ / container 60+ / critical 130+ / fill 35 / 常规修路 15+ / 工事 10+）；有 build 租约且目标存在时 `buildNearestSite` 让位，保留任务池 maxWorkers 语义。
+4. worker：5 个 work 候选全部标注 utility（fillAssignment 60+ / critical 130+ / fill 45+ 空载加成 / build 40+阻塞 50 / upgrade 30+降级紧迫度）；有 fill 租约时 `fillTarget` 让位。
+5. 全局开关 `CONFIG.arbitration.enabled` + 每角色 `arbitration` 字段；回退到旧链式只需改一处、无需回滚代码。
+
+**测试**：+12（arbiter 10：评分/老化/硬性公平/承诺窗/切换余量/缓存隔离/失效重评；角色轮转 2：builder 工地+道路都被服务、worker spawn 填充+升级都被服务）。**unit 434 文件·5,671 例、integration 30·239 全绿；typecheck 0。既有 builder 41 例 / worker 17 例零改动通过** —— 单候选/紧急场景行为与链式逐字一致。
+
+**预写判据**：**E775** 部署后 ≤300 拍，线上 `Memory.creeps[*].utility` 出现，builder/worker 的 `task` 至少覆盖 2 个候选类；**E776** W39S55 工地总进度速率不低于 3/拍（与 R672b 后同尺窗口），不出现无工地完成却进度倒退；**E777** 成熟房 `dc/dy/sc=0`、CC 2000/2000，errorLog `er=0`；**E778** CPU 增量 ≤0.5/拍，若 tier 持续 tight→constrained 则关闭 `arbitration.enabled` 回退。**P2（下一格）**：hauler/distributor 接入 + 房间级任务账本，消除 `fillStorage` 遮蔽 lab 的结构性根因。
+
 ### 4.0（10-31 09:0xZ 立格，R672b；上一条＝R672 格「供能车道」；本格**让车道真的可达：核心饱和门 + 顺序前移**）
 
 **发现（用户要求“检查方案是否实现、并不影响其它” → 只读监测器 + 代码复核）**：R672 的三条动作都在代码里、单测全绿，但**产线不可达**——hauler work 链把 `haulFillTargetExcludingControllerContainer` 排在 feed 之前，而施工期 spawn/extension 永远有空位（每次 transfer 后又有新空位）⇒ non-CC fill 几乎每趟都 resolve，feed 两条动作轮不到。线上佐证（r672 监测器 08:37–08:58Z，t=83,980,835–83,981,146）：`d:[]`（从未出现工地旁掉落堆）、builder 能量合计仅 50→150、工地进度靠 builder 自运（~3/拍），E769 字面上“无堆”而不是“堆被捡走”。

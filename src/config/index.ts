@@ -247,15 +247,38 @@ export const CONFIG = {
     requestTtl: 1000,
   },
 
+  /**
+   * R674：工作模式的效用仲裁（utility arbitration）。
+   * 动作链是「第一个可执行者胜」，每新增需求都要插到链上正确位置，插错就饿死链尾
+   * （R672 的 feed 车道、builder 常规修路、hauler 的 lab 供料都因此被遮蔽）。
+   * utility 模式在每个决策点给所有可执行候选打分，按「价值 × 老化」选最高者；
+   * 只作用于 work 模式，acquire 保持链式（取能的安全次序不允许被分数改写）。
+   * 回退：把 RolePolicy.arbitration 改回 "chain"（默认），或整体置 enabled=false。
+   */
+  arbitration: {
+    /** 总开关：false 时所有角色退回链式（唯一回滚通道，无需改角色文件）。 */
+    enabled: true,
+    /** 决策间隔（tick）：两次完整评分之间只复核当前任务，避免每 tick 全量扫描。 */
+    decisionInterval: 5,
+    /** 承诺窗（tick）：当前任务在窗内获得 stickyBonus，防振荡/减少来回通勤。 */
+    dwellTicks: 40,
+    /** 承诺窗内的得分加成。 */
+    stickyBonus: 1.35,
+    /** 老化上限（tick 当量）：被饿死的候选按 1 + neglect/agingDivisor 提权，最高 3 倍。 */
+    agingCap: 200,
+    agingDivisor: 100,
+    /** 切换余量：当前任务仍可执行时，新任务得分必须超过 current × 此值才换。 */
+    switchMargin: 1.15,
+  },
+
   movement: {
     /** 本地寻路的 maxRooms。remote 角色未来通过 route/waypoint 跨房，本地任务始终为 1。 */
-    localMaxRooms: 1,
-    /**
+    localMaxRooms: 1 /**
      * Traffic Manager 总开关。开启：角色只登记移动意图，tick 末后置系统按房集中
      * 解算（同格仲裁/对向换位/推挤静止者/锚定豁免）后统一签发 move，
      * yield/pull 旧让路机制同时短路禁用（双仲裁并存会互相打架）。
      * 关闭：登记函数直通引擎 move（完全恢复旧行为），后置系统空转 — 唯一回滚通道。
-     */
+     */,
     trafficManager: true,
     /**
      * 移动/锚定优先级表 — 数值越大越优先；同格争抢高优者胜，推挤仅当移动方严格大于阻挡方。

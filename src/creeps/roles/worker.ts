@@ -14,6 +14,42 @@ import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 import { releaseAssignment } from "../support";
 import { defineRole } from "../engine/role-runner";
+import { scored } from "../engine/arbiter";
+
+/** 血量缺口（0=满血，1=归零）。 */
+function hpDeficit(s: { hits: number; hitsMax: number }): number {
+  if (!(s.hitsMax > 0)) return 0;
+  return Math.max(0, 1 - s.hits / s.hitsMax);
+}
+
+/** 填充类加成：spawn/extension 断能即停产，tower 弹药次之，container 兜底。
+ * 越空越紧迫（freeRatio 0→1），让「空 spawn」在效用上压过建造。 */
+function fillBonus(t: AnyOwnedStructure): number {
+  const store = (t as { store?: Store<ResourceConstant, false> }).store;
+  const cap = store?.getCapacity?.(RESOURCE_ENERGY) ?? 0;
+  const free = store?.getFreeCapacity?.(RESOURCE_ENERGY) ?? 0;
+  const ratio = cap > 0 ? free / cap : 0;
+  if (t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION) {
+    return 20 + 30 * ratio;
+  }
+  if (t.structureType === STRUCTURE_TOWER) return 10 + 15 * ratio;
+  return 0;
+}
+
+/** 建造类加成：存在性阻塞（spawn/tower）优先，临近完工其次。 */
+function siteBonus(site: ConstructionSite): number {
+  let bonus = 0;
+  if (site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER) bonus += 50;
+  if (site.progressTotal > 0 && site.progress / site.progressTotal >= 0.8) bonus += 15;
+  return bonus;
+}
+
+/** 控制器降级紧迫度：越接近降级，升级越该插队（保级 = 保住整房进度）。 */
+function downgradeUrgency(ctrl: StructureController): number {
+  if (ctrl.ticksToDowngrade < 5000) return 100;
+  if (ctrl.ticksToDowngrade < 10000) return 50;
+  return 0;
+}
 
 /** 向 assignment 指定的 target 送能。 */
 function fillAssignmentTarget(): ActionCandidate<AnyOwnedStructure> {
@@ -53,6 +89,9 @@ const policy: RolePolicy = {
   isRepairWorker: true,
   isSourceWorker: true,
   executionOrder: 0,
+  // R674：work 模式效用仲裁 —— worker 原先链尾升级在 fill 永远可命中时被饿死；
+  // 现按「填充/建造/维修/升级」价值 × 老化轮转。acquire 仍走链式。
+  arbitration: "utility",
   acquire: [
     // 拾取地上掉落能量（衰减资源，优先于采集）。
     pickupDroppedEnergy(),
@@ -62,20 +101,19 @@ const policy: RolePolicy = {
 
   work: [
     // 优先使用 assignment 指定的 target。
-    fillAssignmentTarget(),
-    // 紧急：修复血量 < 50% 的关键结构（spawn/tower/extension/container）。
-    // P0 修复：worker 被 kernel 计入 repairRooms，必须有实际 repair action 才名副其实。
-    // 优先于 fill — 结构快塌了比填能量更紧急。
-    repairCritical(),
-    // 回退到最近 fillTarget。
-    fillTarget(),
-    // R668：bootstrap 建造吞吐 —— worker 原先没有 build 动作，无 spawn 的新房
-    // 只有 2 只 builder 承建 24k hits（spawn+containers+extensions），实测 ~1–2 hits/拍。
-    // 放在 fillTarget 之后、upgradeController 之前：有填充目标先保供给；无填充
-    // （如无 spawn 的新房）时直接建造；建造完才升级。
-    buildNearestSite(),
-    // 无填充目标、无工地 — 升级。
-    upgradeController(),
+    scored(fillAssignmentTarget(), (_ac, t) => 60 + fillBonus(t)),
+    // 紧急：修复血量 < 50% 的关键结构。
+    scored(repairCritical(), (_ac, t) => 130 + 100 * hpDeficit(t)),
+    // 回退到最近 fillTarget；有 fill 租约且目标仍存在时让位给 assignment（保留 maxWorkers
+    // 语义），assignment 目标满时会先释放租约，本候选随即恢复可用。
+    scored(fillTarget(), (ac, t) =>
+      ac.assignment?.targetId && getObjectById(ac.assignment.targetId) ? 0 : 45 + fillBonus(t),
+    ),
+    // R668：bootstrap 建造吞吐 —— 无 spawn 的新房只有少量 builder 承建。
+    // 有填充目标时先保供给；无填充时建造；建造完才升级。
+    scored(buildNearestSite(), (_ac, s) => 40 + siteBonus(s)),
+    // 无填充目标、无工地 — 升级。降级风险越高，效用越高。
+    scored(upgradeController(), (_ac, c) => 30 + downgradeUrgency(c)),
   ],
 };
 

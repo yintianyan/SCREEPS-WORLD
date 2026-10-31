@@ -17,6 +17,7 @@ import { drawStatusLight } from "./status-light";
 import { interceptForBoost } from "./boost-report";
 import { CONFIG } from "../../config";
 import { recordActionCpu } from "../../kernel/safe-run";
+import { runUtilityArbitration } from "./arbiter";
 
 /** 创建一个由 RolePolicy 驱动的 CreepRole。 */
 export function defineRole(name: string, priority: Priority, policy: RolePolicy): CreepRole {
@@ -163,7 +164,16 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // 消除 predicate-execute 重复计算。actionProfiling 开启时测量每个 resolve/execute
         // 并记录到 globalCache；关闭时走原始路径（零开销）。
         const candidates = creep.memory.mode === "work" ? policy.work : policy.acquire;
+        // R674：work 模式可走效用仲裁（评分选最高价值候选）；acquire 永远保持链式。
+        // 仲裁无结果时回落到链式 —— 双保险，防评分层 bug 把整只 creep 变 idle。
+        const useUtility = policy.arbitration === "utility" && creep.memory.mode === "work";
         if (CONFIG.debug.actionProfiling) {
+          if (useUtility) {
+            const before = Game.cpu.getUsed();
+            const outcome = runUtilityArbitration(ac, candidates);
+            recordActionCpu(`${name}/utility`, Game.cpu.getUsed() - before);
+            if (outcome) return;
+          }
           for (const candidate of candidates) {
             const key = `${name}/${candidate.name}`;
             let target: unknown;
@@ -180,6 +190,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
             }
           }
         } else {
+          if (useUtility && runUtilityArbitration(ac, candidates)) return;
           for (const candidate of candidates) {
             const target = candidate.resolve?.(ac);
             if (target !== undefined) {
