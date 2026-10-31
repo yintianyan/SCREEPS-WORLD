@@ -1192,6 +1192,14 @@
 
 **预写判据**：**E789** 有 lab 搬运需求的房间里，同一 `labId:resource` 不会在同 tick 被两名 carrier 同时执行；lab 需求服务量不降（lt 命中与 lab 库存变化同窗）；**E790** 同一矿物容器不会同 tick 被两名 hauler 选中，且第二人会回落到其它 acquire 候选而非 idle；**E791** 成熟房/CPU 无回归（cpuAvg10 差 ≤0.5、无新增 error）。
 
+**部署（sha `8730964434aa`）与多房基线（t=83,990,065）**：
+- CPU `avg10 16.1`、bucket 9,979、cap tight；lastError 仍是 R676 前的 builder 旧记录。
+- W37S58：RCL8 steady，storage **206,845**，编制 19，sites/queued/spawnQ 全 0。
+- W38S56：RCL7 growth，progress **536,860/10,935,000（4.9%）**，storage **125,797**（10 分钟 +2,904），编制 15，无工地；RCL7 升级受 `expansionPush && CPU tight` 门控暂停（R632 设计）。
+- W39S55：RCL3 growth，progress **91,604/135,000**，10 分钟 +862（**6.16/拍**），storage 0，编制 12，sites/queued/spawnQ 全 0；按此速率 RCL4 还需 **≈7,000 拍**。layout `building`，queued 的 10 条 rampart 已释放完毕。
+- 扩张仍 `G0+G6`；G0 的 youngestMature 正等 W39S55 RCL4，G6 仍 tight（15–16）。
+- E789/E790 需下一次 lab/矿物需求窗口（当前 `labTasks=0`）；watcher `tmp/observe/rooms-watch.sh`（12×600s 只读）持续采集。
+
 ### 4.0（10-31 20:3xZ 立格，R677；上一条＝R676 格「P2 CPU 收口」；本格**修复 spawn 降级门与 economy phase 脱节**）
 
 **现场（只读 Memory）**：W39S55 `spawnRejects.degradeGateClosed` 累计 **2,214**；一次 P1 harvester 补员在 `colonyState=normal`、`phase=bootstrap` 下排队 46 拍仍 `block=degradeGateClosed`，直到 `starvedP1`（wait ≥ 2×spawnTime=48）才降级孵出（t≈83,987,915 队列清空、hcount 1→2）。根因：spawn-manager 的 `allowDegrade` 只读 `colonyState`，而 `colonyState`（会不会出事）与 `phase`（经济阶段）是两套维度，二者不同步；R647 的「bootstrap 允许降级」在 `colonyState=normal` 时失效。
@@ -1202,7 +1210,7 @@
 
 **预写判据**：**E786** 部署后 1,000 拍内，若再出现「P1 请求 + phase=bootstrap + 付不起全 body」，其 `block` 不再停在 `degradeGateClosed`，且 W39S55 该档增量 ≤ 个位数（对照累计 2,214）；**E787** 同窗 `noDegrade/floor` 不异常增加、spawn 失败/黑名单不增加；**E788** phase=growth 的成熟房 spawn 行为不变（控制组）。
 
-**部署（sha `9b04859890db`）**：生效时 t≈83,987,9xx；W39S55 已回到 phase=growth、hcount=2、spawnQueue 空，`spawnRejects.degradeGateClosed` 基线 **2,214**。行为验证需等下一次「P1+bootstrap+付不起」事件；单测已锁定该分支（phase=bootstrap/colony=normal ⇒ 立即降级且该档不涨）。r677 只读轮询 12×300s 跟踪增量。
+**部署（sha `9b04859890db`）**：生效时 t≈83,987,9xx；W39S55 已回到 phase=growth、hcount=2、spawnQueue 空，`spawnRejects.degradeGateClosed` 基线 **2,214**。行为验证需等下一次「P1+bootstrap+付不起」事件；单测已锁定该分支（phase=bootstrap/colony=normal ⇒ 立即降级且该档不涨）。r677 只读轮询 12×300s 跟踪增量：至 t=83,988,805，`dgc` 仅 +27（2,214→2,241），期间出现的是 `upgrader:2`（P2，不在本次修复范围）且 5 分钟内清空；未观察到 P1 被该档挡住的新事件。
 
 ### 4.0（10-31 20:4xZ 立格，R676；上一条＝R675 格「P2 任务账本」；本格**P2 CPU 收口 + 修复目标消失防护**）
 
