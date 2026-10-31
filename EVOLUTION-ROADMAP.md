@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-01 02:5xZ 立格，R678；上一条＝R677 格「spawn 降级门」；本格**P3 配额：lab/矿物目标级租约**）
+
+**动机**：R674b 已证明「多人同修一个目标」会饿死其它任务（3/3 builder 同修一容器）。效用评分解决了“选哪类任务”，但同一目标仍可能被多名 creep 同时选中。P3 给两个会成批出现的目标加**每 tick 每目标 1 人**的占用：lab 按 `labId:resource`（不同 load 可并行）、矿物按 containerId。
+
+**实现**：新增 [task-claims.ts](src/creeps/support/task-claims.ts)（tick 自动清空，无跨 tick 租约）；`supplyLabs` 四相在 resolve 跳过他人占用、execute 占用，withdraw 目标补 `labId` 以便按目标键；`haulMineralTopUp` 同型。评分阶段不占用，避免落选候选偷目标（与 R674b 修复的同类坑）。
+
+**测试**：+3（占用语义/换 tick 清空；lab 同 tick 第二人解析不到、下一拍恢复；矿物容器同型）。unit **439 文件·5,694 例**、integration 30·239、typecheck 0。
+
+**预写判据**：**E789** 有 lab 搬运需求的房间里，同一 `labId:resource` 不会在同 tick 被两名 carrier 同时执行；lab 需求服务量不降（lt 命中与 lab 库存变化同窗）；**E790** 同一矿物容器不会同 tick 被两名 hauler 选中，且第二人会回落到其它 acquire 候选而非 idle；**E791** 成熟房/CPU 无回归（cpuAvg10 差 ≤0.5、无新增 error）。
+
 ### 4.0（10-31 20:3xZ 立格，R677；上一条＝R676 格「P2 CPU 收口」；本格**修复 spawn 降级门与 economy phase 脱节**）
 
 **现场（只读 Memory）**：W39S55 `spawnRejects.degradeGateClosed` 累计 **2,214**；一次 P1 harvester 补员在 `colonyState=normal`、`phase=bootstrap` 下排队 46 拍仍 `block=degradeGateClosed`，直到 `starvedP1`（wait ≥ 2×spawnTime=48）才降级孵出（t≈83,987,915 队列清空、hcount 1→2）。根因：spawn-manager 的 `allowDegrade` 只读 `colonyState`，而 `colonyState`（会不会出事）与 `phase`（经济阶段）是两套维度，二者不同步；R647 的「bootstrap 允许降级」在 `colonyState=normal` 时失效。

@@ -110,6 +110,9 @@ export interface GlobalCache {
   /** R674b：本 tick 的修复目标占用（targetId → creepName），每 tick 自动清空。 */
   repairReservations?: Map<string, string>;
   repairReservationTick?: number;
+  /** R678：本 tick 的任务目标占用（"lab:<labId>:<res>" / "mineral:<containerId>"）。 */
+  taskClaims?: Map<string, string>;
+  taskClaimTick?: number;
   /** 每个 label 的连续错误计数（用于冷却跟踪）。 */
   errorCounts?: Map<string, number>;
   /** 每个 label 的冷却到期 tick（非关键插件在反复报错后暂停）。 */

@@ -4,6 +4,7 @@ import { ACTION_RANGE_NEAR, runAction } from "./helpers";
 import { CONFIG } from "../../../config";
 import { globalCache } from "../../../kernel/global-cache";
 import { getObjectById } from "../../support/obj-cache";
+import { claimTaskTarget, taskTargetClaimedByOther } from "../../support/task-claims";
 import { moveToTarget } from "../../movement";
 import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../domain/war/planning";
 
@@ -71,6 +72,7 @@ export function haulMineralTopUp(): ActionCandidate<StructureContainer> {
       const containerCapacity = 2000; // StructureContainer 总容量恒为 2000
       const mineralThreshold = Math.floor(containerCapacity * 0.7);
       const source = ac.snapshot.containers.find(c => {
+        if (taskTargetClaimedByOther("mineral", c.id, ac.creep.name)) return false;
         let mineralTotal = 0;
         for (const res of Object.keys(c.store) as ResourceConstant[]) {
           if (res === RESOURCE_ENERGY) continue;
@@ -83,6 +85,7 @@ export function haulMineralTopUp(): ActionCandidate<StructureContainer> {
       return source;
     },
     execute: (ac, source) => {
+      claimTaskTarget("mineral", source.id, ac.creep.name);
       const mineral = (Object.keys(source.store) as ResourceConstant[]).find(
         r => r !== RESOURCE_ENERGY && source.store[r]! > 0,
       );
@@ -100,6 +103,7 @@ type LabSupplyTarget =
       source: StructureStorage | StructureTerminal;
       resource: ResourceConstant;
       amount: number;
+      labId: string;
       phase: "withdraw";
     }
   | { source: StructureLab; resource: ResourceConstant; phase: "unload" };
@@ -133,6 +137,9 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
           ? demands.byRoom[ac.snapshot.roomName]
           : undefined;
       if (!table) return undefined;
+      // R678：同一 lab+资源 每 tick 只派一人（execute 占用，其他 creep 在这里跳过）。
+      const labClaimed = (labId: string, resource: ResourceConstant): boolean =>
+        taskTargetClaimedByOther("lab", `${labId}:${resource}`, ac.creep.name);
 
       const store = ac.creep.store;
       const carriedCompound = (Object.keys(store) as ResourceConstant[]).find(
@@ -144,7 +151,11 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
         for (const load of table.loads) {
           if (load.resource !== carriedCompound) continue;
           const lab = getObjectById(load.labId as Id<StructureLab>);
-          if (lab && (lab.store.getFreeCapacity(carriedCompound) ?? 0) > 0) {
+          if (
+            lab &&
+            !labClaimed(load.labId, carriedCompound) &&
+            (lab.store.getFreeCapacity(carriedCompound) ?? 0) > 0
+          ) {
             return { dest: lab, resource: carriedCompound, phase: "deposit" as const };
           }
         }
@@ -163,7 +174,11 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
         for (const load of table.loads) {
           if (load.resource !== RESOURCE_ENERGY) continue;
           const lab = getObjectById(load.labId as Id<StructureLab>);
-          if (lab && (lab.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0) {
+          if (
+            lab &&
+            !labClaimed(load.labId, RESOURCE_ENERGY) &&
+            (lab.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0
+          ) {
             return { dest: lab, resource: RESOURCE_ENERGY, phase: "deposit" as const };
           }
         }
@@ -176,7 +191,7 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
       for (const unload of table.unloads) {
         const lab = getObjectById(unload.labId as Id<StructureLab>);
         const resource = unload.resource as ResourceConstant;
-        if (lab && (lab.store[resource] ?? 0) > 0) {
+        if (lab && !labClaimed(unload.labId, resource) && (lab.store[resource] ?? 0) > 0) {
           return { source: lab, resource, phase: "unload" as const };
         }
       }
@@ -184,31 +199,55 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
       const terminal = ac.snapshot.terminal;
       for (const load of table.loads) {
         const resource = load.resource as ResourceConstant;
+        if (labClaimed(load.labId, resource)) continue;
         if (resource === RESOURCE_ENERGY) {
           if (storage.store.getUsedCapacity(RESOURCE_ENERGY) > labEnergyStorageFloor()) {
-            return { source: storage, resource, amount: load.amount, phase: "withdraw" as const };
+            return {
+              source: storage,
+              resource,
+              amount: load.amount,
+              labId: load.labId,
+              phase: "withdraw" as const,
+            };
           }
           continue;
         }
         // 化合物：storage 优先，terminal 回退 — 市场买入的矿物落在 terminal，
         // 没有回退则贸易补给的原料永远进不了反应链。
         if ((storage.store[resource] ?? 0) > 0) {
-          return { source: storage, resource, amount: load.amount, phase: "withdraw" as const };
+          return {
+            source: storage,
+            resource,
+            amount: load.amount,
+            labId: load.labId,
+            phase: "withdraw" as const,
+          };
         }
         if (terminal && (terminal.store[resource] ?? 0) > 0) {
-          return { source: terminal, resource, amount: load.amount, phase: "withdraw" as const };
+          return {
+            source: terminal,
+            resource,
+            amount: load.amount,
+            labId: load.labId,
+            phase: "withdraw" as const,
+          };
         }
       }
       return undefined;
     },
     execute: (ac, t) => {
-      if (t.phase === "deposit" || t.phase === "dump") {
+      if (t.phase === "deposit") {
+        claimTaskTarget("lab", `${t.dest.id}:${t.resource}`, ac.creep.name);
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.resource));
+      } else if (t.phase === "dump") {
         runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.resource));
       } else if (t.phase === "unload") {
+        claimTaskTarget("lab", `${t.source.id}:${t.resource}`, ac.creep.name);
         runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
           ac.creep.withdraw(t.source, t.resource),
         );
       } else {
+        claimTaskTarget("lab", `${t.labId}:${t.resource}`, ac.creep.name);
         const available = t.source.store[t.resource] ?? 0;
         const amount = Math.min(t.amount, available, ac.creep.store.getFreeCapacity() ?? 0);
         if (amount <= 0) return;
