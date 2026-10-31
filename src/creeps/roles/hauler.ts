@@ -203,11 +203,13 @@ const policy: RolePolicy = {
     // storage → fallthrough。修复 storage 空置死锁：旧顺序 haulFillTarget 在前，spawn 不满时
     // hauler 永远直送 spawn，storage 永远空、distributor 永远 idle。
     fillStorage(),
-    // R672：先把 spawn/extension/tower 填满（排除 controller container），避免被它的
-    // 持续抽能锁死在原地；再供建造（附近缺能 builder / 路过工地），最后才补 container。
-    haulFillTargetExcludingControllerContainer(),
+    // R672b：核心供给接近饱和（spawn/extension 空闲≤25%）时，先把能量供建造
+    // （附近缺能 builder / 路过工地），再回填核心与 container —— 否则施工期
+    // 核心永远有空位，feed 车道永远轮不到（R672 实测不可达）。
     transferToLowBuilder(),
     dropNearConstruction(),
+    // 填 spawn/extension/tower（排除 controller container 的持续抽能优先档）。
+    haulFillTargetExcludingControllerContainer(),
     // spawn/extension 回退 + controller container 兜底（升级不断粮）。
     haulFillTarget(),
     // 矿物补仓（能量已入库后）：有余量才取矿，避免取矿相位抢在 fillStorage 前导致

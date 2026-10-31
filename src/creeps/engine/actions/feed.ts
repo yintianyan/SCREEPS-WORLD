@@ -7,10 +7,27 @@
  *  2) hauler 恰在工地 2 格内 → drop，让 builder 的 pickupNearbyDroppedEnergy 捡。
  * 都只在「本房有在建工地」时生效；成熟房行为不变。
  */
+import type { RoomSnapshot } from "../../../kernel/contracts";
 import type { ActionCandidate } from "../action-types";
 import { ACTION_RANGE_NEAR, runAction } from "./helpers";
 
 const LOW_ENERGY_FREE = 25;
+
+/**
+ * R672b：核心供给是否已接近饱和（spawn/extension 合计空闲 ≤25% 容量）。
+ * 让“供建造”车道不会跟 spawn/extension 抢能量：核心空着时 hauler 先填核心；
+ * 核心接近满时，才把能量转给缺能 builder / 丢在工地旁。
+ */
+export function coreFillNearlySatisfied(snapshot: Pick<RoomSnapshot, "fillTargets">): boolean {
+  let cap = 0;
+  let free = 0;
+  for (const t of snapshot.fillTargets) {
+    if (t.structureType !== "spawn" && t.structureType !== "extension") continue;
+    cap += t.store.getCapacity("energy");
+    free += t.store.getFreeCapacity("energy");
+  }
+  return cap === 0 ? true : free / cap <= 0.25;
+}
 
 /** 直接把能量交给附近（≤4 格）缺能的 builder/worker。 */
 export function transferToLowBuilder(): ActionCandidate<Creep> {
@@ -18,6 +35,7 @@ export function transferToLowBuilder(): ActionCandidate<Creep> {
     name: "feed:low-builder",
     resolve: ac => {
       if (ac.snapshot.myConstructionSites.length === 0) return undefined;
+      if (!coreFillNearlySatisfied(ac.snapshot)) return undefined;
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       const nearby = ac.creep.pos.findInRange(FIND_MY_CREEPS, 4) as Creep[] | undefined;
       if (!nearby || nearby.length === 0) return undefined;
@@ -51,6 +69,7 @@ export function dropNearConstruction(): ActionCandidate<ConstructionSite> {
     resolve: ac => {
       const sites = ac.snapshot.myConstructionSites;
       if (sites.length === 0) return undefined;
+      if (!coreFillNearlySatisfied(ac.snapshot)) return undefined;
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       const near = sites.find(s => ac.creep.pos.getRangeTo(s) <= 2);
       if (!near) return undefined;

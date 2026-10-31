@@ -1182,6 +1182,19 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-31 09:0xZ 立格，R672b；上一条＝R672 格「供能车道」；本格**让车道真的可达：核心饱和门 + 顺序前移**）
+
+**发现（用户要求“检查方案是否实现、并不影响其它” → 只读监测器 + 代码复核）**：R672 的三条动作都在代码里、单测全绿，但**产线不可达**——hauler work 链把 `haulFillTargetExcludingControllerContainer` 排在 feed 之前，而施工期 spawn/extension 永远有空位（每次 transfer 后又有新空位）⇒ non-CC fill 几乎每趟都 resolve，feed 两条动作轮不到。线上佐证（r672 监测器 08:37–08:58Z，t=83,980,835–83,981,146）：`d:[]`（从未出现工地旁掉落堆）、builder 能量合计仅 50→150、工地进度靠 builder 自运（~3/拍），E769 字面上“无堆”而不是“堆被捡走”。
+
+**改动**：
+1. 新增纯函数 `coreFillNearlySatisfied(snapshot)`：spawn+extension 在 fillTargets 中的合计空闲 **≤25% 容量** 才放行供建造（`cap===0` ⇒ 核心已满 ⇒ 放行）。核心空着时 hauler 仍先填核心，避免为建造抽干孵化/防御供给。
+2. `transferToLowBuilder` / `dropNearConstruction` 都加该门控。
+3. 顺序改为 `fillStorage → transferToLowBuilder → dropNearConstruction → non-CC fill → haulFillTarget`：门控通过时先供建造，未通过时 fallthrough 到原填充链（行为与 R672 前逐字一致）。
+
+**测试**：新增 4 例（spawn 空 ⇒ 不喂 builder；空闲 ≤25% ⇒ 放行；核心空 ⇒ 不往工地丢；**角色链可达性**——核心 280/300 + 4 格内缺能 builder 时 hauler 真的 transfer 到 builder 而不是 CC）。unit **432 文件·5,659 例**、integration **30·239**、typecheck 0。
+
+**预写**：**E772** 部署后 ≤600 拍，W39S55 工地附近出现 `d` 非空且下一采样点前被捡走（drop 车道生效）；**E773** builder 能量合计出现 >0 的持续样本，工地进度速率不低于 R672 基线 ~3/拍；**E774** 成熟房（core/young，无工地）`dc/dy/sc=0`、CC 仍 2000/2000（不发散）。
+
 ### 4.0（10-31 07:3xZ 立格，R672；上一条＝R671 格「重占 completed」；本格**施工优先的 hauler 供能车道**）
 
 **诊断（代码考古 + 用户现场）**：`getHaulFillTarget` 有一条「controller container 低于半满 → 优先派 hauler 补给」的硬优先档（targeting.ts:209-218）。新区无 link、upgrader 持续抽能 ⇒ hauler 每拍追着补、锁在 controller 旁；builder 只能自己往返 source↔工地。用户提议“hauler 扔在工地旁”，评估后不采用临时 container（5,000 hits 工时 + 占位/拆除），改用**两条零额外通勤的车道**。

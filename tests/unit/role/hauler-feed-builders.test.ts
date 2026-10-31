@@ -1,5 +1,5 @@
 /** R672：施工优先供能 —— hauler→低能 builder transfer / 工地旁 drop。 */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   dropNearConstruction,
   transferToLowBuilder,
@@ -21,6 +21,8 @@ function makeAc(opts: {
   nearby?: any[];
   siteRange?: number;
   piles?: any[];
+  coreFree?: number;
+  coreCap?: number;
 }) {
   const site = { pos: {} };
   const creep = {
@@ -34,11 +36,26 @@ function makeAc(opts: {
     transfer: () => OK,
     drop: () => OK,
   };
+  const coreCap = opts.coreCap ?? 300;
+  const coreFree = opts.coreFree ?? 0;
   const ac: any = {
     creep,
     snapshot: {
       myConstructionSites: Array.from({ length: opts.sites }, () => site),
       droppedEnergy: opts.piles ?? [],
+      // 默认：核心已满（free=0 ⇒ 不在 fillTargets 里；按生产口径空数组也满足门控）。
+      fillTargets:
+        coreFree > 0
+          ? [
+              {
+                structureType: "spawn",
+                store: {
+                  getFreeCapacity: () => coreFree,
+                  getCapacity: () => coreCap,
+                },
+              },
+            ]
+          : [],
     },
     budget: { tier: "healthy" },
   };
@@ -69,6 +86,30 @@ describe("transferToLowBuilder — R672", () => {
     const { ac } = makeAc({ sites: 1, energy: 0, nearby: [b] });
     expect(transferToLowBuilder().resolve!(ac)).toBeUndefined();
   });
+
+  it("核心（spawn/extension）还空着 ⇒ 先填核心，不喂 builder（R672b 门控）", () => {
+    const b = builder("builder", 50, 1);
+    const { ac } = makeAc({
+      sites: 1,
+      energy: 50,
+      nearby: [b],
+      coreFree: 300,
+      coreCap: 300,
+    });
+    expect(transferToLowBuilder().resolve!(ac)).toBeUndefined();
+  });
+
+  it("核心空闲 ≤25% ⇒ 放行供建造", () => {
+    const b = builder("builder", 50, 1);
+    const { ac } = makeAc({
+      sites: 1,
+      energy: 50,
+      nearby: [b],
+      coreFree: 50,
+      coreCap: 300,
+    });
+    expect(transferToLowBuilder().resolve!(ac)).toBe(b);
+  });
 });
 
 describe("dropNearConstruction — R672", () => {
@@ -87,12 +128,24 @@ describe("dropNearConstruction — R672", () => {
     const { ac } = makeAc({ sites: 1, energy: 50, siteRange: 1, piles: [pile] });
     expect(dropNearConstruction().resolve!(ac)).toBeUndefined();
   });
+
+  it("核心还空着 ⇒ 不往工地丢（R672b 门控）", () => {
+    const { ac } = makeAc({
+      sites: 1,
+      energy: 50,
+      siteRange: 1,
+      coreFree: 200,
+      coreCap: 300,
+    });
+    expect(dropNearConstruction().resolve!(ac)).toBeUndefined();
+  });
 });
 
 import { haulerRole } from "../../../src/creeps/roles/hauler";
 import {
   mockContext,
   mockCreep,
+  mockPos,
   mockSnapshot,
   mockStructure,
   resetGlobals,
@@ -130,5 +183,39 @@ describe("施工期 hauler 填充顺序 — R672", () => {
   it("无在建工地：保留原行为（CC 低于半满优先补给）", () => {
     const { creep, cc } = run(false);
     expect(creep.transfer).toHaveBeenCalledWith(cc, "energy");
+  });
+
+  it("核心接近满 + 附近缺能 builder ⇒ 链上真的轮到 feed 车道（可达性）", () => {
+    resetGlobals();
+    const cc = mockStructure("container", { id: "cc1", energy: 100, capacity: 2000 });
+    // spawn 280/300：空闲 20 ≤ 25% 容量 ⇒ 门控放行。
+    const spawn = mockStructure("spawn", { id: "sp1", energy: 280, capacity: 300 });
+    const snap = mockSnapshot({
+      controllerContainer: cc,
+      fillTargets: [spawn, cc],
+      myConstructionSites: [mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 })],
+    });
+    const mate = {
+      name: "builder_x",
+      memory: { role: "builder", home: "W7N4" },
+      spawning: false,
+      store: { getFreeCapacity: () => 50 },
+      pos: mockPos(26, 25),
+    };
+    const pos = mockPos(25, 25);
+    (pos as any).findInRange = vi.fn(() => [mate]);
+    const creep = mockCreep({
+      name: "hauler_x",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+      pos,
+    });
+
+    haulerRole.run(creep, mockContext(snap));
+
+    expect(creep.transfer).toHaveBeenCalledWith(mate, "energy");
+    expect(creep.transfer).not.toHaveBeenCalledWith(cc, "energy");
   });
 });
