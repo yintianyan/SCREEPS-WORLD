@@ -1,4 +1,5 @@
 /** Actions barrel — 统一重导出所有领域 action 工厂。 */
+export { transferToLowBuilder, dropNearConstruction } from "./feed";
 export { harvestSource, stationaryMine, harvestMineral } from "./harvest";
 export { pickupDroppedEnergy, pickupNearbyDroppedEnergy, lootRemains } from "./pickup";
 export {

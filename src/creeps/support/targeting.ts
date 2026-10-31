@@ -184,6 +184,7 @@ function pickFillTarget(
 export function getHaulFillTarget(
   creep: Creep,
   snapshot: RoomSnapshot,
+  options?: { skipControllerContainerPriority?: boolean },
 ): AnyOwnedStructure | undefined {
   if (snapshot.fillTargets.length === 0) return undefined;
 
@@ -207,7 +208,9 @@ export function getHaulFillTarget(
   }
 
   // 0. 站桩升级保障：controller container 低于半满时优先派一个 hauler 补给。
-  const cc = snapshot.controllerContainer;
+  // R672：施工期（bootstrap 房）可跳过这一优先档 —— 否则 hauler 被它的持续抽能
+  // 锁在原地，builder 却在远处来回跑；CC 仍在 fillTargets 里，后续层级照常兜底。
+  const cc = options?.skipControllerContainerPriority ? undefined : snapshot.controllerContainer;
   if (
     cc &&
     cc.store.getFreeCapacity(RESOURCE_ENERGY) > cc.store.getUsedCapacity(RESOURCE_ENERGY) &&

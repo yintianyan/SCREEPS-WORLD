@@ -168,6 +168,8 @@ export function buildRoomSnapshot(
     ...extensions,
     ...towers,
   ];
+  // controller container 仍纳入 fillTargets：施工期也不能断 upgrader 的粮（RCL 爬升需要），
+  // 建造供能由 hauler 的前置车道（transferToLowBuilder / dropNearConstruction）解决。
   if (controllerContainer) fillBase.push(controllerContainer);
   const fillTargets = fillBase.filter(s => s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
 

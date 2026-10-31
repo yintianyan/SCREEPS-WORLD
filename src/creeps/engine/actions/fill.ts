@@ -191,3 +191,35 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
     },
   };
 }
+
+/**
+ * R672：优先填「非 controller container」的 fill 目标（spawn/extension/tower）。
+ *
+ * 为什么单独一只：controller container 在 fillTargets 里且被 upgrader 持续抽走，
+ * `haulFillTarget` 会让 hauler 每拍"追着补"，把运力从建造/spawn 上吸走（线上观察：
+ * hauler 守在 controller 旁，builder 在远处来回跑）。本动作只处理其余 sink；
+ * controller container 由后续 `haulFillTarget` 兜底，升级不断粮。
+ */
+export function haulFillTargetExcludingControllerContainer(): ActionCandidate<AnyOwnedStructure> {
+  return {
+    name: "fill:haul-target-excluding-cc",
+    resolve: ac => {
+      // 只在施工期启用；用原 getHaulFillTarget（保留 fill 预约去重，防两 hauler 抢同一目标），
+      // 仅跳过「CC 低于半满时的优先档」——CC 仍由后续普通 haulFillTarget 兜底。
+      if (ac.snapshot.myConstructionSites.length === 0) return undefined;
+      if (
+        ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
+        ac.creep.store.getUsedCapacity() > 0
+      )
+        return undefined;
+      return getHaulFillTarget(ac.creep, ac.snapshot, {
+        skipControllerContainerPriority: true,
+      });
+    },
+    execute: (ac, t) => {
+      runAction(ac.creep, t, ACTION_RANGE_NEAR, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
+        [ERR_FULL]: () => updateMode(ac.creep),
+      });
+    },
+  };
+}

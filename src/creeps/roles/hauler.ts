@@ -18,6 +18,8 @@ import {
 import { countedIntent } from "../engine/actions/helpers";
 import { selectHaulSourceContainer, pickHaulFillTargetInRange } from "../support/targeting";
 import { defineRole } from "../engine/role-runner";
+import { transferToLowBuilder, dropNearConstruction } from "../engine/actions/feed";
+import { haulFillTargetExcludingControllerContainer } from "../engine/actions/fill";
 import { moveToTarget, stepToward } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 
@@ -201,7 +203,12 @@ const policy: RolePolicy = {
     // storage → fallthrough。修复 storage 空置死锁：旧顺序 haulFillTarget 在前，spawn 不满时
     // hauler 永远直送 spawn，storage 永远空、distributor 永远 idle。
     fillStorage(),
-    // spawn/extension 紧急回退：storage 满或无 storage 时直送。
+    // R672：先把 spawn/extension/tower 填满（排除 controller container），避免被它的
+    // 持续抽能锁死在原地；再供建造（附近缺能 builder / 路过工地），最后才补 container。
+    haulFillTargetExcludingControllerContainer(),
+    transferToLowBuilder(),
+    dropNearConstruction(),
+    // spawn/extension 回退 + controller container 兜底（升级不断粮）。
     haulFillTarget(),
     // 矿物补仓（能量已入库后）：有余量才取矿，避免取矿相位抢在 fillStorage 前导致
     // 能量滞留背包 + hauler 卡取矿循环不回 acquire 排空 storage link（线上实证 storage-link 满）。

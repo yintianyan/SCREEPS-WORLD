@@ -1182,6 +1182,22 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-31 07:3xZ 立格，R672；上一条＝R671 格「重占 completed」；本格**施工优先的 hauler 供能车道**）
+
+**诊断（代码考古 + 用户现场）**：`getHaulFillTarget` 有一条「controller container 低于半满 → 优先派 hauler 补给」的硬优先档（targeting.ts:209-218）。新区无 link、upgrader 持续抽能 ⇒ hauler 每拍追着补、锁在 controller 旁；builder 只能自己往返 source↔工地。用户提议“hauler 扔在工地旁”，评估后不采用临时 container（5,000 hits 工时 + 占位/拆除），改用**两条零额外通勤的车道**。
+
+**改动**：
+1. `haulFillTargetExcludingControllerContainer()`（新动作）：仅在**有在建工地**时启用，调用原 `getHaulFillTarget(..., {skipControllerContainerPriority:true})`——保留 fill 预约去重（不抢同一目标），只跳过 CC 优先档；CC 仍由后续普通 `haulFillTarget` 兜底（升级不断粮）。
+2. `transferToLowBuilder()`：hauler 携能且 4 格内存在缺能（free≥25）的 builder/worker → 直接 transfer。
+3. `dropNearConstruction()`：hauler 恰在工地 ≤2 格且脚下无能量堆 → drop，builder 的 `pickupNearbyDroppedEnergy` 会捡。
+4. hauler work 链顺序：`fillStorage → non-CC fill → feed builder → drop near site → haulFillTarget(含 CC)`。
+
+**被否的两条**：①快照层在施工期把 CC 从 fillTargets 移除 —— 打红 3 个集成用例（RCL 爬升依赖 CC 供能），已回滚；②临时 container —— 建造工时/占位/拆除成本反向。
+
+**测试**：+9（feed 7：transfer/drop 条件；fill 顺序 2：有工地先 spawn、无工地保留 CC 优先）。首版部署 `55ed615c6ef6` 因“绕开会话预约、且破坏 CC 优先用例”被 2 例单测抓出 → 改为复用 `getHaulFillTarget` 后全绿：unit **432 文件·5,655 例**、integration **30·239**。**部署** sha `bc69e9f9c62f`（824,534 B）。
+
+**预写**：**E768** 换码后 W39S55 tower 工地速率提升（同窗对比其它工地）；**E769** 工地附近出现被 builder 及时捡走的能量堆（drop 车道生效）且不长期堆积；**E770** 成熟房（无工地）hauler 行为与原来逐字一致；**E771** 有工地但 spawn/extension 满时，hauler 仍会兜底补 CC（升级不断粮）。
+
 ### 4.0（10-31 07:1xZ 立格，R671；上一条＝R669 格「spawn 优先+载重档」；本格记录**重占扩张完成 + RCL3 在建塔**）
 
 **终态（线上只读）**：`kernel.expansion` 已清、`lastExpansionCompletedTick=83,969,557` ⇒ W39S55 重占扩张**走完全链路 completed**。现读：RCL **3**（progress 14,688）、spawn 1、**tower 0 但在建（工地 3,668/5,000）**、extensions/ramparts/roads 工地推进、home 编制 13、房间无 storage（RCL<4）、gate −0.59。三房 gates：core +4.94 / young +0.89 / new −0.59（Σ 5.24）；storage：core 102,641、young 103,929；CPU tight 13.7、无 errorLog。
