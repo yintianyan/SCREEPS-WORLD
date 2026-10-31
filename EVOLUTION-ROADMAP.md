@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-31 07:1xZ 立格，R671；上一条＝R669 格「spawn 优先+载重档」；本格记录**重占扩张完成 + RCL3 在建塔**）
+
+**终态（线上只读）**：`kernel.expansion` 已清、`lastExpansionCompletedTick=83,969,557` ⇒ W39S55 重占扩张**走完全链路 completed**。现读：RCL **3**（progress 14,688）、spawn 1、**tower 0 但在建（工地 3,668/5,000）**、extensions/ramparts/roads 工地推进、home 编制 13、房间无 storage（RCL<4）、gate −0.59。三房 gates：core +4.94 / young +0.89 / new −0.59（Σ 5.24）；storage：core 102,641、young 103,929；CPU tight 13.7、无 errorLog。
+
+**链路复盘**：claim → seedLayoutAnchor（V3+template，锚点 23,18）→ spawn 建成 → economic_startup → CP4（5 extensions + 2 containers）→ integrating → **completed**（t=83,969,557）。中途 R668/R669 把建造吞吐从 ~1–2 hits/拍抬到 ~12/拍（spawn 优先 + worker build + 6C 载重）。
+
+**下一阶段**：tower 建成（RCL3 防御质变）→ RCL4 storage → 本地能量链闭合；同时 W39S56 已是下一个 `EVALUATED` 候选（等 readiness）。监测器 r671（至 ~10:18Z）盯塔/扩展/三房 storage 与 CPU。
+
 ### 4.0（10-30 12:3xZ 立格，R669；上一条＝R668 格「worker 加 build」；本格**spawn 工地优先 + worker 载重档**）
 
 **背景**：R668 后建造吞吐仍偏向“最近的工地”（container 以 ~9 hits/拍推进而 spawn 卡 3,017/5,000）；且 worker 模板最大只有 **1 CARRY**（50 能量/趟），bootstrap 往返是天花板。另：用户明确**非紧急不控制台干预**，本轮全部走代码。
