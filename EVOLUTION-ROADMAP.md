@@ -1209,6 +1209,12 @@
 
 **部署链事故（已修）**：`tmp/tools/official/deploy-screeps.js` 的默认产物路径仍是迁移前的 `__dirname/../../dist`，实际指向 `tmp/dist/main.js`（陈旧 R672 副本）⇒ 部署命令返回 ✓、线上却回滚到旧码（10:05–10:07Z）。修法：改为 `process.cwd()/dist/main.js`（与 check-code.mjs 同口径）；**上线核对必须带 `branch=default` 参数并比对 dist sha**（不带参数会读到旧缓存）。
 
+**部署与判效（R674 sha `74723f156dac` → R674b sha `b1693ceda87e`）**：
+- **E775 PASS**：线上 `Memory.creeps` 出现 utility，task 覆盖 `build:assignment-site / fill:target / repair:container-decay` 三类。
+- **E776 PASS（修复后）**：R674 期间因「3/3 同修一容器」冻结 150+ 拍；R674b 生效后（10:35→10:45Z，77 拍）工地总进度 **2,062→2,781（+719，9.3/拍）**，b=288、掉落堆及时清空。
+- **E777 PASS**：core `dc=0/sc=0`、CC 2000/2000；young 仅 1 枚瞬时掉落（部署前同样出现，随后归零）。
+- **E778 观察中**：usage 14.7 / avg10 14.7、bucket 9,997、`er=0`、lastError 仍是 10-28 的旧 room-state；`capacity.tier` 在部署前已于 83,981,544 转 tight，暂不能把 tight 归因给仲裁（对同尺基线再取一窗）。
+
 ### 4.0（10-31 09:0xZ 立格，R672b；上一条＝R672 格「供能车道」；本格**让车道真的可达：核心饱和门 + 顺序前移**）
 
 **发现（用户要求“检查方案是否实现、并不影响其它” → 只读监测器 + 代码复核）**：R672 的三条动作都在代码里、单测全绿，但**产线不可达**——hauler work 链把 `haulFillTargetExcludingControllerContainer` 排在 feed 之前，而施工期 spawn/extension 永远有空位（每次 transfer 后又有新空位）⇒ non-CC fill 几乎每趟都 resolve，feed 两条动作轮不到。线上佐证（r672 监测器 08:37–08:58Z，t=83,980,835–83,981,146）：`d:[]`（从未出现工地旁掉落堆）、builder 能量合计仅 50→150、工地进度靠 builder 自运（~3/拍），E769 字面上“无堆”而不是“堆被捡走”。
