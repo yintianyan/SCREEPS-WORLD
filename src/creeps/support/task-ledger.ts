@@ -107,6 +107,10 @@ export function getRoomTaskLedger(snapshot: RoomSnapshot): RoomTaskLedger {
   }
 
   const sites = snapshot.myConstructionSites.length;
+  // R680：crisis/recovery/bootstrap 时 CC 不得压过核心（线上 W39S55：CC 低半满锁住
+  // 唯一 work hauler，spawn 饿死、源容器积压、harvester idle ⇒ 人口 11→4）。
+  const phase = Memory.rooms[snapshot.roomName]?.phase?.phase;
+  const crisisLike = phase === "crisis" || phase === "recovery" || phase === "bootstrap";
   const coreFreeRatio = 1 - ratio(coreUsed, coreCap);
   const towerFreeRatio = 1 - ratio(towerUsed, towerCap);
   const ccFreeRatio = 1 - ratio(ccUsed, ccCap);
@@ -128,7 +132,8 @@ export function getRoomTaskLedger(snapshot: RoomSnapshot): RoomTaskLedger {
   }
   if (ccCap > 0 && ccFreeRatio > 0) {
     // 施工期不给 CC 优先档（R672 教训）；和平期低于半满时 CC 是升级生命线。
-    const value = sites > 0 ? 50 : ccLevel < 0.5 ? 90 : 50;
+    // R680：危机/恢复期同样降档，核心填充优先。
+    const value = sites > 0 || crisisLike ? 50 : ccLevel < 0.5 ? 90 : 50;
     tasks.push({ kind: "fill-cc", value, demand: ccCap * ccFreeRatio });
   }
   if (storageCap > 0 && storageFreeRatio > 0) {

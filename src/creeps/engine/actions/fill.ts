@@ -206,7 +206,11 @@ export function haulFillTargetExcludingControllerContainer(): ActionCandidate<An
     resolve: ac => {
       // 只在施工期启用；用原 getHaulFillTarget（保留 fill 预约去重，防两 hauler 抢同一目标），
       // 仅跳过「CC 低于半满时的优先档」——CC 仍由后续普通 haulFillTarget 兜底。
-      if (ac.snapshot.myConstructionSites.length === 0) return undefined;
+      // R680：危机/恢复期也启用 —— 线上 W39S55 无工地但 CC 低半满锁住 hauler，
+      // spawn 饿死、源容器积压、harvester idle（人口 11→4）。此时核心填充必须优先。
+      const phase = Memory.rooms[ac.snapshot.roomName]?.phase?.phase;
+      const crisisLike = phase === "crisis" || phase === "recovery" || phase === "bootstrap";
+      if (ac.snapshot.myConstructionSites.length === 0 && !crisisLike) return undefined;
       if (
         ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
         ac.creep.store.getUsedCapacity() > 0

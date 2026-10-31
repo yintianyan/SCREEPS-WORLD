@@ -62,6 +62,22 @@ describe("task-ledger — 指标与任务价值", () => {
     expect(ledgerValue(ledger, "feed-construction")).toBe(75);
   });
 
+  it("R680：crisis/recovery/bootstrap 期 CC 同样降档（核心优先）", () => {
+    const cc = mockStructure("container", { id: "cc1", energy: 100, capacity: 2000 });
+    const snap = mockSnapshot({ controllerContainer: cc, fillTargets: [cc] });
+    (Memory.rooms.W7N4 as any).phase = { phase: "crisis" };
+    expect(ledgerValue(getRoomTaskLedger(snap), "fill-cc")).toBe(50);
+
+    (globalThis as any).Game.time += 1;
+    (Memory.rooms.W7N4 as any).phase = { phase: "growth" };
+    expect(
+      ledgerValue(
+        getRoomTaskLedger(mockSnapshot({ controllerContainer: cc, fillTargets: [cc] })),
+        "fill-cc",
+      ),
+    ).toBe(90);
+  });
+
   it("lab 需求表在 TTL 内可用，超时归零", () => {
     const snap = mockSnapshot();
     labTable("W7N4", 2, (globalThis as any).Game.time - 10);

@@ -71,6 +71,25 @@ describe("hauler — lab 供料 vs storage", () => {
   });
 });
 
+describe("hauler — R680 crisis 时 CC 不再锁死核心填充", () => {
+  it("crisis 期 spawn 与低半满 CC 同时存在 ⇒ 先填 spawn", () => {
+    const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
+    const cc = mockStructure("container", { id: "cc1", energy: 100, capacity: 2000 });
+    const snap = mockSnapshot({ fillTargets: [spawn, cc], controllerContainer: cc });
+    (Memory.rooms.W7N4 as any).phase = { phase: "crisis" };
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
+    haulerRole.run(creep, mockContext(snap));
+    expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
+    expect(creep.transfer).not.toHaveBeenCalledWith(cc, "energy");
+  });
+});
+
 describe("distributor — lab 供料 vs spawn", () => {
   function setup(loadCount: number) {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 0, capacity: 300 });
