@@ -1192,6 +1192,8 @@
 
 **预写判据**：**E786** 部署后 1,000 拍内，若再出现「P1 请求 + phase=bootstrap + 付不起全 body」，其 `block` 不再停在 `degradeGateClosed`，且 W39S55 该档增量 ≤ 个位数（对照累计 2,214）；**E787** 同窗 `noDegrade/floor` 不异常增加、spawn 失败/黑名单不增加；**E788** phase=growth 的成熟房 spawn 行为不变（控制组）。
 
+**部署（sha `9b04859890db`）**：生效时 t≈83,987,9xx；W39S55 已回到 phase=growth、hcount=2、spawnQueue 空，`spawnRejects.degradeGateClosed` 基线 **2,214**。行为验证需等下一次「P1+bootstrap+付不起」事件；单测已锁定该分支（phase=bootstrap/colony=normal ⇒ 立即降级且该档不涨）。r677 只读轮询 12×300s 跟踪增量。
+
 ### 4.0（10-31 20:4xZ 立格，R676；上一条＝R675 格「P2 任务账本」；本格**P2 CPU 收口 + 修复目标消失防护**）
 
 **CPU 归因（段1 环，按部署拍 83,983,250 切窗）**：pre avg **15.47** / post **16.57**（+1.10）；系统 traffic 3.75→4.16、snapshots 1.43→1.98，远程采矿反而 1.62→1.10；角色 hauler 0.16→0.52、distributor 0.05→0.15、harvester 1.80→2.04。⇒ 仲裁全量评分与新增物流活是真实增量，但总量抬升还叠加了人口 50、rampart 维修与快照成本；后续样本 avg10 曾到 19.6（含 remote-mining 5.3 尖峰），距 limit 20 过近。
@@ -1205,9 +1207,9 @@
 **预写判据**：**E783** 部署后 ≥2,000 拍，`cpuAvg10` 窗口均值 ≤ 部署前 +0.5，且不再出现 ≥19 的连续样本；**E784** 1,000 拍内不再出现 `repairIntentAmount` 目标消失类 error；**E785** lab 供料仍被选中、W39S55 建造/维修吞吐不降（built+repaired 增量 ≥ 部署前同窗）。
 
 **部署与早期判效（sha `12186a038733`，生效 ≈83,984,6xx）**：
-- **E783 早期 PASS**：部署后四发 `cpuAvg10` **16.1→12.4→13.0→12.6**（部署前 15.47–17.8，limit 20）；降幅远超预期，说明 distributor 10 候选的重复全量扫描是主成本之一。仍需满 2,000 拍确认。
-- **E784 观察中**：`lastError` 仍是部署前 `creep/builder-W39S55-2-83983809-dq7@83,984,453`，部署后未新增；差值已 ~330 拍，继续等 1,000 拍。
-- **E785 早期 PASS**：12:50/12:55/13:00 仍有 `hauler/distributor:haul:supply-labs`；W39S55 工地数 2→0（本轮施工队列全部建成），builder 转入 ramp/road/container 维修与填充，无掉落积压。
+- **E783 早期 PASS**：部署后四发 `cpuAvg10` **16.1→12.4→13.0→12.6**；3,000 拍窗口均值 **15.63**（R675 前基线 15.47、R675 后 16.57），hauler 角色 0.52→0.38、distributor 0.15→0.02。降幅主要来自 distributor 10 候选每 5 拍的重复全量扫描。
+- **E784 PASS**：R676 部署后至 t=83,987,905 共 ~3,400 拍，`lastError` 仍停在部署前的 `creep/builder-W39S55-2-83983809-dq7@83,984,453`，未新增修复目标消失类异常。
+- **E785 PASS**：`haul:supply-labs` 在 hauler/distributor 上持续命中；W39S55 工地数 2→0（施工队列全部建成），builder 转入 ramp/road/container 维修与填充，无掉落积压。
 
 ### 4.0（10-31 19:1xZ 立格，R675；上一条＝R674b 格「维修配额」；本格**P2：hauler/distributor 接入任务账本**）
 
@@ -1229,7 +1231,7 @@
 - **E779 PASS**：一处只读快照同时出现 9 类 utility task（builder build/road/fortification/container/fill、hauler storage/haul-target/excluding-cc/minerals、distributor fill/supply-labs/reclaim-factory）。
 - **E780 PASS**：11:35Z 快照 `lt=2` —— **hauler 与 distributor 同时选中 `haul:supply-labs`**（此前只有 lab-tender 补丁角色）；11:49Z 仍有 distributor:supply-labs。lab 供料不再是死链。
 - **E781 早期 PASS**：W39S55 工地 5 个、`energyLedger.built` 在 80 拍内 789→1,129（≈4.2/拍），无掉落积压（旧监测器末发 d=[]）。
-- **E782 观察中**：`cpuAvg10` 14.2–16.1（部署前 14.7），`capacity.tier` 由 constrained 回 tight、bucket 约 10k、`er=0`、lastError 仍是 10-28 的旧 room-state；需再取几窗再判增量。
+- **E782 初判 FAIL，R676 回落**：段1 环按部署拍切窗，`cpuAvg10` pre **15.47** / post **16.57（+1.10）**，超「≤+0.5」判据；主要增量在 hauler 0.16→0.52、distributor 0.05→0.15、traffic 3.75→4.16、snapshots 1.43→1.98。R676 把物流决策降到 10 拍后，3,000 拍窗口均值回到 **15.63**（hauler 0.38、distributor 0.02），与 R675 前基线 15.47 基本持平。
 - **工具**：线上已有另一路探针周期写 `Memory.__evalResult`（console-eval 读回撞载荷），本轮改用纯只读 Memory API 轮询（`r675-readout.mjs` / `r675-watch.sh`），不再发 console 求值。
 
 ### 4.0（10-31 18:1xZ 立格，R674；上一条＝R672b 格「feed 车道可达」；本格**调度重构 P1：work 模式效用仲裁 + builder/worker 灰度**）
