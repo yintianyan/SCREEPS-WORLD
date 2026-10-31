@@ -170,7 +170,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         if (CONFIG.debug.actionProfiling) {
           if (useUtility) {
             const before = Game.cpu.getUsed();
-            const outcome = runUtilityArbitration(ac, candidates);
+            const outcome = runUtilityArbitration(ac, candidates, policy.decisionInterval);
             recordActionCpu(`${name}/utility`, Game.cpu.getUsed() - before);
             if (outcome) return;
           }
@@ -190,7 +190,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
             }
           }
         } else {
-          if (useUtility && runUtilityArbitration(ac, candidates)) return;
+          if (useUtility && runUtilityArbitration(ac, candidates, policy.decisionInterval)) return;
           for (const candidate of candidates) {
             const target = candidate.resolve?.(ac);
             if (target !== undefined) {

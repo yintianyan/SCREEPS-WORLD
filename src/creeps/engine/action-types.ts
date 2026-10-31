@@ -53,6 +53,12 @@ export interface RolePolicy {
    */
   arbitration?: "chain" | "utility";
   /**
+   * R676：该角色 utility 模式下的完整决策间隔（tick）。缺省用 CONFIG.arbitration.decisionInterval。
+   * 物流角色（hauler/distributor）任务稳定，10 拍决策一次可显著降低全量评分开销；
+   * 施工角色（builder/worker）保持默认 5 拍以尽快响应急救/feed。
+   */
+  decisionInterval?: number;
+  /**
    * flee 钩子：威胁检测后、通用 flee 移动之前调用。
    * 返回 true=角色已自行处理（如 hauler 防御圈内安全充能），false=需要通用 flee 接管。
    * 职责分离（P0-2）：flee 期间的安全区行为由角色层决定，不在引擎层硬编码角色判断。

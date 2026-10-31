@@ -66,7 +66,17 @@ export function runCountedAction(
  * （不一致时 ledgerConsumption/P0P1 速率把 hits 当 energy，消费与净流被高估百倍）。 */
 export function repairIntentAmount(creep: Creep, target: Structure): number {
   const work = creep.body.filter(p => p.type === WORK).length;
-  return Math.min(REPAIR_POWER * work, target.hitsMax - target.hits) / REPAIR_POWER;
+  // R676：线上实测目标在 resolve 与 execute 之间消失（工地建成/结构衰减）时，
+  // 对象 getter 会抛 "Could not find an object with ID" 并中断整只 creep；
+  // 返回 0（本次不计入修复量），让 runAction 正常签发并走 ERR_INVALID_TARGET 分支清理缓存。
+  let remaining: number;
+  try {
+    remaining = target.hitsMax - target.hits;
+  } catch {
+    return 0;
+  }
+  if (!(remaining > 0)) return 0;
+  return Math.min(REPAIR_POWER * work, remaining) / REPAIR_POWER;
 }
 
 /**

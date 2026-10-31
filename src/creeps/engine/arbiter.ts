@@ -152,11 +152,12 @@ export function scoreCandidates(
 export function runUtilityArbitration(
   ac: ActionContext,
   candidates: readonly ActionCandidate<any>[],
+  intervalOverride?: number,
 ): UtilityOutcome | undefined {
   if (!CONFIG.arbitration.enabled) return undefined;
   const tick = Game.time;
   const state = ac.creep.memory.utility;
-  const interval = CONFIG.arbitration.decisionInterval;
+  const interval = intervalOverride ?? CONFIG.arbitration.decisionInterval;
 
   // 1) 决策间隔内：只复核当前任务，避免每拍全量扫描。
   if (state?.task && tick - state.lastAt < interval) {

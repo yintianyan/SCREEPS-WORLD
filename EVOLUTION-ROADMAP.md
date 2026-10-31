@@ -1182,6 +1182,18 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（10-31 20:4xZ 立格，R676；上一条＝R675 格「P2 任务账本」；本格**P2 CPU 收口 + 修复目标消失防护**）
+
+**CPU 归因（段1 环，按部署拍 83,983,250 切窗）**：pre avg **15.47** / post **16.57**（+1.10）；系统 traffic 3.75→4.16、snapshots 1.43→1.98，远程采矿反而 1.62→1.10；角色 hauler 0.16→0.52、distributor 0.05→0.15、harvester 1.80→2.04。⇒ 仲裁全量评分与新增物流活是真实增量，但总量抬升还叠加了人口 50、rampart 维修与快照成本；后续样本 avg10 曾到 19.6（含 remote-mining 5.3 尖峰），距 limit 20 过近。
+
+**改动**：
+1. `RolePolicy.decisionInterval` 可覆盖全局决策间隔；hauler/distributor 设 **10 拍**（builder/worker 仍 5 拍）。物流任务稳定，全量评分减半，其余拍只复核当前任务。
+2. `repairIntentAmount` 对「目标在 resolve/execute 之间消失」做防护：线上实测 builder 读 `hitsMax` 抛 `Could not find an object with ID ...` 并中断整只 creep；现在返回 0，让 runAction 正常走 ERR_INVALID_TARGET 清理缓存。
+
+**测试**：+4（角色级间隔覆盖 1、修复计量防护 3）。unit **438 文件·5,689 例**、integration 30·239、typecheck 0。
+
+**预写判据**：**E783** 部署后 ≥2,000 拍，`cpuAvg10` 窗口均值 ≤ 部署前 +0.5，且不再出现 ≥19 的连续样本；**E784** 1,000 拍内不再出现 `repairIntentAmount` 目标消失类 error；**E785** lab 供料仍被选中、W39S55 建造/维修吞吐不降（built+repaired 增量 ≥ 部署前同窗）。
+
 ### 4.0（10-31 19:1xZ 立格，R675；上一条＝R674b 格「维修配额」；本格**P2：hauler/distributor 接入任务账本**）
 
 **问题**：hauler work 链的 `fillStorage` 只要 storage 有空位就命中（成熟房 100k/1M 永远有空位）⇒ 链尾 `supplyLabs`/`haulMineralTopUp` 永不执行，才需要 lab-tender 补丁角色；同时 `supplyLabs` 要求需求表 `tick === Game.time`，而 lab-manager 每 10 拍才发布一次 ⇒ lab 供料另有 1/10 可达性断供。

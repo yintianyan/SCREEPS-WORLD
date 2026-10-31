@@ -276,4 +276,21 @@ describe("效用仲裁 — 目标缓存隔离", () => {
     expect(log).toEqual(["b"]);
     expect([...(globalCache().fillReservations ?? [])]).toEqual(["tb"]);
   });
+
+  it("角色级 decisionInterval 覆盖全局值（10 拍才重评）", () => {
+    const { ac } = makeAc();
+    const log: string[] = [];
+    const counts = { a: { n: 0 } };
+    const cands = [
+      candidate({ name: "a", target: "ta", utility: 10, executeLog: log, resolveCount: counts.a }),
+      candidate({ name: "b", target: "tb", utility: 20, executeLog: log }),
+    ];
+    runUtilityArbitration(ac, cands, 10);
+    advance(5);
+    runUtilityArbitration(ac, cands, 10); // 间隔内：只复核 b
+    expect(counts.a.n).toBe(1);
+    advance(5);
+    runUtilityArbitration(ac, cands, 10); // 满 10 拍：完整重评
+    expect(counts.a.n).toBe(2);
+  });
 });

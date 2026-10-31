@@ -104,6 +104,8 @@ const policy: RolePolicy = {
   isLifeLine: true,
   // R675：work 模式走任务账本 + 效用仲裁；acquire 保持链式（storage 取能/需求门禁）。
   arbitration: "utility",
+  // R676：物流任务稳定，10 拍决策一次，降低全量评分开销。
+  decisionInterval: 10,
   gate: distributorGate,
   acquire: [
     // nuke 资产抢救（nuke 警报房才激活，常态零开销）：storage → terminal 搬运，

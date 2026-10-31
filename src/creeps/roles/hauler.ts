@@ -174,6 +174,8 @@ const policy: RolePolicy = {
   // 账本给出「核心/storage/CC/施工/lab/矿物」的基础价值；老化由 arbiter 统一叠加，
   // 因此 storage 不再因为「永远有空位」把 lab 供料/矿物补仓永久饿死。
   arbitration: "utility",
+  // R676：物流任务稳定，10 拍决策一次（其余拍只复核当前任务）——把全量评分开销减半。
+  decisionInterval: 10,
   gate: haulerGate,
   onFlee: haulerOnFlee,
   acquire: [
