@@ -1198,6 +1198,13 @@
 
 **预写判据**：**E779** 部署后 ≤300 拍，hauler/distributor 的 `Memory.creeps[*].utility` 出现，task 至少覆盖 3 类；**E780** 有 lab 搬运需求的房间出现 `haul:supply-labs` 被选中（不再只靠 lab-tender），且 lab 需求不长期挂起；**E781** W39S55 建造速率仍 ≥3/拍、掉落堆不积压；**E782** CPU 增量 ≤0.5/拍、error 0；若持续 constrained 则把 hauler/distributor 改回 chain 或关闭 `arbitration.enabled`。
 
+**部署与早期判效（sha `e4e8ead14fe9`，生效 ≈83,983,25x）**：
+- **E779 PASS**：一处只读快照同时出现 9 类 utility task（builder build/road/fortification/container/fill、hauler storage/haul-target/excluding-cc/minerals、distributor fill/supply-labs/reclaim-factory）。
+- **E780 PASS**：11:35Z 快照 `lt=2` —— **hauler 与 distributor 同时选中 `haul:supply-labs`**（此前只有 lab-tender 补丁角色）；11:49Z 仍有 distributor:supply-labs。lab 供料不再是死链。
+- **E781 早期 PASS**：W39S55 工地 5 个、`energyLedger.built` 在 80 拍内 789→1,129（≈4.2/拍），无掉落积压（旧监测器末发 d=[]）。
+- **E782 观察中**：`cpuAvg10` 14.2–16.1（部署前 14.7），`capacity.tier` 由 constrained 回 tight、bucket 约 10k、`er=0`、lastError 仍是 10-28 的旧 room-state；需再取几窗再判增量。
+- **工具**：线上已有另一路探针周期写 `Memory.__evalResult`（console-eval 读回撞载荷），本轮改用纯只读 Memory API 轮询（`r675-readout.mjs` / `r675-watch.sh`），不再发 console 求值。
+
 ### 4.0（10-31 18:1xZ 立格，R674；上一条＝R672b 格「feed 车道可达」；本格**调度重构 P1：work 模式效用仲裁 + builder/worker 灰度**）
 
 **问题**：动作链是「第一个可执行者胜」，每来一个新需求必须插到正确位置，插错就饿死链尾。证据：R672 feed 车道不可达、builder 常规修路被建造饿死（16 条路 8 条破 40%）、hauler 的 supplyLabs 被 fillStorage 遮蔽（催生 lab-tender 补丁角色）。**修法不是再插一个动作，而是把「排序」换成「调度」。**
