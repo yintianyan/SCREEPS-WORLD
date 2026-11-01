@@ -1196,6 +1196,8 @@
 
 **测试**：R679 +3、R680 +2；最终 unit **439 文件·5,699 例**、integration 30·239、typecheck 0。**预写**：**E792** W39S55 在 1,000 拍内保持非 crisis、人口回升 ≥8、RCL 进度继续增长；**E793** 其他房无回归（storage/编制/CPU 同窗不恶化）；**E794** spawnQueue 不靠人工干预自然清空或只余正常替换请求。
 
+**RCL4 milestone（t=84,003,425）与终判**：W39S55 **RCL4**，progress 48,616/405,000；buildQueue **7 个 site 含 `core.storage.01@(23,20)`**（V3 anchor (23,18)+(0,2)，位置逐格正确），另有 road×2、mincut rampart×2、extension×2；queued 17。人口 **11**（hauler 4 / harvester 2 / builder 3 / upgrader 2），phase growth，G2/G3 已 cleared。⇒ **E792 PASS**；**E793 PASS**（W37S58 storage 335,592/pop24、W38S56 storage 166,647/pop15，CPU 15.1 tight，无新增 error）；**E794 PASS**（仅 1 条 `upgrader:2:degradeGateClosed` 正常替换，队列不卡）。下一里程碑：storage 建成 → RCL4 本地能量闭环。
+
 ### 4.0（11-01 02:5xZ 立格，R678；上一条＝R677 格「spawn 降级门」；本格**P3 配额：lab/矿物目标级租约**）
 
 **动机**：R674b 已证明「多人同修一个目标」会饿死其它任务（3/3 builder 同修一容器）。效用评分解决了“选哪类任务”，但同一目标仍可能被多名 creep 同时选中。P3 给两个会成批出现的目标加**每 tick 每目标 1 人**的占用：lab 按 `labId:resource`（不同 load 可并行）、矿物按 containerId。
