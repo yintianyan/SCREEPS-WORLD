@@ -1182,6 +1182,20 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-01 15:2xZ 立格，R681/R681a；上一条＝R679/R680 格「死亡螺旋止血」；本格**storage/升级的分配纠正**）
+
+**现象**：W39S55 controller **112,742**（/405,000 = 27.8%）而 storage **15,969**（/30,000 = 53.2%），storage 速率仅 **0.42/拍**。分母不同，不能按绝对数比较；`ea=ec=1300`（能量满），真正瓶颈是 **builder 工时被 fresh rampart（2 人）/urgent road（1 人）分走**，不是升级耗能。
+
+**第一版 R681（已本地提交、未部署）**：`upgraderGate` 在“RCL4 无 storage + storage 工地存在”时暂停升级。老玩家复核后判定这是把数字对齐而非解决瓶颈：暂停升级不释放 builder 工时，只会停 RCL 并让 upgrader 空转 ⇒ **R681a 撤回该门控**，仅保留 builder 的 storage 工地 +90（150：高于常规维护/修路，低于 fresh rampart 180 与 critical 维修）。升级继续并行。
+
+**部署与早期判效（R681a sha `690a3d8e1b2b`）**：生效后 t=84,030,425 探针：
+- storage **17,261/30,000（57.5%）**；从 t=84,029,899 的 15,969 起，**526 拍 +1,292 = 2.46/拍**（≈6× 于此前 0.42/拍）；
+- builder 任务出现 `build:assignment-site`（1 人），另有 1 人 fresh rampart、1 人 acquire；
+- upgrader 仍在 acquire/工作，controller 116,460 继续增长；`ea=850/1300`。
+- 结论：只改真正瓶颈层（builder 工时）比暂停升级有效；RCL 与 storage 可并行。
+
+**预写**：**E795** storage 在 7,000 拍内建成（届时 site 消失/StructureStorage 出现），过程中不出现 fresh rampart 死亡或道路跌破 15%；**E796** controller 进度继续增长（升级不被误停）；**E797** 其他房无回归（CPU/编制/storage 同窗不恶化）。若 E795 超时，下一刀是暂停非关键 road/rampart 工地或加 builder，而不是停升级。
+
 ### 4.0（11-01 07:3xZ 立格，R679/R680；上一条＝R678 格「目标级配额」；本格**幼房死亡螺旋的连续止血**）
 
 **现场（t≈83,994,145）**：W39S55 人口 **11→4**（0 upgrader/builder），spawnQueue 5 个 P2 请求全部 `degradeGateClosed`；room `phase=crisis`、`liquidityTrapTicks=239`、storage=0。两层根因叠加：
