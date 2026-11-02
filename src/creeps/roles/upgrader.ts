@@ -107,18 +107,6 @@ function upgraderGate(ac: ActionContext): boolean {
   const claimSecure = Memory.rooms[ac.snapshot.roomName]?.claimSecure ?? false;
   if (claimSecure) return true;
 
-  // R681：RCL4 已解锁 storage 但尚未建成、且有 storage 工地时，暂停升级 ——
-  // 线上 W39S55 出现 controller 112,742（27.8%）而 storage 仅 15,969/30,000（53.2%）：
-  // 3 个 upgrader 持续推 RCL，builder 工时被维护分走。storage 是 RCL4 的经济解锁项，
-  // 建成前不把能量/CPU 投进纯 RCL 进度。降级风险/claimSecure 已在上方放行。
-  if (
-    ac.snapshot.rcl >= 4 &&
-    !ac.snapshot.storage &&
-    ac.snapshot.myConstructionSites.some(s => s.structureType === STRUCTURE_STORAGE)
-  ) {
-    return false;
-  }
-
   // R594 帝国失血闸 → R617 限定版扩张预留：全帝国 `gateNetFlow` 之和为负时暂停升级；
   // **仅当**本房 RCL≥7 且存在扩张推进态计划时，把刹车抬到 `upgradeReserveNetFlow`（5），
   // 把盈余留给扩张门 G4。早期房/无计划/终态计划保持原语义（0），避免 RCL 冲刺被压掉。
