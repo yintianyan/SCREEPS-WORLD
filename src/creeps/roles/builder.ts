@@ -42,6 +42,9 @@ function siteUtility(ac: ActionContext, site: ConstructionSite): number {
     if (near(ac.snapshot.controller?.pos) || ac.snapshot.sources.some(s => near(s.pos)))
       bonus += 20;
   }
+  // R681：RCL4 尚未建成 storage 时，storage 工地是经济解锁项，排在常规维护之前
+  // （150 = 60 基础 + 90；仍低于 fresh rampart 180，濒死城防急救不被抢）。
+  if (site.structureType === STRUCTURE_STORAGE && ac.snapshot.storage === undefined) bonus += 90;
   if (site.progressTotal > 0 && site.progress / site.progressTotal >= 0.8) bonus += 15;
   return bonus;
 }
