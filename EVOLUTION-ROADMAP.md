@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-02 17:0xZ 立格，R682；上一条＝R681a 格「分配纠正」；本格**rampart 必要性与位置评估 + RCL4 防御降档**）
+
+**现场（t≈84,043,2xx）**：W39S55 RCL4、storage 已建成（73,964）。已建 rampart **50 个**，血量 201–10,101；塔 (25,20) 射程 20；外围 min-cut 在 x=2 / y=47 / x=45，到塔 **22–27 格（塔打不到）**；核心 rampart 在 spawn(23,18)/tower(25,20)/storage(23,20)/extension 一带（距离 0–10，有效）。威胁历史 `hostileEdges` **全部是 invader（NPC）**，最近 t=84,042,308，20 拍后被清除；`lastPlayerHostileAt` 为空。`defense-planner` 在 **RCL≥4** 就按 `MAX_CUT_RAMPARTS=50` 铺整房墙；`repairFortifications` 把 min-cut 归 perimeter，RCL3-4 目标 **100K**，storage 70K 已越过 50K 门槛 ⇒ 约 50×100K=**5M hits / 5 万能量 / 2.5 万 builder 工时**的隐性黑洞。
+
+**判断**：核心 rampart **必要**（NPC 单兵入侵，塔+核心 bunker 足够）；外围 min-cut 环在 RCL4/NPC-only 下 **不必要**：未闭合、血量低、塔覆盖不到，只有完整闭环+多塔+防守 creep 时才有意义。位置：核心建筑同格正确；外围割集点是后期合法顶点、当前错误；远端 core rampart（4,20/7,41/8,40）也应降级。
+
+**R682 实现**：`shouldPlanMinCut(rcl, playerThreatRecent)` = RCL5+ 或 RCL4+近期 **lastPlayerHostileAt**；RCL4 无玩家威胁时只做核心 coverage，并清掉 queued/blocked mincut 任务；`repairFortifications` 对 RCL4 perimeter 目标封顶到 `rampartBootstrapHits`（10K），核心/utility 与玩家威胁路径不变。部署 sha `a3ef976df389`；unit **440·5,704**、integration 30·239。
+
+**早期判效**：storage 73,964、RCL4 progress **162,825/405,000**（升级正常）；W39S55 仍有 6 条 mincut 任务（2 site、4 queued）——`defense-planner` 被 `system/defense-planner/budget` 跳过 5 次（capacity constrained），清理要等它下一趟；**repair cap 已即时生效**，外围 >10K 不再被投工时。预写：**E798** 1,000 拍内 queued mincut 被清、无新 mincut site；**E799** 外围 >10K 不再被修、fresh ramp/core 维护正常；**E800** 若出现玩家威胁，mincut 恢复（条件路径单测已锁）。
+
 ### 4.0（11-01 15:2xZ 立格，R681/R681a；上一条＝R679/R680 格「死亡螺旋止血」；本格**storage/升级的分配纠正**）
 
 **现象**：W39S55 controller **112,742**（/405,000 = 27.8%）而 storage **15,969**（/30,000 = 53.2%），storage 速率仅 **0.42/拍**。分母不同，不能按绝对数比较；`ea=ec=1300`（能量满），真正瓶颈是 **builder 工时被 fresh rampart（2 人）/urgent road（1 人）分走**，不是升级耗能。
