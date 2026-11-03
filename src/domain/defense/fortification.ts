@@ -6,6 +6,33 @@ export function packFortXY(x: number, y: number): number {
   return x * 50 + y;
 }
 
+/** 塔的有效攻击射程（Screeps TOWER range 上限）。 */
+export const TOWER_COVERAGE_RANGE = 20;
+
+/**
+ * 位置是否在任一塔的火力圈内（Chebyshev ≤ 20）。
+ * R683：塔外的墙会把敌方挡在火力圈外——敌人打墙、塔打不到，反而不如放进来杀。
+ */
+export function isTowerCovered(
+  pos: { x: number; y: number },
+  towers: readonly { pos: { x: number; y: number } }[],
+): boolean {
+  return towers.some(
+    t => Math.max(Math.abs(t.pos.x - pos.x), Math.abs(t.pos.y - pos.y)) <= TOWER_COVERAGE_RANGE,
+  );
+}
+
+/** 一组位置被塔覆盖的比例（0..1）；空集返回 0。 */
+export function towerCoverageRatio(
+  positions: readonly { x: number; y: number }[],
+  towers: readonly { pos: { x: number; y: number } }[],
+): number {
+  if (positions.length === 0) return 0;
+  let covered = 0;
+  for (const p of positions) if (isTowerCovered(p, towers)) covered++;
+  return covered / positions.length;
+}
+
 /** 分类上下文 — 三个位置集合，由 buildFortificationContext 预建。 */
 export interface FortificationContext {
   /** min-cut 割集位置（来自 Memory.rooms[*].minCut.positions）。 */

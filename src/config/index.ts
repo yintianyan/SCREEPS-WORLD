@@ -685,6 +685,10 @@ export const CONFIG = {
     rampartBootstrapHits: 10_000,
     /** 受袭记忆窗口（tick）：lastHostileAt 距今小于此值视为受袭姿态。 */
     siegeMemoryTicks: 10000,
+    /** R683：min-cut 割集被当前塔火力覆盖的最低比例。低于此值不建整房墙——
+     * 塔外的 rampart 会把敌人挡在火力圈外（敌人打墙、塔打不到），且维护成本巨大；
+     * 单塔 RCL4 割集覆盖率通常为 0，应只做核心 bunker。 */
+    minCutCoverageFloor: 0.8,
     /** P1-3：威胁过期 tick 数：threatCreeps>0 但 lastHostileAt 超过此值未刷新视为
      * stale — 旧威胁停留（无新增）超过此窗口不再维持 defense 姿态，让经济恢复。 */
     threatStaleTicks: 100,

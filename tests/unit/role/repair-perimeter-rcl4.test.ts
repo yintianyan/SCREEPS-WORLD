@@ -1,9 +1,10 @@
-/** R682：RCL4 无玩家威胁时，外围 rampart 维护只到 bootstrap 线；核心/玩家威胁不受影响。 */
+/** R683：塔火圈外的 perimeter rampart 只维持 bootstrap 线；覆盖内的正常维护。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { builderRole } from "../../../src/creeps/roles/builder";
 import {
   mockContext,
   mockCreep,
+  mockPos,
   mockSnapshot,
   mockStructure,
   resetGlobals,
@@ -14,39 +15,48 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function setup(playerThreat: boolean) {
+function setup(opts: { covered: boolean }) {
+  const tower = mockStructure("tower", { id: "tw", energy: 1000, capacity: 1000 });
+  tower.pos.x = 25;
+  tower.pos.y = 20;
   const rampart = mockStructure("rampart", { id: "rp1", hits: 50000, hitsMax: 300000 });
-  rampart.pos.x = 26;
-  rampart.pos.y = 26;
+  if (opts.covered) {
+    rampart.pos.x = 26;
+    rampart.pos.y = 26; // 距塔 (25,20) 6 格
+  } else {
+    rampart.pos.x = 46;
+    rampart.pos.y = 20; // 距塔 21 格，塔外
+  }
   const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
   const snap = mockSnapshot({
     rcl: 4,
     storage,
+    towers: [tower],
     ramparts: [rampart],
     fillTargets: [],
     myConstructionSites: [],
   });
-  if (playerThreat) (Memory.rooms.W7N4 as any).lastPlayerHostileAt = Game.time;
   const creep = mockCreep({
     name: "builder_1",
     role: "builder",
     used: 50,
     capacity: 50,
     mode: "work",
+    pos: mockPos(opts.covered ? 25 : 45, opts.covered ? 25 : 20),
   });
   return { rampart, creep, ctx: mockContext(snap) };
 }
 
-describe("repairFortifications — R682 RCL4 外围维护帽", () => {
-  it("无玩家威胁：50K 的外围 rampart 不再往 100K 维护", () => {
-    const { rampart, creep, ctx } = setup(false);
-    builderRole.run(creep, ctx);
-    expect(creep.repair).not.toHaveBeenCalledWith(rampart);
-  });
-
-  it("玩家威胁在场：恢复正常 100K 目标，50K rampart 会被修", () => {
-    const { rampart, creep, ctx } = setup(true);
+describe("repairFortifications — R683 塔覆盖维护帽", () => {
+  it("覆盖内 perimeter：正常 100K 目标，50K rampart 会被修", () => {
+    const { rampart, creep, ctx } = setup({ covered: true });
     builderRole.run(creep, ctx);
     expect(creep.repair).toHaveBeenCalledWith(rampart);
+  });
+
+  it("塔外的 perimeter：只维持 10K，50K 不再往 100K 修", () => {
+    const { rampart, creep, ctx } = setup({ covered: false });
+    builderRole.run(creep, ctx);
+    expect(creep.repair).not.toHaveBeenCalledWith(rampart);
   });
 });

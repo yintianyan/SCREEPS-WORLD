@@ -9,6 +9,7 @@ import { claimRepairTarget, repairTargetClaimedByOther } from "../../support/rep
 import {
   buildFortificationContext,
   classifyFortification,
+  isTowerCovered,
   resolveUnderSiege,
 } from "../../../domain/defense/fortification";
 
@@ -171,13 +172,10 @@ export function repairFortifications(): ActionCandidate<Fortification> {
 
       // 分层分类上下文：min-cut 割集来自 Memory 持久化数据。
       const fortCtx = buildFortificationContext(ac.snapshot, roomMemory?.minCut?.positions);
-      // R682：RCL4 无玩家威胁时，外围（perimeter）rampart 只维持 bootstrap 线，
-      // 不再往 RCL3-4 的 100K 目标投 builder 工时/能量（NPC 由塔处理）。
-      // 核心/utility 档不受影响；玩家威胁或 RCL5+ 恢复正常目标。
-      const lastPlayerHostileAt = roomMemory?.lastPlayerHostileAt;
-      const playerThreatRecent =
-        lastPlayerHostileAt !== undefined &&
-        Game.time - lastPlayerHostileAt <= CONFIG.defense.siegeMemoryTicks;
+      // R683：位置评估——塔火圈外的 perimeter rampart 只维持 bootstrap 线。
+      // 原因不是“没塔保护”这么简单：rampart 会阻挡敌方步行，塔外的墙会把敌人
+      // 挡在火力圈外（敌人打墙、塔打不到），且 RCL4 的 100K 目标维护成本巨大。
+      // 核心/utility 档不受影响；塔覆盖到的 perimeter 仍按正常目标维护。
       const targetOf = (f: Fortification): number => {
         const role = classifyFortification(
           f.pos.x,
@@ -186,7 +184,9 @@ export function repairFortifications(): ActionCandidate<Fortification> {
           fortCtx,
         );
         const base = getWallTargetHits(ac.snapshot.rcl, underSiege, role);
-        if (role === "perimeter" && ac.snapshot.rcl === 4 && !playerThreatRecent) {
+        // 任何角色（perimeter/core/utility）只要在当前塔火圈外，都只维持 bootstrap 线：
+        // 塔外的盾既不让塔打到敌人，又要按 RCL 目标吃维护工时。
+        if (ac.snapshot.towers.length > 0 && !isTowerCovered(f.pos, ac.snapshot.towers)) {
           return Math.min(base, CONFIG.defense.rampartBootstrapHits);
         }
         return base;

@@ -9,6 +9,7 @@ import {
   type ValidationOptions,
 } from "../../domain/layout/validation";
 import { computeMinCutDefense, MINCUT_ALGO_VERSION } from "../../domain/layout/min-cut-defense";
+import { isTowerCovered, towerCoverageRatio } from "../../domain/defense/fortification";
 import { globalCache, type MinCutCache, type ExitCache } from "../../kernel/global-cache";
 import { COMPACT_CORE_V2 } from "../../domain/layout/templates/compact-core-v2";
 
@@ -189,14 +190,14 @@ function buildBlockedPositions(): Set<number> {
 }
 
 /**
- * R682：min-cut 整房墙的规划门槛。
- * RCL4 单塔、NPC-only 威胁时，外围割集既在塔火圈外、又只有 1-10K hits，
- * 不构成防御；反而 50 个 rampart × 100K 目标会吃掉 builder 工时与 storage 能量
- *（线上 W39S55：storage 工地被 fresh rampart 挤慢，storage 刚建成 70K 就面临外围
- * 全部往 100K 维护）。RCL4 只做核心 rampart 覆盖；RCL5+ 或近期玩家威胁才规划 min-cut。
+ * R682/R683：min-cut 整房墙的规划门槛。
+ * RCL4 单塔时割集在塔火圈外（W39S55 实测 22–27 格）：rampart 会挡住敌方步行，
+ * 反而把敌人挡在塔射程之外——敌人打墙、塔打不到；且 50 个 rampart 的维护成本巨大。
+ * 因此 RCL4 只做核心 rampart 覆盖；RCL5+ 才规划 min-cut，且割集覆盖率必须 ≥
+ * CONFIG.defense.minCutCoverageFloor，否则同样退回核心 bunker。
  */
-export function shouldPlanMinCut(rcl: number, playerThreatRecent: boolean): boolean {
-  return rcl >= 5 || (rcl >= 4 && playerThreatRecent);
+export function shouldPlanMinCut(rcl: number): boolean {
+  return rcl >= 5;
 }
 
 function planDefense(
@@ -226,14 +227,9 @@ function planDefense(
   // 使敌方必须先拆 rampart 才能攻击建筑。独立于 min-cut/扇区路径封锁逻辑。
   added = addCoreRampartCoverage(queue, snapshot, existingKeys) || added;
 
-  // R682：RCL4 无玩家威胁时，不规划新的 min-cut 整房墙，并清掉尚未落地的
+  // R682/R683：RCL4 不规划新的 min-cut 整房墙，并清掉尚未落地的
   // queued/blocked mincut 任务（已建 rampart 与已建 site 保留）。
-  // 注意：playerThreatRecent 只看 lastPlayerHostileAt（NPC 不算），与 #198-B 同口径。
-  const lastPlayerHostileAt = roomMem.lastPlayerHostileAt;
-  const playerThreatRecent =
-    lastPlayerHostileAt !== undefined &&
-    Game.time - lastPlayerHostileAt <= CONFIG.defense.siegeMemoryTicks;
-  const minCutAllowed = shouldPlanMinCut(snapshot.rcl, playerThreatRecent);
+  const minCutAllowed = shouldPlanMinCut(snapshot.rcl);
   if (snapshot.rcl >= 4 && !minCutAllowed) {
     let removed = false;
     for (let i = queue.length - 1; i >= 0; i--) {
@@ -319,6 +315,13 @@ function planDefense(
     }
 
     if (cutResult.complete) {
+      // R683：位置评估——整房墙只有被塔火力覆盖才有意义。覆盖不足时，
+      // 墙会把敌人挡在塔外（敌人打墙、塔打不到），不如只留核心 bunker。
+      const coverage = towerCoverageRatio(cutResult.rampartPositions, snapshot.towers);
+      if (coverage < CONFIG.defense.minCutCoverageFloor) {
+        if (added) roomMem.buildQueue = queue;
+        return; // 核心 coverage 已加；不建整房墙，也不走扇区 fallback
+      }
       // Min-cut 成功：使用割集位置生成防御建筑任务。
       //
       // 防线只签发 rampart。constructed wall 是不可逆的硬阻挡，不能由线上
@@ -444,6 +447,11 @@ function addCoreRampartCoverage(
   const maxBackgroundQueued = CONFIG.construction.maxBackgroundQueuedPerRoom;
   let added = false;
   for (const pos of corePositions) {
+    // R683：RCL4 单塔只覆盖核心圈；塔外的 container/link 盾（如远端 source container）
+    // 既不进塔火力、又要维护，暂不建。RCL5+ 恢复全量 core coverage。
+    if (snapshot.rcl === 4 && snapshot.towers.length > 0 && !isTowerCovered(pos, snapshot.towers)) {
+      continue;
+    }
     const packed = pos.x * 50 + pos.y;
     if (existingRampartPositions.has(packed)) continue;
     const key = `defense.core.rampart.${pos.x}.${pos.y}`;

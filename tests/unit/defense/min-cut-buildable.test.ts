@@ -5,6 +5,7 @@ import {
   shouldPlanMinCut,
 } from "../../../src/systems/military/defense-planner";
 import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
+import { isTowerCovered, towerCoverageRatio } from "../../../src/domain/defense/fortification";
 
 /**
  * P1-2 min-cut 割集位置可建造性预校验单元测试。
@@ -100,10 +101,29 @@ describe("未来蓝图 footprint 防护", () => {
 
 describe("R682 min-cut 规划门槛", () => {
   it("RCL4 无玩家威胁不规划 min-cut；RCL4+玩家威胁 / RCL5+ 规划", () => {
-    expect(shouldPlanMinCut(3, false)).toBe(false);
-    expect(shouldPlanMinCut(3, true)).toBe(false);
-    expect(shouldPlanMinCut(4, false)).toBe(false);
-    expect(shouldPlanMinCut(4, true)).toBe(true);
-    expect(shouldPlanMinCut(5, false)).toBe(true);
+    expect(shouldPlanMinCut(3)).toBe(false);
+    expect(shouldPlanMinCut(4)).toBe(false);
+    expect(shouldPlanMinCut(5)).toBe(true);
+  });
+});
+
+describe("R683 塔覆盖判定", () => {
+  const tower = { pos: { x: 25, y: 20 } };
+  it("Chebyshev ≤20 覆盖，>20 不覆盖", () => {
+    expect(isTowerCovered({ x: 45, y: 20 }, [tower])).toBe(true);
+    expect(isTowerCovered({ x: 46, y: 20 }, [tower])).toBe(false);
+    expect(isTowerCovered({ x: 4, y: 20 }, [tower])).toBe(false);
+  });
+  it("覆盖率按位置计", () => {
+    expect(
+      towerCoverageRatio(
+        [
+          { x: 45, y: 20 },
+          { x: 46, y: 20 },
+        ],
+        [tower],
+      ),
+    ).toBe(0.5);
+    expect(towerCoverageRatio([], [tower])).toBe(0);
   });
 });
