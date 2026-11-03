@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProtectedLayoutPositions,
   isMinCutPositionBuildable,
+  shouldPlanMinCut,
 } from "../../../src/systems/military/defense-planner";
 import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
 
@@ -17,8 +18,6 @@ import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-co
  * 永久阻塞 22 万 tick。P1-2 在入队前预校验，避免注定 blocked 的任务入队。
  */
 describe("isMinCutPositionBuildable — min-cut 割集位置可建造性预校验", () => {
-  // ── 出口格过滤 ──
-
   it("x=0（出口格）不可建造", () => {
     expect(isMinCutPositionBuildable({ x: 0, y: 25 }, false)).toBe(false);
   });
@@ -96,5 +95,15 @@ describe("未来蓝图 footprint 防护", () => {
         expect(protectedPositions.has(x * 50 + y)).toBe(true);
       }
     }
+  });
+});
+
+describe("R682 min-cut 规划门槛", () => {
+  it("RCL4 无玩家威胁不规划 min-cut；RCL4+玩家威胁 / RCL5+ 规划", () => {
+    expect(shouldPlanMinCut(3, false)).toBe(false);
+    expect(shouldPlanMinCut(3, true)).toBe(false);
+    expect(shouldPlanMinCut(4, false)).toBe(false);
+    expect(shouldPlanMinCut(4, true)).toBe(true);
+    expect(shouldPlanMinCut(5, false)).toBe(true);
   });
 });

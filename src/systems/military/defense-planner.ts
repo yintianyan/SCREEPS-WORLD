@@ -188,6 +188,17 @@ function buildBlockedPositions(): Set<number> {
   return blocked;
 }
 
+/**
+ * R682：min-cut 整房墙的规划门槛。
+ * RCL4 单塔、NPC-only 威胁时，外围割集既在塔火圈外、又只有 1-10K hits，
+ * 不构成防御；反而 50 个 rampart × 100K 目标会吃掉 builder 工时与 storage 能量
+ *（线上 W39S55：storage 工地被 fresh rampart 挤慢，storage 刚建成 70K 就面临外围
+ * 全部往 100K 维护）。RCL4 只做核心 rampart 覆盖；RCL5+ 或近期玩家威胁才规划 min-cut。
+ */
+export function shouldPlanMinCut(rcl: number, playerThreatRecent: boolean): boolean {
+  return rcl >= 5 || (rcl >= 4 && playerThreatRecent);
+}
+
 function planDefense(
   snapshot: import("../../kernel/contracts").RoomSnapshot,
   globalSiteCount: number,
@@ -210,10 +221,34 @@ function planDefense(
 
   let added = false;
 
-  // ── 核心结构 rampart 覆盖（P1：保护建筑不被直接攻击）──
+  // 核心结构 rampart 覆盖（P1：保护建筑不被直接攻击）──
   // rampart 可与建筑共格 — 在每个核心结构位置叠加 rampart，
   // 使敌方必须先拆 rampart 才能攻击建筑。独立于 min-cut/扇区路径封锁逻辑。
   added = addCoreRampartCoverage(queue, snapshot, existingKeys) || added;
+
+  // R682：RCL4 无玩家威胁时，不规划新的 min-cut 整房墙，并清掉尚未落地的
+  // queued/blocked mincut 任务（已建 rampart 与已建 site 保留）。
+  // 注意：playerThreatRecent 只看 lastPlayerHostileAt（NPC 不算），与 #198-B 同口径。
+  const lastPlayerHostileAt = roomMem.lastPlayerHostileAt;
+  const playerThreatRecent =
+    lastPlayerHostileAt !== undefined &&
+    Game.time - lastPlayerHostileAt <= CONFIG.defense.siegeMemoryTicks;
+  const minCutAllowed = shouldPlanMinCut(snapshot.rcl, playerThreatRecent);
+  if (snapshot.rcl >= 4 && !minCutAllowed) {
+    let removed = false;
+    for (let i = queue.length - 1; i >= 0; i--) {
+      const task = queue[i]!;
+      if (
+        task.key.startsWith("defense.mincut.") &&
+        (task.state === "queued" || task.state === "blocked")
+      ) {
+        queue.splice(i, 1);
+        removed = true;
+      }
+    }
+    if (added || removed) roomMem.buildQueue = queue;
+    return;
+  }
 
   // 快速检查：buildQueue 已有未完成的 mincut 防御建筑 key → 跳过 min-cut 计算。
   // 旧格式 defense.mincut.wall.* 也匹配前缀检查，由 construction-manager 阻断。
@@ -247,7 +282,8 @@ function planDefense(
   // ── 策略 1：Min-Cut（最少 rampart 完全封锁）──
   // P0-3：RCL3 跳过 min-cut — 核心结构少，扇区防御更快且够用。
   // min-cut 计算昂贵（图论算法），RCL3 的简单布局不值得这个成本。
-  if (snapshot.rcl >= 4) {
+  // R682：RCL4 仅在近期玩家威胁时启用；RCL5+ 默认启用。
+  if (minCutAllowed) {
     // 仅在缓存 miss 时执行昂贵的 min-cut 计算。
     let cutResult: { rampartPositions: { x: number; y: number }[]; complete: boolean };
 

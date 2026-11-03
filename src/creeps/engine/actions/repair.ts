@@ -171,12 +171,26 @@ export function repairFortifications(): ActionCandidate<Fortification> {
 
       // 分层分类上下文：min-cut 割集来自 Memory 持久化数据。
       const fortCtx = buildFortificationContext(ac.snapshot, roomMemory?.minCut?.positions);
-      const targetOf = (f: Fortification): number =>
-        getWallTargetHits(
-          ac.snapshot.rcl,
-          underSiege,
-          classifyFortification(f.pos.x, f.pos.y, f.structureType === STRUCTURE_WALL, fortCtx),
+      // R682：RCL4 无玩家威胁时，外围（perimeter）rampart 只维持 bootstrap 线，
+      // 不再往 RCL3-4 的 100K 目标投 builder 工时/能量（NPC 由塔处理）。
+      // 核心/utility 档不受影响；玩家威胁或 RCL5+ 恢复正常目标。
+      const lastPlayerHostileAt = roomMemory?.lastPlayerHostileAt;
+      const playerThreatRecent =
+        lastPlayerHostileAt !== undefined &&
+        Game.time - lastPlayerHostileAt <= CONFIG.defense.siegeMemoryTicks;
+      const targetOf = (f: Fortification): number => {
+        const role = classifyFortification(
+          f.pos.x,
+          f.pos.y,
+          f.structureType === STRUCTURE_WALL,
+          fortCtx,
         );
+        const base = getWallTargetHits(ac.snapshot.rcl, underSiege, role);
+        if (role === "perimeter" && ac.snapshot.rcl === 4 && !playerThreatRecent) {
+          return Math.min(base, CONFIG.defense.rampartBootstrapHits);
+        }
+        return base;
+      };
 
       // 优先复用持久化目标 — 验证它仍是墙/城防且仍低于自身档位目标。
       if (ac.creep.memory.repairTargetId) {
