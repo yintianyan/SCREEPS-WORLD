@@ -116,6 +116,9 @@ describe("A2 — storage 水位驱动升级功率", () => {
     expect(bodyCost(upgraders[0]!.body)).toBeLessThanOrEqual(1300);
     // 封顶后落到 8W 档（模板自己的注释：「RCL4(1300) 主力档」），不是把需求静默归零。
     expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(8);
+    // R692：生产 demand 路径也要带上 2C（只测 selectBody 会漏掉请求装配层）。
+    expect(upgraders[0]!.body.filter(p => p === "carry")).toHaveLength(2);
+    expect(bodyCost(upgraders[0]!.body)).toBe(1000);
   });
 
   it("低水位：storage < 10k 且 pressure > 0.5 → 停升级攒库存", () => {
