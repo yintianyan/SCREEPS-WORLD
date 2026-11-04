@@ -1186,7 +1186,7 @@
 
 **诱因**：R688 部署后 `kernel.capacity.inputs` 现读 `usage=13.2`、`headroom=0.34`、`limit=20`，看起来距 G6 的 comfortable（≤12）只差 **1.2–1.6 CPU**；同发 `rateTotal=15.84`、`rateWindowTicks=97`、`rateUnsampledTicks=0`。
 
-- 判读：`capacity.ts:51-57` 的 `pickCpuUsagePerTick` 只在 `rateWindowTicks ≥ 100` 且无漏采时采信逐拍均量；97 拍未到门槛 ⇒ 当前分档喂的是偏乐观的 avg10。窗一旦成熟，`usage` 会切到 **15.84**（ratio 0.792，tight 下沿），到 comfortable 的缺口是 **3.84**，不是 1.6。
+- 判读：`capacity.ts:51-57` 的 `pickCpuUsagePerTick` 只在 `rateWindowTicks ≥ 100` 且无漏采时采信逐拍均量；97 拍未到门槛 ⇒ 当前分档喂的是偏乐观的 avg10。**实测窗成熟（`rateWindowTicks=197`）后 `usage` 切到 15.08**（`avg10` 也升到 14.8，`headroom` 0.246）⇒ 到 comfortable（≤12）的缺口是 **3.08**，不是 1.6。同发 CPU 榜：traffic-manager **3.97**、snapshots 1.59、角色合计 6.63（harvester 1.79、remoteHarvester 1.06、distributor 0.83、hauler 0.66、upgrader 0.23），unexplained 1.66。
 - `tier=constrained` 不是新异常：部署尖峰把 `upgradeTicks` 清零（现读 45），且升档需连续 300 拍 ≤0.8；>16 的拍会把计数重置。G6 仍红，R685「无法靠微优解决」的结论不变。
 - 决定：**不追这个假 1.6 缺口**；扩张继续等 RCL5（G0 的 youngestMature）+ G6。下一轮若要做 CPU 项，必须先等到 `rateWindowTicks ≥100` 再用 `rateTotal` 定基线，禁止拿窗口未成熟时的 `usage` 做判据。
 
