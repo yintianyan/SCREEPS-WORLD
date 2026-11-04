@@ -1190,6 +1190,8 @@
 - 修法（`task-ledger.ts:141-142`）：核心接近满（`coreFreeRatio<0.25`）且 CC 低于半满时 `fill-cc=96`，压过 storage 的 95；核心空时仍为 90（升级不抢 spawn 能量），施工期/危机仍为 50。
 - 测试 +2（正向 96 且 >95；控制组 core 不接近满仍 90）；typecheck 0；unit **440 文件·5,713 例**；integration **30·239**。部署 sha `5d286dfeae53`（check-code 现读线上同值）。
 
+**R685「G0=war」的更正（同窗只读）**：`kernel.strategy` 现读 posture=war、`since=84,054,339`、`warPressureTicks=0`；三房 `lastHostileAt` 与 `lastInvaderHostileAt` **逐值相同**（84,062,932／84,066,825／84,066,996）且**无 `lastPlayerHostileAt` 键** ⇒ `npcOnlyThreatRecent=true`，NPC 豁免成立。`expandHealth` 的合取逐项现读：gclHeadroom(5>3)✓、allNormal✓、bucket(10,000≥7,000)✓、avgPressure(0≤0.4)✓、sponsorReady(W37S58 RCL8/storage 775K)✓、**youngestMature✗（W39S55 RCL4 < `colonizeYoungestFloorRcl=5`）**、cpuRatioOk(role CPU 7.07/20=0.35 <0.6)✓ ⇒ **G0 今日的唯一假项是 youngestMature，不是 war 也不是 CPU**。R687 把 W39S55 升级提到 ≈9–13/拍 ⇒ 余量 161,047 进度的 ETA 从 ≈2 天（3.7/拍）压到 ≈0.75 天（10/拍，按 4.05 s/拍）；G6 仍是另一道独立门（tier constrained）。
+
 **早期判效（t=84,068,1xx–2xx）**：hauler 任务从 `fill:storage` 翻到 `fill:haul-target`；CC **0→1,067**（53%）后随升级消耗回落到 ~700；两只 upgrader 回到 controller range 3；controller 速率 **8.81/拍**（`242,283→242,609` / 37 拍）并在第二窗升到 **9.89/拍**（`242,283→243,193` / 92 拍，基线 3.7 ⇒ 2.7×；CC 1,134、两只 upgrader 均回 controller range 2）；W39S55 pop 12、spawnQ 0。另两房无行为回归（W37S58 pop 21、W38S56 pop 14/storage 723K，均继续上升）。⚠️两发部署间隔 ≈15 分钟，G6 尾税叠加。窗后读数（t=84,068,305）：controller 第三窗 **12.9/拍**（`243,193→243,953` / 59 拍），另两房储量继续上升（W37S58 777K、W38S56 727K）、无行为回归；CPU `avg10=15.1` 但 tier 仍 `constrained`（部署尾税 + W37S58 人口 21→24），G6 仍红、留待下轮。预写：**E810** CC 长期维持 ≥50%（现读 1,067→1,134，已过）；**E811** controller ≥5/拍（8.81/9.89/12.9 三窗均过）；**E812** 另两房人口/储量无回归（已过），CPU 归因需等窗完全结束后另判。
 
 ### 4.0（11-04 20:2xZ 立格，R686；上一条＝R685 格「G6 审计」；本格**修复预留把 P2 永久挡在孵化口**）
