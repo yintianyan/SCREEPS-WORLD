@@ -1182,6 +1182,17 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-04 20:2xZ 立格，R686；上一条＝R685 格「G6 审计」；本格**修复预留把 P2 永久挡在孵化口**）
+
+**现场（只读探针 + Memory，全部同窗现读）**：W39S55 RCL4、容量 1300、`energyAvailable=1300`（满）、storage 259,271、population 9。队列 2 条：hauler 16C8M=1200、builder 8W2C5M=1150，双双 `block=degradeGateClosed`；`spawnRejects` 累计 budget 13,052／reserveOnly 8,328／degradeGateClosed 18,000+。economy `pressure=0`、`cr=259,331`、`rb/10≈25,933`（条件 2 不触发）。
+
+- 根因：条件 3（采集者在替换窗口）无条件加 `recoveryEnergyReserve=200`；道路优化档的 body 恰好按 `capacity-100` 裁（RCL4 hauler 1200 / 容量 1300）⇒ 有效额度只有 1100，**满能量也永远付不起整身**。而 P2 饥饿降级 `starvedP2` 要求 `economyPressure>0.5`，富房 pressure 恒 0 ⇒ 请求只能 TTL 到期重建，人口停止补员。探针证实：harvester TTL 241/856（替换窗口开启）时 `reserveOnly` 继续上涨。
+- 修法：`reserveBlockedP2 = priority===2 && cost <= energyBudget`（本房现金付得起整身、只被预留挡住）⇒ 立即走降级路径，`degradeBody` 保住 MOVE 配比、产物仍是「预留后的最大 body」；不是饥饿降级。
+- 测试 +3（`try-spawn.test.ts`）：正向（1300 现金 → 14C8M=1100、reserveOnly+1、degradeGateClosed 不涨）、无预留控制组（同一请求仍出整身 1200）、反例（cost>energyBudget 时不借道降级，仍等能量）。typecheck 0；unit **440 文件·5,711 例**；integration **30·239**。
+- 部署 sha `352ccbfb49d4`（check-code 现读线上同值）。
+
+**早期判效（t≈84,067,8xx）**：新码生效后队列里的 hauler 立即孵出，console 现读 body **22 件＝14C8M=1100**（整身为 24 件 16C8M=1200），当时 `ea=208`、harvester TTL 175/790 ⇒ 预留确实开着 ⇒ 走的正是新分支；builder 仍在队（需等能量回填到 950 以上）。预写：**E807** 500 拍内 builder 也孵出、W39S55 population ≥10；**E808** 队列清空后 `degradeGateClosed` 增量≈0（不再每拍烧）、`reserveOnly` 不再因 P2 累积；**E809** 另两房人口/能量/CPU 无回归（CPU 增量 ≤0.3，未进 constrained）。
+
 ### 4.0（11-04 12:1xZ 立格，R685；上一条＝R684 格「CPU 门外溢」；本格**G6/终局能力审计与扩张决策**）
 
 **R683/R684 终判**：**E801 PASS**（W39S55 mincut queued 已清、live sites=0、无新 mincut）；**E802 PASS**（核心 rampart 正常、NPC 仍由塔清）；**E803** 条件单测锁定；**E804 PASS**（upgrader 2 只，controller 约 3.1/拍）；**E805 PASS**（无新的 hpDeficit 目标消失 error）；**E806 边界 PASS**（CPU avg10 17–18，tight，未进 constrained、未越 limit 20）。
