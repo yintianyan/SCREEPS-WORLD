@@ -1182,6 +1182,13 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-04 21:2xZ 立格，R690 观测；上一条＝R689 格「capacity 仪器」；本格**升级器 1C 与站桩距离的占空比**）
+
+**现场**：W39S55 两只原 upgrader（TTL 450/605）死亡后，新孵的两只（TTL 1,403/1,478）使 controller 速率从 13.3/拍掉到 **5.6→6.0/拍**；同发 CC **1,714→1,950**（满 2,000 的 97.5%）、核心 1300/1300、tower 1000、storage 260,500 ⇒ **不是断粮**。两只 upgrader 各只带 42/50 能量，位置在 controller range 2–3。
+
+- 机制：RCL4 主力档 body 是 **8W1C2M @950**（`bodies.ts:724`），1 CARRY 只有 50 能量。理想站桩（CC range 1，可同 tick withdraw+upgrade）能 8/拍；实际位置在 range 2–3，50 能量只够 6 拍，随后花数拍走到 CC、再走回 ⇒ 占空比 ≈6/14≈43%，两只合计 ≈6.9/拍，与实测 6.0 吻合。此前 13/拍是两只都满能量且贴着站的瞬态。
+- 候选修法（**暂不做**）：body 改 **8W2C2M @1000**（仍在 1,300 容量与 1,100 预留额度内，R686 不会降级），把每趟工作窗从 6 拍拉到 12.5 拍，估速率 ~10–11/拍；或把站桩锚点从“CC range 3”收紧到 withdraw 真的够得着的 range 1。代价：body 模板属平衡参数、第四个部署、且当前 G6 仍红（RCL5 不是扩张的充分条件）⇒ **不为一枚非绑定门改平衡**；等 RCL5/G6 的真需求或下一次主动修复再评估。预写：**E816** 若落地 2C 模板，新孵 upgrader 的 store 上限=100、单趟 work 窗≥12 拍；**E817** controller 速率 ≥9/拍（同 CC/核心条件下）且 upgrader 数不增。
+
 ### 4.0（11-04 21:1xZ 立格，R689 观测；上一条＝R688 格「满仓升级门」；本格**capacity 的 usage/rateTotal 陷阱**）
 
 **诱因**：R688 部署后 `kernel.capacity.inputs` 现读 `usage=13.2`、`headroom=0.34`、`limit=20`，看起来距 G6 的 comfortable（≤12）只差 **1.2–1.6 CPU**；同发 `rateTotal=15.84`、`rateWindowTicks=97`、`rateUnsampledTicks=0`。
