@@ -1182,6 +1182,15 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-04 21:5xZ 立格，R692；上一条＝R691 格「快路径负结果」；本格**RCL4 升级器改 8W2C2M**）
+
+**重开理由**：R690 当时以「RCL5 不是扩张充分条件」暂缓；R691 证明 traffic 是 **move 动作量**成本 ⇒ 升级器每 6 拍往返一次既拖 controller 速率、也产生 move 调用。2C 把工作窗拉到 12.5 拍，同时服务 RCL5 与 G6 方向。
+
+- 改动：`bodies.ts` 的 RCL4 主力档 **8W1C2M@950 → 8W2C2M@1000**；仍在 1,300 容量与 1,100 预留额度内（R686 的 reserveBlockedP2 不会把它降级）。`bodies.test` 同步断言 8W/2C/cost 1000。
+- 验证：typecheck 0；unit **441 文件·5,719 例**；integration **30·239**。提交 `c28eab99`，部署 `b368c4ee906b`（线上同值）。
+- 上线后健康：W39S55 prog 248,959→249,885 / 70 拍 = **13.2/拍**、pop 10、spawnQ 0；另两房稳定。现有两只升级器（TTL ~1,300）保留旧 body，**改动只作用于下一代替换**。
+- 预写：**E820** 下一只 W39S55 upgrader 的 body=12 件（8W2C2M）、store 上限 100、单趟 work 窗 ≥12 拍；**E821** 同 CC/核心条件下 controller 稳态 ≥9/拍（旧 1C 基线 ~6）；**E822** 8W2C2M 在预留 200 下仍能原样孵化（不被 R686 降级），spawnRejects 不出现该角色的 degradeGateClosed 长串。
+
 ### 4.0（11-04 21:4xZ 立格，R691；上一条＝R690 格「1C 占空比」；本格**锚点快路径优化：实现已上线、判效为负**）
 
 **假设**：`traffic-manager.ts:112` 的 `anchors.size > 0 → return false` 让几乎所有带站桩升级器/矿工的房间永久跳过快路径（W39S55 traffic 1.16 CPU/拍，三房最高）。
