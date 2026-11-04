@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-04 20:4xZ 立格，R687；上一条＝R686 格「预留死锁」；本格**控制器容器被 storage 永久压住**）
+
+**现场（R686 判效同窗，只读探针）**：W39S55 RCL4、controller `(5,21)`、controller container `(4,20)` **224→0 / 2000**、core `1200–1300/1300`、storage 259K；两只 **8W** upgrader 能量 0/42–50，常在距 controller 8–11 格处（去远处取能），controller 速率 ≈3.7/拍。CC 不是没进 `fillTargets`（`room-snapshot.ts:171-174` 明含），而是效用仲裁不选它。
+
+- 根因：账本 `fill-cc=90` < `store-energy=95`，hauler 的 work 候选每次先选 `fillStorage`；`getHaulFillTarget` 内部那条「CC 低于半满优先派一个 hauler」只有在 `fill:haul-target` 被选中后才会执行 ⇒ CC 永远拿不到 hauler。
+- 修法（`task-ledger.ts:133-142`）：核心接近满（`coreFreeRatio<0.25`）且 CC 低于半满时 `fill-cc=96`，压过 storage 的 95；核心空时仍为 90（升级不抢 spawn 能量），施工期/危机仍为 50。
+- 测试 +2（正向 96 且 >95；控制组 core 不接近满仍 90）；typecheck 0；unit **440 文件·5,713 例**；integration **30·239**。部署 sha `5d286dfeae53`（check-code 现读线上同值）。
+
+**早期判效（t=84,068,1xx–2xx）**：hauler 任务从 `fill:storage` 翻到 `fill:haul-target`；CC **0→1,067**（53%）后随升级消耗回落到 ~700；两只 upgrader 回到 controller range 3；controller 速率 **8.81/拍**（`242,283→242,609` / 37 拍，基线 3.7 ⇒ 2.4×）；W39S55 pop 12、spawnQ 0。另两房无行为回归（W37S58 pop 21、W38S56 pop 14/storage 723K，均继续上升）。⚠️两发部署间隔 ≈15 分钟，G6 尾税叠加，CPU 17.3/constrained 不作 R687 判据，窗后再读。预写：**E810** CC 长期维持 ≥50%（判 1,000 拍均值）；**E811** controller ≥5/拍（早期 8.81 已过）；**E812** 另两房人口/储量/CPU 在窗后无回归。
+
 ### 4.0（11-04 20:2xZ 立格，R686；上一条＝R685 格「G6 审计」；本格**修复预留把 P2 永久挡在孵化口**）
 
 **现场（只读探针 + Memory，全部同窗现读）**：W39S55 RCL4、容量 1300、`energyAvailable=1300`（满）、storage 259,271、population 9。队列 2 条：hauler 16C8M=1200、builder 8W2C5M=1150，双双 `block=degradeGateClosed`；`spawnRejects` 累计 budget 13,052／reserveOnly 8,328／degradeGateClosed 18,000+。economy `pressure=0`、`cr=259,331`、`rb/10≈25,933`（条件 2 不触发）。
