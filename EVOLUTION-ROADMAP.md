@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-04 12:1xZ 立格，R685；上一条＝R684 格「CPU 门外溢」；本格**G6/终局能力审计与扩张决策**）
+
+**R683/R684 终判**：**E801 PASS**（W39S55 mincut queued 已清、live sites=0、无新 mincut）；**E802 PASS**（核心 rampart 正常、NPC 仍由塔清）；**E803** 条件单测锁定；**E804 PASS**（upgrader 2 只，controller 约 3.1/拍）；**E805 PASS**（无新的 hpDeficit 目标消失 error）；**E806 边界 PASS**（CPU avg10 17–18，tight，未进 constrained、未越 limit 20）。
+
+**终局结构可见性更正（探针形状坑）**：本服 `room.factory/observer/powerSpawn/nuker` 便捷属性返回 undefined，但 `find(FIND_MY_STRUCTURES)` 显示 **W37S58 有 factory/observer/powerSpawn/nuker 各 1，W38S56 有 factory 1**；`room-snapshot` 本就用 `allStructures.find`，bot 实际看得见它们。此前“后期结构缺失”是探针用错访问器造成的假缺口；后续探针一律用 `find`（与 `Room.spawns` 同型）。
+
+**G6/扩张决策**：当前 **G4 Σgate=13.08（pass）**、G0（posture=war）与 G6（CPU tight，usage 15.42 / avg10 17，comfortable≤12）双门。CPU 最大项 traffic 4.47 / snapshots 2.06 / remote-manager 1.72、roles harvester 2.12 / remoteHarvester 1.21。**砍远矿过 G6 是陷阱**：remote net 6.71 e/t、G4 会掉到 ~6.4 仍勉强过，但扩张本身新增 3–5 CPU，G6 必反弹；CPU Unlock 现价 ~378M 远超 credits 0.78M。⇒ **不追阈值、不砍产能**；扩张暂缓，优先保持经济/防御/RCL 稳定与观测。若用户授权 CPU Unlock 或市场资源调度，再重开扩张。
+
+**当前帝国**：W39S55 RCL4、storage 259,941、upgrader 2、controller 进度恢复；W38S56 RCL7、storage 739K、RCL7 升级仍受 expansionPush CPU 门控；W37S58 RCL8、storage 805K、终局结构齐全。下轮候选（按需）：① idle/低价值编制回收；② 快照/交通结构性 CPU 项目（高风险）；③ 工业/市场（需用户授权资源调度）。
+
 ### 4.0（11-03 13:3xZ 立格，R684；上一条＝R683 格「塔覆盖 rampart」；本格**修 R632 CPU 门外溢 + hpDeficit 保护**）
 
 **现场**：W39S55 建成 storage（258K）后，population 8、**0 upgrader / 0 builder**，controller **184,557 冻结**、spawn idle；实际 live sites=0、Memory buildQueue 已清空（R683 的 queue 清理生效）。CPU `tight`。
