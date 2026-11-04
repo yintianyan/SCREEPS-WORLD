@@ -1190,7 +1190,7 @@
 - 修法（`task-ledger.ts:141-142`）：核心接近满（`coreFreeRatio<0.25`）且 CC 低于半满时 `fill-cc=96`，压过 storage 的 95；核心空时仍为 90（升级不抢 spawn 能量），施工期/危机仍为 50。
 - 测试 +2（正向 96 且 >95；控制组 core 不接近满仍 90）；typecheck 0；unit **440 文件·5,713 例**；integration **30·239**。部署 sha `5d286dfeae53`（check-code 现读线上同值）。
 
-**早期判效（t=84,068,1xx–2xx）**：hauler 任务从 `fill:storage` 翻到 `fill:haul-target`；CC **0→1,067**（53%）后随升级消耗回落到 ~700；两只 upgrader 回到 controller range 3；controller 速率 **8.81/拍**（`242,283→242,609` / 37 拍，基线 3.7 ⇒ 2.4×）；W39S55 pop 12、spawnQ 0。另两房无行为回归（W37S58 pop 21、W38S56 pop 14/storage 723K，均继续上升）。⚠️两发部署间隔 ≈15 分钟，G6 尾税叠加，CPU 17.3/constrained 不作 R687 判据，窗后再读。预写：**E810** CC 长期维持 ≥50%（判 1,000 拍均值）；**E811** controller ≥5/拍（早期 8.81 已过）；**E812** 另两房人口/储量/CPU 在窗后无回归。
+**早期判效（t=84,068,1xx–2xx）**：hauler 任务从 `fill:storage` 翻到 `fill:haul-target`；CC **0→1,067**（53%）后随升级消耗回落到 ~700；两只 upgrader 回到 controller range 3；controller 速率 **8.81/拍**（`242,283→242,609` / 37 拍）并在第二窗升到 **9.89/拍**（`242,283→243,193` / 92 拍，基线 3.7 ⇒ 2.7×；CC 1,134、两只 upgrader 均回 controller range 2）；W39S55 pop 12、spawnQ 0。另两房无行为回归（W37S58 pop 21、W38S56 pop 14/storage 723K，均继续上升）。⚠️两发部署间隔 ≈15 分钟，G6 尾税叠加，CPU 17.3/constrained 不作 R687 判据，窗后再读。预写：**E810** CC 长期维持 ≥50%（判 1,000 拍均值）；**E811** controller ≥5/拍（早期 8.81 已过）；**E812** 另两房人口/储量/CPU 在窗后无回归。
 
 ### 4.0（11-04 20:2xZ 立格，R686；上一条＝R685 格「G6 审计」；本格**修复预留把 P2 永久挡在孵化口**）
 
