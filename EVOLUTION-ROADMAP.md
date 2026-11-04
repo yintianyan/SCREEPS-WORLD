@@ -1189,7 +1189,7 @@
 - 改动：`bodies.ts` 的 RCL4 主力档 **8W1C2M@950 → 8W2C2M@1000**；仍在 1,300 容量与 1,100 预留额度内（R686 的 reserveBlockedP2 不会把它降级）。`bodies.test` 同步断言 8W/2C/cost 1000。
 - 验证：typecheck 0；unit **441 文件·5,719 例**；integration **30·239**。提交 `c28eab99`，部署 `b368c4ee906b`（线上同值）。
 - 上线后健康：W39S55 prog 248,959→249,885 / 70 拍 = **13.2/拍**、pop 10、spawnQ 0；另两房稳定。现有两只升级器（TTL ~1,300）保留旧 body，**改动只作用于下一代替换**。
-- 预写：**E820** 下一只 W39S55 upgrader 的 body=12 件（8W2C2M）、store 上限 100、单趟 work 窗 ≥12 拍；**E821** 同 CC/核心条件下 controller 稳态 ≥9/拍（旧 1C 基线 ~6）；**E822** 8W2C2M 在预留 200 下仍能原样孵化（不被 R686 降级），spawnRejects 不出现该角色的 degradeGateClosed 长串。
+- 预写：**E820** 下一只 W39S55 upgrader 的 body=12 件（8W2C2M）、store 上限 100、单趟 work 窗 ≥12 拍；**E821** 同 CC/核心条件下 1,000 拍窗 ≥12/拍（旧 1C 基线本身可在有利窗到 **9.39/拍**，≥9 不具区分度；E820 的 body 证据才是主判据）；**E822** 8W2C2M 在预留 200 下仍能原样孵化（不被 R686 降级），spawnRejects 不出现该角色的 degradeGateClosed 长串。
 
 ### 4.0（11-04 21:4xZ 立格，R691；上一条＝R690 格「1C 占空比」；本格**锚点快路径优化：实现已上线、判效为负**）
 
@@ -1218,7 +1218,7 @@
 
 ### 4.0（11-04 21:0xZ 立格，R688；上一条＝R687 格「CC 被 storage 压住」；本格**满仓时升级 CPU 门让位**·已上线）
 
-**依据（R687 同窗）**：W38S56 storage **727K/1M（72.7%）**；660 拍实测均速 **15.5/拍**（t=84,068,375 727,814 → t=84,069,035 738,069）⇒ 到 `storageFullThreshold=0.9` 约 **10.4K 拍（≈12h）**（近窗 4.2/拍是通勤/孵化噪声，按 660 拍均值优先；触发前用同窗复算）；同房 3 只 upgrader 因 R632 的 `expansionPush && tier∈{tight,constrained}` 门 idle。满仓后继续停升级只能把盈余白扔（升级器本来已存活，工作只增加动作开销）。
+**依据（R687 同窗）**：W38S56 storage **727K/1M（72.7%）**；首批 660 拍 15.5/拍（t=84,068,375 727,814 → t=84,069,035 738,069），但随后 290 拍（→t=84,069,325 738,614）仅 **+545 ≈ 1.9/拍** ⇒ **不是稳态**，90% 触发按近窗是数天量级，不能按 12h 预排；触发前必须以 ≥1,000 拍窗复算，R688 暂按惰性处理。同房 3 只 upgrader 因 R632 的 `expansionPush && tier∈{tight,constrained}` 门 idle。满仓后继续停升级只能把盈余白扔（升级器本来已存活，工作只增加动作开销）。
 
 - 修法：`demand.ts` 的 `cpuAllowsThisRoomUpgrade` 加 `|| roomCtx.storageNearFull === true`；`upgrader.ts` 抽出纯函数 `cpuGateAllowsUpgrade(tier, storageNearFull)`（满仓一律放行，未满仓维持 tight/constrained 停）。核心填充/保级/Σgate 预留门全部不动。
 - 测试 +4（纯函数 3 例：满仓任意 tier 放行、未满仓 tight/constrained 停、comfortable/abundant/undefined 放行；demand 1 例：expansionPush+tight+满仓+Σgate=10 仍出 upgrader）。typecheck 0；unit **441 文件·5,717 例**；integration **30·239**。提交 `ea7545ea`。
