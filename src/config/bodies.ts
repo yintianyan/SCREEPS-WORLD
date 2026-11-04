@@ -721,7 +721,11 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
       ],
       minCapacity: 1650,
     },
-    // [8W,1C,2M] @950：RCL4(1300) 主力档。
+    // [8W,2C,2M] @1000：RCL4(1300) 主力档。
+    // R690：原 1C(950) 只在贴着 CC 站桩（range 1，可同 tick withdraw+upgrade）时够用；
+    // 线上 W39S55 实测两只升级器在 controller range 2–3，50 能量只够 6 拍，随后花数拍
+    // 走到 CC 再走回 ⇒ 占空比 ≈43%、controller 掉到 6/拍。2C 把工作窗拉到 12.5 拍，
+    // 同时减少 upgrader 的 move API 调用（traffic 是动作量成本，R691 已证）。
     {
       parts: [
         "work",
@@ -733,10 +737,11 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
         "work",
         "work",
         "carry",
+        "carry",
         "move",
         "move",
       ],
-      minCapacity: 950,
+      minCapacity: 1000,
     },
     // [4W] @500：RCL2-3(550/800) 过渡档。
     { parts: ["work", "work", "work", "work", "carry", "move"], minCapacity: 500 },

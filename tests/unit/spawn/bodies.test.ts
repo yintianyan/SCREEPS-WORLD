@@ -174,10 +174,12 @@ describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {
     expect(bodyCost(body)).toBe(1650);
   });
 
-  it("upgrader RCL4(1300) 选 8W body；RCL2(550) 选 4W 过渡档", () => {
+  it("upgrader RCL4(1300) 选 8W2C body；RCL2(550) 选 4W 过渡档", () => {
     const rcl4 = selectBody("upgrader", 1300, { rcl: 4 });
     expect(rcl4.filter(p => p === "work")).toHaveLength(8);
-    expect(bodyCost(rcl4)).toBe(950);
+    // R690：2C 把站桩工作窗从 6 拍拉到 12.5 拍（W39S55 实测旧 1C 掉到 6/拍）。
+    expect(rcl4.filter(p => p === "carry")).toHaveLength(2);
+    expect(bodyCost(rcl4)).toBe(1000);
 
     const rcl2 = selectBody("upgrader", 550, { rcl: 2 });
     expect(rcl2.filter(p => p === "work")).toHaveLength(4);
