@@ -1188,7 +1188,7 @@
 
 - 修法：`demand.ts` 的 `cpuAllowsThisRoomUpgrade` 加 `|| roomCtx.storageNearFull === true`；`upgrader.ts` 抽出纯函数 `cpuGateAllowsUpgrade(tier, storageNearFull)`（满仓一律放行，未满仓维持 tight/constrained 停）。核心填充/保级/Σgate 预留门全部不动。
 - 测试 +4（纯函数 3 例：满仓任意 tier 放行、未满仓 tight/constrained 停、comfortable/abundant/undefined 放行；demand 1 例：expansionPush+tight+满仓+Σgate=10 仍出 upgrader）。typecheck 0；unit **441 文件·5,717 例**；integration **30·239**。提交 `ea7545ea`。
-- **未部署**：本窗已连发 R686/R687 两次部署（每次 ≈400 拍 G6 尾税），而本改动在 90% 前惰性 ⇒ 不在窗口内做第三发。上线时机＝W38S56 storage ≥0.88 或与下一次主动修复捆绑；部署前重跑 build，live sha 现读 `5d286dfeae53`。预写：**E813** 满仓标记变 true 后 W38S56 upgrader 转 work、controller 进度恢复增长；**E814** CPU 增量 ≤0.3、不因此越过 limit；**E815** spawn/extension 核心填充不被升级抢占（满仓时 core 空则仍应优先）。
+- **已部署 `1de58a260216`**（R687 判效窗 ≈450 拍后第三发；三房 `storageNearFull` 现读全为 false ⇒ 行为惰性、上线后未触发任何升级变化）。部署后快照：W39S55 pop 11／spawnQueue 0、storage 260,200；W38S56 storage 727,814→740,240、pop 12；W37S58 storage 781,373、pop 24，均无回归。预写：**E813** 满仓标记变 true 后 W38S56 upgrader 转 work、controller 进度恢复增长；**E814** CPU 增量 ≤0.3、不因此越过 limit；**E815** spawn/extension 核心填充不被升级抢占（满仓时 core 空则仍应优先）。
 
 ### 4.0（11-04 20:4xZ 立格，R687；上一条＝R686 格「预留死锁」；本格**控制器容器被 storage 永久压住**）
 
