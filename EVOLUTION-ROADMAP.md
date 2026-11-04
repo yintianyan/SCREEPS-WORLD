@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-04 21:0xZ 立格，R688；上一条＝R687 格「CC 被 storage 压住」；本格**满仓时升级 CPU 门让位**·已实现未部署）
+
+**依据（R687 同窗）**：W38S56 storage **727K/1M（72.7%）**、+≈9.6/拍 ⇒ 约 **18K 拍（≈20h）** 到 `storageFullThreshold=0.9`；同房 3 只 upgrader 因 R632 的 `expansionPush && tier∈{tight,constrained}` 门 idle。满仓后继续停升级只能把盈余白扔（升级器本来已存活，工作只增加动作开销）。
+
+- 修法：`demand.ts` 的 `cpuAllowsThisRoomUpgrade` 加 `|| roomCtx.storageNearFull === true`；`upgrader.ts` 抽出纯函数 `cpuGateAllowsUpgrade(tier, storageNearFull)`（满仓一律放行，未满仓维持 tight/constrained 停）。核心填充/保级/Σgate 预留门全部不动。
+- 测试 +4（纯函数 3 例：满仓任意 tier 放行、未满仓 tight/constrained 停、comfortable/abundant/undefined 放行；demand 1 例：expansionPush+tight+满仓+Σgate=10 仍出 upgrader）。typecheck 0；unit **441 文件·5,717 例**；integration **30·239**。提交 `ea7545ea`。
+- **未部署**：本窗已连发 R686/R687 两次部署（每次 ≈400 拍 G6 尾税），而本改动在 90% 前惰性 ⇒ 不在窗口内做第三发。上线时机＝W38S56 storage ≥0.88 或与下一次主动修复捆绑；部署前重跑 build，live sha 现读 `5d286dfeae53`。预写：**E813** 满仓标记变 true 后 W38S56 upgrader 转 work、controller 进度恢复增长；**E814** CPU 增量 ≤0.3、不因此越过 limit；**E815** spawn/extension 核心填充不被升级抢占（满仓时 core 空则仍应优先）。
+
 ### 4.0（11-04 20:4xZ 立格，R687；上一条＝R686 格「预留死锁」；本格**控制器容器被 storage 永久压住**）
 
 **现场（R686 判效同窗，只读探针）**：W39S55 RCL4、controller `(5,21)`、controller container `(4,20)` **224→0 / 2000**、core `1200–1300/1300`、storage 259K；两只 **8W** upgrader 能量 0/42–50，常在距 controller 8–11 格处（去远处取能），controller 速率 ≈3.7/拍。CC 不是没进 `fillTargets`（`room-snapshot.ts:171-174` 明含），而是效用仲裁不选它。
