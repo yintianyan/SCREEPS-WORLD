@@ -1182,6 +1182,15 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-04 21:4xZ 立格，R691；上一条＝R690 格「1C 占空比」；本格**锚点快路径优化：实现已上线、判效为负**）
+
+**假设**：`traffic-manager.ts:112` 的 `anchors.size > 0 → return false` 让几乎所有带站桩升级器/矿工的房间永久跳过快路径（W39S55 traffic 1.16 CPU/拍，三房最高）。
+
+- 实现：删掉该否决，逐目标检查已覆盖「目标被静止/不可动者（含锚定者）占用」的唯一危险形状；导出 `tryFastDispatch` + `RoomBatch` 供直测，补正反两例。typecheck 0；unit **441 文件·5,719 例**；integration **30·239**。提交 `a10f40b7`，部署 `83794288f07f`。
+- **判效（负）**：CPU 窗成熟 157 拍现读 `traffic-manager=3.91`，部署前同口径 **3.97**（−0.06，噪声内）；`total=15.38`、`snapshots=1.7`、角色合计 6.6 均无实质变化。⇒ **traffic 的成本在 `creep.move` 调用量/角色动作本身，不在 resolver 分支**；R598 的 API-bound 结论在 traffic 上也成立，快路径不是 G6 的杠杆。
+- **仪器教训**：部署后短窗里 `cpuPerTickByRoom` 出现 W37S58 0.979→0.084、W39S55 1.159→0.588 的“大降”，但那是**当前拍 top 表**，不是窗口均值；同发 `cpuRate.bySystem["traffic-manager"]` 仍 3.91。判交通成本只认 bySystem 窗口，不认 byRoom 单拍（与「两张榜不能相加」同族）。
+- 决定：改动本身语义安全（冲突/推挤仍走 resolver），保留不折腾；**不再追 traffic 微优化**。G6 缺口按 15.38 对 12 计算为 **3.38**。预写：**E818** 未来 1,000 拍人口/死亡/卡死无回归（若无异常保持现状）；**E819** traffic CPU 不高于 3.9（回归守卫）。
+
 ### 4.0（11-04 21:2xZ 立格，R690 观测；上一条＝R689 格「capacity 仪器」；本格**升级器 1C 与站桩距离的占空比**）
 
 **现场**：W39S55 两只原 upgrader（TTL 450/605）死亡后，新孵的两只（TTL 1,403/1,478）使 controller 速率从 13.3/拍掉到 **5.6→6.0/拍**；同发 CC **1,714→1,950**（满 2,000 的 97.5%）、核心 1300/1300、tower 1000、storage 260,500 ⇒ **不是断粮**。两只 upgrader 各只带 42/50 能量，位置在 controller range 2–3。
