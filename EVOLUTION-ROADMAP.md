@@ -1190,7 +1190,7 @@
 - 验证：typecheck 0；unit **441 文件·5,719 例**；integration **30·239**。提交 `c28eab99`，部署 `b368c4ee906b`（线上同值）。
 - 上线后健康：W39S55 prog 248,959→249,885 / 70 拍 = **13.2/拍**、pop 10、spawnQ 0；另两房稳定。现有两只升级器（TTL ~1,300）保留旧 body，**改动只作用于下一代替换**。
 - **E820 已 PASS**（15:08Z，t=84,070,187）：第一只换代升级器 `...0069-fzx` 出生 body **8W2C2M=12 件**、store 92/100、mode=acquire；同房 CC 1,035、spawn 满 1,300、无敌对。注意该房当前只有 1 只升级器：demand 的价格弹性把冲刺目标 2 缩到 1（有 storage 时弹性照常生效），**不是补员故障**；因此同窗 862 拍总数 10.24/拍是「2→1 只」混合窗，不能当 E821 的干净样本。
-- **E821 早期 PASS**（15:13Z，干净单只窗）：prog 261,373→261,901 / 70 拍 = **7.54/拍**，对单只 8W 上限 8 拍 = **94% 占空**（1C 时代约 43% ⇒ 3.4/拍/只）；pop 9、storage 253,778 基本持平、无敌对。1,000 拍长窗待复核，但效率已到上限附近，2C 的目的达成。
+- **E821 PASS（长窗）**：1,000 拍（t=84,070,245→84,071,245）prog 261,901→274,162 = **12.26/拍**；早期干净单只窗也已 7.54/拍（94% 占空）。即使长窗内一度有 2 只升级器，按 per-upgrader 归一仍远超 7/拍阈值；RCL5 余量 130,838 ⇒ ETA ≈10.7K 拍（**~12h**）。pop 9、storage 255,052、无敌对。
 - 预写：**E820** 下一只 W39S55 upgrader 的 body=12 件（8W2C2M）、store 上限 100、单趟 work 窗 ≥12 拍；**E821** 按编制归一：**单只 8W 升级器的 1,000 拍窗 ≥7/拍**（上限 8；1C 占空 ~43% ⇒ ~3.4/拍），若窗口内有 2 只则按 per-upgrader ≥5.5/拍 计；**禁止用总数跨编制比较**（旧 1C 双人窗可到 9.39/拍，12 的阈值按构造不可达——W39S55 当前 demand 弹性只给 1 只，单只上限 8）。E820 的 body 证据仍是主判据。；**E822** 8W2C2M 在预留 200 下仍能原样孵化（不被 R686 降级），spawnRejects 不出现该角色的 degradeGateClosed 长串。
 
 ### 4.0（11-04 21:4xZ 立格，R691；上一条＝R690 格「1C 占空比」；本格**锚点快路径优化：实现已上线、判效为负**）
@@ -1217,10 +1217,11 @@
 - 判读：`capacity.ts:51-57` 的 `pickCpuUsagePerTick` 只在 `rateWindowTicks ≥ 100` 且无漏采时采信逐拍均量；97 拍未到门槛 ⇒ 当前分档喂的是偏乐观的 avg10。**实测窗成熟（`rateWindowTicks=197`）后 `usage` 切到 15.08**（`avg10` 也升到 14.8，`headroom` 0.246）⇒ 到 comfortable（≤12）的缺口是 **3.08**，不是 1.6。同发 CPU 榜：traffic-manager **3.97**、snapshots 1.59、角色合计 6.63（harvester 1.79、remoteHarvester 1.06、distributor 0.83、hauler 0.66、upgrader 0.23），unexplained 1.66。
 - `tier=constrained` 不是新异常：部署尖峰把 `upgradeTicks` 清零（现读 45），且升档需连续 300 拍 ≤0.8；>16 的拍会把计数重置。G6 仍红，R685「无法靠微优解决」的结论不变。
 - 决定：**不追这个假 1.6 缺口**；扩张继续等 RCL5（G0 的 youngestMature）+ G6。下一轮若要做 CPU 项，必须先等到 `rateWindowTicks ≥100` 再用 `rateTotal` 定基线，禁止拿窗口未成熟时的 `usage` 做判据。
+- 11-05 单发补读：`cpu10=14.9`、`tier=tight`（R692 后），比 constrained 进了一档，但 G6 仍需 comfortable ⇒ **仍未清**；单点不签趋势，下一窗再看。
 
 ### 4.0（11-04 21:0xZ 立格，R688；上一条＝R687 格「CC 被 storage 压住」；本格**满仓时升级 CPU 门让位**·已上线）
 
-**依据（R687 同窗）**：W38S56 storage **727K/1M（72.7%）**；首批 660 拍 15.5/拍（t=84,068,375 727,814 → t=84,069,035 738,069），但随后 290 拍（→t=84,069,325 738,614）仅 **+545 ≈ 1.9/拍** ⇒ **不是稳态**，90% 触发按近窗是数天量级，不能按 12h 预排；触发前必须以 ≥1,000 拍窗复算，R688 暂按惰性处理。同房 3 只 upgrader 因 R632 的 `expansionPush && tier∈{tight,constrained}` 门 idle。满仓后继续停升级只能把盈余白扔（升级器本来已存活，工作只增加动作开销）。
+**依据（R687 同窗）**：W38S56 storage **727K/1M（72.7%）**；首批 660 拍 15.5/拍，随后 290 拍仅 +545（1.9/拍），但**后续约 1,200 拍回升到 22.4/拍**（t=84,070,175 738,614 → t=84,071,245 765,452）⇒ 90% 余量 134.5K，ETA ≈6.1K 拍（**~7h**）。增速仍非稳态，触发前以最后 ≥1,000 拍窗复算；R688 暂按惰性处理。同房 3 只 upgrader 因 R632 的 `expansionPush && tier∈{tight,constrained}` 门 idle。满仓后继续停升级只能把盈余白扔（升级器本来已存活，工作只增加动作开销）。
 
 - 修法：`demand.ts` 的 `cpuAllowsThisRoomUpgrade` 加 `|| roomCtx.storageNearFull === true`；`upgrader.ts` 抽出纯函数 `cpuGateAllowsUpgrade(tier, storageNearFull)`（满仓一律放行，未满仓维持 tight/constrained 停）。核心填充/保级/Σgate 预留门全部不动。
 - 测试 +4（纯函数 3 例：满仓任意 tier 放行、未满仓 tight/constrained 停、comfortable/abundant/undefined 放行；demand 1 例：expansionPush+tight+满仓+Σgate=10 仍出 upgrader）。typecheck 0；unit **441 文件·5,717 例**；integration **30·239**。提交 `ea7545ea`。
