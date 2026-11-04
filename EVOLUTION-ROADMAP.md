@@ -1182,7 +1182,15 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
-### 4.0（11-04 21:0xZ 立格，R688；上一条＝R687 格「CC 被 storage 压住」；本格**满仓时升级 CPU 门让位**·已实现未部署）
+### 4.0（11-04 21:1xZ 立格，R689 观测；上一条＝R688 格「满仓升级门」；本格**capacity 的 usage/rateTotal 陷阱**）
+
+**诱因**：R688 部署后 `kernel.capacity.inputs` 现读 `usage=13.2`、`headroom=0.34`、`limit=20`，看起来距 G6 的 comfortable（≤12）只差 **1.2–1.6 CPU**；同发 `rateTotal=15.84`、`rateWindowTicks=97`、`rateUnsampledTicks=0`。
+
+- 判读：`capacity.ts:51-57` 的 `pickCpuUsagePerTick` 只在 `rateWindowTicks ≥ 100` 且无漏采时采信逐拍均量；97 拍未到门槛 ⇒ 当前分档喂的是偏乐观的 avg10。窗一旦成熟，`usage` 会切到 **15.84**（ratio 0.792，tight 下沿），到 comfortable 的缺口是 **3.84**，不是 1.6。
+- `tier=constrained` 不是新异常：部署尖峰把 `upgradeTicks` 清零（现读 45），且升档需连续 300 拍 ≤0.8；>16 的拍会把计数重置。G6 仍红，R685「无法靠微优解决」的结论不变。
+- 决定：**不追这个假 1.6 缺口**；扩张继续等 RCL5（G0 的 youngestMature）+ G6。下一轮若要做 CPU 项，必须先等到 `rateWindowTicks ≥100` 再用 `rateTotal` 定基线，禁止拿窗口未成熟时的 `usage` 做判据。
+
+### 4.0（11-04 21:0xZ 立格，R688；上一条＝R687 格「CC 被 storage 压住」；本格**满仓时升级 CPU 门让位**·已上线）
 
 **依据（R687 同窗）**：W38S56 storage **727K/1M（72.7%）**、+≈9.6/拍 ⇒ 约 **18K 拍（≈20h）** 到 `storageFullThreshold=0.9`；同房 3 只 upgrader 因 R632 的 `expansionPush && tier∈{tight,constrained}` 门 idle。满仓后继续停升级只能把盈余白扔（升级器本来已存活，工作只增加动作开销）。
 
