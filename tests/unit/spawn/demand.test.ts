@@ -1772,3 +1772,45 @@ describe("#85 — upgraderClamp：需求阶梯当前把编制压在哪个结构�
     expect(clampOf(60000, { capacity: 1800 })).toBe(2);
   });
 });
+
+describe("R684 — R632 的 CPU 门只应作用于 expansionPush 房", () => {
+  function staged() {
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 4, energyCapacityAvailable: 1300 });
+    return { snap, creeps: livingHarvester() };
+  }
+
+  it("非扩张房 + CPU tight：仍补 upgrader（storage 充足）", () => {
+    const { snap, creeps } = staged();
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      creeps,
+      [],
+      normalCtx(0),
+      1000,
+      0,
+      false,
+      false,
+    );
+    expect(requests.some(r => r.role === "upgrader")).toBe(true);
+  });
+
+  it("扩张推进房 + CPU tight：R632 仍停升级", () => {
+    const { snap, creeps } = staged();
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      creeps,
+      [],
+      normalCtx(0),
+      1000,
+      0,
+      true,
+      false,
+    );
+    expect(requests.some(r => r.role === "upgrader")).toBe(false);
+  });
+});

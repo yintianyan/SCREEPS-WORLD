@@ -896,10 +896,14 @@ export function evaluateDemand(
   const earlyRoom = snapshot.storage === undefined;
   // R595：帝国失血期（gateNetFlow 和为负）不补孵 upgrader —— 角色闸会把它 idle，
   // 补出来只会白付孵化与维持；降级风险/无 storage 早房仍豁免。RCL8 另由 rcl8NoUpgrade 关。
+  // R684：cpuAllowsUpgrade 是 R632 的“扩张推进态才停升级”信号，不能外溢到非扩张房。
+  // 线上 W39S55：storage 建成后 earlyRoom=false，CPU tight 让 allowUpgrader 恒假，
+  // 房间 258K storage、0 upgrader、controller 冻结。非 expansionPush 房继续按水位升级。
+  const cpuAllowsThisRoomUpgrade = !expansionPush || cpuAllowsUpgrade;
   const allowUpgrader =
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
     !rcl8NoUpgrade &&
-    (cpuAllowsUpgrade || hasDowngradeRisk || earlyRoom) &&
+    (cpuAllowsThisRoomUpgrade || hasDowngradeRisk || earlyRoom) &&
     (empireGateSum >= (expansionPush ? CONFIG.economy.upgradeReserveNetFlow : 0) ||
       hasDowngradeRisk ||
       earlyRoom);

@@ -26,8 +26,15 @@ import { scored } from "../engine/arbiter";
 
 /** 血量缺口（0=满血，1=归零）— 维修类效用的共同尺度。 */
 function hpDeficit(s: { hits: number; hitsMax: number }): number {
-  if (!(s.hitsMax > 0)) return 0;
-  return Math.max(0, 1 - s.hits / s.hitsMax);
+  // R684：效用评分在 resolve 之后才发现目标已消失时，对象 getter 会抛
+  // "Could not find an object with ID" 并中断整只 creep（R676 只护了 execute 侧）。
+  // 返回 0 让该候选失去效用，由其它候选继续。
+  try {
+    if (!(s.hitsMax > 0)) return 0;
+    return Math.max(0, 1 - s.hits / s.hitsMax);
+  } catch {
+    return 0;
+  }
 }
 
 /** 建造类效用加成：存在性阻塞（spawn/tower）> 关键 container > 临近完工。 */
