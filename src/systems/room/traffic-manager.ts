@@ -24,7 +24,7 @@ const NEIGHBOR_DELTAS: readonly [number, number][] = [
   [-1, -1],
 ];
 
-interface RoomBatch {
+export interface RoomBatch {
   intents: MoveIntent[];
   /** 本房全部 creep：packed 占位 → 名。 */
   occupancy: Map<number, string>;
@@ -108,8 +108,13 @@ export const trafficManagerSystem: System = {
  * 环传播在这种形状下全为空操作。任一条件不满足即回退 resolver——互换、跟车、
  * 目标被占、目标落到墙内结构格等旧形状仍走原路径（保守优先）。
  */
-function tryFastDispatch(batch: RoomBatch, snapshot: RoomSnapshot | undefined): boolean {
-  if (batch.anchors.size > 0) return false;
+export function tryFastDispatch(batch: RoomBatch, snapshot: RoomSnapshot | undefined): boolean {
+  // R691：锚点本身不是快路径的否决项——它只在**发生冲突/推挤**时才有意义。
+  // 旧实现 `anchors.size > 0 → false` 把站桩升级器/矿工（几乎每拍都登记）变成
+  // 全房禁用快路径的开关：W39S55 每拍 1.16 CPU 的 traffic 里，大量是无冲突的
+  // 直发被送进完整解算器。下面的逐目标检查已经覆盖唯一的危险形状——
+  // 目标格被静止者/不可动者占用（含锚定者）时必返回 false，交给 resolver 推挤；
+  // 目标格全空、互不重复、且不是阻挡格时，锚定者不会被移动，优先级也无需仲裁。
   const active = batch.intents.filter(it => it.to !== it.from);
   if (active.length === 0) return true;
   const parkData = snapshot ? getParkRoomData(snapshot) : undefined;

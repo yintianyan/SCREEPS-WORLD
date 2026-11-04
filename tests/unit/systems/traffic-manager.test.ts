@@ -1,7 +1,11 @@
 /** Traffic Manager 系统测试 — 意图登记双模、tick 末集中解算与统一签发。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONFIG } from "../../../src/config";
-import { trafficManagerSystem } from "../../../src/systems/room/traffic-manager";
+import {
+  trafficManagerSystem,
+  tryFastDispatch,
+  type RoomBatch,
+} from "../../../src/systems/room/traffic-manager";
 import { getIntentLedger, registerAnchor, registerMove } from "../../../src/creeps/movement/intent";
 import { mockContext, resetGlobals } from "../../support/factories";
 
@@ -95,6 +99,65 @@ describe("intent — 登记双模", () => {
     tired.fatigue = 4;
     expect(registerMove(tired, RIGHT as DirectionConstant, 60)).toBe(ERR_TIRED);
     expect(getIntentLedger().intents.has("c2")).toBe(false);
+  });
+});
+
+/**
+ * R691：锚点只在冲突/推挤时有意义。站桩升级器与矿工几乎每拍都登记锚点，
+ * 旧入口 `anchors.size > 0 → false` 等于让所有带站桩角色的房间永久禁用快路径
+ * （W39S55 traffic 1.16 CPU/拍 的主因之一）。
+ */
+describe("R691 — 锚点不阻塞无冲突快路径", () => {
+  const packed = (x: number, y: number): number => x * 50 + y;
+
+  it("有锚定的静止矿工但目标格无冲突 ⇒ 快路径直发 mover，锚定者不动", () => {
+    setTraffic(true);
+    const mover = trafficCreep("mover", 25, 25, undefined);
+    const miner = trafficCreep("miner", 20, 20, undefined);
+    const room = flatRoom([mover, miner]);
+    mover.room = room;
+    miner.room = room;
+    (globalThis as any).Game.creeps.mover = mover;
+    (globalThis as any).Game.creeps.miner = miner;
+
+    const batch: RoomBatch = {
+      intents: [{ name: "mover", from: packed(25, 25), to: packed(26, 25), priority: 60 }],
+      occupancy: new Map([
+        [packed(25, 25), "mover"],
+        [packed(20, 20), "miner"],
+      ]),
+      immovable: new Set(),
+      anchors: new Map([["miner", 90]]),
+    };
+
+    expect(tryFastDispatch(batch, undefined)).toBe(true);
+    expect(mover.move).toHaveBeenCalledWith(RIGHT);
+    expect(miner.move).not.toHaveBeenCalled();
+  });
+
+  it("控制组：目标格正是锚定者 ⇒ 仍回退 resolver（不能把静止者挤掉）", () => {
+    setTraffic(true);
+    const mover = trafficCreep("mover", 24, 25, undefined);
+    const miner = trafficCreep("miner", 25, 25, undefined);
+    const room = flatRoom([mover, miner]);
+    mover.room = room;
+    miner.room = room;
+    (globalThis as any).Game.creeps.mover = mover;
+    (globalThis as any).Game.creeps.miner = miner;
+
+    const batch: RoomBatch = {
+      intents: [{ name: "mover", from: packed(24, 25), to: packed(25, 25), priority: 60 }],
+      occupancy: new Map([
+        [packed(24, 25), "mover"],
+        [packed(25, 25), "miner"],
+      ]),
+      immovable: new Set(),
+      anchors: new Map([["miner", 90]]),
+    };
+
+    expect(tryFastDispatch(batch, undefined)).toBe(false);
+    expect(mover.move).not.toHaveBeenCalled();
+    expect(miner.move).not.toHaveBeenCalled();
   });
 });
 
