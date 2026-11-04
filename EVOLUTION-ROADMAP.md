@@ -1182,6 +1182,19 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-03 13:3xZ 立格，R684；上一条＝R683 格「塔覆盖 rampart」；本格**修 R632 CPU 门外溢 + hpDeficit 保护**）
+
+**现场**：W39S55 建成 storage（258K）后，population 8、**0 upgrader / 0 builder**，controller **184,557 冻结**、spawn idle；实际 live sites=0、Memory buildQueue 已清空（R683 的 queue 清理生效）。CPU `tight`。
+- 根因：`spawn-manager` 把 `cpuAllowsUpgrade = tier ∈ {abundant, comfortable}` 传给**所有**房；`demand` 的 `allowUpgrader` 用它作为硬门。R632 的本意是“**扩张推进态**（RCL≥7+计划）下 CPU 不足才停升级”，但实现外溢：`earlyRoom=false`（storage 建成）+ tight ⇒ 所有成熟房都不孵 upgrader，房间 258K storage 无人升级。
+- 附带：builder/worker 的 `hpDeficit`（效用评分阶段）读到已消失目标会抛 `Could not find an object`（R676 只护了 execute）——一次 builder 中断记录。
+
+**R684 实现**：
+1. `cpuAllowsThisRoomUpgrade = !expansionPush || cpuAllowsUpgrade`；仅扩张推进房保留 R632 的 CPU 停升级，非扩张房按 storage 水位正常升级。
+2. builder/worker `hpDeficit` 加 try/catch，目标消失返回 0（该候选失去效用，其它候选继续）。
+部署 sha `90f8aed0983e`；unit **440·5,708**、integration 30·239。
+
+**早期判效**：upgrader 请求恢复并孵出 **2 只**，均 `mode=work`；controller **184,557→184,711（50 拍 +154 ≈3.1/拍）**，storage 258,783，CPU 16.9 tight。预写：**E804** 下一窗 controller ≥3/拍、upgrader ≥1；**E805** 不再出现 hpDeficit 目标消失 error；**E806** CPU 不因 2 upgrader 越过 limit/进 constrained（若越线则把非扩张房 upgrader 上限收紧到 1，而不是恢复全局停孵）。
+
 ### 4.0（11-02 17:4xZ 立格，R683；上一条＝R682 格「rampart 降档」；本格**按塔覆盖重做 rampart 位置评估**）
 
 **机制澄清（用户提问）**：rampart **己方 creep 可自由穿过**；**敌对 creep 不能穿过非 public 的 rampart**（`public=true` 才放行所有人）。它挡的是步行，不挡 tower/远程攻击；对同格**建筑**提供护盾，但站在上面的 creep 不获得伤害免疫。⇒ 塔**火圈外**的墙会把敌人挡在塔射程之外：敌人打墙、塔打不到，反而不如放进来杀；而且 50 个 rampart 维护到 100K 的成本约 5M hits / 5 万能量 / 2.5 万 builder 工时。
@@ -1194,7 +1207,7 @@
 3. `repairFortifications`：任何角色（perimeter/core/utility）只要在塔火圈外，维护目标封顶 `rampartBootstrapHits`（10K）；塔内 perimeter/core 正常目标。无塔房保持原目标（墙是唯一防御）。
 部署 sha `5c428bbea8b2`；unit **440·5,706**、integration 30·239。
 
-**早期判效**：W39S55 的 4 条 queued mincut 已被清掉，只剩 2 条已落地 site（45.11/47.17），RCL4 不再生成新 mincut；storage 73,964、RCL4 progress 162,825；7 条 core rampart queued（部分塔外，维护已被 10K 帽限制）。预写：**E801** 1,000 拍内无新增 mincut site，塔外 rampart hits 不再往 100K 增长；**E802** 塔内核心 rampart 正常维护、NPC 入侵仍由塔清掉；**E803** RCL5+ 且覆盖 ≥0.8 时 min-cut 恢复（条件单测锁定），覆盖不足则只做 bunker。
+**早期判效**：W39S55 的 4 条 queued mincut 已被清掉，只剩 2 条已落地 site（45.11/47.17），RCL4 不再生成新 mincut；storage 73,964、RCL4 progress 162,825；7 条 core rampart queued（部分塔外，维护已被 10K 帽限制）。**后续 live 探针**：实际 `FIND_MY_CONSTRUCTION_SITES`=0、buildQueue 已清空 ⇒ **E801 PASS**（无新增 mincut site）；塔内核心 rampart 正常、NPC 由塔处理。预写：**E802** 塔内核心 rampart 正常维护、NPC 入侵仍由塔清掉；**E803** RCL5+ 且覆盖 ≥0.8 时 min-cut 恢复（条件单测锁定），覆盖不足则只做 bunker。
 
 ### 4.0（11-02 17:0xZ 立格，R682；上一条＝R681a 格「分配纠正」；本格**rampart 必要性与位置评估 + RCL4 防御降档**）
 
