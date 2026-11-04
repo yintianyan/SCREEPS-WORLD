@@ -133,7 +133,13 @@ export function getRoomTaskLedger(snapshot: RoomSnapshot): RoomTaskLedger {
   if (ccCap > 0 && ccFreeRatio > 0) {
     // 施工期不给 CC 优先档（R672 教训）；和平期低于半满时 CC 是升级生命线。
     // R680：危机/恢复期同样降档，核心填充优先。
-    const value = sites > 0 || crisisLike ? 50 : ccLevel < 0.5 ? 90 : 50;
+    // R687：核心接近满时（free<25%）把 CC 抬到 96 — storage(95) 会永久压住 CC(90)，
+    // hauler 的效用仲裁只在 CC 被选中时才会走 getHaulFillTarget 的半满优先档。
+    // 线上 W39S55：核心 1200/1300、CC 224/2000、两只 8W upgrader 只有 0/42 能量，
+    // controller 速率 ≈3.7/拍（RCL5 是扩张 youngestMature 门的最后一格）。
+    // 核心空时仍用 90 以下的值——生存侧优先，不让升级抢 spawn 的能量。
+    const coreNearlyFull = coreCap > 0 && coreFreeRatio < 0.25;
+    const value = sites > 0 || crisisLike ? 50 : ccLevel < 0.5 ? (coreNearlyFull ? 96 : 90) : 50;
     tasks.push({ kind: "fill-cc", value, demand: ccCap * ccFreeRatio });
   }
   if (storageCap > 0 && storageFreeRatio > 0) {
