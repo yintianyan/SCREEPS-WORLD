@@ -899,7 +899,10 @@ export function evaluateDemand(
   // R684：cpuAllowsUpgrade 是 R632 的“扩张推进态才停升级”信号，不能外溢到非扩张房。
   // 线上 W39S55：storage 建成后 earlyRoom=false，CPU tight 让 allowUpgrader 恒假，
   // 房间 258K storage、0 upgrader、controller 冻结。非 expansionPush 房继续按水位升级。
-  const cpuAllowsThisRoomUpgrade = !expansionPush || cpuAllowsUpgrade;
+  // R688：满仓时 CPU 门必须让位——storage 已无处可放，停升级只会把盈余白扔掉；
+  // 升级器本来就已经存活（CPU 花在角色上），让它们工作只增加动作开销。
+  const cpuAllowsThisRoomUpgrade =
+    !expansionPush || cpuAllowsUpgrade || roomCtx.storageNearFull === true;
   const allowUpgrader =
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
     !rcl8NoUpgrade &&

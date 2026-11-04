@@ -1813,4 +1813,22 @@ describe("R684 — R632 的 CPU 门只应作用于 expansionPush 房", () => {
     );
     expect(requests.some(r => r.role === "upgrader")).toBe(false);
   });
+
+  it("R688：扩张推进房 + CPU tight + storage 满仓 ⇒ 满仓让位，仍补 upgrader", () => {
+    // 满仓时盈余无处可放；停升级只会把能量白扔。升级器本来已存活，工作只增加动作开销。
+    const { snap, creeps } = staged();
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      creeps,
+      [],
+      { ...normalCtx(0), storageNearFull: true },
+      1000,
+      10, // Σgate 过扩张预留门（真实 W38S56 为 13.08）；本用例只隔离 CPU 门
+      true,
+      false,
+    );
+    expect(requests.some(r => r.role === "upgrader")).toBe(true);
+  });
 });

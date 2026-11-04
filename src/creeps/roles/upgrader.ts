@@ -94,6 +94,16 @@ function downgradeRisk(ac: ActionContext): boolean {
  * 如果 controller container / 任何 container 有能量，upgrader 不与 spawn 竞争，
  * 不应被 energyAvailable 地板阻止。
  */
+/**
+ * R688：扩张推进房的 CPU 升级闸。满仓时强制放行 —— storage 已无处可放，
+ * 停升级只会把盈余白扔；升级器本来已存活，工作只增加动作开销。
+ * 未满仓时维持 R632 原语义：tier 差于 comfortable（tight/constrained）就停。
+ */
+export function cpuGateAllowsUpgrade(tier: string | undefined, storageNearFull: boolean): boolean {
+  if (storageNearFull) return true;
+  return tier !== "tight" && tier !== "constrained";
+}
+
 function upgraderGate(ac: ActionContext): boolean {
   const isEmergency = downgradeRisk(ac);
 
@@ -118,9 +128,11 @@ function upgraderGate(ac: ActionContext): boolean {
   if (sumGate < gateFloor) return false;
   // R632：扩张推进态且 CPU 无余量（tier 差于 comfortable）时，连“净流够”的升级也停。
   // 升级是可选的 CPU 消费者，而 G6 正是扩张门；花 CPU 升级会把门自己顶死（与 R626 同构）。
+  // R688：满仓时例外——storage 已无处可放，停升级只会把盈余白扔；升级器本来已存活，
+  // 让它们工作只增加动作开销，不会让 G6 从“有解”变成“无解”。
   if (expansionPush) {
-    const tier = Memory.kernel?.capacity?.tier;
-    if (tier === "tight" || tier === "constrained") return false;
+    const storageNearFull = Memory.rooms[ac.snapshot.roomName]?.storageNearFull === true;
+    if (!cpuGateAllowsUpgrade(Memory.kernel?.capacity?.tier, storageNearFull)) return false;
   }
 
   // RCL8 满级后升级零收益（controller.progress=0）：无降级风险时停烧。
