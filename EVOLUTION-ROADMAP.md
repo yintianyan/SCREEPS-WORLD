@@ -1218,7 +1218,7 @@
 
 ### 4.0（11-04 21:0xZ 立格，R688；上一条＝R687 格「CC 被 storage 压住」；本格**满仓时升级 CPU 门让位**·已上线）
 
-**依据（R687 同窗）**：W38S56 storage **727K/1M（72.7%）**、+≈9.6/拍 ⇒ 约 **18K 拍（≈20h）** 到 `storageFullThreshold=0.9`；同房 3 只 upgrader 因 R632 的 `expansionPush && tier∈{tight,constrained}` 门 idle。满仓后继续停升级只能把盈余白扔（升级器本来已存活，工作只增加动作开销）。
+**依据（R687 同窗）**：W38S56 storage **727K/1M（72.7%）**；660 拍实测均速 **15.5/拍**（t=84,068,375 727,814 → t=84,069,035 738,069）⇒ 到 `storageFullThreshold=0.9` 约 **10.4K 拍（≈12h）**（近窗 4.2/拍是通勤/孵化噪声，按 660 拍均值优先；触发前用同窗复算）；同房 3 只 upgrader 因 R632 的 `expansionPush && tier∈{tight,constrained}` 门 idle。满仓后继续停升级只能把盈余白扔（升级器本来已存活，工作只增加动作开销）。
 
 - 修法：`demand.ts` 的 `cpuAllowsThisRoomUpgrade` 加 `|| roomCtx.storageNearFull === true`；`upgrader.ts` 抽出纯函数 `cpuGateAllowsUpgrade(tier, storageNearFull)`（满仓一律放行，未满仓维持 tight/constrained 停）。核心填充/保级/Σgate 预留门全部不动。
 - 测试 +4（纯函数 3 例：满仓任意 tier 放行、未满仓 tight/constrained 停、comfortable/abundant/undefined 放行；demand 1 例：expansionPush+tight+满仓+Σgate=10 仍出 upgrader）。typecheck 0；unit **441 文件·5,717 例**；integration **30·239**。提交 `ea7545ea`。
