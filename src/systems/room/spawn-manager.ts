@@ -627,6 +627,15 @@ export function trySpawn(
         req.priority === 2 &&
         waitTicks >= spawnTime * 10 &&
         (economyPressure > 0.5 || noStorageYoung);
+      // R686：**预留单独挡住的 P2**。本房现金付得起整身，只是扣掉 200 预留后不够 —
+      // 这类请求在 pressure=0 的富房永远等不到 starvedP2（其条件是 pressure>0.5），
+      // 而道路优化档的 body 恰好按 `capacity-100` 裁（RCL4 hauler 16C8M=1200 / 容量 1300），
+      // 预留 200 把它永久挡在 1100 之外 ⇒ 请求只能 TTL 到期重建，人口停止补员。
+      // 线上 W39S55 实测：energyAvailable=1300=capacity、storage 259K、economyPressure=0，
+      // 队列 2 条（hauler 1200 / builder 1150）持续 degradeGateClosed，累计 18,000+ 次。
+      // 降到「保住预留后的最大 body」并立即孵化 — 这不是饥饿降级（产物仍接近整身），
+      // 而是把预留从"永远挡住"变成"确实留住"。
+      const reserveBlockedP2 = req.priority === 2 && cost <= energyBudget;
       const pumpOutage = req.role === "distributor" && distributorCount === 0;
       const allowDegrade =
         req.survival ||
@@ -635,6 +644,7 @@ export function trySpawn(
         (req.priority === 1 && bootstrapPhase) ||
         starvedP1 ||
         starvedP2 ||
+        reserveBlockedP2 ||
         pumpOutage;
       if (allowDegrade) {
         // 使用角色正确的 requiredParts，避免 hauler（无 WORK）降级时

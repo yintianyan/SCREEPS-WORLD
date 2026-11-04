@@ -1,7 +1,8 @@
 /** trySpawn 消费逻辑测试 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { trySpawn } from "../../../src/systems/room/spawn-manager";
+import { trySpawn, type SpawnRejectStats } from "../../../src/systems/room/spawn-manager";
 import { CONFIG } from "../../../src/config";
+import { bodyCost } from "../../../src/config/bodies";
 import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
 
 function mockSpawn(energyAvailable: number, capacity = 800): any {
@@ -147,6 +148,71 @@ describe("trySpawn — SP-1 recovery 能量预留", () => {
     trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 1);
 
     expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * R686：预留单独挡住的 P2 —— 线上 W39S55 的形状。
+ * RCL4 容量 1300、hauler 道路优化档 16C8M=1200、预留 200 ⇒ 有效额度 1100。
+ * economyPressure 在 storage 259K 的富房恒为 0，`starvedP2` 的 pressure>0.5 条件
+ * 按构造不可达 ⇒ 请求只能 TTL 到期重建（累计 degradeGateClosed 18,000+）。
+ * 正确行为不是等饥饿窗口，而是立刻降到「留住预留后的最大 body」。
+ */
+describe("R686 预留单独挡住的 P2", () => {
+  const fullHauler = [...Array(16).fill("carry"), ...Array(8).fill("move")] as BodyPartConstant[]; // 1200
+  const rejects = () =>
+    (Memory.rooms.W7N4 as (RoomMemory & { spawnRejects?: SpawnRejectStats }) | undefined)
+      ?.spawnRejects;
+
+  it("现金够整身（cost ≤ energyBudget）而只被预留挡住 ⇒ 立即降级孵化", () => {
+    const spawn = mockSpawn(1300, 1300);
+    const queue = [
+      makeRequest({ key: "hauler:W7N4:0", role: "hauler", priority: 2, body: fullHauler }),
+    ];
+
+    trySpawn(
+      mockSnapshot({ spawns: [spawn], energyCapacityAvailable: 1300 }),
+      queue,
+      3,
+      1,
+      true, // 条件 3：采集者在替换窗口 ⇒ reserve=200
+    );
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+    const body = spawn.spawnCreep.mock.calls[0]![0] as BodyPartConstant[];
+    expect(bodyCost(body)).toBe(1100);
+    expect(body.filter(p => p === "carry")).toHaveLength(14);
+    expect(body.filter(p => p === "move")).toHaveLength(8); // MOVE 配比守卫不被降级打破
+    expect(queue).toHaveLength(0);
+    expect(rejects()?.reserveOnly).toBe(1);
+    expect(rejects()?.degradeGateClosed ?? 0).toBe(0);
+  });
+
+  it("控制组：没有预留时同一请求出整身 1200（不为修死锁永久缩小 body）", () => {
+    const spawn = mockSpawn(1300, 1300);
+    const queue = [
+      makeRequest({ key: "hauler:W7N4:0", role: "hauler", priority: 2, body: fullHauler }),
+    ];
+
+    trySpawn(mockSnapshot({ spawns: [spawn], energyCapacityAvailable: 1300 }), queue, 3, 1, false);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+    const body = spawn.spawnCreep.mock.calls[0]![0] as BodyPartConstant[];
+    expect(bodyCost(body)).toBe(1200);
+  });
+
+  it("反例：未扣预留的预算都不够（cost > energyBudget）⇒ 仍等能量，不借道降级", () => {
+    const spawn = mockSpawn(900, 1300);
+    const queue = [
+      makeRequest({ key: "hauler:W7N4:0", role: "hauler", priority: 2, body: fullHauler }),
+    ];
+
+    trySpawn(mockSnapshot({ spawns: [spawn], energyCapacityAvailable: 1300 }), queue, 3, 1, true);
+
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(queue).toHaveLength(1);
+    expect(rejects()?.budget).toBe(1);
+    expect(rejects()?.degradeGateClosed).toBe(1);
   });
 });
 
