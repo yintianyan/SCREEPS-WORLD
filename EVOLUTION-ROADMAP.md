@@ -1182,6 +1182,17 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-05 09:1xZ 立格，R696；上一条＝R695「G6 唯一门」；本格**扩张执行验收预写**）
+
+**触发**：`capacity.tier ≤ comfortable`（当前 `cpu10=14.4`、累计 16.2/constrained；G6 是唯一失败门）。G0 已清、`expansionAllowed=true`、计划 `W39S56@83406284` EVALUATED、cost 61.3K、能量预算 419K 足够。
+
+- **E826**：readiness 变 READY 后 **600 拍内**，计划状态离开 EVALUATED（READY/APPROVED/EXECUTING），dashboard `Blocked=none`。
+- **E827**：claim 发生：Memory 出现 W39S56 房（RCL1、sponsor=W38S56），同拍 `expansionAllowed=true`；claim 事件/op 可读。
+- **E828**：新房 bootstrap：spawn 落位、harvester/worker 请求出现、phase 进 recovery；不出现 R686/R679 类的 P2 degrade 死锁（远矿/预留闸对新房按低容量规则）。
+- **E829**：扩张后 CPU 成熟窗 ≤20、bucket 流失 ≤1/拍（按 14.4+3–5 估 17.4–19.4）；若 >20 或持续 constrained，按 CPU Unlock/回退属人决策处理。
+- **E830**：claim 期间 G6 不翻面；若 tier 在 600 拍内跌回 constrained，记录并在下次评估考虑暂停计划，不硬冲。
+- 纪律：G6 属人授权前**不降阈值、不买市场**；若 CPU 自然降到 comfortable，则按 E826–E830 自动执行，无需额外授权。
+
 ### 4.0（11-05 08:4xZ 立格，R695 观测/决策；上一条＝R694「RCL5/G0 清」；本格**G6 是唯一门，安全清废不足**）
 
 **CPU 现状（成熟窗 1329 拍）**：total **16.14**、traffic **4.42**、layout-planner 0.55（RCL5 换档重算，非稳态）、roles 6.46（harvester 1.71／remoteHarvester 1.36／distributor 0.79／remoteHauler 0.65／upgrader 0.48）、unexplained 1.67。comfortable 需 ≤12 ⇒ 缺口 **4.1**。
