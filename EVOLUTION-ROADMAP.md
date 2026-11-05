@@ -1182,6 +1182,15 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-05 08:1xZ 立格，R694；上一条＝R693 格「保级带」；本格**W39S55 达 RCL5，扩张只剩 G6**）
+
+**里程碑**：W39S55 **RCL5**（prog 6,444 / 1,215,000，ttd 上限 80K）；2 只升级器 work、pop 11、storage 250,099。`youngestMature`（三房 RCL 8/7/5）通过。
+
+- 扩张仪表现读：`kernel.strategy.expansionAllowed=true`、`expansionDashboard.Blocked=**G6**`、`failedGates=["G6: CPU tier(v=tight|tier ≤ comfortable)"]`、Candidates 9(Q3/R6)、**Plans=1 active（W39S56 EVALUATED）** ⇒ G0 已清，G4/G0/预算都不再挡，唯一剩余门是 CPU。
+- 保级终判（R693）：W37S58 RCL8 ttd **29,553 / risk=false**（到 30K 退出线后升级器 idle）；W38S56 RCL7 ttd **21,974 / risk=false**（到 22.5K 退出）；两房均无降级事件 ⇒ **E823/E824/E825 全 PASS**。
+- CPU 成熟窗 **15.8 / tier=tight**，到 comfortable（≤12）差 **3.8**；traffic 已证 API-bound、roles 是收入侧、snapshots 曾试过回滚 ⇒ **没有安全的 3.8 微优**。扩张只剩两条属人路径：CPU Unlock（价 vs credits）或接受等待/重构活动。
+- W38S56 storage **854,254（85.4%）**，距 R688 的 90%（900K）约 45.7K；增速不定，触发前按 ≥1,000 拍窗复算。
+
 ### 4.0（11-05 立格，R693；上一条＝R692 格「2C body」；本格**保级带按控制器上限缩放**）
 
 **现场**：W37S58 RCL8、本服 `CONTROLLER_DOWNGRADE[8]=200,000`、ttd **12,525**，而 `controllerDowngradeRisk=false`——固定进入线 10,000 只占上限 5%，等触发只剩 2.5K 拍；W38S56 RCL7 ttd 14,339/150K（9.6%）同样贴着旧线。
