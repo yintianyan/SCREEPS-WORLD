@@ -23,6 +23,8 @@
 | 工业 | factory 等级回退已上线；商品需求 ROI 闸已上线；lab 经济线未稳定产出 | 部分已验证 |
 | 自我诊断 | 期望自检 E1–E9 + 定长事件环 + dashboard/peek 工具链；**恢复烧穿第一次留下可查痕迹**（10-02 04:5xZ `Memory.kernel.escalations` 首条真实条目 `W38S56/colony/population_rebuild, attempts=2, terminal=true`，环内同段 `RecoveryEscalation=2`）⇒ #59 的"等一次真实烧穿"结束；`manual_intervention` 仍是死枚举（无生产者） | 已集成；E5 本轮修复（见 §4）；升级侧响应惰性仍未判效。**10-02 08:0xZ 三点更新**： ①#54 的五档拒因**今天被真正用来定罪**（差分 +1/拍 ⇒ 逐拍锁定被挡请求，最终指到 body 成本 1650 > 容量 1300）； 第 6 档 `degradeGateClosed`（#64）已实施待上线，上线后"没被允许降级"与"付不起"才可分读； ②幼房升级道解冻后 `economy.bk` 与 `controllerProgressChangedAt` 同步走（+8.0/拍），**"发展静默失败"这一类第一次有可差分的仪器链**； ③**验证侧缺口**：e2e 长 soak 不可复现（#62 孪生 FAIL，第二随机源 = creep 名后缀进 hash 与队列键） ⇒ 在孪生 PASS 之前，soak 场景的红**不得当因果证据**（这限制了 E2E-016 一类判定的升级） |
 
+**11-06 R702 现状补（不覆盖上表旧值）**：三房 W37S58/W38S56/W39S55（RCL 8/7/5）全部 `state=normal`、`controllerDowngradeRisk=false`、`lostRooms={}`；`capacity.tier=tight@84,091,224`、`usage=15.51`（limit 20，comfortable 需 ≤12）；扩张 `failedGates=G4+G6`——**G4 在 5 附近翻面**（ΣgateNetFlow 5.069→4.802→5.094，dashboard 84,095,484 曾只剩 G6、84,095,784 回到 `G4 v=4.8`），账本 `ws` 残差 1.1–1.3/t 与过线幅度同量级 ⇒ G4 不可判；G6 是唯一稳定红门且属人（采购/阈值/砍营收）。三房 50 拍窗 `nf` 合计由 +18.13 回落到 −3.57（事件窗 `spawned:4750` 驱动），`gateNetFlow` 为 α=0.02/100 拍慢 EMA，会继续回摆。
+
 ## 2. 模块参与矩阵（39 个已注册 System 的参与状态）
 
 - **确认在场且生效**（线上读数能证明其在决策路径上）：room-state、spawn-manager、demand、assignment-service、
@@ -51,7 +53,7 @@
 
 ## 3. 优先级队列（数周 → 数月）
 
-> **现行（11-05 R699 现读）**：上一轮唯一的上线阻塞 **#201 已解除**——bundle 811,577B ≤ 819,200B、CI Upload 已执行、live sha `0bf73b74ab2d`。当前目标链＝「等部署税窗成熟（≥500 拍）→ 若 G6 转 comfortable 则按 E826–E830 做扩张执行验收」；下面 v3–v6 队列的前提（待推批、部署授权）均已过期，只作状态出处。
+> **现行（11-06 R702 现读）**：上线通道**#201 已解除**（bundle 811,577B、live sha `0bf73b74ab2d`）；R617 限定版 2,000 拍验收已判 **FAIL（单独不足，拖累＝W39S55）**；G4 输入审计判 **UNKNOWN**——`nf` 方向可信（两房物理闭合、非单向），但 Σdrift/拍 1.1–1.3、G4 在 5 附近 100 拍级翻面（**不可判，不是稳定绿**）。当前扩张门集＝G4（噪声带）＋G6（稳定红、`tier=tight`、缺口 ≈3.5、属人），**E826–E830 未触发**。下一轮＝G4 慢 EMA 穿越的持续性判决（观测型）。下面 v3–v6 队列的前提（待推批、部署授权）均已过期，只作状态出处。
 
 > **现行排序＝§3.0-v4（2026-10-09 11:2xZ，在文件末尾）**：协议规定"下一轮主目标取本节第一小节"，而下面这份 §3.0-v3 的前提已逐条过期（姿态由 war 变 fortify、失败门由 G0+G6 变 G4+G6、`#94` 从待推里摘出、部署通道新起确认闸门）。v3 正文保留仅作状态出处。旧指针（v3，2026-10-07 22:5xZ）：协议规定"下一轮主目标取本节第一小节"，
 > 而下面这份 §3.0-v2 的**第 ①/②/③ 条前提都已变**——G2/G3/G5 已定案为同一枚 `economicClass` 分类位（R415-417）、
@@ -1175,6 +1177,22 @@
   · **★R275 #8 的读法边界（一把尺被证实是 heap 镜像）**＝`telemetry-collector.ts:499-501` 每次 flush 用 `(Memory.kernel.stats).trade = {...g.tradeLedger}` 整体覆盖，而 heap 在重启时清零 ⇒ 本轮（boot 后 700 拍内）现读 `publishedAt=0／demandsPublished=0／demandsComputed=0／buyNoMatch=0／runs=3／lastTick=529,692`，而 R273 同键读到的是 `publishedAt 527,981／demandsPublished 2／buyNoMatch 16` ⇒ **那三枚历史值已从这把尺里消失**，#8 的「没花」从此只能按「本次 boot 内」引用；跨 boot 的发布与撮合次数要另找持久载体（`Memory.kernel.escalations` 那一类才持久，本枚现读三条逐字未动）。
 
 ## 4. 当前迭代（最近三轮）
+
+### 4.0（11-06 05:5xZ 立格，R702；上一条＝R701「R617 限定版 FAIL」；本格**G4 输入可信度审计＝UNKNOWN：背离被边界解释（非单向，整段边际 0.5–1.8/t）、但 Σdrift/拍 1.1–1.3 未达 ≤1；并现读 G4 在 5 附近 100 拍级翻面（5.07→4.80→5.09），不能当稳健扩张条件**）
+
+**唯一主目标**：承接 R701——判 `nf`（G4/`gateNetFlow` 唯一输入）与物理存量、`ws` 残差的背离是可解释的端点边界还是单向漏记。不改 src、不部署、不动阈值。
+
+- **四发同发（间隔 100–150 拍，t=84,095,47x→84,095,82x）**：三房 `ws`/`nf`/`dr` 全量见下；三房 Σdrift/拍 视界平均 −2.40→−2.02→−1.10→**−1.14**（W37S58）、+3.07→+2.24→+2.19→**−1.20**（W38S56）、+2.12→+1.28→+1.28→**+1.29**（W39S55）。
+- **判据① 单窗恒等式 ⇒ PASS（12/12 窗）**：每窗 `dr = pl[1]−pl[0] − (income−consumption) − pl[4] + (pl[3]−pl[2])` 逐字闭合（例：W38S56 s4 `−3104 −(−3314) −0 +(−2400) = −2190`，`dr=−2190`）。账本算术无错，`dr` 是端点残差而非计算错误。
+- **判据② 非单向（边界解释）⇒ 成立**：整段（s1→s4，350–400 拍）边际 Σdrift/拍＝**+1.79 / +0.48 / −1.06**，无一 ≥3；相邻发之间符号多次翻转（W37S58 −0.25→+6.66→−1.44；W38S56 +0.02→+1.89→−15.9；W39S55 −4.09→+1.27→+1.49）。单窗大漂移与已知边界项同拍对齐：W38S56 s4 `dr=−2190` 中 `Δother=−2400`（工业池）占绝对主体；W37S58 s3 `dr=−1244` 同窗 `Δcarry=−1385`；W37S58 s3 的 `bk` 是巨型事件窗（`spawned:4300`＋`exported:1650`、flow −88.6/t）。
+- **判据③ 物理面独立对照 ⇒ 两房闭合、核心房未闭合**：用 `phase.reserve`（energyAvailable+containers+storage+carry）＋`pl` 的 other 项：W38S56 s1→s4 `ΔΣflow=+3,031` 对 `Δreserve+Δother=+5,396−2,400=+2,996`（差 1.2%）；W39S55 `ΔΣflow=−611` 对 `Δreserve=−560`（差 8%）；核心房 `ΔΣflow=−3,013` 对 `Δreserve=−46`，差 ≈2,967 落在 reserve 未覆盖的 terminal/link/tower/loose，**未证**。⇒ `nf` 的方向与总量在另两房上与物理同号同量级，"仪器坏了"不成立。
+- **判据④ Σdrift/拍 ≤1 ⇒ 未达**：s4 视界平均 1.14 / 1.20 / 1.29。占 Σflow 的比例 12% / 11% / 25%，远高于 R142 的 0.8–2.4%（R142 分母 Σflow 为 −18.2/t；现在 Σflow 只有 ±5–18/t 且视界更短 700–1,350 拍）。
+- **判决＝UNKNOWN**：边界解释成立 ⇒ 不判 FAIL（无"持续 ≥3/t"）；Σdrift/拍 >1 ⇒ 不判 PASS。**不是"仪器坏了"，也不是"账已对齐"。**
+- **本格最重要的现读变化：G4 在门槛噪声带内翻面**。`ΣgateNetFlow`＝**5.069**@84,095,457（dashboard 84,095,484 `failedGates` 只剩 G6）→ **4.802**@84,095,757（dashboard 84,095,784 逐字 `G4: net flow(v=4.8|netFlow ≥ 5)`）→ **5.094**@读点 84,095,8xx。100 拍级跨线两次 ⇒ R701 的"G4 仍红"与 R700 的"G4 逼近 5"都应改写为**G4 不可判**：过线幅度 ±0.2 与本轮量到的账本残差 1.1–1.3/t 同量级。`readySince=0t` 不是 G4 抖动造成——R624 已实现对称迟滞（`downgradeTicks=200`），而 G6 持续红 >200 拍按构造清空。
+- **G6 仍稳定红**：`capacity.inputs` `usage=15.51`、`avg10=15.4`、`rateTotal=15.51`、`limit=20`、`bucket=10,000`、`tier=tight@84,091,224` ⇒ comfortable(≤12) 缺口 ≈3.5。E826–E830 未触发。
+- **nf 的短窗波动极大**：s1 三房合计 +18.13 → s4 **−3.57**（W37S58 −0.18／W38S56 −4.67／W39S55 +1.28）。主因是 W38S56 的事件窗（`spawned:4750`、`Δother−2,400`、flow −66.3/t）。`gateNetFlow` 是 α=0.02/100 拍的慢 EMA ⇒ R701→R702 的 Σgate 1.785→5.07 是慢 EMA 向高 nf 收敛，不是账本突变；但同一机制会让它继续回摆。
+- **验证/发布**：零 src、零测试、零部署；live sha 沿用 `0bf73b74ab2d`（未重跑 check-code、未 rebuild）。
+- **下一轮唯一主目标**：**G4 慢 EMA 穿越的持续性判决（观测型）**——以 ≥1,000 拍窗口判 Σgate 是否站稳 ≥5（dashboard 连续无 G4）或回落到 <4.5；同时确认 G6 仍是唯一稳定红门。PASS＝窗内 dashboard 无 G4 且 Σgate ≥5；FAIL＝Σgate <4.5 且 G4 常驻；UNKNOWN＝窗内跨越不定。不改阈值、不部署、不动 src。
 
 ### 4.0（11-05 19:3xZ 立格，R701；上一条＝R700「部署税窗判决」；本格**R617 限定版 2,000 拍验收＝FAIL：Σgate 1.785、G4 仍在门集，「限定版单独不足」已定量到幼房**）
 
@@ -15659,3 +15677,5 @@ isReady = extendedReadiness.allPassed && plannerInput.readiness.readiness !== "N
 **2026-11-05｜R700｜部署税窗判决＋本批回归检查**：boot≈84,090,908 后 1,241 拍窗成熟；`capacity.tier` 由 `constrained@84,090,909` 回 **`tight@84,091,224`**（部署税瞬态 ≈315 拍，E-17 否证子项解除）；`usage=15.23`/limit 20 ⇒ G6 仍红（需 ≤12，缺口 3.23）；`failedGates=G4+G6`、`ΣgateNetFlow=3.947`（dashboard G4 v=4.0 为 planner 趟值）、`Readiness=NOT_READY`、W39S56 EVALUATED；E826–E830 未触发。三房 normal/risk=false、spawnQueue=0、pop 45、errors 0、lastError 仍部署前、lostRooms={}、无部署后防御事件（环内 EnemyInvasion/TowerVolley/WarPlanCreated 均在 boot 前 84,089,4xx，旧码）⇒ 本批窗口内未见回归（非 soak）。零 src/零部署；live sha `0bf73b74ab2d` 与本地 dist 一致。#200 仍不可线上直接复读（无 RCL<4 房）。
 
 **2026-11-05｜R701｜R617 限定版 2,000 拍验收＝FAIL（观测型，零 src/零部署）**：boot ≤84,090,868（`capacity.inputs.at 84,093,809 − rateWindowTicks 2,941` 上界）、读点 84,093,815 ⇒ 窗已越 ≥947 拍。`ΣgateNetFlow=1.785`（W37S58 4.906／W38S56 3.557／W39S55 −6.678；dashboard G4 `v=1.7` 两读收敛）、`failedGates=G4+G6`、`Readiness=NOT_READY`、计划 W39S56 EVALUATED；Σ 由 R700 的 3.947 反向下降 ⇒ **限定版单独不足**。行为级：W38S56/W37S58 末窗 `bk` 无 `upgraded`（暂停生效）、W39S55 `bk` 有 `upgraded:610`。拖累定量：W39S55 `nf=−26.6/t`、storage 1,660 拍 −25,986；末窗 50 拍＝收入 1,570／消费 2,810（spawned 1,200＋upgraded 610＋**towerSpent 1,000 全为塔修墙＝20/t、两塔满速**）⇒ 塔修墙是最大可控项（#197），升级其次。同窗 W37S58 遭一次 NPC 进犯（84,093,212–225、6 发 TowerVolley、`EnemyCleared`、`warPlan DEFEND spawned 0`），`posture=war/war-sustain` 是进犯前旧姿态、`expansionAllowed=true`（#198-B）⇒ G0 不在门集。三房 RCL 8/7/5、normal、`controllerDowngradeRisk=false`、`lostRooms={}` ⇒ 无 RCL/降级回归。**新登记疑点（下一轮）**：`nf` 与物理存量背离——W38S56 `nf=+13.6/t` 而末窗 flow＝Δtracked(168)−dr(855)＝−687（−13.7/t）、`ws` 物理 −0.81/t；核心房 `ws=[5658,1904,1050]`（Σdrift 是 Σflow 的 3 倍，R142 同口径 0.8%）。#196 状态更新为三选一（扩闸到幼房／先压 #197 塔修墙／维持现状），#197 记为 G4 最大单项。
+
+**2026-11-06｜R702｜G4 输入可信度审计＝UNKNOWN（观测型，零 src/零部署）**：四发同发（t=84,095,47x→84,095,82x）。①单窗恒等式 12/12 逐字闭合（`dr = Δtracked − flow − looseΔ + Δother`），账本算术无错。②非单向成立：整段边际 Σdrift/拍 +1.79／+0.48／−1.06，相邻发符号多次翻转；单窗大漂移与已知边界项同拍——W38S56 s4 `dr=−2190` 中 `Δother=−2400`（工业池）、W37S58 s3 `dr=−1244` 同窗 `Δcarry=−1385`、且 s3 是 `spawned:4300`＋`exported:1650` 的事件窗。③物理对照：W38S56 `ΔΣflow=+3,031` 对 `Δ(reserve+other)=+2,996`（差 1.2%）、W39S55 `−611` 对 `−560`（差 8%）；核心房 `−3,013` 对 `−46`（差 ≈2,967 落在 reserve 未覆盖池，未证）⇒ `nf` 方向与总量可信。④但 Σdrift/拍 视界平均 1.14／1.20／1.29 >1 ⇒ 未达 PASS；无"持续 ≥3/t" ⇒ 不判 FAIL。**现读变化**：`ΣgateNetFlow` 5.069@84,095,457（dashboard 只剩 G6）→ 4.802@84,095,757（dashboard `G4 v=4.8`）→ 5.094@读点 ⇒ **G4 在门槛噪声带内 100 拍级翻面，不可判**（过线幅度 ±0.2 ≈ 账本残差 1.1–1.3/t）；`readySince=0t` 由 G6 持续红 >`downgradeTicks=200` 造成（R624 对称迟滞），非 G4 抖动。G6 稳定红：`usage=15.51`、`tier=tight@84,091,224`、缺口 ≈3.5。三房 `nf` 合计 +18.13→−3.57（W38S56 事件窗 `spawned:4750`、flow −66.3/t）。下一轮＝G4 慢 EMA 穿越的持续性判决（≥1,000 拍窗：站稳 ≥5 或回落 <4.5）。
