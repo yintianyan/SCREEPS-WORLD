@@ -89,7 +89,7 @@
 - **实现状态**：`LIVE_VALIDATED`（含**两次**整圈复证）
 - **机制依据**：RCL8 设计上不常驻 upgrader；`[10000, >15000]` 迟滞带自动救援。
 - **线上验证**：#52 第一次预测差 17 拍命中；**第二次 flag true@83396584 / false@83396784，预测差 39 拍**（`core-downgrade-band.log` ENGAGE-PASS）。
-- **已知缺陷**：#93 上线前**算不出"离下一级还差多少"**（`progressTotal` 不落盘）；`upgraded` 桶是**能量**、进度是**进度**，比值 ≈2:1，不可互相换算定罪。
+- **已知缺陷**：#93 上线前**算不出"离下一级还差多少"**（`progressTotal` 不落盘）；`upgraded` 桶是**能量**、进度是**进度**，比值 ≈2:1，不可互相换算定罪。**#200（11-05 R698 已修，待部署复读）**：RCL1-3 无 storage 的早期房在负 Σ`gateNetFlow` 时被 `upgraderGate` 整条冻结（需求侧已放行、角色闸空转）；canary 复现 controller progress 卡 50 达 3,500 拍，修复后同 seed rcl2 采样 16→83、9/9。豁免口径＝`storage===undefined && rcl<4`，成熟房与扩张推进房不变。
 - **优先级**：P0（幼房 RCL5 是当前扩张的长期闸）。
 
 ## 6. 调优引擎与参数自调（`systems/empire/tuning-engine.ts`）

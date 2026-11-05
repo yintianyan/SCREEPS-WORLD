@@ -118,3 +118,10 @@
 1–4 同上（E-09 observe／E-10 #113 的违例转空沿／#111 完整价格／#119 safeMode 三列）。
 5. **§3.4 残留资产**：`stats.strayAssets` 出现，并顺带确认 W37S55 那两只无主 spawn（＝#118 的免费复证）。
 6. **#131（本轮新增）**：`stats.remainsLoot` 与 `stats.remainsBlind` **出现**＝`07b38f92` 真上线；**正面读数形状**＝阈值档 `belowThreshold>0 且 resolved=0`、兜底档（键 `"0"`）`resolved>0`；若两档 `resolved` 全 0 而 `seen>0` ⇒ 注释里"链尾兜底"不成立，排序问题升级为真问题。`remainsBlind.blindFiltered/snapshotTicks` 给出盲点率，>0 才值得为"选中后落空"单独归因。
+
+---
+
+## E-16 · R2 canary 红因：测试窗口还是早期房升级冻结（R697→R698，11-05）
+- **预期（R697 登记，写死）**：canary 的 `rcl2` 采样 16<30 是"房间更快离开 RCL2"导致的测试窗口假设失效。**实测**：`/tmp/rcl2-canary.json`（R697 产物）与 `E2E_RANDOM_SEED=42` 第二发**逐字同形**：`rcl1=88/rcl2=16`、RCL2 首次 4,402、全程未到 RCL3、controller progress 552→4,052 卡 50。**裁决：否证**（更晚到达，不是更快离开）。
+- **预期（R698 诊断，写死）**：若冻结因是 `ΣgateNetFlow<0` 的角色闸，则 upgrader 的 work/idle 应与 gate 符号逐拍相关；修复（早期房豁免）后同 seed canary 必须 `rcl2≥30`。**实测**：t=600–4,000 `gate<0` ⇒ upgrader 全 idle（ea=300、spawn 队列空），t=4,100 转正后 300 拍 progress 50→150；修复后同 seed `rcl1=21/rcl2=83`、RCL2@1,052、canary 9/9。**裁决：命中**（立 #200 并修复）。
+- **口径边界**：两条世界线的 `rcl>=3` 采样均为 0（5,200 拍内未到 RCL3），故本实验只裁 RCL1→RCL2 段；RCL2→RCL3 的速率未测。

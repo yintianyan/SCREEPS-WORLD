@@ -35,10 +35,11 @@ describe("upgrader — work 模式", () => {
     expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 
-  it("帝国净流之和为负 → 暂停升级（R594 失血闸）", () => {
+  it("帝国净流之和为负 → 成熟房暂停升级（R594 失血闸）", () => {
     (globalThis as any).Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
     const controller = mockController();
-    const snap = mockSnapshot({ controller });
+    const storage = mockStructure("storage", { id: "st1", energy: 5000, capacity: 100000 });
+    const snap = mockSnapshot({ controller, rcl: 4, storage });
     const creep = mockCreep({
       name: "upgrader_1",
       role: "upgrader",
@@ -50,6 +51,23 @@ describe("upgrader — work 模式", () => {
     upgraderRole.run(creep, mockContext(snap));
 
     expect(creep.upgradeController).not.toHaveBeenCalled();
+  });
+
+  it("帝国净流之和为负 → 早期房（无 storage）仍升级", () => {
+    (globalThis as any).Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, rcl: 3, storage: undefined });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
+
+    upgraderRole.run(creep, mockContext(snap));
+
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 
   it("帝国净流之和为正 → 正常升级（控制组）", () => {

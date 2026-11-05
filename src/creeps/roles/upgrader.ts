@@ -125,7 +125,10 @@ function upgraderGate(ac: ActionContext): boolean {
     ac.snapshot.rcl >= 7 &&
     (Memory.kernel?.expansionPlans ?? []).some(p => isExpansionPushPlan(p.st));
   const gateFloor = expansionPush ? CONFIG.economy.upgradeReserveNetFlow : 0;
-  if (sumGate < gateFloor) return false;
+  // 早期房（RCL1-3 无 storage）的负净流就是"在建自己"：需求侧已按 earlyRoom 放行，
+  // 角色闸若再按帝国净流掐断，只会白付一只空转的升级器并把控制器冻在低 RCL。
+  const earlyRoom = ac.snapshot.storage === undefined && ac.snapshot.rcl < 4;
+  if (!earlyRoom && sumGate < gateFloor) return false;
   // R632：扩张推进态且 CPU 无余量（tier 差于 comfortable）时，连“净流够”的升级也停。
   // 升级是可选的 CPU 消费者，而 G6 正是扩张门；花 CPU 升级会把门自己顶死（与 R626 同构）。
   // R688：满仓时例外——storage 已无处可放，停升级只会把盈余白扔；升级器本来已存活，
