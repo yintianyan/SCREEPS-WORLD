@@ -1182,6 +1182,14 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-05 08:4xZ 立格，R695 观测/决策；上一条＝R694「RCL5/G0 清」；本格**G6 是唯一门，安全清废不足**）
+
+**CPU 现状（成熟窗 1329 拍）**：total **16.14**、traffic **4.42**、layout-planner 0.55（RCL5 换档重算，非稳态）、roles 6.46（harvester 1.71／remoteHarvester 1.36／distributor 0.79／remoteHauler 0.65／upgrader 0.48）、unexplained 1.67。comfortable 需 ≤12 ⇒ 缺口 **4.1**。
+
+- **idle 普查**：50 只里 11 只 idle，但安全可省的只有 ~0.2–0.7：W37S58 的 3 只 distributor 正好等于 maxCount=3（其中一只 TTL 67 将自然死）；W38S56/W37S58 的 idle upgrader 是 R693 保级/R688 满仓要用的，不可收；W38S56 mineralMiner 的矿量现读 **Z=13,388**（不是采空）；2 只 remoteDefender 属战争计划，回收会与 planner 拉锯。⇒ **不为一枚非绑定门做回收跑步机**。
+- **扩张就绪面**：G0 已清；计划 `W39S56@83406284` 仍 **EVALUATED**（created 83,406,284、ua 84,084,684、cost 61.3K、ROI 4.08、风险 MEDIUM）；预算 419K 能量 > 61.3K；**唯一失败门 G6**。也就是说：一旦 CPU tier ≤ comfortable，计划在 `upgradeTicks 500` 后即可晋升，无其他暗门。
+- **决策**：已把四条路（清废+等／G6 放宽到 tight／CPU Unlock（credits 现读 **150.4M**，旧价 378M 待核）／砍远矿）交给用户；用户未选 ⇒ 按推荐默认 **不动阈值/市场/收入，继续等**。R688 触发（storage 90%，现 85.4%）会增加 W38S56 升级器 CPU，反而推远 G6——触发时若 G6 仍是唯一门，需要重新权衡“满仓消能 vs 扩张 CPU”。
+
 ### 4.0（11-05 08:1xZ 立格，R694；上一条＝R693 格「保级带」；本格**W39S55 达 RCL5，扩张只剩 G6**）
 
 **里程碑**：W39S55 **RCL5**（prog 6,444 / 1,215,000，ttd 上限 80K）；2 只升级器 work、pop 11、storage 250,099。`youngestMature`（三房 RCL 8/7/5）通过。
