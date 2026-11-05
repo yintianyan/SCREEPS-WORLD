@@ -1182,6 +1182,15 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-05 立格，R693；上一条＝R692 格「2C body」；本格**保级带按控制器上限缩放**）
+
+**现场**：W37S58 RCL8、本服 `CONTROLLER_DOWNGRADE[8]=200,000`、ttd **12,525**，而 `controllerDowngradeRisk=false`——固定进入线 10,000 只占上限 5%，等触发只剩 2.5K 拍；W38S56 RCL7 ttd 14,339/150K（9.6%）同样贴着旧线。
+
+- 修法：新增 `scaledControllerRiskBand`，进入/退出取 `max(原阈值, cap×10%/15%)`，再走原有 `downgradeRiskBand` 压缩。RCL8→**20k/30k**、RCL7→**15k/22.5k**、RCL6→12k/18k；RCL≤5 与 RCL2 的 6666/10k 压缩逐字不变。room-state 的风险标志改用它；claimSecure 的旧函数不动。
+- 测试：`downgrade-risk` 13 例（含 RCL7/8 放大、RCL≤5 不变、RCL2 压缩、cap 缺失保守），`room-state` 的 RCL6 带更新为 12k/18k；typecheck 0、unit **441 文件·5,723 例**、integration **30·239**。提交 `ac7b9e25`，部署 `37437e204936`。
+- **早期判效**：W37S58 `risk=true` 且已孵出升级器（TTL 1,431，acquire 取能中）；W38S56 `risk=true`，**ttd 14,866→16,283**（两只在岗升级器把缓冲拉回 15K 以上）。代价：CPU 读数 `usage=12.5` 但 `rateWindowTicks=29`（部署尾税），窗成熟后再判。
+- 预写：**E823** W37S58 ttd 在 500 拍内止跌并回升（升级器接上后），risk 保持到 ≥30k 才解除；**E824** W38S56 ttd 达 ≥22.5k 后 risk 清除；**E825** CPU 窗成熟后 usage ≤16（若持续 constrained，需评估是否把高等级保级升级器与 R632 的 CPU 门重新排产，而不是回退阈值）。
+
 ### 4.0（11-04 21:5xZ 立格，R692；上一条＝R691 格「快路径负结果」；本格**RCL4 升级器改 8W2C2M**）
 
 **重开理由**：R690 当时以「RCL5 不是扩张充分条件」暂缓；R691 证明 traffic 是 **move 动作量**成本 ⇒ 升级器每 6 拍往返一次既拖 controller 速率、也产生 move 调用。2C 把工作窗拉到 12.5 拍，同时服务 RCL5 与 G6 方向。
