@@ -9,7 +9,7 @@ import {
   type PhaseState,
 } from "../../domain/economy/phase";
 import { computeEnergyPrice } from "../../domain/economy/energy-price";
-import { downgradeRiskBand } from "../../domain/economy/downgrade-risk";
+import { scaledControllerRiskBand } from "../../domain/economy/downgrade-risk";
 import { hasSurvivalRequest } from "../../domain/spawn/queue";
 import { EventKind, recordEvent } from "../../kernel/event-log";
 import { globalCache } from "../../kernel/global-cache";
@@ -337,11 +337,13 @@ export const roomStateSystem: System = {
       // ⚠️迟滞带必须先折进本级值域（levelCapTicks）：引擎的 CONTROLLER_DOWNGRADE 表非单调
       // （RCL2 上限 10000 < RCL1/RCL3 的 20000），固定退出线 15000/20000 在 RCL2 按构造不可达
       // ⇒ 每个 RCL2 房间永久「保级态」（线上实证 W38S56：ttd 恒等于上限，两个标志恒真）。
+      // RCL7-8 反向：上限 150k/200k，固定 10k/15k 只有 5–10% ⇒ 按本级 10%/15% 放大
+      // （W37S58 RCL8 ttd=12,525 曾仍 risk=false，用户指出阈值太低）。
       const controller = snapshot.controller;
       const levelCapTicks = CONTROLLER_DOWNGRADE[snapshot.rcl];
       if (controller != null && controller.my) {
         const ttd = controller.ticksToDowngrade;
-        const band = downgradeRiskBand(
+        const band = scaledControllerRiskBand(
           levelCapTicks,
           CONFIG.economy.controllerDowngradeThreshold,
           CONFIG.economy.controllerDowngradeExitThreshold,

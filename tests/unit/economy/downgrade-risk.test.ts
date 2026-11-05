@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveControllerDowngradeRisk,
   downgradeRiskBand,
+  scaledControllerRiskBand,
 } from "../../../src/domain/economy/downgrade-risk";
 import { CONFIG } from "../../../src/config";
 
@@ -79,6 +80,30 @@ describe("downgradeRiskBand — 退出线高于本级上限时按 cap/exit 等�
   it("cap 缺失（未知等级 / 常量未注入）→ 保守退回原始阈值，不放宽护栏", () => {
     expect(downgradeRiskBand(undefined, 15000, 20000)).toEqual({ enter: 15000, exit: 20000 });
     expect(downgradeRiskBand(0, 15000, 20000)).toEqual({ enter: 15000, exit: 20000 });
+  });
+
+  it("RCL7-8：保级带按本级 10%/15% 放大（固定 10k/15k 在 RCL8 只有 5%）", () => {
+    expect(scaledControllerRiskBand(200000, 10000, 15000)).toEqual({ enter: 20000, exit: 30000 });
+    expect(scaledControllerRiskBand(150000, 10000, 15000)).toEqual({ enter: 15000, exit: 22500 });
+    expect(scaledControllerRiskBand(120000, 10000, 15000)).toEqual({ enter: 12000, exit: 18000 });
+  });
+
+  it("RCL≤5：放大后仍回到原 10k/15k，行为逐字不变", () => {
+    expect(scaledControllerRiskBand(80000, 10000, 15000)).toEqual({ enter: 10000, exit: 15000 });
+    expect(scaledControllerRiskBand(40000, 10000, 15000)).toEqual({ enter: 10000, exit: 15000 });
+    expect(scaledControllerRiskBand(20000, 10000, 15000)).toEqual({ enter: 10000, exit: 15000 });
+  });
+
+  it("RCL2（cap 10000 < 放大后的 exit）：仍走压缩 → 6666/10000", () => {
+    expect(scaledControllerRiskBand(10000, 10000, 15000)).toEqual({ enter: 6666, exit: 10000 });
+  });
+
+  it("cap 缺失 → 保守退回原阈值，不放大也不放宽", () => {
+    expect(scaledControllerRiskBand(undefined, 10000, 15000)).toEqual({
+      enter: 10000,
+      exit: 15000,
+    });
+    expect(scaledControllerRiskBand(0, 10000, 15000)).toEqual({ enter: 10000, exit: 15000 });
   });
 
   it("不变式：折带后 enter < exit ≤ cap（否则又是一个不可达的退出线）", () => {

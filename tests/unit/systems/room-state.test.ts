@@ -187,39 +187,33 @@ describe("room-state system — TD-014 controllerDowngradeRisk 迟滞带", () =>
     return getRoomMem().controllerDowngradeRisk;
   }
 
+  // RCL6（cap 120,000）的保级带按 10%/15% 缩放 = 12,000/18,000（原先写死 10k/15k）。
   it("ticksToDowngrade 低于进入阈值时触发风险", () => {
-    // 初始 risk=false，ttd=9999 < 10000（进入阈值）→ 应触发
-    expect(runWithTicks(9999)).toBe(true);
+    expect(runWithTicks(11999)).toBe(true);
   });
 
   it("ticksToDowngrade 高于进入阈值时不触发风险", () => {
-    // 初始 risk=false，ttd=10001 > 10000 → 不触发
-    expect(runWithTicks(10001)).toBe(false);
+    expect(runWithTicks(12001)).toBe(false);
   });
 
   it("已进入风险后，ticksToDowngrade 在迟滞带内保持风险", () => {
-    // 第一步：进入风险
     expect(runWithTicks(5000)).toBe(true);
-    // 第二步：ttd=12000，在 10000~15000 之间（迟滞带内），应仍为 true
-    expect(runWithTicks(12000)).toBe(true);
+    // 15,000 在 12,000~18,000 的带内
+    expect(runWithTicks(15000)).toBe(true);
   });
 
   it("已进入风险后，ticksToDowngrade 超过退出阈值才解除", () => {
-    // 第一步：进入风险
     expect(runWithTicks(5000)).toBe(true);
-    // 第二步：ttd=15001 > 15000（退出阈值）→ 解除
-    expect(runWithTicks(15001)).toBe(false);
+    expect(runWithTicks(18001)).toBe(false);
   });
 
   it("解除风险后，ticksToDowngrade 需低于进入阈值才重新触发", () => {
-    // 进入风险
     expect(runWithTicks(5000)).toBe(true);
-    // 解除风险
     expect(runWithTicks(20000)).toBe(false);
-    // ttd=12000 > 10000（进入阈值）→ 不重新触发
-    expect(runWithTicks(12000)).toBe(false);
-    // ttd=9999 < 10000 → 重新触发
-    expect(runWithTicks(9999)).toBe(true);
+    // 15,000 > 12,000（进入阈值）→ 不重新触发
+    expect(runWithTicks(15000)).toBe(false);
+    // 11,999 < 12,000 → 重新触发
+    expect(runWithTicks(11999)).toBe(true);
   });
 
   it("controller 不属于自己时 risk 为 false", () => {

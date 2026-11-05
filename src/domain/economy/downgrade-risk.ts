@@ -47,6 +47,24 @@ export function downgradeRiskBand(
 }
 
 /**
+ * RCL7-8 的保级带按本级上限缩放：固定 10k/15k 在 RCL8（cap 200,000）只占 5%/7.5%，
+ * 线上 W37S58 在 ttd=12,525 仍 `risk=false`，等到 10k 才反应只剩 2.5k 拍。
+ * 规则：进入 = max(原进入线, cap×10%)，退出 = max(原退出线, cap×15%)；
+ * 先放大再走 `downgradeRiskBand` 的压缩，RCL2（cap 10k）仍落到 6,666/10,000。
+ * 低等级（cap ≤ 150k 的原有不变区）行为逐字不变。
+ */
+export function scaledControllerRiskBand(
+  levelCapTicks: number | undefined,
+  enter: number,
+  exit: number,
+): { enter: number; exit: number } {
+  const cap = levelCapTicks ?? 0;
+  const enterScaled = Math.max(enter, Math.floor(cap * 0.1));
+  const exitScaled = Math.max(exit, Math.floor(cap * 0.15));
+  return downgradeRiskBand(levelCapTicks, enterScaled, exitScaled);
+}
+
+/**
  * @param latched 房间记忆里的迟滞标志（`controllerDowngradeRisk`）；undefined = 本 tick 还没写过。
  */
 export function resolveControllerDowngradeRisk(
