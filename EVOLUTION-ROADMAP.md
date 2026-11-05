@@ -1186,6 +1186,8 @@
 
 **CPU 现状（成熟窗 1329 拍）**：total **16.14**、traffic **4.42**、layout-planner 0.55（RCL5 换档重算，非稳态）、roles 6.46（harvester 1.71／remoteHarvester 1.36／distributor 0.79／remoteHauler 0.65／upgrader 0.48）、unexplained 1.67。comfortable 需 ≤12 ⇒ 缺口 **4.1**。
 
+- **仪器语义（核实 `telemetry-collector.ts:549-551`）**：`rateWindowTicks = Game.time − g.processBootTick`，`rateTotal` 是**自进程 boot 起的累计均值**，不是 100 拍短滚动窗；capacity 的 tier 用它 ⇒ 会滞后当前负载（本轮 `cpu10=14.4` 对累计 16.2）。部署/heap reset 会重开窗口，但 boot 首拍的堆清重活会把累计抬高；判 G6 必须同发 current（cpu10）和累计（rateTotal），别把“窗 ≥100”误读成短窗成熟。
+
 - **idle 普查**：50 只里 11 只 idle，但安全可省的只有 ~0.2–0.7：W37S58 的 3 只 distributor 正好等于 maxCount=3（其中一只 TTL 67 将自然死）；W38S56/W37S58 的 idle upgrader 是 R693 保级/R688 满仓要用的，不可收；W38S56 mineralMiner 的矿量现读 **Z=13,388**（不是采空）；2 只 remoteDefender 属战争计划，回收会与 planner 拉锯。⇒ **不为一枚非绑定门做回收跑步机**。
 - **扩张就绪面**：G0 已清；计划 `W39S56@83406284` 仍 **EVALUATED**（created 83,406,284、ua 84,084,684、cost 61.3K、ROI 4.08、风险 MEDIUM）；预算 419K 能量 > 61.3K；**唯一失败门 G6**。也就是说：一旦 CPU tier ≤ comfortable，计划在 `upgradeTicks 500` 后即可晋升，无其他暗门。
 - **决策（含一处选项更正）**：已把四条路交给用户；用户未选 ⇒ 按推荐默认 **不动阈值/市场/收入，继续等**。⚠️“G6 放宽到 tight”**在当前 16.2 下无效**：tight = usage ≤16，而现读已 >16（constrained）；要开门只能接受 **constrained / 比例 ≥0.85**，且新房间会把 CPU 推到 **19–21**（按 3–5 增量）——21.2 时 bucket 以 1.2/拍流失，约 8.3K 拍后触顶。CPU Unlock（credits 150.4M，旧价 378M 待核）与砍远矿是另两条。R688 触发（storage 90%）还会加升级器 CPU，进一步推远 G6。
