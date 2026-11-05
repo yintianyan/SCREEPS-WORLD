@@ -1182,6 +1182,16 @@
 
 **R598 判效（14:12Z，采样 3 拍）＝E603 PASS，且结论是“没有可修的热循环”**：`remoteHarvester/stationary-mine/execute` **1.12–1.35 CPU/拍**（4–5 次调用 ⇒ **0.26/次**）、`harvester/stationary-mine/execute` **0.96–1.17**（4 次 ⇒ 0.25）、`remoteHarvester/repair-container/execute` 0.22–0.44、`remoteHauler/fill:storage|withdraw-container/execute` 0.07–0.26；而全部 **resolve 只有 0.03–0.08**。同拍实测矿工全部站在 container 格上（到最近 container 距离 0，无每拍重寻路）、`getRemoteSource/findSourceContainer` 均命中缓存、`countedIntent→recordIntent` 只是计数器 ⇒ **成本在 `harvest`/`transfer` API 调用自身**，不在可优化的扫描循环里。E604 不可分离（`cpuRate` 窗跨部署、长 EMA 仍 13.67）。⇒ **G6 不能靠动作层微优解决**：它随“活跃 creeps×API 调用”线性增长，而 limit 恒 20；在 G4（慢 EMA）仍是绑定门的情况下，不为 G6 砍产能。
 
+### 4.0（11-05 11:5xZ 立格，R697；上一条＝R696「扩张验收预写」；本格**全量 e2e 结果与归类**）
+
+**结果**：`npm run test:e2e` 在 R693 源码构建上跑完（3019s）：**28/34 文件、65/72 用例通过**；失败 6 文件/7 用例：
+
+- **22/23/24 战争三场景**：22 的失败信息是「fact 级真目标 W1N1 未被授权 warPlan——授权门槛把真战争也挡住了」；23/24 是同一授权门的级联（战争没立项，止损/战后核验无对象）。属 **#151 战争授权语义（属人）**，不是 R686–R693 的 spawn/物流改动。
+- **30 CPU 规模外推 / 31 台阶人口**：31 是已知红（定价判据缺噪声底，记忆档明确）；30 是同类 CPU 基准 knife-edge，单跑不足以定罪（R498/记忆规矩：单发不签）。
+- **R2 canary（2 例）**：`rcl2` 采样 16 < 30（严格 RCL2 窗口不足 1,500 拍）与 `queued→site` 转移 undefined。更像“房间更快离开 RCL2”导致测试窗口假设失效（R686 可能让 RCL2 的 P2 更早孵化，但布局队列不在该路径上）；**先按测试假设问题登记，不改产线**。
+
+结论：**没有一条能直接归因到本轮 R686–R693**；战争组是属人 #151，CPU 组是已知 knife-edge，R2 canary 需第二次跑/测试口径复核。不在单次 e2e 红上改 src；官服 sha 仍 `37437e204936`。
+
 ### 4.0（11-05 09:1xZ 立格，R696；上一条＝R695「G6 唯一门」；本格**扩张执行验收预写**）
 
 **触发**：`capacity.tier ≤ comfortable`（当前 `cpu10=14.4`、累计 16.2/constrained；G6 是唯一失败门）。G0 已清、`expansionAllowed=true`、计划 `W39S56@83406284` EVALUATED、cost 61.3K、能量预算 419K 足够。
