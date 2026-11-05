@@ -125,3 +125,8 @@
 - **预期（R697 登记，写死）**：canary 的 `rcl2` 采样 16<30 是"房间更快离开 RCL2"导致的测试窗口假设失效。**实测**：`/tmp/rcl2-canary.json`（R697 产物）与 `E2E_RANDOM_SEED=42` 第二发**逐字同形**：`rcl1=88/rcl2=16`、RCL2 首次 4,402、全程未到 RCL3、controller progress 552→4,052 卡 50。**裁决：否证**（更晚到达，不是更快离开）。
 - **预期（R698 诊断，写死）**：若冻结因是 `ΣgateNetFlow<0` 的角色闸，则 upgrader 的 work/idle 应与 gate 符号逐拍相关；修复（早期房豁免）后同 seed canary 必须 `rcl2≥30`。**实测**：t=600–4,000 `gate<0` ⇒ upgrader 全 idle（ea=300、spawn 队列空），t=4,100 转正后 300 拍 progress 50→150；修复后同 seed `rcl1=21/rcl2=83`、RCL2@1,052、canary 9/9。**裁决：命中**（立 #200 并修复）。
 - **口径边界**：两条世界线的 `rcl>=3` 采样均为 0（5,200 拍内未到 RCL3），故本实验只裁 RCL1→RCL2 段；RCL2→RCL3 的速率未测。
+
+## E-17 · bundle 预算修复与 10-27 以来整批上线（R699，11-05）
+- **预期（上线前写死，15:3xZ）**：CI run 42056910649 的 Bundle size budget 步骤打印 **811,577B**（本地同 commit 构建 `dist/main.js` 811,577B、sha256 前 12 位 `0bf73b74ab2d`），且 **Upload 步骤真的执行**；部署生效后 `check-code.mjs` 的 live sha 应等于 `0bf73b74ab2d`；boot 拍后 100–200 拍内三房（W37S58/W38S56/W39S55）`state=normal`、`capacity.tier` 不跌到 `constrained`（部署前 `tight@84090604`、usage 15.93）、`errorsPerTick≤1`、无房失守/失联。
+- **口径边界**：#200 的早期房豁免在线上**不可直接复读**——现无 RCL<4 的房（8/7/5），只能靠 R697/R698 的 canary（9/9）与本次同批代码上线作为间接证据，不得写成"线上已复读 #200"。
+- **裁决**：**部分命中（15:5xZ 读回）**——CI `42056910649` 的 Bundle size budget 打印 **811,577B** 且 Upload 执行；`check-code` 无参数与 shard3 两问 live sha 均 **`0bf73b74ab2d`** ＝本地同 commit 构建；boot≈84,090,908；boot 后 176 拍三房 `state=normal`、`errorsPerTick=0`、无失守/失联 ⇒ 四项命中。**但 `capacity.tier` 在 boot 拍 `84,090,909` 由 tight 跌到 constrained**（`upgradeTicks` 160/500）⇒ `tier 不跌到 constrained` 一项**否证**，成因是既有的部署税（boot 首拍重活抬高自 boot 起的累计均值），不是本批回归。口径边界：#200 仍不可线上直接复读（现无 RCL<4 房）。
