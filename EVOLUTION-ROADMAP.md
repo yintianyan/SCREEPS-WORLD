@@ -1188,8 +1188,8 @@
 
 - 修法：新增 `scaledControllerRiskBand`，进入/退出取 `max(原阈值, cap×10%/15%)`，再走原有 `downgradeRiskBand` 压缩。RCL8→**20k/30k**、RCL7→**15k/22.5k**、RCL6→12k/18k；RCL≤5 与 RCL2 的 6666/10k 压缩逐字不变。room-state 的风险标志改用它；claimSecure 的旧函数不动。
 - 测试：`downgrade-risk` 13 例（含 RCL7/8 放大、RCL≤5 不变、RCL2 压缩、cap 缺失保守），`room-state` 的 RCL6 带更新为 12k/18k；typecheck 0、unit **441 文件·5,723 例**、integration **30·239**。提交 `ac7b9e25`，部署 `37437e204936`。
-- **早期判效**：W37S58 `risk=true` 且已孵出升级器（TTL 1,431，acquire 取能中）；W38S56 `risk=true`，**ttd 14,866→16,283**（两只在岗升级器把缓冲拉回 15K 以上）。代价：CPU 读数 `usage=12.5` 但 `rateWindowTicks=29`（部署尾税），窗成熟后再判。
-- 预写：**E823** W37S58 ttd 在 500 拍内止跌并回升（升级器接上后），risk 保持到 ≥30k 才解除；**E824** W38S56 ttd 达 ≥22.5k 后 risk 清除；**E825** CPU 窗成熟后 usage ≤16（若持续 constrained，需评估是否把高等级保级升级器与 R632 的 CPU 门重新排产，而不是回退阈值）。
+- **判效**：W37S58 `risk=true`，升级器出壳后一度 acquire/0 能量，到 controller range 3 时 **ttd 12,173→12,628**（+455/约 50 拍，约 9/拍回升；CC range 1 有 2,000 能量，升级器 35/50 能量）⇒ **E823 早期 PASS**（risk 保持到 ≥30k，按 9/拍约 2h，远早于剩余 12.6K 拍）。W38S56 `risk=true`，**ttd 14,866→16,283→16,714**（3 只升级器：2 work + 1 acquire）⇒ 朝 22.5k 退出线恢复，**E824 早期 PASS**。CPU 成熟窗（`rateWindowTicks=129`）**usage=14.49/tight**，未被保级升级器顶爆 ⇒ **E825 早期 PASS**（≤16）。
+- 余项：W37S58 的 RCL8 升级器是 40W1C2M、以 controller container（range 1，2,000 能量）为补给；若后续 ttd 回升停滞，再看 CC 补给/站位，不改阈值。
 
 ### 4.0（11-04 21:5xZ 立格，R692；上一条＝R691 格「快路径负结果」；本格**RCL4 升级器改 8W2C2M**）
 
