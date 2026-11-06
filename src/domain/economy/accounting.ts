@@ -59,6 +59,17 @@ export interface EnergyLedger {
    */
   tradeFeeEnergySell: number;
   tradeFeeEnergyBuy: number;
+  /**
+   * 工业池内**实扣能量**（纯观测）：factory produce / lab boost / powerSpawn process /
+   * nuke launch。**不进** `CONSUMPTION_FIELDS` ⇒ 净流/G4 口径不变；但它作为 drift 的
+   * 解释项加回 —— 工业消耗让 `other` 池下降，不补回就会被误报成账实不符。
+   */
+  industrialSpend: number;
+  /**
+   * `industrialSpend` 的子集：核弹发射耗能。nuker 储能**不在** tracked/other 池里，
+   * 所以 drift 解释项只加 `industrialSpend − nukeSpend`（发射不减少任何受踪池）。
+   */
+  nukeSpend: number;
 }
 
 export type LedgerField = keyof EnergyLedger;
@@ -96,6 +107,8 @@ export function emptyLedger(): EnergyLedger {
     tradeFee: 0,
     tradeFeeEnergySell: 0,
     tradeFeeEnergyBuy: 0,
+    industrialSpend: 0,
+    nukeSpend: 0,
   };
 }
 
@@ -224,7 +237,8 @@ export interface AccountingWindow {
    * 单独落这两个数，是为了让那种噪声一眼可辨而不是被算成"账实不符"。 */
   carryStart: number;
   carryEnd: number;
-  /** drift = Δtracked − flowBalance − looseΔ **+ Δother**；超容差即核算缺陷信号。
+  /** drift = Δtracked − flowBalance − looseΔ **+ Δother + (industrialSpend − nukeSpend)**；
+   * 超容差即核算缺陷信号。
    * （旧版写的是 −Δother，而 `other` 不在 trackedPoolsOf 里 ⇒ 一次 storage→工业池的纯搬运
    * 被算成两倍损失；`ba18a6b` 纠正。） */
   drift: number;
@@ -262,12 +276,19 @@ export function rollupWindow(
   // 不在 `trackedPoolsOf` 里。一笔"storage → 工业池"的搬运会让 tracked 少 X、other 多 X：
   // 减号把同一个 X 算两次损失（drift=−2X），于是**正常的工业装料每窗都谎报账实不符**；
   // 加号才让纯搬运归零（Δtracked=−X 与 +Δother=+X 相消）。
-  // 代价（已知局限，别当成已修完）：工业池内部真正烧掉的能量（压缩 commodity、boost、
-  // 反应每批 20 能量）没有计数器，而池快照无法把它与"排回 storage"区分 ⇒ 那种消耗在这里
-  // 显示为 0 而不是负 drift。补法是加一个 `industrialSpend` 消费桶（见任务列表），
-  // 而不是把符号改回去 —— 改回去只会让 AccountingDrift 每窗空响。
+  // 工业池内部真正烧掉的能量（factory 压缩 commodity、lab boost、powerSpawn process）
+  // 由 `industrialSpend` 单独计数。它**不进** CONSUMPTION_FIELDS（nf/G4 口径不变），
+  // 但必须在 drift 里加回：烧掉一度电让 `other` 少一度电，不补回就会被当成漏口。
+  // nuker 是例外 —— 它的储能不在 tracked/other 池里，发射不会让任何受踪池下降，
+  // 所以这里只加 `industrialSpend − nukeSpend`。
+  const industrialFromOther = d.industrialSpend - d.nukeSpend;
   const drift =
-    trackedEnd - trackedStart - flowBalance - looseDelta + (endPools.other - startPools.other);
+    trackedEnd -
+    trackedStart -
+    flowBalance -
+    looseDelta +
+    (endPools.other - startPools.other) +
+    industrialFromOther;
   return {
     t0,
     t1,

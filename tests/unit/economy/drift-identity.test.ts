@@ -63,12 +63,11 @@ describe("drift 恒等式：跨池搬运不该被当成账实不符", () => {
     expect(w.drift).toBe(0);
   });
 
-  it("已知局限（写下来免得被当成已修完）：工业池内部烧掉的能量没有计数器，池快照也无法与「排回 storage」区分", () => {
-    // 下面两个情形在"池快照 + 计数器"这层输入下**完全同形**（Δtracked=+1000、Δother=−1000）：
-    //   ① 工业池 → storage 的纯搬运；② 工业池把能量烧成 commodity/boost（无计数器）。
-    // 因此恒等式只能二选一：要么把搬运误记成损失（旧符号：一笔搬运算两次，drift=−2000），
-    // 要么把真实工业燃烧看成 0（新符号）。选后者 —— 它不每个窗口谎报账实不符，
-    // 代价是工业消耗能量必须靠新计数器补（见任务：给 ledger 加 industrialSpend 桶）。
+  it("没有工业桶时：industrial 池 → storage 的搬运与工业池烧掉在池快照上不可分（桶补上后才可分）", () => {
+    // 下面这个形状（storage +1000、other −1000）在本用例里是**搬运**，drift=0 是对的。
+    // 若它是"工业池烧掉 1000"，同一组池读数会得到同样的 0 —— 这正是旧局限；
+    // 现在由 `industrialSpend` 计数器区分：有桶时烧掉会归零，无桶时烧掉会报 −1000。
+    // 两种情形见文件前面的两个新用例。
     const w = rollupWindow(
       0,
       50,
@@ -77,6 +76,49 @@ describe("drift 恒等式：跨池搬运不该被当成账实不符", () => {
       pools({ storage: 4000, other: 1000 }),
       pools({ storage: 5000, other: 0 }),
     );
+    expect(w.drift).toBe(0);
+  });
+
+  it("工业桶补上后：factory 烧掉 600 ⇒ drift 归零（这就是 #206 要修的那条）", () => {
+    const start = emptyLedger();
+    const end = emptyLedger();
+    end.industrialSpend = 600;
+    const w = rollupWindow(
+      0,
+      50,
+      start,
+      end,
+      pools({ storage: 5000, other: 600 }),
+      pools({ storage: 5000, other: 0 }),
+    );
+    expect(w.drift).toBe(0);
+  });
+
+  it("桶缺席时同一笔消耗仍必须报负 drift（不是把符号改回去）", () => {
+    const w = rollupWindow(
+      0,
+      50,
+      emptyLedger(),
+      emptyLedger(),
+      pools({ storage: 5000, other: 600 }),
+      pools({ storage: 5000, other: 0 }),
+    );
+    expect(w.drift).toBe(-600);
+  });
+
+  it("核弹发射：nuker 储能在受踪池之外 ⇒ nukeSpend 必须从解释项里减掉", () => {
+    const end = emptyLedger();
+    end.industrialSpend = 50_000;
+    end.nukeSpend = 50_000;
+    const w = rollupWindow(
+      0,
+      50,
+      emptyLedger(),
+      end,
+      pools({ storage: 5000 }),
+      pools({ storage: 5000 }),
+    );
+    // 发射前后池快照完全一致；若把整笔工业桶加回，这里会报 +50,000 的假 drift。
     expect(w.drift).toBe(0);
   });
 

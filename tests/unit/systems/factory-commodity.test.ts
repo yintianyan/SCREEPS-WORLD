@@ -55,6 +55,8 @@ describe("factory-manager — commodity 升级链", () => {
     factoryManagerSystem.run(makeContext(snap));
 
     expect(factory.produce).toHaveBeenCalledWith("wire");
+    // 实扣能量 30（配方里的 energy 分量）记入工业桶。
+    expect((globalThis as any).energyLedger?.rooms?.W7N4?.industrialSpend).toBe(30);
   });
 
   it("T2 原料齐且 level 达标 → 优先产 T2", () => {
@@ -64,6 +66,7 @@ describe("factory-manager — commodity 升级链", () => {
     factoryManagerSystem.run(makeContext(snap));
 
     expect(factory.produce).toHaveBeenCalledWith("circuit");
+    expect((globalThis as any).energyLedger?.rooms?.W7N4?.industrialSpend).toBe(100);
   });
 
   // 本私服实测 `factory.level === undefined`（同拍 controller.level=8），旧实现 `?? 0`
@@ -109,6 +112,8 @@ describe("factory-manager — commodity 升级链", () => {
     factoryManagerSystem.run(makeContext(snap));
 
     expect(factory.produce).toHaveBeenCalledWith("battery");
+    // COMMODITIES.battery 的能量分量 600/批 —— 这正是 R708 里看不见的那笔。
+    expect((globalThis as any).energyLedger?.rooms?.W7N4?.industrialSpend).toBe(600);
   });
 });
 

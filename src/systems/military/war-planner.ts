@@ -29,7 +29,7 @@ import {
   buildSpawnRequest,
 } from "../../domain/spawn/queue";
 import { selectBody } from "../../config/bodies";
-import { querySquad, globalCache } from "../../kernel/global-cache";
+import { querySquad, globalCache, bumpEnergyCounter } from "../../kernel/global-cache";
 import { recordExecution, recordPlanningDecision } from "../../telemetry";
 import { log } from "../../kernel/log";
 
@@ -264,6 +264,8 @@ export const warPlannerSystem: System = {
       if (launch) {
         const pos = new RoomPosition(25, 25, plan.targetRoom);
         if (nuker.launchNuke(pos) === OK) {
+          bumpEnergyCounter(sponsor, "industrialSpend", NUKE_ENERGY_COST);
+          bumpEnergyCounter(sponsor, "nukeSpend", NUKE_ENERGY_COST);
           recordNukeLaunch(plan.targetRoom, ctx.tick);
           recordEvent(EventKind.NukeLaunched, plan.targetRoom, [plan.towersSeen]);
           log.info(

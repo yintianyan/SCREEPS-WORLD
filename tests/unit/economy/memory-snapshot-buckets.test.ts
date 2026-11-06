@@ -6,7 +6,13 @@
  * （消费方 `queryEconomy`/恢复路径不能因为加了字段而变）。
  */
 import { describe, expect, it } from "vitest";
-import { toMemorySnapshot, type AccountingWindow } from "../../../src/domain/economy/accounting";
+import {
+  emptyLedger,
+  emptyPools,
+  rollupWindow,
+  toMemorySnapshot,
+  type AccountingWindow,
+} from "../../../src/domain/economy/accounting";
 
 /** 一个自洽的核算窗：收入 1000、消费 1300、退还 50 ⇒ 流平衡 −250；
  *  跟踪池 900_000 → 899_700（−300），other 池 5000 → 4960（−40，工业池内部烧掉而无计数器），
@@ -96,5 +102,32 @@ describe("economy 瘦快照：落盘的数必须能点名 drift 的来源", () =
     expect(legacy).toEqual({ t: 1050, nf: 1185, cr: 899700, rb: 1000, dr: -80, ei: 200, ef: 100 });
     expect(legacy.bk).toBeUndefined();
     expect(legacy.pl).toBeUndefined();
+  });
+
+  it("工业桶落进 bk，且只读 Memory 的人能用它复算 drift", () => {
+    const end = emptyLedger();
+    end.industrialSpend = 600;
+    const w = rollupWindow(
+      0,
+      50,
+      emptyLedger(),
+      end,
+      { ...emptyPools(), storage: 5000, other: 600 },
+      { ...emptyPools(), storage: 5000, other: 0 },
+    );
+    expect(w.drift).toBe(0);
+
+    const snap = toMemorySnapshot(50, 0, 0, 0, w.drift, 0, 1, w);
+    expect(snap.bk?.industrialSpend).toBe(600);
+    const bk = snap.bk!;
+    const [trackedStart, trackedEnd, otherStart, otherEnd, looseDelta] = snap.pl!;
+    const recomputed =
+      trackedEnd! -
+      trackedStart! -
+      0 -
+      looseDelta! +
+      (otherEnd! - otherStart!) +
+      ((bk.industrialSpend ?? 0) - (bk.nukeSpend ?? 0));
+    expect(recomputed).toBe(snap.dr);
   });
 });

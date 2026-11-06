@@ -874,6 +874,10 @@ export interface RoomEnergyCounters {
    */
   tradeFeeEnergySell: number;
   tradeFeeEnergyBuy: number;
+  /** 工业池实扣能量（纯观测，不进 CONSUMPTION_FIELDS；drift 解释项加回）。 */
+  industrialSpend: number;
+  /** 核弹发射耗能（industrialSpend 的子集；nuker 储能不在受踪池 ⇒ drift 不补）。 */
+  nukeSpend: number;
   /**
    * 跨房导入本房的能量（carrier 卸能 + 远矿 hauler 交付到本房 sink 时计）。
    * **已并入 `ledgerIncome`**（见 accounting.ts），对偶项是 `exported`。
@@ -922,6 +926,8 @@ export function bumpEnergyCounter(
     tradeFee: 0,
     tradeFeeEnergySell: 0,
     tradeFeeEnergyBuy: 0,
+    industrialSpend: 0,
+    nukeSpend: 0,
   });
   entry[field] += amount;
 }

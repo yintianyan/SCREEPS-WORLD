@@ -44,6 +44,22 @@ describe("factory-manager — processPower 调度接线", () => {
     factoryManagerSystem.run(makeCtx([room]));
 
     expect(processPower).toHaveBeenCalledTimes(1);
+    // 实扣能量 50 记入工业桶（只观测，不进消费合计）。
+    const ledger = (globalThis as any).energyLedger?.rooms?.W7N4;
+    expect(ledger?.industrialSpend).toBe(50);
+  });
+
+  it("processPower 返回非 OK → 不记工业桶（没扣到能量）", () => {
+    const processPower = vi.fn(() => ERR_NOT_ENOUGH_RESOURCES);
+    const room = mockSnapshot({
+      powerSpawn: { store: resStore({ power: 50, energy: 1000 }), processPower } as any,
+      storage: { store: resStore({ energy: CONFIG.factory.processEnergyFloor }, 1000000) } as any,
+    });
+
+    factoryManagerSystem.run(makeCtx([room]));
+
+    expect(processPower).toHaveBeenCalledTimes(1);
+    expect((globalThis as any).energyLedger?.rooms?.W7N4?.industrialSpend).toBeUndefined();
   });
 
   it("storage 低于地板 → 暂停（投资让位 spawn/tower）", () => {

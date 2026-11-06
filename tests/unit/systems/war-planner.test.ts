@@ -1,11 +1,12 @@
 /** War Planner 系统测试（R3 战时闭环 + R4 自治升级）。 */
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { demobilize, warPlannerSystem } from "../../../src/systems/military/war-planner";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { mapAbortToRecoveryAction } from "../../../src/domain/military/abort-recovery";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
+import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../src/domain/war/planning";
 
 const TICK = 1000;
 
@@ -591,5 +592,68 @@ describe("R5 — 存续期情报复核", () => {
     const k = (globalThis as any).Memory.kernel;
     expect(k.warIntelLost).toBeUndefined();
     expect(k.warPlan.spawned).toBeGreaterThan(2); // 补员恢复
+  });
+});
+
+describe("核弹发射 — 工业消耗桶", () => {
+  function resStore(resources: Record<string, number>): any {
+    const store: Record<string, any> = { ...resources };
+    Object.defineProperty(store, "getUsedCapacity", {
+      enumerable: false,
+      value: (r?: string) =>
+        r ? (resources[r] ?? 0) : Object.values(resources).reduce((a, b) => a + b, 0),
+    });
+    return store;
+  }
+
+  function authorize(): any {
+    const g = globalThis as any;
+    g.Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
+    setupHome();
+    setPosture("war");
+    g.Memory.kernel.warPlan = {
+      targetRoom: "W6N4",
+      sponsor: "W7N4",
+      squadSize: 3,
+      since: 900,
+      towersSeen: CONFIG.nuker.launchTowerThreshold,
+      phase: "advance",
+      spawned: 0,
+    };
+    return g;
+  }
+
+  it("launchNuke OK → industrialSpend 与 nukeSpend 各记一发当量", () => {
+    const g = authorize();
+    const launchNuke = vi.fn(() => OK);
+    const nuker = {
+      store: resStore({ energy: NUKE_ENERGY_COST, G: NUKE_GHODIUM_COST }),
+      cooldown: 0,
+      launchNuke,
+    };
+    const snap = mockSnapshot({ roomName: "W7N4", rcl: 8, nuker: nuker as any });
+
+    warPlannerSystem.run(mockContext(snap));
+
+    expect(launchNuke).toHaveBeenCalled();
+    const ledger = g.energyLedger?.rooms?.W7N4;
+    expect(ledger?.industrialSpend).toBe(NUKE_ENERGY_COST);
+    expect(ledger?.nukeSpend).toBe(NUKE_ENERGY_COST);
+  });
+
+  it("launchNuke 被拒 → 不记工业桶", () => {
+    const g = authorize();
+    const launchNuke = vi.fn(() => ERR_INVALID_TARGET);
+    const nuker = {
+      store: resStore({ energy: NUKE_ENERGY_COST, G: NUKE_GHODIUM_COST }),
+      cooldown: 0,
+      launchNuke,
+    };
+    const snap = mockSnapshot({ roomName: "W7N4", rcl: 8, nuker: nuker as any });
+
+    warPlannerSystem.run(mockContext(snap));
+
+    expect(launchNuke).toHaveBeenCalled();
+    expect(g.energyLedger?.rooms?.W7N4?.industrialSpend).toBeUndefined();
   });
 });

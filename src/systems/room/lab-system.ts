@@ -26,6 +26,7 @@ import {
   globalCache,
   publishProcurementDemands,
   recordProcurementAttempt,
+  bumpEnergyCounter,
 } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
 import { collectFullInventory } from "../../domain/industry/inventory";
@@ -607,6 +608,7 @@ export const labSystem: System = {
 
         const result = lab.boostCreep(creep, parts);
         if (result === OK) {
+          bumpEnergyCounter(snapshot.roomName, "industrialSpend", parts * LAB_BOOST_ENERGY);
           if (!industryMem.boostedCreeps) industryMem.boostedCreeps = [];
           industryMem.boostedCreeps.push(creep.name);
         }

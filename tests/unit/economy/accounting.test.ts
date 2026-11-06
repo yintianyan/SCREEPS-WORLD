@@ -63,6 +63,14 @@ describe("EnergyLedger — L1 计数器", () => {
     expect(ledgerIncome(l)).toBe(530);
     expect(ledgerConsumption(l)).toBe(0);
   });
+
+  it("工业消耗只观测：industrialSpend/nukeSpend 不进收入与消费合计（nf/G4 口径不变）", () => {
+    const l = led({ industrialSpend: 600, nukeSpend: 50_000 });
+    expect(ledgerIncome(l)).toBe(0);
+    expect(ledgerConsumption(l)).toBe(0);
+    // 它们只作为 drift 的解释项（见 rollupWindow），P0/P1 常供侧同样不受影响。
+    expect(ledgerP0P1Consumption(l)).toBe(0);
+  });
 });
 
 describe("AccountingWindow — 对账恒等式", () => {

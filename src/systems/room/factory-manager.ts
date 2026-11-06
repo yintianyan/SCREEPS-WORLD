@@ -1,6 +1,6 @@
 /** Factory Manager */
 import { CONFIG } from "../../config";
-import { shouldProcessPower } from "../../domain/economy/power-processing";
+import { shouldProcessPower, PROCESS_POWER_ENERGY } from "../../domain/economy/power-processing";
 import { shouldDecompressBattery } from "../../domain/economy/battery-decompression";
 import {
   missingComponents,
@@ -9,7 +9,11 @@ import {
   type StockView,
 } from "../../domain/industry/commodity";
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
-import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
+import {
+  globalCache,
+  publishProcurementDemands,
+  bumpEnergyCounter,
+} from "../../kernel/global-cache";
 import type { ProcurementDemand } from "../../kernel/global-cache";
 import { collectFullInventory } from "../../domain/industry/inventory";
 import { commodityBatchRoi } from "../../domain/industry/market-pricing";
@@ -32,7 +36,10 @@ export const factoryManagerSystem: System = {
             warActive: Memory.kernel?.strategy?.posture === "war",
           })
         ) {
-          powerSpawn.processPower();
+          const result = powerSpawn.processPower();
+          if (result === OK) {
+            bumpEnergyCounter(snapshot.roomName, "industrialSpend", PROCESS_POWER_ENERGY);
+          }
         }
       }
 
@@ -57,7 +64,14 @@ export const factoryManagerSystem: System = {
       // 能量应流向 upgrade/build，压缩的 1/6 折损划不来。
       if (Memory.rooms[snapshot.roomName]?.storageNearFull !== true) continue;
       if (factory.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.factory.batchEnergy) continue;
-      factory.produce(RESOURCE_BATTERY);
+      const result = factory.produce(RESOURCE_BATTERY);
+      if (result === OK) {
+        bumpEnergyCounter(
+          snapshot.roomName,
+          "industrialSpend",
+          produceEnergyCost(RESOURCE_BATTERY),
+        );
+      }
     }
   },
 };
@@ -135,7 +149,20 @@ function tryProduceCommodity(
   // factory 内原料齐 → 生产（缺料由 distributor 补，下轮再产）。
   const missing = missingComponents(factoryStoreView, target);
   if (Object.keys(missing).length > 0) return;
-  factory.produce(target.resourceType as CommodityConstant);
+  const result = factory.produce(target.resourceType as CommodityConstant);
+  if (result === OK) {
+    bumpEnergyCounter(snapshot.roomName, "industrialSpend", produceEnergyCost(target.resourceType));
+  }
+}
+
+/** 引擎配方里的能量成本（无 `components.energy` = 0；battery 压缩 600/批）。 */
+function produceEnergyCost(resourceType: string): number {
+  const table = (
+    globalThis as {
+      COMMODITIES?: Record<string, { components?: Record<string, number> }>;
+    }
+  ).COMMODITIES;
+  return table?.[resourceType]?.components?.energy ?? 0;
 }
 
 /**
