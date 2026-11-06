@@ -136,6 +136,7 @@ export const COLLECTION_FREQUENCY: Record<string, number> = {
   economy: 10,
   logistics: 10,
   dashboard_summary: 10,
+  energy_audit: 10,
   // 每 25 tick
   empire: 25,
   // 事件驱动（不做周期采集）

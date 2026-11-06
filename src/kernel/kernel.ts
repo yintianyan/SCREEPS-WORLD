@@ -40,6 +40,7 @@ import {
   collectCreepMetrics,
   collectSpawnMetrics,
   collectEconomyMetrics,
+  collectEnergyAuditMetrics,
   collectLogisticsMetrics,
   collectEmpireMetrics,
   collectExpansionMetrics,
@@ -254,6 +255,7 @@ export class Kernel {
         collectCreepMetrics();
         collectSpawnMetrics();
         collectEconomyMetrics(snapshots);
+        collectEnergyAuditMetrics();
         collectLogisticsMetrics();
         collectDefenseMetrics(snapshots);
         collectEmpireMetrics();

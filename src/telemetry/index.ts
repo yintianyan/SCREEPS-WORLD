@@ -46,6 +46,10 @@ export { registerRoomMetrics, collectRoomMetrics } from "./metrics/RoomMetrics";
 export { registerCreepMetrics, collectCreepMetrics } from "./metrics/CreepMetrics";
 export { registerSpawnMetrics, collectSpawnMetrics } from "./metrics/SpawnMetrics";
 export { registerEconomyMetrics, collectEconomyMetrics } from "./metrics/EconomyMetrics";
+export {
+  registerEnergyAuditMetrics,
+  collectEnergyAuditMetrics,
+} from "./metrics/EnergyAuditMetrics";
 export { registerLogisticsMetrics, collectLogisticsMetrics } from "./metrics/LogisticsMetrics";
 export {
   registerPlanningMetrics,

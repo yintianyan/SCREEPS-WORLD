@@ -153,3 +153,12 @@
 - **口径边界**：`epsClosed`（ε−(imp−exp)）是 R708 遗留的逐房启发列，不是帝国闭式；本轮只以 `ε` 为判决数。`ws` 三元组是核算恒等式残差累计，不拿来当净流。
 - **实测**：窗 84,109,241→84,109,644（403 拍、70 好样本、boot 84,107,581 未变；原始 `tmp/observe/r711-samples.jsonl`／`r711-analyze-final.txt`）。`ε=+715（+1.774/t）`：`ΔP=−1,242`、`ΣnetFlow=−1,957`；`harvested=38,680`、`spawned=20,600`、`upgraded=5,099`、`built=1,095`、`repaired=1,405`、`towerSpent=1,540`、`tradeFee=3,698`、`industrialSpend=7,200`、`recycledRefund=0`。**H1 否证**：skip 重建 `economyBudget=0／budgetCap=0／windowSlip=0／allSystemSkips=0`（lostTicks=[0,0]）；**H2 否证**：`recycledRefund` 全 0；**H3 无污染**：W38S58 仅早段可见 14 发、`P/D=0`、source 3000；远矿 outflow Σ16,415 对 imported 17,055（差 640，边界量级）。`pickedUp=4,448`（W39S55 3,150／W37S58 956／W38S56 342）只登记为候选，未定罪。bot `dr` 同窗 Σ **−670（−1.663/t）**，与本尺反号但同量级。
 - **裁决**：**UNKNOWN**（预注册形状：good 跨度 403<600；`/api/user/memory` 自 14:20Z 起长 429、console 读回同时超时，探针端点随之中断）。**不得写成 PASS**（跨度不达标）；**也不得写成 FAIL**（预注册 FAIL 需要 ≥600 拍且无具名汇）。已到手的否证只有 H1/H2/H3 三条候选，本轮正残差本身既未复现到 11/t、也未被解释。**口径修正**：R708/R710 的物理池 `P`（probe B）与 carry `H`（probe A）相差 1 拍，单个 transfer 可在端点注入上千能量误差；本轮起物理侧（P/D/H）同拍、账本单发，端点边界误差降到约一拍流量。**口径债**：每周期 2 探针＋clear＋整份 Memory 读疑似 429 触发源，下一轮改 probe-only。
+
+## E-21 · #207 观测通道解阻：segment-4 能量审计指标（R712，11-06）
+- **预期（11-06 15:5xZ 写死，代码改动之前；出处 `tmp/observe/AGENT.lock` R712 目标卡）**：
+  1. 部署后 ≥100 拍内，`/api/user/memory-segment?segment=4` 的文本出现 `screeps_economy_audit_tick`、全部 `screeps_economy_audit_<field>{room=...}` 与四项池指标（general／industrial／loose／carry），且段文本 <80KB、`screeps_runtime_cpu_used` 与部署前同量级（差 ≤0.5/t）。
+  2. 同一 boot 内取 ≥600 拍两端样本，按 E-18/E-19 闭式 `ε = ΔP_total − ΣΔ(harvested + bought + recycledRefund − sold − spawned − upgraded − built − repaired − towerSpent − tradeFee − industrialSpend)` 计算；PASS＝|ε| ≤1/t 且具名；FAIL＝>1/t 无具名；UNKNOWN＝boot 变化／段缺样本／两端可见房集不一致。
+  3. 若残差 >1/t，`pickedUp` 是首要候选（R711 唯一同量级未定罪项），但不得单凭同量级定罪；必须与 Δloose（掉落／墓碑／废墟）同向且量级差可解释。
+- **口径边界**：segment 4 的 gauge 每 10 拍覆盖一次，样本 tick 由 `screeps_economy_audit_tick` 标注；`imported/exported` 为内部项不进闭式；`nukeSpend` 是 `industrialSpend` 子集不重复减；carry 按 `memory.home` 归房（与 R711 物理侧 H 同口径）；掉落／墓碑／废墟按房计。
+- **实测**：待部署后回写。
+- **裁决**：**未开始**（部署前）。

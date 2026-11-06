@@ -68,6 +68,7 @@ import {
   registerCreepMetrics,
   registerSpawnMetrics,
   registerEconomyMetrics,
+  registerEnergyAuditMetrics,
   registerLogisticsMetrics,
   registerPlanningMetrics,
   registerExecutionMetrics,
@@ -98,6 +99,7 @@ registerRoomMetrics();
 registerCreepMetrics();
 registerSpawnMetrics();
 registerEconomyMetrics();
+registerEnergyAuditMetrics();
 registerLogisticsMetrics();
 registerPlanningMetrics();
 registerExecutionMetrics();
