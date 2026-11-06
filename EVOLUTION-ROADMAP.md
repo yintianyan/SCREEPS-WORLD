@@ -43,6 +43,8 @@
 
 **11-06 R713 现状补（不覆盖上表旧值）**：segment-4 ε 窗 **84,112,201→84,112,821（620 拍、63 样本、10 拍间隔、同 boot）**；`ΔP=−10,186` 对 `ΣnetFlow=−13,248` ⇒ **ε=+3,062（+4.939/t）＝预注册 FAIL（字面）**。闭式分项 `harvested=53,780／spawned=35,380／upgraded=11,229／industrialSpend=15,600／repaired=2,277／towerSpent=2,170／tradeFee=372`（built/bought/sold/refund 全 0）；`pickedUp=2,204`、`imported=20,917`、`exported=1,650`。**正向残差已具名为「账外 carry」**：carrier 死亡（84,112,550，1,456）＋hauler 死亡（84,112,430，548）＋remoteHauler 死亡（84,112,488，161）＋两笔无死亡卸货（W37S58 510／W38S56 826）合计 **+3,501 ≥ ε**；死亡区间承载净 ε 的 **96.9%**。code 根因＝`kernel.ts:358-362` 与 `EnergyAuditMetrics.ts:127-131` 仅在 `creep.memory.home` 存在时计 carry。窗内全量环 74 事件只有 Assignment*/CreepDeath/AccountingDrift，无 EnergyTransfer/MineralTransfer/Market/Enemy/War；`AccountingDrift` 三条（W39S55 +361、W38S56 −600、W39S55 +52）。H1（economy 跳拍）未成立（低 harvest 区间 CPU `sk` 5/7 对均值 6.34，无尖峰）；H2/H4–H8 否证或量级不足。memory 端点仍 429（单发 `retry after 47,250,959ms`≈13.1h）⇒ 无 home 的 creep 数量未直接取证。零 src／零测试／零部署；live sha 沿用 `8e4275d98d57`。另立 **#208**（账外 carry 仪器化），下一轮先加 `audit_unhomed_carry`/`audit_unhomed_creeps` 再复跑。
 
+**11-07 R715 现状补（不覆盖上表旧值）**：live sha **`bbabb0deba51`**（boot≈84,115,6xx），三房运营未变；#209 仪器上线（`audit_pool_tomb_own/foreign`＋`CreepDeathCarry`），620 拍窗 ε=**+5,960（+9.613/t）⇒ FAIL**，外方墓碑 0/63；新候选＝在孵体价/终端在途未计入 P（#210）。窗内 `cpu_used` avg 14.51（部署前 300t 环 17.2、收窗后 16.7）。
+
 ## 2. 模块参与矩阵（39 个已注册 System 的参与状态）
 
 - **确认在场且生效**（线上读数能证明其在决策路径上）：room-state、spawn-manager、demand、assignment-service、
@@ -1204,13 +1206,24 @@
 
 - **#207 已执行（R713，观测型；正向残差已具名）**：620 拍同 boot 窗（84,112,201→84,112,821，63 样本）ε=**+3,062（+4.939/t）⇒ 预注册 FAIL（字面）**；`ΔP=−10,186` 对 `ΣnetFlow=−13,248`。**具名通道＝账外 carry**：三笔死亡注入（carrier 1,456／hauler 548／remoteHauler 161）＋两笔无死亡卸货（W37S58 510／W38S56 826）合计 +3,501 ≥ ε；死亡区间承载净 ε 的 96.9%；code 根因＝`kernel.ts:358-362` 与 `EnergyAuditMetrics.ts:127-131` 只在 `creep.memory.home` 存在时计 carry。H1（economy 跳拍）未成立（低 harvest 区间的 CPU `sk` 5/7 对均值 6.34，无尖峰）；H2/H4–H8 均否证或量级不足；窗内全量环无 EnergyTransfer/MineralTransfer/Market/Enemy/War。memory 端点仍 429（retry ≈13.1h）⇒ 无 home 的 creep 数量未直接取证。零 src／零部署。下一轮先仪器化（#208）再复跑。
 - **#208 已执行（R714，代码型；仪器 PASS、ε FAIL）**：`EnergyAuditMetrics` 两 gauge（`audit_unhomed_carry`／`audit_unhomed_creeps`，无 `memory.home` 的 creep 按所在房归集）＋分析器把 unseen-home carry 纳入 P；上线 `281f42b00acb`。620 拍窗 ε=**+4,071（+6.566/t）⇒ 预注册 FAIL**；`unhomed`／`unseen-home` 63/63 恒 0 ⇒ **R713 的「账外 carry」归因不被证实**。本轮新证：84,114,470→480 六次 TowerVolley 后 W37S58 loose 0→582 且无 CreepDeath ⇒ **非帝国 creep 墓碑＝直接外源**；两笔非自然 carrier 死亡区间 ε=+932／+1,423，而自然 remoteHauler 死亡平衡（−2／+84）。零阈值、零决策输入。
-- **#209 死亡注入具名化（下一轮，代码型；一次部署）**：`CreepDeath` payload 带 `carryEnergy`＋`home`；`EnergyAuditMetrics` 把 loose 拆成我方/非我方墓碑两档（`Tombstone.creep.my === false`）。先只观测。PASS＝部署后 ≥620 拍窗内 ε 被这两档具名到 |残差|≤1/t；FAIL＝仍 >1/t；UNKNOWN＝boot/段缺失/样本不足。
+- **#209 已执行（R715，代码型；仪器 PASS、ε FAIL）**：`CreepDeathCarry`（r=home，d=[role,carry,natural]）＋`EnergyAuditMetrics` 我方/外方墓碑两档，上线 `bbabb0deba51`。620 拍窗 ε=**+5,960（+9.613/t）⇒ 预注册 FAIL**；外方墓碑 0/63 样本、端点差与正向跳变均 0 ⇒ R714 的「非帝国墓碑注入」在本窗未复现。own 墓碑窗内正向跳变 4,375（事件下界 3,113）；`CreepDeathCarry` 14 笔全 natural=1。新候选＝**在孵体价/终端在途未计入 P**（最大单区间 ε=+4,109 与 `W38S56 spawned=8,300` 同拍）。
+- **#210 在途能量具名化（下一轮，代码型；一次部署）**：`EnergyAuditMetrics` 增「当前在孵体价」gauge（`spawn.spawning` 的 body 体价按房/spawn 汇总）；部署后同 boot ≥620 拍窗把该项纳入 P 的端点差；PASS＝`|ε−Δin-flight| ≤1/t × 窗长` 且具名；FAIL＝仍 >1/t；UNKNOWN＝boot/段/样本不足。不改 G4/G6/阈值。
 - **#206 已结（R710）**：四写点落地并上线（`f368e1d1`／live `b865ea891cb8`）；桶逐房闭合（12,000 对喂入 12,584）、`bk.industrialSpend` 已落 Memory、`nf` 不变；预注册 ε FAIL（+11.16/t），剩余残差转 #207。
 - **#205 已结（R708）**：预注册 FAIL（ε=−29,383／−47.24/t）；主通道＝W38S56 工厂电池压缩（`COMMODITIES.battery` 600 能量/批、工业池 −18,311），属既知 `industrialSpend` 缺桶，升级为账本输入缺陷；**≈−11,272（−18.1/t）仍未分离**，由 #206 后的第二轮同口径复判。
 - **#204 已结（R707）**：原命题否证（见 §3.5 更正），不再排轮；遗留的「G4 慢门 vs 物理尺平滑层不一致」作为口径项留在 §3.5。
 - 其余机器可办项：无（G 门相关 #195/#196/#197/#199 均在 §3.5 属人队列）。
 
 ## 4. 当前迭代（最近三轮）
+
+### 4.0（11-07 06:2xZ 立格，R715；上一条＝R714「#208 账外 carry 仪器化」；本格 **#209 死亡注入具名化＝仪器 PASS（两档墓碑 gauge 在场、`CreepDeathCarry` 14 笔合计 3,113）、ε 判决 FAIL（ε=+5,960／+9.613/t，620 拍同 boot）：外方墓碑 0/63 样本 ⇒ R714 的「非帝国墓碑注入」在本窗未复现；我方墓碑窗内正向跳变 4,375（事件下界 3,113）而端点只 +105；最大单区间 ε=+4,109 与 `spawned=8,300` 同拍 ⇒ 新候选＝在孵体价/窗口端点未计入 P**）
+
+**唯一主目标**：**#209 死亡注入具名化（代码型，一次部署）＋部署后 ε 复跑**——`CreepDeath` 携带量独立成 `CreepDeathCarry`（r=home，d=[role,carry,natural]）；`EnergyAuditMetrics` 把 loose 拆成我方/非我方墓碑两档；纯观测，不改 `nf`／G4／G6／阈值。
+
+- **改动/发布**：commit `75a3e1ac`（4 src＋3 test：`kernel.ts` 的 `creepLastSeen` 带最后可见携带量与 home；`event-log.ts` 新增 `CreepDeathCarry=50`；`EnergyAuditMetrics` 两 gauge）。CI run `42296906300` success；live sha **`bbabb0deba51`（814,041B）**＝本地同 commit dist 逐字一致（check-code 无参数与 shard3 两问同值）；boot≈84,115,6xx；一次正常部署，无回滚。门禁：typecheck 0、check:docs 通过、`npm test` 479 files/6,014 tests、build 815,868B、e2e smoke 3/3。反向实验：墓碑归属钉回旧值恰好 1 红；事件能量钉回 0 恰好 1 红（控制组全绿）。
+- **仪器 PASS**：10 个可见房两档 gauge 全程在场；段 63,256→69,242B（<80KB）；窗内 `cpu_used` avg **14.51**（min 12.28／max 19.22），部署前 300t 环 17.2、收窗后 16.7（未见 +0.5/t）；`CreepDeathCarry` 环内 **14 笔合计 3,113**（含 84,116,174 remoteHauler 1,000／home W37S58、死亡房 W37S57），全部 natural=1；own tomb 44/63 样本 >0，foreign 0/63。→ 我方档已 EXERCISED，外方档只 WIRED（本窗未遇到外方墓碑）。
+- **ε 判决＝FAIL（预注册字面）**：窗 84,115,790→84,116,410＝**620 拍／63 样本**，同 boot（账本单调无复位、两端可见房集一致）；`ΔP=−9,690` 对 `ΣnetFlow=−15,650` ⇒ **ε=+5,960（+9.613/t）**。闭式 `harvested=60,180／spawned=42,750／upgraded=7,507／repaired=4,383／industrialSpend=19,200／tradeFee=945／towerSpent=940／built=105`；诊断 `pickedUp=4,787／imported=26,810／exported=1,650`。外方墓碑端点差与窗内正向跳变**均为 0** ⇒ #209 的两档不能具名本窗残差。
+- **新证据（未证假设）**：最大单区间 84,115,920→930 `W38S56 spawned=8,300` 而全窗 ΔP 仅 −4,624、ε=+4,109 ⇒ 与「孵化开始即扣体价、`spawned` 完成才入账」同形；**窗界在孵体价（spawn 内已扣但不在任一池）与终端在途**未被 P 计入，可能是本窗正残差主项。另：own 墓碑正向跳变 4,375 对事件下界 3,113（差 1,262，含 age=1 无 lastSeen 的死亡）；H2 的端点 Δcarry +294 不能单独证账外 carry（carry 是流量池，端点差不是逐死亡配对）。
+- **下一轮唯一主目标**：**#210 在途能量具名化（代码型，一次部署）**——给 `EnergyAuditMetrics` 增「当前在孵体价」gauge（`spawn.spawning` 的 body 体价按房/spawn 汇总），部署后同 boot ≥620 拍窗把该项加入 P 的端点差；PASS＝`|ε−Δin-flight| ≤1/t × 窗长` 且具名；FAIL＝仍 >1/t；UNKNOWN＝boot/段/样本不足。不动 G4/G6、不改阈值。
 
 ### 4.0（11-06 20:4xZ 立格，R714；上一条＝R713「#207 ε 复跑」；本格 **#208 账外 carry 仪器化＝仪器 PASS、ε 判决 FAIL（+4,071／+6.566/t，620 拍同 boot）：两条新通道（无 home／unseen home）在 63/63 样本上恒 0 ⇒ R713 的「账外 carry」归因不被证实；新增直接反例＝84,114,470→480 六次 TowerVolley 后 W37S58 loose 0→582 且**无 CreepDeath 事件** ⇒ 非帝国 creep 的墓碑能量进入我方池，闭式「封闭系统」前提被打破**）
 
@@ -7605,6 +7618,7 @@
 
 ## 6. 变更记录（追加式）
 
+- 2026-11-07 R715 #209 死亡注入具名化（`CreepDeathCarry`＋墓碑两档）：仪器 PASS、ε FAIL（+9.613/t）；外方墓碑 0/63 样本 ⇒ R714 的非帝国墓碑注入未复现；own 墓碑正向跳变 4,375（事件下界 3,113）；新立 #210（在孵体价/终端在途未计入 P）。上线 `bbabb0deba51`，详见 §4.0 R715 与 lock。
 - 2026-11-06 R714 #208 账外 carry 仪器化（`audit_unhomed_carry`／`audit_unhomed_creeps`）：仪器 PASS、ε 判决 FAIL（+6.566/t）；两条新通道 63/63 恒 0 ⇒ R713 归因被否证；新立 #209（外方墓碑 + 死亡携带具名化）。上线 `281f42b00acb`，详见 §4.0 R714 与 `tmp/observe/AGENT.lock`。
 - 2026-11-05 R698 #200 修复（`upgrader` 早期房豁免帝国失血闸）：R2 canary 由 88/16 恢复到 21/83、9/9；unit 441/5,724、integration 30/239、typecheck/build 绿。部署与线上复读见 `tmp/observe/AGENT.lock` R698 条。
 - 2026-10-01 L1 建档；本轮 L2 = E5 停滞计时跨部署化（`c93f467`），P0-2「检出→响应」立案为下一批主目标。
