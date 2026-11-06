@@ -160,5 +160,5 @@
   2. 同一 boot 内取 ≥600 拍两端样本，按 E-18/E-19 闭式 `ε = ΔP_total − ΣΔ(harvested + bought + recycledRefund − sold − spawned − upgraded − built − repaired − towerSpent − tradeFee − industrialSpend)` 计算；PASS＝|ε| ≤1/t 且具名；FAIL＝>1/t 无具名；UNKNOWN＝boot 变化／段缺样本／两端可见房集不一致。
   3. 若残差 >1/t，`pickedUp` 是首要候选（R711 唯一同量级未定罪项），但不得单凭同量级定罪；必须与 Δloose（掉落／墓碑／废墟）同向且量级差可解释。
 - **口径边界**：segment 4 的 gauge 每 10 拍覆盖一次，样本 tick 由 `screeps_economy_audit_tick` 标注；`imported/exported` 为内部项不进闭式；`nukeSpend` 是 `industrialSpend` 子集不重复减；carry 按 `memory.home` 归房（与 R711 物理侧 H 同口径）；掉落／墓碑／废墟按房计。
-- **实测**：待部署后回写。
-- **裁决**：**未开始**（部署前）。
+- **实测（16:0xZ，部署后 ≥80 拍）**：commit `17eb882b`、CI `42247608760` success、live sha `8e4275d98d57`（813,086B，与本地同 commit dist 逐字一致）。segment 4 复读：`screeps_economy_audit_tick=84,111,201`；8 个可见房的四项池指标在场（W37S58 general 927,440／industrial 303,919／carry 4,340；W38S56 915,390／3,440／678；W39S55 57,401／0／465；远矿 W37S55 26,838 等）；账本 15 列在首个 economy 采样后出现（W37S58 harvested 840、towerSpent 1,500、imported 1,705；随后 10 拍 +200／+300 的连续增量）；`audit_seen` 全部为 1。段文本 55,746B（<80KB）；`screeps_runtime_cpu_used` 14.4–15.0（部署前 300t 环 avg 15.2）⇒ 仪器面三项验收全部命中。
+- **裁决**：**命中（仅仪器面）＋ ε 窗口未开始**。第 2 条（≥600 拍 ε 闭式）本轮未跑，留给下一轮；不得写成 PASS/FAIL。
