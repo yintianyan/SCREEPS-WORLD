@@ -1203,13 +1203,27 @@
 ## 3.7 现行机器可办队列（R710 起；属人项仍见 §3.5）
 
 - **#207 已执行（R713，观测型；正向残差已具名）**：620 拍同 boot 窗（84,112,201→84,112,821，63 样本）ε=**+3,062（+4.939/t）⇒ 预注册 FAIL（字面）**；`ΔP=−10,186` 对 `ΣnetFlow=−13,248`。**具名通道＝账外 carry**：三笔死亡注入（carrier 1,456／hauler 548／remoteHauler 161）＋两笔无死亡卸货（W37S58 510／W38S56 826）合计 +3,501 ≥ ε；死亡区间承载净 ε 的 96.9%；code 根因＝`kernel.ts:358-362` 与 `EnergyAuditMetrics.ts:127-131` 只在 `creep.memory.home` 存在时计 carry。H1（economy 跳拍）未成立（低 harvest 区间的 CPU `sk` 5/7 对均值 6.34，无尖峰）；H2/H4–H8 均否证或量级不足；窗内全量环无 EnergyTransfer/MineralTransfer/Market/Enemy/War。memory 端点仍 429（retry ≈13.1h）⇒ 无 home 的 creep 数量未直接取证。零 src／零部署。下一轮先仪器化（#208）再复跑。
-- **#208 账外 carry 仪器化（下一轮，代码型；一次部署）**：`EnergyAuditMetrics` 增 `audit_unhomed_carry`／`audit_unhomed_creeps`，并把 unseen-home carry 纳入分析池；先只观测，不改 `nf`／G4／`CONSUMPTION_FIELDS`。PASS＝部署后 gauge 在场、同 boot ≥620 拍窗把账外 carry 纳入 P 后 |ε|≤1/t 并具名；FAIL＝仍 >1/t；UNKNOWN＝boot/段缺失/样本不足。若通道确认，下一轮再做 `kernel.ts`/`collectPools` 的归属修法（同样先过全门禁）。
+- **#208 已执行（R714，代码型；仪器 PASS、ε FAIL）**：`EnergyAuditMetrics` 两 gauge（`audit_unhomed_carry`／`audit_unhomed_creeps`，无 `memory.home` 的 creep 按所在房归集）＋分析器把 unseen-home carry 纳入 P；上线 `281f42b00acb`。620 拍窗 ε=**+4,071（+6.566/t）⇒ 预注册 FAIL**；`unhomed`／`unseen-home` 63/63 恒 0 ⇒ **R713 的「账外 carry」归因不被证实**。本轮新证：84,114,470→480 六次 TowerVolley 后 W37S58 loose 0→582 且无 CreepDeath ⇒ **非帝国 creep 墓碑＝直接外源**；两笔非自然 carrier 死亡区间 ε=+932／+1,423，而自然 remoteHauler 死亡平衡（−2／+84）。零阈值、零决策输入。
+- **#209 死亡注入具名化（下一轮，代码型；一次部署）**：`CreepDeath` payload 带 `carryEnergy`＋`home`；`EnergyAuditMetrics` 把 loose 拆成我方/非我方墓碑两档（`Tombstone.creep.my === false`）。先只观测。PASS＝部署后 ≥620 拍窗内 ε 被这两档具名到 |残差|≤1/t；FAIL＝仍 >1/t；UNKNOWN＝boot/段缺失/样本不足。
 - **#206 已结（R710）**：四写点落地并上线（`f368e1d1`／live `b865ea891cb8`）；桶逐房闭合（12,000 对喂入 12,584）、`bk.industrialSpend` 已落 Memory、`nf` 不变；预注册 ε FAIL（+11.16/t），剩余残差转 #207。
 - **#205 已结（R708）**：预注册 FAIL（ε=−29,383／−47.24/t）；主通道＝W38S56 工厂电池压缩（`COMMODITIES.battery` 600 能量/批、工业池 −18,311），属既知 `industrialSpend` 缺桶，升级为账本输入缺陷；**≈−11,272（−18.1/t）仍未分离**，由 #206 后的第二轮同口径复判。
 - **#204 已结（R707）**：原命题否证（见 §3.5 更正），不再排轮；遗留的「G4 慢门 vs 物理尺平滑层不一致」作为口径项留在 §3.5。
 - 其余机器可办项：无（G 门相关 #195/#196/#197/#199 均在 §3.5 属人队列）。
 
 ## 4. 当前迭代（最近三轮）
+
+### 4.0（11-06 20:4xZ 立格，R714；上一条＝R713「#207 ε 复跑」；本格 **#208 账外 carry 仪器化＝仪器 PASS、ε 判决 FAIL（+4,071／+6.566/t，620 拍同 boot）：两条新通道（无 home／unseen home）在 63/63 样本上恒 0 ⇒ R713 的「账外 carry」归因不被证实；新增直接反例＝84,114,470→480 六次 TowerVolley 后 W37S58 loose 0→582 且**无 CreepDeath 事件** ⇒ 非帝国 creep 的墓碑能量进入我方池，闭式「封闭系统」前提被打破**）
+
+**唯一主目标**：**#208 账外 carry 仪器化（代码型，一次部署）＋部署后 ε 复跑**——`EnergyAuditMetrics` 增 `unhomed_carry`／`unhomed_creeps`（无 `memory.home` 的 creep，按当前所在房归集），并把「home 不可见房」的 carry 纳入分析池；纯观测，不改 `nf`／G4／`CONSUMPTION_FIELDS`／`globalCreepEnergy`。
+
+- **改动/发布**：commit `e9bb9eb2`（2 files，+78/−3；`src/telemetry/metrics/EnergyAuditMetrics.ts` 两 gauge＋采集循环零值归零、`tests/unit/telemetry/energy-audit-metrics.test.ts` +1 例覆盖「无 home 按所在房单列／零能量也计数／home 不可见仍按 home 导出／下一发归零」）。CI run `42279913803` **success**；live sha **`281f42b00acb`（813,511B）**＝本地同 commit dist 逐字一致（check-code 无参数与 shard3 两问同值）；boot≈84,113,9xx；一次正常部署，无回滚。门禁：typecheck 0、check:docs 通过、`npm test` 479 files／6,010 tests 全绿（原被 `tmp/observe/` 两份 10 月旧脚手架 `.test.ts` 污染，改名 `*.test.ts.legacy` 后复跑；tmp 被 gitignore、未删）、build 815,338B。
+- **验收＝仪器 PASS**：部署后 segment 4 两 gauge 在场（`unhomed_carry`／`unhomed_creeps` 按房），段 58,034→66,276B（<80KB），`cpu_used` 12.7（部署前 300t 环 13.9–14.3）；`audit_tick` 10 拍一档、账本全程单调无复位。
+- **ε 判决＝FAIL（预注册字面）**：窗 84,114,110→84,114,730＝**620 拍、63 样本**（`tmp/observe/r714-audit-samples.jsonl`／`r714-analyze-final.txt`）。`ΔP=+9,284` 对 `ΣnetFlow=+5,213` ⇒ **ε=+4,071（+6.566/t）**。闭式分项 `harvested=55,560／spawned=25,730／upgraded=2,235／built=1,040／repaired=573／towerSpent=9,300／industrialSpend=11,400／tradeFee=69／bought=sold=refund=0`；诊断 `pickedUp=4,082／imported=24,615／exported=3,300／nukeSpend=0`。逐房（远矿与本家互为镜像，不作判决）：W37S58 **+14,521**／W38S56 **+9,380**／W39S55 +608；W36S58 −10,730／W37S57 −5,058／W38S55 −4,650。
+- **R713 归因被否证**：`unhomed` 全程 0e/0c、`unseen-home carry` 两端 0（63/63）；用新分析器回放 R713 旧样本同样 Δunhomed=Δunseen=0、ε 仍 +3,062。R713 那五笔「账外 carry」**没有一条被这两条通道证实**，其措辞不得外推。
+- **本轮唯一的直接外源证据**：84,114,470→480 W37S58 在六次 `TowerVolley`（hits/100 50→6）之后 loose **0→582**，同区间**无 CreepDeath 事件** ⇒ 死的是非帝国 creep，其墓碑能量直接进入我方 loose 池。即 ε 闭式的「封闭系统」前提在遭袭期不成立。
+- **仍未具名的形状**：两笔**非自然 carrier 死亡**与正 ε 同区间——84,141,145（role14、age 1,071）loose +964／区间 ε +932；84,145,555（role14、age 781）loose +1,448／区间 ε +1,423；对照组两笔**自然** remoteHauler 死亡（84,142,259 age 1,625；84,147,004 age 1,625）分别 ε=−2／+84＝平衡。故「carrier 死亡时的携带能量为何不在 carry 池里」是下一轮的立案对象，不是本轮能判的。
+- **残留假设（未验证）**：跨房在途（terminal.send 途中能量不入任一池）、recycle 销毁随身货物、非自然死亡的第三来源；本轮均未取得读数。
+- **下一轮唯一主目标**：**#209 死亡注入具名化（代码型，一次部署）**——把 `CreepDeath` 事件 payload 扩成带 `carryEnergy`＋`home`（或等价的独立事件），并在 `EnergyAuditMetrics` 把 loose 拆成「我方/非我方墓碑」两档（`Tombstone.creep.my === false` 判外方），先只观测；PASS＝部署后 ≥620 拍窗内 ε 能被这两档具名到 |残差|≤1/t；FAIL＝仍 >1/t；UNKNOWN＝boot/段缺失/样本不足。不动 G4/G6、不改阈值。
 
 ### 4.0（11-06 18:1xZ 立格，R713；上一条＝R712「#207 观测通道解阻」；本格 **#207 segment-4 ε 复跑＝预注册 FAIL（ε=+3,062／+4.939/t，620 拍同 boot）：正向残差已全部归到「账外 carry」——三笔死亡注入 1,456/548/161＋两笔无死亡卸货 510/826，合计 +3,501 ≥ ε；code 根因＝`kernel.ts:358-362` 与 `EnergyAuditMetrics.ts:127-131` 只在 `creep.memory.home` 存在时计 carry；另立 #208，下一轮先仪器化再复跑**）
 
@@ -7591,6 +7605,7 @@
 
 ## 6. 变更记录（追加式）
 
+- 2026-11-06 R714 #208 账外 carry 仪器化（`audit_unhomed_carry`／`audit_unhomed_creeps`）：仪器 PASS、ε 判决 FAIL（+6.566/t）；两条新通道 63/63 恒 0 ⇒ R713 归因被否证；新立 #209（外方墓碑 + 死亡携带具名化）。上线 `281f42b00acb`，详见 §4.0 R714 与 `tmp/observe/AGENT.lock`。
 - 2026-11-05 R698 #200 修复（`upgrader` 早期房豁免帝国失血闸）：R2 canary 由 88/16 恢复到 21/83、9/9；unit 441/5,724、integration 30/239、typecheck/build 绿。部署与线上复读见 `tmp/observe/AGENT.lock` R698 条。
 - 2026-10-01 L1 建档；本轮 L2 = E5 停滞计时跨部署化（`c93f467`），P0-2「检出→响应」立案为下一批主目标。
 - 2026-10-01 #57 实施（`0776a0d`）：停摆信号接入**既有**失败图 + `development_resume` 定向响应；顺带修 `captureWorldSnapshot` 按位置解析房名。
