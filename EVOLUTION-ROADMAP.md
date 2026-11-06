@@ -1221,6 +1221,8 @@
 
 **依赖/现状**：当前 live `0bf73b74ab2d`（R708）；#200/#201 已过去，boost 的代码改动可排期，但仍须过同一条 CI/bundle（≤819,200B）门；Memory 级目标切换/唤醒可先由自动化执行。
 
+**R709b（强化万能化 / power creep 评估）**：live 无 power creeps（`Game.powerCreeps=[]`）；W37S58 powerSpawn power/G=0、energy 1300；terminal power **100** / G **5000** / ops **0**。① **强化 creep 非万能**：boost 按“部位×动作”生效（UO=harvest、GH=upgrade、LH=build），`evaluateBoostRequests` 的 `boosted` 是单化合物标志、50 部件上限、30 矿/部件/化合物；专门化经济 boost（R709）优先；多 boost 万能 WORK creep 只作后续单房 A/B，需扩展多化合物/部位与角色/任务链。② **power creep 是操作员不是工人**（不能 harvest/carry/build）；用 OPERATE_* 放大 spawn/extension/tower/lab/factory/terminal/storage/observer；现 `operateStruct` 无消费者。③ 计划（排队）：把 100 power/部分 G 搬入 powerSpawn → create/level → `PWR_GENERATE_OPS` → OPERATE_SPAWN/EXTENSION（经济）/OPERATE_TOWER（防御）/OPERATE_LAB/FACTORY（工业），计量 ops/power/冷却与增益；power 100/G 5000/ops 0 是起点，power 农场未开。优先级：R709 经济 boost > power ops > 万能 R&D；自动化 #205/#206 先，零 src/零部署。
+
 ### 4.0（11-06 10:2xZ 立格，R708；上一条＝R707「#204 原命题否证」；本格 **#205 帝国级残余收敛归因＝预注册 FAIL：622 拍窗 ε=−29,383（−47.24/t），远超 1/t；主因为 W38S56 工厂电池压缩（`COMMODITIES.battery` 600 能量→50 电池、cooldown 10，工业池按 600/批线性下降 18,311），对应既知 `industrialSpend` 缺桶；扣除工厂池降与 loose 后仍剩 ≈−11,272（−18.1/t）未分离**）
 
 **唯一主目标**：**#205 的帝国级残余收敛归因（观测型）**——同一 ≥600 拍窗内采齐三房＋远矿房的容器/掉落/坟墓/在途 carry 端点，用「物理（含远矿库存变化）− 账本（imported/exported 作内部项剔除）」同一口径重算帝国残余。PASS＝|残余| ≤1/t 且逐房残差能归到「跨房调拨相位/远矿库存」具名项；FAIL＝仍 >1/t 且无具名汇 ⇒ #205 升级为账本输入缺陷交 §3.5；UNKNOWN＝端点缺一房或窗内 boot。
