@@ -37,6 +37,8 @@
 
 **11-06 R710 现状补（不覆盖上表旧值）**：`f368e1d1` 已上线，live sha **`b865ea891cb8`**（810,353B，与本地 dist 逐字一致，CI run `42211974078` success）；boot 84,107,581。`EnergyLedger.industrialSpend`/`nukeSpend` 四写点落地：622 拍窗内 `industrialSpend=12,000`（W37S58 7,200／W38S56 4,800），逐房与工业池变化+补料闭合（喂入 12,584）；`bk.industrialSpend` 已进 Memory；`nf`/`CONSUMPTION_FIELDS` 未变。**预注册 ε 判决 FAIL：+6,943（+11.16/t）**——工业桶解释了 12,000 后残余翻正；bot `dr` 三房 Σ +6.10/t（R708 −36.80/t）。剩余正向残差另立 **#207**（远矿 harvested 下界/一端可见房 W38S58/未入账拾取；分析脚本缺 `recycledRefund` 列，本窗全 0）。部署后 84,108,255 三房 normal、risk=false、errors 0、`tier=tight@84,107,924`、`usage=14.81`、`Blocked=G4+G6`。
 
+**11-06 R711 现状补（不覆盖上表旧值）**：live sha 仍 **`b865ea891cb8`**、boot 84,107,581 未变；三房 RCL 8/7/5（W38S56 已到 RCL7、`progress=564,553`）、`state=normal`、`Blocked=G4+G6`、`capacity.tier=tight@84,107,924`。**#207 部分窗（84,109,241→84,109,644，403 拍、70 发）ε=+715（+1.774/t）**，比 R710 的 +11.16/t 低一个量级；`economy` 跳拍计数全 0、`recycledRefund` 全 0、W38S58 单端可见且 `P/D=0` ⇒ R710 列的三个候选（跳拍/退款/单端房）在本窗均不能解释残差；`pickedUp=4,448`（W39S55 3,150）是唯一同量级未入账候选，但二次流与 loot 同形、未定罪。因 memory 端点 429 中断，good 跨度 403<600 ⇒ 预注册 UNKNOWN，不能判 PASS/FAIL。**口径修正**：R708/R710 的 `P` 与 `H` 相差 1 拍，单 transfer 可在端点注入上千能量误差；R711 起物理侧同拍。
+
 ## 2. 模块参与矩阵（39 个已注册 System 的参与状态）
 
 - **确认在场且生效**（线上读数能证明其在决策路径上）：room-state、spawn-manager、demand、assignment-service、
@@ -1196,13 +1198,25 @@
 
 ## 3.7 现行机器可办队列（R710 起；属人项仍见 §3.5）
 
-- **#207 帝国 ε 剩余正向残差分解（下一轮，观测型）**：补采 `recycledRefund` 与 `economy/window-slip`（本窗 300t 环 `skippedPerTick=9.2`）；逐远矿房对比 `harvested` 计数与 source/container 端点，量化 CPU 跳窗造成的采集下界；W38S58 单端可见房剔除或单独记账；核查未入账拾取/取消孵化退款。PASS＝剩余 |ε| ≤1/t 且归到具名通道；FAIL＝仍 >1/t 且无具名汇 ⇒ 升级为账本输入缺陷；UNKNOWN＝端点缺房或窗内 boot。不部署、不动 G4/G6。
+- **#207 帝国 ε 剩余正向残差分解（下一轮复跑，观测型）**：R711 已补采 `recycledRefund` 与 `economy` 跳拍计数、逐远矿房对比 source/container 端点、W38S58 单端可见单列 ⇒ **预注册 UNKNOWN（good 跨度 403<600，memory 端点自 14:20Z 长 429）**；部分窗 ε=+715（+1.774/t），跳拍/退款/单端房三项在本窗均被否证，`pickedUp=4,448` 是唯一同量级候选（未定罪）。下一轮改 **probe-only**（skip 计数进探针、去掉 clear 与整份 Memory 读）重开 ≥600 拍窗，物理侧同拍；PASS＝|ε|≤1/t 且具名归因；FAIL＝>1/t 无具名汇 ⇒ 升级为账本输入缺陷（首查 `pickedUp`/loot 与 `terminal.send` 在途）；UNKNOWN＝端点缺失/429/boot。不部署、不动 G4/G6。
 - **#206 已结（R710）**：四写点落地并上线（`f368e1d1`／live `b865ea891cb8`）；桶逐房闭合（12,000 对喂入 12,584）、`bk.industrialSpend` 已落 Memory、`nf` 不变；预注册 ε FAIL（+11.16/t），剩余残差转 #207。
 - **#205 已结（R708）**：预注册 FAIL（ε=−29,383／−47.24/t）；主通道＝W38S56 工厂电池压缩（`COMMODITIES.battery` 600 能量/批、工业池 −18,311），属既知 `industrialSpend` 缺桶，升级为账本输入缺陷；**≈−11,272（−18.1/t）仍未分离**，由 #206 后的第二轮同口径复判。
 - **#204 已结（R707）**：原命题否证（见 §3.5 更正），不再排轮；遗留的「G4 慢门 vs 物理尺平滑层不一致」作为口径项留在 §3.5。
 - 其余机器可办项：无（G 门相关 #195/#196/#197/#199 均在 §3.5 属人队列）。
 
 ## 4. 当前迭代（最近三轮）
+
+### 4.0（11-06 14:4xZ 立格，R711；上一条＝R710「#206 工业桶」；本格 **#207 帝国 ε 残差分解＝预注册 UNKNOWN（窗 403 拍 <600，memory 端点 429 中断）：部分窗 ε=+715（+1.77/t），economy 跳拍=0、recycledRefund=0 ⇒ H1/H2 在本窗被否证；R710 的 +11.16/t 未在稳定期复现，但跨度不足不能判 PASS/FAIL**）
+
+**唯一主目标**：**#207 帝国 ε 剩余正向残差分解（观测型）**——补采 `recycledRefund` 与 `economy` 跳拍计数、逐远矿房对比 `harvested` 计数与 source/container 端点、W38S58 单端可见窗剔除或单独记账、核查未入账拾取/取消孵化退款；PASS＝剩余 |ε| ≤1/t 且归到具名通道；FAIL＝仍 >1/t 且无具名汇 ⇒ 升级为账本输入缺陷；UNKNOWN＝端点缺房或窗内 boot。不部署、不动 G4/G6。
+
+- **为什么是它**：§3.7 第一条 + R710 正文明确「下一轮唯一主目标」；纯观测、无部署税与 CI 风险。
+- **改动（零 src；动层＝②选目标＋测量口径）**：新增 `tmp/observe/r711-poll.mjs`、`r711-analyze.mjs`。**口径修正（本轮最大收益）**：R708/R710 的物理池 `P`（probe B）与 carry `H`（probe A）相差 1 拍，单个 transfer 可在端点注入上千能量误差；本轮改为物理侧（P/D/H）同拍（probe B）、账本单发（probe A），端点边界误差降为约一拍流量（≈90 能量/窗）。
+- **验证/发布**：零 src、零测试、零部署；live sha 沿用 **`b865ea891cb8`**（810,353B，`check-code` 无参数与 shard3 同值）；boot 84,107,581 全窗未变。
+- **窗与判决（预注册 E-20）**：窗 84,109,241→84,109,644（403 拍、70 good 样本）。ε=**+715（+1.774/t）**（ΔP=−1,242、netFlow=−1,957）。**H1 否证**：skip 重建 `economyBudget=0／budgetCap=0／windowSlip=0／allSystemSkips=0`；**H2 否证**：`recycledRefund` 全 0；**H3 无污染**：W38S58 仅早段可见 14 发且 `P/D=0`、source 3000；远矿 outflow 16,415 对 imported 17,055（差 640，边界量级）；`pickedUp` 4,448（W39S55 3,150／W37S58 956／W38S56 342）只登记为候选（二次流与 loot 同形）；bot `dr` 同窗 Σ **−670（−1.663/t）**，与我方尺反号但同量级。**判决 UNKNOWN**：`/api/user/memory` 自 14:20Z 起长 429（console 读回同时超时），good 跨度冻结在 403<600。
+- **口径债（下一轮修）**：本轮每周期 2 探针＋clear＋整份 Memory 读，显著重于 R710 的 2 探针＋1 读 ⇒ 疑似 429 触发源；下一轮改 probe-only（`skipReasons/prevSkipReasons` 进探针 A、去掉 clear 与整份 Memory 读）。
+- **改动边界**：零阈值、零决策输入、零 src；回退面＝none（仅 tmp 脚本与文档）。
+- **下一轮唯一主目标**：**#207 复跑（观测型，probe-only）**——≥600 拍窗、物理侧同拍、skip 计数进探针；PASS＝|ε|≤1/t 且具名归因；FAIL＝>1/t 无具名汇 ⇒ 升级为账本输入缺陷（首查 `pickedUp`/loot 与 `terminal.send` 在途）；UNKNOWN＝端点缺失/429/boot。不部署、不动 G4/G6。
 
 ### 4.0（11-06 12:4xZ 立格，R710；上一条＝R709「矿物 boost 诊断/排队」；本格 **#206 工业消耗观测桶＝代码型落地并部署（live `b865ea891cb8`）；桶本身逐房闭合并进 `bk`，但预注册 ε 判决 FAIL（+11.16/t）：工业项解释了 12,000，剩余正向残差另立 #207**）
 
@@ -15842,3 +15856,5 @@ isReady = extendedReadiness.allPassed && plannerInput.readiness.readiness !== "N
 **2026-11-06｜R708｜#205 帝国级残余收敛归因＝预注册 FAIL（ε=−47.24/t），主因工厂电池压缩+`industrialSpend` 缺桶（观测型，零 src/零部署）**：窗 84,105,642→84,106,264（622 拍、36 发、boot 84,090,865 未变）。①`ΔP_total −35,056` 对 `ΣnetFlow −5,673` ⇒ **ε=−29,383（−47.24/t）**；分项 `Δindustrial −17,711`／`Δgeneral −17,988`／`Δcontainers +3,739`／`Δloose −400`／`Δcarry −2,696`。②**主通道＝W38S56 工厂电池压缩**：`COMMODITIES.battery` 600 能量→50 电池/cooldown 10，工业池 20,381→2,070（−18,311＝≈30.5 批×600），前 256 拍 −15,000＝25 批×600（≈58.6/t＝满速）；账本无 `industrialSpend` 桶（`accounting.ts:262-267`）⇒ 已知不可见工业消耗，不是新漏口。③bot 自身 drift 同向：W38S56 −39.49/t、W37S58 +1.42/t、W39S55 +1.27/t（Σ −36.80/t）。④逐房 ε：W37S58 +8,741（import 剔除后 epsClosed −2,020）／W38S56 −20,848（epsClosed −28,148）／W39S55 −295／远矿三房 −16,981（调拨相位）；ownEpsClosed −30,463 基本被工厂池降吸收。⑤**仍未分离 ≈−11,272（−18.1/t）**（工厂补料→消耗差、窗内完全衰减的墓碑/掉落、其它未入账工业/战斗损失）⇒ #205 升级为账本输入缺陷；下一轮 #206 加 `industrialSpend` 观测桶后同口径复判。⑥仪器：`room.factory` 本服返回 null（用 `find` 才读到）、两探针同发差 ≤1 拍、socket 断连后按累计计数器续跑。验证/发布：零 src、零测试、零部署；live sha `0bf73b74ab2d`。
 
 **2026-11-06｜R710｜#206 工业消耗观测桶落地并上线＝预注册 ε FAIL（+11.16/t），但工业项逐房闭合（代码型，一次部署）**：commit `f368e1d1`（5 src＋7 test），CI run `42211974078` success，live sha **`b865ea891cb8`（810,353B）**＝本地同 commit dist 逐字一致；boot 84,107,581。①改动：`EnergyLedger.industrialSpend`＋子集 `nukeSpend`（纯观测，不进 `CONSUMPTION_FIELDS`/`nf`）；`rollupWindow` 的 drift 解释项加 `industrialSpend − nukeSpend`；factory produce（battery/commodity 按 `COMMODITIES[x].components.energy`，decompress 不记）、lab boost（parts×20）、powerSpawn process（50）、nuker launch（`NUKE_ENERGY_COST=300,000`，目标卡写 50k 是笔误）四写点只在 `OK` 时计数；kernel 镜像同步。②门禁：typecheck 0／check:docs 通过／unit 5,734／integration 239／build／e2e smoke 3/3 全绿；`npm test` 裸跑会扫到 `tmp/observe/` 两份 10-02/10-15 陈旧测试并载入失败（与本轮无关，门禁按 unit+integration 执行）。③ε 窗 84,107,605→84,108,227（622 拍、93 发、boot 未变）：`industrialSpend` **12,000**（W37S58 7,200／W38S56 4,800），与工业池变化+喂入逐房闭合（W37S58 池 +760 ⇒ 喂入 7,960；W38S56 池 −176 ⇒ 喂入 4,624；合计 12,584）；`bk.industrialSpend` 已落 Memory（W37S58 单窗 3,000/50t＝满速）。**帝国 ε＝+6,943（+11.16/t）⇒ FAIL**（R708 同式不含工业桶时 −5,057；桶解释 12,000 后残余翻正）；bot `dr` 三房 Σ +3,795（+6.10/t），R708 为 −36.80/t；逐房 epsClosed Σ −9,602（−15.4/t），正残差集中 W37S58 +4,457／W39S55 +1,671。④部署后 84,108,255 三房 normal/risk=false/queue 0/errors 0、`tier=tight@84,107,924`、`usage=14.81`、`Blocked=G4+G6`、Plan W39S56 EVALUATED；无本批回归。⑤**剩余正向残差另立 #207**：候选远矿 `harvested` 下界（CPU 跳窗丢 bump，本窗 `skippedPerTick=9.2`）、W38S58 单端可见、未入账拾取/取消孵化退款；分析脚本缺 `recycledRefund` 列（本窗三房全 0）。零阈值、零决策输入变更；回退面＝`f368e1d1` 整体 revert。
+
+**2026-11-06｜R711｜#207 帝国 ε 残差分解＝预注册 UNKNOWN（观测型，零 src/零测试/零部署）**：窗 84,109,241→84,109,644（403 拍、70 好样本、boot 84,107,581 未变）。①**ε=+715（+1.774/t）**（ΔP=−1,242、netFlow=−1,957），比 R710 的 +11.16/t 低一个量级，但跨度未达预注册 ≥600。②**H1/H2 在本窗否证**：skip 重建 `economyBudget=0／budgetCap=0／windowSlip=0／allSystemSkips=0`；`recycledRefund` 全 0。③**H3 无污染**：W38S58 仅早段可见 14 发且 `P/D=0`、source 3000；远矿 outflow Σ16,415 对 imported 17,055（差 640，边界量级）。④**pickedUp=4,448**（W39S55 3,150／W37S58 956／W38S56 342）是唯一同量级候选，但它在闭式外（二次流与 loot 同形），未定罪。⑤bot `dr` 同窗 Σ **−670（−1.663/t）**，与我方尺反号但同量级 ⇒ 两把尺都固定不住 +11/t。⑥**判决 UNKNOWN**：`/api/user/memory` 自 14:20Z 起长 429 且 console 读回同时超时，good 跨度冻结在 403<600。⑦**口径修正（本轮最大收益）**：R708/R710 的 `P`（probe B）与 `H`（probe A）相差 1 拍，单个 transfer 可在端点注入上千能量误差；R711 起物理侧（P/D/H）同拍、账本单发，边界误差≈一拍流量。⑧口径债：本轮每周期 2 探针＋clear＋整份 Memory 读，显著重于 R710 ⇒ 疑似 429 触发源；下一轮改 probe-only。零阈值、零决策输入；live sha 沿用 `b865ea891cb8`；docs-only 本地 commit（按 6.4 不 push）。下一轮＝#207 probe-only 复跑（≥600 拍、物理侧同拍、skip 进探针）。
