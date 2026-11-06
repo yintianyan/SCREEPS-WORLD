@@ -1201,6 +1201,26 @@
 
 ## 4. 当前迭代（最近三轮）
 
+### 4.0（11-06 立格，R709；上一条＝R708「#205 工厂电池」；本格**矿物 boost 全链诊断与给自动化的计划（排队，不抢占 #205/#206）**）
+
+**现场（Game.time 84,106,370，console/Memory 现读）**：两房 `industry.boostedCreeps=[]`；W37S58 有 **XGH2O 205**（storage+lab）与 terminal **GH 768 / GO 9397 / U 7014 / O 3000 / L 5351 / H 2716 / G 5000 / X 1007**；W38S56 有 GH 30+5、GH2O 25、G 225、H 900、U 600、L 300、O 777。两房 `reactionTarget=XGH2O`；W37S58 计划只有 `X+GH2O→XGH2O(35)`（缺 GH2O 上游），`idleUntil=84,106,791`（now+421，正常 500 拍休眠）；W38S56 六步链、`idleUntil=84,105,241`（已过期/醒着）。W39S55 RCL5 < boost.minRcl=6。
+
+- **主因①：策略未覆盖 remoteHarvester**（`boost.ts:11-41` 的 roleBoosts 只有 harvester/upgrader/builder/战斗；`evaluateBoostRequests` 按 `roleBoosts[creep.role]` 查）。W37S58 的 **4 只 remoteHarvester** 是收入引擎，永远不生成 boost 请求；remoteHauler/hauler/distributor 同样没有 carry boost（KH/KH2O/XKH2O 完全没用上）。
+- **主因②：500 拍休眠 vs ~100 拍报到窗**（`lab-system.ts:278-316` 休眠分支只每 50 拍重规划采购，**不评估 boost**；`:537-539` 无反应+无请求即睡 500；`boost.ts:65` `BOOST_REPORT_TTL=1400` ⇒ 出生后约 100 拍内不报到就永久失去资格）。任何在休眠窗内出生的经济 creep 必错过强化。
+- **主因③：化合物/房间-角色错配**：引擎 BOOSTS 核对（common/constants.js:620-700）＝**GH/XGH2O=upgrade、LH/XLH2O=build、LO/XLHO2=heal、ZO=move**，代码映射**没写反**；但 XGH2O 囤在 RCL8 无升级器的 W37S58；W38S56 有升级器但 GH 仅 35（< reserve 100+30=130 门槛）；采/建化合物 UO/LH 没生产；默认目标 `XGH2O`（`lab-system.ts:415-418`）锁死；`reserveAmount=100`+`≥30` 要求库存 ≥130；RCL8 `rcl8NoUpgrade`、RCL5 `<minRcl6` 天然没有升级器消费者；W37S58 反应计划缺 GH2O 上游。
+
+**该强化谁（按 ROI）**：① **remoteHarvester**（XUHO2→UHO2→UO，harvest ×7/×5/×3；4 只，收入侧最高）；② 本地 harvester（UO 线）；③ builder（XLH2O→LH2O→LH，build/repair ×2/×1.8/×1.5）；④ upgrader（XGH2O→GH2O→GH；W38S56 在 R688 后、W39S55 RCL6；W37S58 RCL8 不需要）；⑤ 可选：remoteHauler/hauler/distributor 的 carry boost（XKH2O→KH2O→KH，carry ×4/×3/×2；K/H 充裕，先做 ROI 评估）；⑥ 战斗角色只在玩家威胁时（当前 NPC-only，低优先）。
+
+**计划（交给自主进化定时任务）**：
+1. **立即可做的 Memory 级动作（无需部署）**：把 W37S58 `industry.reactionTarget` 切到 **UO**（或 LH）、amount 300，清 `reactionPlan/reactionWait`、`idleUntil=0` 唤醒；W38S56 切到 **GH**、同样清计划/唤醒。lab-system 会按持久化目标重规划；先让 T1 产线转起来（U/O/L/H/G 都够），不再空产 XGH2O。注意 W37S58 无升级器，XGH2O 205 暂搁置。
+2. **策略覆盖（代码，等 #201 bundle 门修好后）**：`DEFAULT_BOOST_POLICY.roleBoosts` 加 `remoteHarvester: XUHO2`（fallback UHO2/UO，priority 9，高于 local harvester）；可选加 remoteHauler/hauler/distributor 的 KH 线；补单测（角色→化合物→效果→部位）。
+3. **休眠/窗口（代码）**：休眠分支每 50 拍也评估 `evaluateBoostRequests`，有请求即清 `idleUntil`；`idleUntil` 上限压到 ≤50 拍或 spawn 时唤醒；经济角色 `BOOST_REPORT_TTL` 放宽到 ~700–1000（或“化合物就绪即可在剩余寿命内强化”）。
+4. **按房间产 T1**：W37S58 → UO（供 harvesters）与 LH（供 builder）；W38S56 → GH（供 R688 后 upgraders，先补到 ≥130/300）与 UO/LH；W39S55 RCL6 后再上 GH/LH/UO（矿物需 terminal/跨房引入）。T1 单步、廉价、ROI 最高；T2/T3 在 T1 稳定后再做。
+5. **用掉搁置料**：XGH2O 205 可 terminal 送 W38S56（属人市场/物流）或留到 W39S55 RCL6；GH 768/GO 9397 在 terminal（`collectFullInventory` 可见，但需 supplyLabs 搬入 lab）。
+6. **验证**：`boostedCreeps` 非空、remoteHarvester 的 body 出现 boost、采集速率提升、lab `idleUntil` 不再吃掉报到窗、R688 后 W38S56 upgraders 的 GH 到位；CPU 不因 boost 显著上升。
+
+**依赖/现状**：当前 live `0bf73b74ab2d`（R708）；#200/#201 已过去，boost 的代码改动可排期，但仍须过同一条 CI/bundle（≤819,200B）门；Memory 级目标切换/唤醒可先由自动化执行。
+
 ### 4.0（11-06 10:2xZ 立格，R708；上一条＝R707「#204 原命题否证」；本格 **#205 帝国级残余收敛归因＝预注册 FAIL：622 拍窗 ε=−29,383（−47.24/t），远超 1/t；主因为 W38S56 工厂电池压缩（`COMMODITIES.battery` 600 能量→50 电池、cooldown 10，工业池按 600/批线性下降 18,311），对应既知 `industrialSpend` 缺桶；扣除工厂池降与 loose 后仍剩 ≈−11,272（−18.1/t）未分离**）
 
 **唯一主目标**：**#205 的帝国级残余收敛归因（观测型）**——同一 ≥600 拍窗内采齐三房＋远矿房的容器/掉落/坟墓/在途 carry 端点，用「物理（含远矿库存变化）− 账本（imported/exported 作内部项剔除）」同一口径重算帝国残余。PASS＝|残余| ≤1/t 且逐房残差能归到「跨房调拨相位/远矿库存」具名项；FAIL＝仍 >1/t 且无具名汇 ⇒ #205 升级为账本输入缺陷交 §3.5；UNKNOWN＝端点缺一房或窗内 boot。
