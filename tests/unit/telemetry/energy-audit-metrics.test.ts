@@ -202,4 +202,60 @@ describe("EnergyAuditMetrics — ε 结算的 segment 出口", () => {
     expect(entry("screeps_economy_audit_pool_general", "W4N4")).toBe(5);
     expect(entry("screeps_economy_audit_pool_industrial", "W4N4")).toBe(7);
   });
+
+  it("无 home 的 creep carry 按所在房单列，下一发归零", () => {
+    game.time = 5000;
+    game.rooms = {
+      W5N5: makeRoom({ structures: [{ structureType: "storage", amount: 100 }] }),
+      W6N6: makeRoom({ structures: [] }),
+    };
+    game.creeps = {
+      homed: {
+        memory: { home: "W5N5" },
+        room: { name: "W5N5" },
+        store: { getUsedCapacity: () => 40 },
+      },
+      orphanLoaded: {
+        memory: {},
+        room: { name: "W5N5" },
+        store: { getUsedCapacity: () => 75 },
+      },
+      orphanEmpty: {
+        memory: {},
+        room: { name: "W5N5" },
+        store: { getUsedCapacity: () => 0 },
+      },
+      orphanElsewhere: {
+        memory: {},
+        room: { name: "W6N6" },
+        store: { getUsedCapacity: () => 12 },
+      },
+      unseenHome: {
+        memory: { home: "W9N9" },
+        room: { name: "W6N6" },
+        store: { getUsedCapacity: () => 33 },
+      },
+    };
+    collectEnergyAuditMetrics();
+
+    expect(entry("screeps_economy_audit_pool_carry", "W5N5")).toBe(40);
+    expect(entry("screeps_economy_audit_unhomed_carry", "W5N5")).toBe(75);
+    expect(entry("screeps_economy_audit_unhomed_creeps", "W5N5")).toBe(2);
+    expect(entry("screeps_economy_audit_unhomed_carry", "W6N6")).toBe(12);
+    expect(entry("screeps_economy_audit_unhomed_creeps", "W6N6")).toBe(1);
+    // home 不可见：carry 仍按 home 导出（分析器据此纳入 P）
+    expect(entry("screeps_economy_audit_pool_carry", "W9N9")).toBe(33);
+
+    game.time = 5010;
+    game.creeps = {
+      homed: {
+        memory: { home: "W5N5" },
+        room: { name: "W5N5" },
+        store: { getUsedCapacity: () => 40 },
+      },
+    };
+    collectEnergyAuditMetrics();
+    expect(entry("screeps_economy_audit_unhomed_carry", "W5N5")).toBe(0);
+    expect(entry("screeps_economy_audit_unhomed_creeps", "W5N5")).toBe(0);
+  });
 });

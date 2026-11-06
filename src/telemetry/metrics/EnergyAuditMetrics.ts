@@ -29,6 +29,8 @@ const POOL_INDUSTRIAL = "screeps_economy_audit_pool_industrial";
 const POOL_LOOSE = "screeps_economy_audit_pool_loose";
 const POOL_CARRY = "screeps_economy_audit_pool_carry";
 const POOL_SEEN = "screeps_economy_audit_seen";
+const UNHOMED_CARRY = "screeps_economy_audit_unhomed_carry";
+const UNHOMED_CREEPS = "screeps_economy_audit_unhomed_creeps";
 
 let registered = false;
 
@@ -43,6 +45,12 @@ export function registerEnergyAuditMetrics(): void {
     "room",
   ]);
   registerMetricGauge("economy", "audit_pool_carry", "Creep carried energy by home room", ["room"]);
+  // 无 home 的 creep 原本完全落在审计之外：死亡或卸货时才以 loose/general 现身，
+  // 制造无法归因的正残差。按所在房归集，便于纳入同一 ε 闭式。
+  registerMetricGauge("economy", "audit_unhomed_carry", "Energy carried by creeps without a home", [
+    "room",
+  ]);
+  registerMetricGauge("economy", "audit_unhomed_creeps", "Creeps without a home", ["room"]);
   for (const field of AUDIT_FIELDS) {
     registerMetricGauge("economy", `audit_${field}`, `Energy ledger ${field} since boot`, ["room"]);
   }
@@ -122,16 +130,27 @@ export function collectEnergyAuditMetrics(): void {
     }
 
     const carry = new Map<string, number>();
+    const unhomedCarry = new Map<string, number>();
+    const unhomedCreeps = new Map<string, number>();
     for (const creepName in Game.creeps) {
       const creep = Game.creeps[creepName];
       if (!creep) continue;
-      const home = creep.memory?.home;
-      if (!home) continue;
       const amount = creep.store.getUsedCapacity(RESOURCE_ENERGY);
-      carry.set(home, (carry.get(home) ?? 0) + amount);
+      const home = creep.memory?.home;
+      if (home) {
+        carry.set(home, (carry.get(home) ?? 0) + amount);
+        continue;
+      }
+      // 按所在房归集：死亡/卸货的落点就是这里，与 loose 池同房对账。
+      const here = creep.room?.name;
+      if (!here) continue;
+      if (amount > 0) unhomedCarry.set(here, (unhomedCarry.get(here) ?? 0) + amount);
+      unhomedCreeps.set(here, (unhomedCreeps.get(here) ?? 0) + 1);
     }
     for (const roomName of seen) {
       setGauge(POOL_CARRY, carry.get(roomName) ?? 0, { room: roomName });
+      setGauge(UNHOMED_CARRY, unhomedCarry.get(roomName) ?? 0, { room: roomName });
+      setGauge(UNHOMED_CREEPS, unhomedCreeps.get(roomName) ?? 0, { room: roomName });
     }
     for (const [home, amount] of carry) {
       if (!seen.has(home)) setGauge(POOL_CARRY, amount, { room: home });
