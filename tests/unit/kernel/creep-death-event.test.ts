@@ -64,6 +64,43 @@ describe("recordCreepDeath — 死亡事件字段", () => {
     expect(ev!.d[2]).toBe(-1);
   });
 
+  it("最后可见携带 >0：另发 CreepDeathCarry（r=home，d=[role,carry,natural]）", () => {
+    const name = `hauler-W37S58-2-${82000000 - 400}-ab3x`;
+    globalCache().creepLastSeen = new Map([
+      [name, { r: "W37S58", x: 31, y: 24, e: 640, h: "W37S58" }],
+    ]);
+
+    recordCreepDeath(name);
+
+    const events = drainEventBuffer();
+    expect(events).toHaveLength(2);
+    expect(events[1]!.k).toBe(EventKind.CreepDeathCarry);
+    expect(events[1]!.r).toBe("W37S58");
+    expect(events[1]!.d).toEqual([roleCode("hauler"), 640, 0]);
+  });
+
+  it("无 home 的死亡携带：r 回落到死亡房（携带仍须具名）", () => {
+    const name = `hauler-W39S55-2-${82000000 - 400}-cd4y`;
+    globalCache().creepLastSeen = new Map([[name, { r: "W39S55", x: 12, y: 9, e: 210, h: "" }]]);
+
+    recordCreepDeath(name);
+
+    const events = drainEventBuffer();
+    expect(events[1]!.k).toBe(EventKind.CreepDeathCarry);
+    expect(events[1]!.r).toBe("W39S55");
+  });
+
+  it("携带为 0：不发 CreepDeathCarry（旧读数形状不变）", () => {
+    const name = `hauler-W37S58-2-${82000000 - 400}-ef5z`;
+    globalCache().creepLastSeen = new Map([
+      [name, { r: "W37S58", x: 31, y: 24, e: 0, h: "W37S58" }],
+    ]);
+
+    recordCreepDeath(name);
+
+    expect(drainEventBuffer()).toHaveLength(1);
+  });
+
   it("非标准命名（外部/手工 creep）静默跳过", () => {
     recordCreepDeath("scout1");
 

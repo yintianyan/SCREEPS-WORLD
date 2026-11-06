@@ -334,9 +334,12 @@ export class Kernel {
     // P0-1：预构建每房「待计入」harvester/worker 数量。
     // 包括已存活但尚未分配 sourceId 的 + 正在孵化中的，避免替换期间的假 bootstrap。
     const globalPendingHarvesters = new Map<string, number>();
-    // 战斗黑匣子（M9）：记录每个 creep 的当前位置，供下 tick 死亡事件取
-    // 生前最后位置（maintainMemory 先于本函数运行，死者读到的是旧 Map）。
-    const creepLastSeen = new Map<string, { r: string; x: number; y: number }>();
+    // 战斗黑匣子（M9）：记录每个 creep 的当前位置与携带能量，供下 tick 死亡事件取
+    // 生前最后位置/携带量（maintainMemory 先于本函数运行，死者读到的是旧 Map）。
+    const creepLastSeen = new Map<
+      string,
+      { r: string; x: number; y: number; e: number; h: string }
+    >();
     // P0-1：全局编队索引 — 在已有的 Game.creeps 遍历中顺便按编队维度归组，
     // 供 war-planner / power-farm-manager / prospect-manager / expansion-manager
     // 复用，消除各系统独立全量遍历的 O(4N) → O(N)。
@@ -353,13 +356,17 @@ export class Kernel {
       // 快照构建。个别字段异常（引擎 edge case、手工注入的 mock 缺字段）是
       // 长期运行中的真实风险，而快照是全 tick 数据量最大的热点。
       try {
-        creepLastSeen.set(creep.name, { r: creep.room.name, x: creep.pos.x, y: creep.pos.y });
         const home = creep.memory.home;
-        if (home) {
-          const carried = creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-          if (carried > 0) {
-            globalCreepEnergy.set(home, (globalCreepEnergy.get(home) ?? 0) + carried);
-          }
+        const carried = creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+        creepLastSeen.set(creep.name, {
+          r: creep.room.name,
+          x: creep.pos.x,
+          y: creep.pos.y,
+          e: carried,
+          h: home ?? "",
+        });
+        if (home && carried > 0) {
+          globalCreepEnergy.set(home, (globalCreepEnergy.get(home) ?? 0) + carried);
         }
         const roleName = creep.memory.role;
         const roleDef = roleMap.get(roleName ?? "");

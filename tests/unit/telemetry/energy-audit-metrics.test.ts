@@ -49,8 +49,13 @@ function makeRoom(spec: {
   structures?: Array<{ structureType: string; amount: number }>;
   dropped?: number;
   tombstone?: number;
+  tombs?: Array<{ amount: number; mine: boolean }>;
   ruin?: number;
 }) {
+  const tombs = [
+    ...(spec.tombstone ? [{ amount: spec.tombstone, mine: false }] : []),
+    ...(spec.tombs ?? []),
+  ];
   return {
     find: (kind: number) => {
       if (kind === 101) {
@@ -61,7 +66,11 @@ function makeRoom(spec: {
       }
       if (kind === 102)
         return spec.dropped ? [{ resourceType: "energy", amount: spec.dropped }] : [];
-      if (kind === 103) return spec.tombstone ? [energy(spec.tombstone)] : [];
+      if (kind === 103)
+        return tombs.map(t => ({
+          store: { getUsedCapacity: () => t.amount },
+          creep: { my: t.mine },
+        }));
       if (kind === 104) return spec.ruin ? [energy(spec.ruin)] : [];
       return [];
     },
@@ -142,6 +151,8 @@ describe("EnergyAuditMetrics — ε 结算的 segment 出口", () => {
     expect(entry("screeps_economy_audit_pool_general", "W1N1")).toBe(600);
     expect(entry("screeps_economy_audit_pool_industrial", "W1N1")).toBe(200);
     expect(entry("screeps_economy_audit_pool_loose", "W1N1")).toBe(100);
+    expect(entry("screeps_economy_audit_pool_tomb_own", "W1N1")).toBe(0);
+    expect(entry("screeps_economy_audit_pool_tomb_foreign", "W1N1")).toBe(30);
     expect(entry("screeps_economy_audit_pool_carry", "W1N1")).toBe(75);
     expect(entry("screeps_economy_audit_pool_general", "W2N2")).toBe(400);
     expect(entry("screeps_economy_audit_pool_industrial", "W2N2")).toBe(60);
@@ -171,6 +182,25 @@ describe("EnergyAuditMetrics — ε 结算的 segment 出口", () => {
         (mockGlobal as any).energyLedger.rooms.W1N1[field],
       );
     }
+  });
+
+  it("墓碑按 creep.my 拆成我方/非我方两档，两档都是 loose 的子集", () => {
+    game.time = 2500;
+    game.rooms = {
+      W5N5: makeRoom({
+        dropped: 10,
+        tombs: [
+          { amount: 300, mine: true },
+          { amount: 582, mine: false },
+        ],
+      }),
+    };
+
+    collectEnergyAuditMetrics();
+
+    expect(entry("screeps_economy_audit_pool_loose", "W5N5")).toBe(892);
+    expect(entry("screeps_economy_audit_pool_tomb_own", "W5N5")).toBe(300);
+    expect(entry("screeps_economy_audit_pool_tomb_foreign", "W5N5")).toBe(582);
   });
 
   it("房间失去视野后 seen 归 0：旧池值不许当当前样本", () => {

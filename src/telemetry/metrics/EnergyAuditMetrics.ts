@@ -27,6 +27,8 @@ const AUDIT_FIELDS = [
 const POOL_GENERAL = "screeps_economy_audit_pool_general";
 const POOL_INDUSTRIAL = "screeps_economy_audit_pool_industrial";
 const POOL_LOOSE = "screeps_economy_audit_pool_loose";
+const POOL_TOMB_OWN = "screeps_economy_audit_pool_tomb_own";
+const POOL_TOMB_FOREIGN = "screeps_economy_audit_pool_tomb_foreign";
 const POOL_CARRY = "screeps_economy_audit_pool_carry";
 const POOL_SEEN = "screeps_economy_audit_seen";
 const UNHOMED_CARRY = "screeps_economy_audit_unhomed_carry";
@@ -44,6 +46,17 @@ export function registerEnergyAuditMetrics(): void {
   registerMetricGauge("economy", "audit_pool_loose", "Dropped, tombstone and ruin energy", [
     "room",
   ]);
+  // 墓碑按归属拆档：外方（NPC/他人）墓碑是受踪池的外源注入，是 ε 正残差的主要候选。
+  // 两档都是 loose 的子集，分析时不得重复计入 P。
+  registerMetricGauge("economy", "audit_pool_tomb_own", "Energy in our own creep tombstones", [
+    "room",
+  ]);
+  registerMetricGauge(
+    "economy",
+    "audit_pool_tomb_foreign",
+    "Energy in non-empire creep tombstones",
+    ["room"],
+  );
   registerMetricGauge("economy", "audit_pool_carry", "Creep carried energy by home room", ["room"]);
   // 无 home 的 creep 原本完全落在审计之外：死亡或卸货时才以 loose/general 现身，
   // 制造无法归因的正残差。按所在房归集，便于纳入同一 ε 闭式。
@@ -114,11 +127,16 @@ export function collectEnergyAuditMetrics(): void {
       }
 
       let loose = 0;
+      let ownTomb = 0;
+      let foreignTomb = 0;
       for (const dropped of room.find(FIND_DROPPED_RESOURCES)) {
         if (dropped.resourceType === RESOURCE_ENERGY) loose += dropped.amount;
       }
       for (const tombstone of room.find(FIND_TOMBSTONES)) {
-        loose += tombstone.store.getUsedCapacity(RESOURCE_ENERGY);
+        const amount = tombstone.store.getUsedCapacity(RESOURCE_ENERGY);
+        loose += amount;
+        if (tombstone.creep?.my === true) ownTomb += amount;
+        else foreignTomb += amount;
       }
       for (const ruin of room.find(FIND_RUINS)) {
         loose += ruin.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -127,6 +145,8 @@ export function collectEnergyAuditMetrics(): void {
       setGauge(POOL_GENERAL, general, { room: roomName });
       setGauge(POOL_INDUSTRIAL, industrial, { room: roomName });
       setGauge(POOL_LOOSE, loose, { room: roomName });
+      setGauge(POOL_TOMB_OWN, ownTomb, { room: roomName });
+      setGauge(POOL_TOMB_FOREIGN, foreignTomb, { room: roomName });
     }
 
     const carry = new Map<string, number>();

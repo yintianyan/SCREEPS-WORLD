@@ -164,3 +164,13 @@
 - **裁决**：**命中（仅仪器面）＋ ε 窗口未开始**。第 2 条（≥600 拍 ε 闭式）本轮未跑，留给下一轮；不得写成 PASS/FAIL。
 - **实测（R713，18:1xZ）**：窗 84,112,201→84,112,821（**620 拍、63 样本、10 拍间隔、同 boot**）；`ΔP=−10,186`、`ΣnetFlow=−13,248` ⇒ **ε=+3,062（+4.939/t）**。闭式 `harvested=53,780／spawned=35,380／upgraded=11,229／industrialSpend=15,600／repaired=2,277／towerSpent=2,170／tradeFee=372`；`pickedUp=2,204`（诊断项）、`imported=20,917`、`exported=1,650`。**具名通道＝账外 carry**：carrier 死亡 1,456＋hauler 死亡 548＋remoteHauler 死亡 161＋两笔无死亡卸货 510/826＝**+3,501 ≥ ε**；死亡区间承载净 ε 的 96.9%。code 根因＝`kernel.ts:358-362` 与 `EnergyAuditMetrics.ts:127-131` 仅在 `creep.memory.home` 存在时计 carry。H1（economy 跳拍）**未成立/未证**（低 harvest 区间 CPU `sk` 5/7 对均值 6.34，无尖峰；segment 4 无 skipReasons）；H2/H4–H8 否证或量级不足；窗内全量环无 EnergyTransfer/MineralTransfer/Market/Enemy/War。
 - **裁决（R713）**：**FAIL（字面；|ε|=4.939/t > 1/t）＋正向具名通道**。残差不是游戏经济漏口，而是**账外 carry 的仪器/账本覆盖缺口**；净差 −439 的负向小项（Δloose −250、repair 同拍多计候选）未再分。另立 #208：下一轮先给 `EnergyAuditMetrics` 加 `audit_unhomed_carry`/`audit_unhomed_creeps` 与 unseen-home carry 导出，再取同 boot ≥620 拍窗复判；PASS＝纳入账外 carry 后 |ε|≤1/t 且具名；FAIL＝仍 >1/t；UNKNOWN＝boot/段缺失/样本不足。无 home 的 creep 身份/数量本轮不可得（memory 端点 429，retry ≈13.1h）。
+
+## E-22 · #209 死亡注入具名化（R715，11-07）
+- **预期（2026-11-07 05:2xZ 写死，代码改动与部署之前；出处 `tmp/observe/AGENT.lock` R715 目标卡）**：
+  1. **仪器面**：部署后 segment 4 出现 `screeps_economy_audit_pool_tomb_own` 与 `..._tomb_foreign`（对每个可见房），且两者之和 ≤ `audit_pool_loose`（都是 loose 的子集）；段文本仍 <80KB、`runtime_cpu_used` 与部署前同量级（差 ≤0.5/t）。
+  2. **事件面**：我方 creep 死亡且最后可见携带 >0 时，segment 2 的事件环出现 `CreepDeathCarry`（`r` = home，`d = [roleCode, carryEnergy, natural]`），与同拍 `CreepDeath` 相邻；携带为 0 时不发。旧 `CreepDeath` 的 `d` 形状不变，历史事件解码不受影响。
+  3. **ε 判决**：部署后取同 boot ≥620 拍、10 拍采样、两端可见房集一致的窗，按 E-18/E-19 闭式计算 `ε = ΔP − ΣΔ(harvested+bought+recycledRefund−sold−spawned−upgraded−built−repaired−towerSpent−tradeFee−industrialSpend)`；`P` 仍只含 general/industrial/loose/carry（含 unseen-home 与 unhomed carry），**两档墓碑是 loose 的子集，不重复计入 P**。
+  4. **预注册判据**：PASS＝`|ε| ≤ 1/t × 窗长`，或 `|ε − ΔP_tomb_foreign| ≤ 1/t × 窗长` 且正残差由外方墓碑具名；FAIL＝扣掉外方墓碑端点差后仍 >1/t 且无具名汇；UNKNOWN＝boot 变化／segment 缺失／样本 <620 拍／两端可见房集不一致。我方墓碑（`ΔP_tomb_own`）按 H2 与同窗 carry 差分交叉核验：若墓碑升而 carry 未降，则记「账外 carry」候选，**不得直接从未具名残差里扣掉**。
+- **反向实验（部署前，已执行）**：把墓碑归属条件钉成恒假 ⇒ 恰好 1 例红（墓碑拆分用例）、其余 4 例绿；把 `CreepDeathCarry` 的能量字段钉回 0 ⇒ 恰好 1 例红（携带具名用例）、其余 16 例绿。两处均已恢复，无残留改动。
+- **口径边界**：segment 4 每 10 拍覆盖一次，两档墓碑的端点差只解释「窗端仍在池中」的部分；窗内已被拾取/完全衰减的注入需要看 10 拍序列的正向跳变，且该序列只是下界（注入后 10 拍内被清空会漏采）。`CreepDeathCarry` 只覆盖我方 creep（外方 creep 无 Memory 条目）；外方注入只用墓碑 stock 差分判。
+- **实测/裁决**：待部署后填写（不得事后补预测）。

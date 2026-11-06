@@ -163,6 +163,10 @@ export enum EventKind {
   /** 帝国姿态转换（empire-strategy 唯一写点）：d = [fromCode, toCode, reasonCode]；t 即转换拍。
    * 码表见 posture.ts 的 POSTURE_EVENT_CODE / POSTURE_BRANCH_EVENT_CODE；只许追加、不得重排。 */
   PostureTransition = 49,
+  /** 死亡携带能量具名化（仅最后可见携带 >0 时发）。r = home（缺省死亡房），
+   * d = [roleCode, carryEnergy, natural(0/1)]。与 CreepDeath 同拍相邻，用于把
+   * 死亡区间注入受踪池的能量逐笔对到房。 */
+  CreepDeathCarry = 50,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────
@@ -313,6 +317,14 @@ export function recordCreepDeath(name: string): void {
     age,
     natural,
   ]);
+  // 携带量单独成事件：CreepDeath 的 d 已被历史解码器占用，扩列会让旧读数错位。
+  if (seen?.e !== undefined && seen.e > 0) {
+    recordEvent(EventKind.CreepDeathCarry, seen.h || (seen.r ?? ""), [
+      roleCode(role),
+      seen.e,
+      natural,
+    ]);
+  }
   // M11 safe mode 熔断的战损计数：仅非自然死亡入账（寿终不是战损）。
   // 惰性清理两倍窗口前的旧记录，防止数组无界增长。
   if (natural === 0) {

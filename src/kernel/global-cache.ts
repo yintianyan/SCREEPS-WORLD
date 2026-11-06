@@ -177,7 +177,7 @@ export interface GlobalCache {
    * 战斗黑匣子（M9）消费：maintainMemory 清理死者 memory 时死者已不在 Game.creeps —
    * 本缓存是死亡位置的唯一来源（maintainMemory 先于 buildSnapshots 运行）。
    * global reset 后首 tick 为空 — 死亡事件降级为无位置记录，可接受。 */
-  creepLastSeen?: ReadonlyMap<string, { r: string; x: number; y: number }>;
+  creepLastSeen?: ReadonlyMap<string, { r: string; x: number; y: number; e?: number; h?: string }>;
   /** 近期战损记录（recordCreepDeath 对 natural=0 的死亡追加，惰性清理）。
    * safe mode 舰队伤亡熔断（M11）消费：窗口内本房战损达阈值且威胁在场即触发。
    * heap 存储 — global reset 丢失可接受（reset 极少，威胁持续在场时计数快速重建）。 */
