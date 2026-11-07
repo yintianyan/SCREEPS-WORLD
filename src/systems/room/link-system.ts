@@ -3,6 +3,7 @@ import type { LinkInfo, LinkRole } from "../../domain/economy/links";
 import {
   planLinkTransfers,
   classifyLinkRole,
+  resolveLinkRoleRanges,
   computeControllerLinkTarget,
 } from "../../domain/economy/links";
 import { linkHasOutlet } from "../../domain/economy/link-outlet";
@@ -271,11 +272,14 @@ export function clearDismantlePlan(deadLinkId: string): void {
  * 共用同一 classifyLinkRole，消除口径漂移致的「死 link」。详见 domain/economy/links.ts。
  */
 function classifyLink(link: StructureLink, snapshot: RoomSnapshot): LinkRole {
+  // 用 resolveLinkRoleRanges 而非单个 anchorRange：放置侧（task-factory）按角色半径
+  // 放 link（storage 可比 anchorRange 远一格），分类侧必须读同一组半径，
+  // 否则 range+1 处建成的 storage link 会被判成 hub —— hub 无消费者 = 死资产。
   return classifyLinkRole(
     link.pos,
     snapshot.sources.map(s => s.pos),
     snapshot.controller?.pos,
     snapshot.storage?.pos,
-    CONFIG.economy.link.anchorRange,
+    resolveLinkRoleRanges(CONFIG.economy.link),
   );
 }

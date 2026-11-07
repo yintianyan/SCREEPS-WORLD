@@ -12,6 +12,8 @@ import type { EmpireRoomRole } from "./empire-role";
 export interface EconomyQueryInput {
   tick: number;
   netFlow: number;
+  /** 资本支出 EMA（能量/tick）；缺省（旧快照/未核算）按 0 ⇒ brakeNetFlow 退化为 netFlow。 */
+  capexFlow?: number;
   contractReserve: number;
   riskBuffer: number;
   drift: number;
@@ -74,6 +76,14 @@ export interface RoomEconomicProfile {
   // ── Economy 三指标（ECONOMY §3，从 EconomyQuery 派生）──
   /** 净流 EMA（能量/tick，可负）。未核算过为 0。 */
   netFlow: number;
+  /**
+   * 刹车用净流（能量/tick）= netFlow + 资本支出。
+   * 与 netFlow 的唯一区别：建造（自有/远矿工地）不再记成"失血"。
+   * 只供失血闸消费；G4 扩张门读的还是 `netFlow`（两条口径不许合并 —— 详见
+   * domain/economy/accounting.ts:EconomyMemorySnapshot.cx）。
+   * 可选：换码前的旧快照没有 `cx`，此时读者按 netFlow 处理（`?? netFlow`）。
+   */
+  brakeNetFlow?: number;
   /** 合同储备（storage + terminal + link 水位）。 */
   contractReserve: number;
   /** 风险缓冲（断供耐受 tick 数）。 */
@@ -256,6 +266,9 @@ export function buildRoomEconomicProfile(
 
   // ── Economy 三指标 ──
   const netFlow = economy?.netFlow ?? 0;
+  // 资本支出加回去 ⇒ 刹车用净流。缺列（旧快照/未核算）时恒等于 netFlow，不改变行为。
+  const capexFlow = Math.max(0, economy?.capexFlow ?? 0);
+  const brakeNetFlow = netFlow + capexFlow;
   const contractReserve = economy?.contractReserve ?? 0;
   const riskBuffer = economy?.riskBuffer ?? 0;
   const estimatedIncome = economy?.estimatedIncome ?? 0;
@@ -299,6 +312,7 @@ export function buildRoomEconomicProfile(
     hasStorage,
     hasTerminal,
     netFlow,
+    brakeNetFlow,
     contractReserve,
     riskBuffer,
     estimatedIncome,

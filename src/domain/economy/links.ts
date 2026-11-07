@@ -191,19 +191,61 @@ export interface LinkAnchorPoint {
 }
 
 /**
- * 按「最近锚获胜」分类 link 角色（纯函数）：Chebyshev 距离最近且在 anchorRange 内的
+ * 各 link 角色的锚定半径（Chebyshev）。
+ *
+ * 放置侧（task-factory 的搜索半径）与运行时分类侧（classifyLinkRole）必须读**同一个对象**：
+ * 两侧一旦分叉，就会出现「建得出来但没人排空」的死 link —— 旧实现把 2 这个数字抄在
+ * classifyLinkRole 默认值、CONFIG.economy.link.anchorRange、task-factory 三处
+ * `searchRange=2` 与 gaps/tuning 的默认实参里，注释自陈「改动需三处同步」，
+ * 而同步靠人记。
+ */
+export interface LinkRoleRanges {
+  readonly source: number;
+  readonly controller: number;
+  readonly storage: number;
+}
+
+/**
+ * source/controller 取 2：harvester 站 container（贴 source）上仍能 range1 够到隔一格的 link。
+ * storage 取其上界 +1：link 槽位由引擎按 RCL 门控（5:2／6:3／7:4／8:6），而道路与 extension
+ * 从 RCL1 就开始占地 —— 等 storage link 拿到槽位（RCL6+）时，storage 的 ≤2 邻域往往已被铺满。
+ * 线上实证：W8N3 的 storage (21,15) 的 24 格邻域全是 extension/road/lab ⇒ `linkStorage:1`
+ * 成了永久不可满足缺口，并把布局规划器钉在 gap-force 慢速重试上。放到 3 格即可满足
+ * （(22,18)／(24,18) 空闲且不密封），代价只是 hauler 多走两格。
+ */
+export const DEFAULT_LINK_ROLE_RANGES: LinkRoleRanges = { source: 2, controller: 2, storage: 3 };
+
+/** 由 CONFIG.economy.link 形状解析角色半径 —— 唯一映射点，调用方不得自行拼装。 */
+export function resolveLinkRoleRanges(cfg?: {
+  anchorRange?: number;
+  storageAnchorRange?: number;
+}): LinkRoleRanges {
+  const base = cfg?.anchorRange ?? DEFAULT_LINK_ROLE_RANGES.source;
+  return {
+    source: base,
+    controller: base,
+    storage: cfg?.storageAnchorRange ?? DEFAULT_LINK_ROLE_RANGES.storage,
+  };
+}
+
+/**
+ * 按「最近锚获胜」分类 link 角色（纯函数）：Chebyshev 距离最近且落在**该角色自己的**半径内的
  * 锚定角色胜出；等距按 controller > storage > source 裁决（专属单例不被 source 抢占）；
  * 均不在范围内 → hub。替代旧「source 固定最高优先级 + 短路」— 旧版会把紧邻
  * controller/storage 却落在 source range≤2 的 link 误判为 source（优先级劫持），
  * 令 controller/storage link 从传输拓扑消失、升级链/排空链断裂。
+ *
+ * 入参兼容旧的单一数字（三角色同值）；新代码传 LinkRoleRanges。
  */
 export function classifyLinkRole(
   link: LinkAnchorPoint,
   sources: readonly LinkAnchorPoint[],
   controller: LinkAnchorPoint | undefined,
   storage: LinkAnchorPoint | undefined,
-  anchorRange = 2,
+  ranges: number | LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
 ): LinkRole {
+  const r: LinkRoleRanges =
+    typeof ranges === "number" ? { source: ranges, controller: ranges, storage: ranges } : ranges;
   const cheb = (a: LinkAnchorPoint, b: LinkAnchorPoint): number =>
     Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
@@ -217,9 +259,9 @@ export function classifyLinkRole(
 
   // 候选：范围内的锚定角色，(距离, tie-break 优先级 pri 越大越优先)。
   const candidates: { role: LinkRole; dist: number; pri: number }[] = [];
-  if (dSource <= anchorRange) candidates.push({ role: "source", dist: dSource, pri: 0 });
-  if (dStorage <= anchorRange) candidates.push({ role: "storage", dist: dStorage, pri: 1 });
-  if (dController <= anchorRange)
+  if (dSource <= r.source) candidates.push({ role: "source", dist: dSource, pri: 0 });
+  if (dStorage <= r.storage) candidates.push({ role: "storage", dist: dStorage, pri: 1 });
+  if (dController <= r.controller)
     candidates.push({ role: "controller", dist: dController, pri: 2 });
   if (candidates.length === 0) return "hub";
 

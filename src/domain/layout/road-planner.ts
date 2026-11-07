@@ -38,6 +38,11 @@ export interface RoadPlanContext {
   readonly corridorCacheStore?: CorridorPathCacheStore;
   /** 【D-2 修复】蓝图受保护位置集合（走廊路不得占用未来结构位置）。 */
   readonly protectedPositionsFactory?: () => Set<number>;
+  /**
+   * 未来 link 角色的预留格（见 domain/layout/link-reserve）。三种道路来源都必须让开：
+   * link 槽位按 RCL 门控，而道路 RCL2 就开铺 —— 不让，等槽位到位时邻域已死。
+   */
+  readonly linkReserve?: ReadonlySet<number>;
 }
 
 /** 规划本周期应入队的道路任务；调用方负责 push 到 queue 并更新 existingKeys，内部已去重。 */
@@ -68,6 +73,8 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
       room,
       snapshot,
       occupiedSet,
+      undefined, // maxRoadsPerCycle：取默认 4
+      ctx.linkReserve,
     );
     for (const candidate of coreRoadCandidates) {
       if (isDuplicate(candidate.key)) continue;
@@ -95,6 +102,8 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
     );
 
     for (const candidate of roadCandidates) {
+      // 流量路同样让开 link 预留格：热度只决定「该铺路」，不能决定「把未来 link 挤掉」。
+      if (ctx.linkReserve?.has(packPos(candidate.pos.x, candidate.pos.y))) continue;
       if (isDuplicate(candidate.key)) continue;
       tasks.push({
         key: candidate.key,
@@ -119,6 +128,10 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
     const protectedPositions = new Set<number>();
     for (const cell of blueprint.cells) {
       protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
+    }
+    // 未来 link 角色的预留格并入同一集合（走廊路只认这一个受保护口径）。
+    if (ctx.linkReserve) {
+      for (const packed of ctx.linkReserve) protectedPositions.add(packed);
     }
 
     const corridorRoads = planCorridorRoads(

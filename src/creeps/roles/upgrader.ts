@@ -1,7 +1,12 @@
 /** Upgrader */
 import { CONFIG } from "../../config";
+import {
+  brakeGateSum,
+  isUpgradeReserveActive,
+  upgradeBrakeAllows,
+  upgradeBrakeFloor,
+} from "../../domain/economy/accounting";
 import { resolveControllerDowngradeRisk } from "../../domain/economy/downgrade-risk";
-import { isExpansionPushPlan } from "../../domain/expansion/plan";
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
@@ -117,18 +122,23 @@ function upgraderGate(ac: ActionContext): boolean {
   const claimSecure = Memory.rooms[ac.snapshot.roomName]?.claimSecure ?? false;
   if (claimSecure) return true;
 
-  // R594 帝国失血闸 → R617 限定版扩张预留：全帝国 `gateNetFlow` 之和为负时暂停升级；
+  // R594 帝国失血闸 → R617 限定版扩张预留 → 本轮（剔资本支出）：
+  // 全帝国 `brakeNetFlow` 之和为负时暂停升级。它与 `gateNetFlow` 只差一项 ——
+  // 建造（`economy.cx`）不再记成失血，因为本闸唯一能掐的执行器是升级，
+  // 把计划性投资算进"失血"只会让刹车对真 driver 无能为力
+  // （线上实测：闸全程关死、升级支出 0，Σ 仍从 −8.6 深到 −28.4，控制器冻 27,624 拍）。
   // **仅当**本房 RCL≥7 且存在扩张推进态计划时，把刹车抬到 `upgradeReserveNetFlow`（5），
   // 把盈余留给扩张门 G4。早期房/无计划/终态计划保持原语义（0），避免 RCL 冲刺被压掉。
-  const sumGate = Object.values(Memory.kernel?.gateNetFlow ?? {}).reduce((a, b) => a + b, 0);
-  const expansionPush =
-    ac.snapshot.rcl >= 7 &&
-    (Memory.kernel?.expansionPlans ?? []).some(p => isExpansionPushPlan(p.st));
-  const gateFloor = expansionPush ? CONFIG.economy.upgradeReserveNetFlow : 0;
+  const sumGate = brakeGateSum(Memory.kernel?.brakeNetFlow, Memory.kernel?.gateNetFlow);
+  // 生效判定与门槛计算都在 accounting 里（签发车道与恢复臂共用同一对函数）。
+  const expansionPush = isUpgradeReserveActive(ac.snapshot.rcl, Memory.kernel?.expansionPlans);
+  const gateFloor = upgradeBrakeFloor(expansionPush, CONFIG.economy.upgradeReserveNetFlow);
   // 早期房（RCL1-3 无 storage）的负净流就是"在建自己"：需求侧已按 earlyRoom 放行，
   // 角色闸若再按帝国净流掐断，只会白付一只空转的升级器并把控制器冻在低 RCL。
   const earlyRoom = ac.snapshot.storage === undefined && ac.snapshot.rcl < 4;
-  if (!earlyRoom && sumGate < gateFloor) return false;
+  if (!earlyRoom && !upgradeBrakeAllows(sumGate, gateFloor, Memory.kernel?.upgradeBrake)) {
+    return false;
+  }
   // R632：扩张推进态且 CPU 无余量（tier 差于 comfortable）时，连“净流够”的升级也停。
   // 升级是可选的 CPU 消费者，而 G6 正是扩张门；花 CPU 升级会把门自己顶死（与 R626 同构）。
   // R688：满仓时例外——storage 已无处可放，停升级只会把盈余白扔；升级器本来已存活，

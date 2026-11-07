@@ -5,8 +5,14 @@ import {
   createStorageLinkTask,
   createControllerLinkTask,
   hasSourceLinkFeedStand,
+  shouldHaveStorageLink,
 } from "../../../src/domain/layout/task-factory";
-import { classifyLinkRole } from "../../../src/domain/economy/links";
+import {
+  classifyLinkRole,
+  DEFAULT_LINK_ROLE_RANGES,
+  resolveLinkRoleRanges,
+} from "../../../src/domain/economy/links";
+import { CONFIG } from "../../../src/config";
 import {
   buildObstaclePositionSet,
   type ValidationOptions,
@@ -545,5 +551,124 @@ describe("Link 放置与运行时角色分类闭环（对抗性几何）", () =>
     const pos = candidate!.pos;
     expect(runtimeRole(snap, pos.x, pos.y)).toBe("storage");
     expect(Math.max(Math.abs(pos.x - 26), Math.abs(pos.y - 25))).toBeLessThanOrEqual(1);
+  });
+});
+
+// ─── storage 角色半径单一真源（W8N3 现场回归，2026-11-07）──────────────────
+//
+// 线上事实：W8N3 的 storage 在 (21,15)，其 Chebyshev ≤2 的 24 格全被
+// extension/road/lab 占满；而 link 槽位由引擎按 RCL 门控（5:2／6:3／7:4／8:6），
+// 等 storage link 拿到槽位（RCL6+）时邻域早已被铺死 ⇒ `createStorageLinkTask`
+// 的 searchRange=2 永远返回 undefined，`layoutGaps.linkStorage` 成了不可满足缺口，
+// 并把布局规划器钉在 gap-force 慢速重试上。修复＝放置搜索半径与运行时分类
+// 共用 `resolveLinkRoleRanges(CONFIG.economy.link)`，storage 角色取 anchorRange+1。
+
+/** 以 extension 铺满 (cx,cy) 的 Chebyshev ≤radius 环。 */
+function paveRing(cx: number, cy: number, radius: number): any[] {
+  const out: any[] = [];
+  let i = 0;
+  for (let dx = -radius; dx <= radius; dx++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      out.push({
+        id: `ext${i++}`,
+        pos: mockPos(cx + dx, cy + dy),
+        structureType: STRUCTURE_EXTENSION,
+        my: true,
+      } as any);
+    }
+  }
+  return out;
+}
+
+/** 与产线同口径的运行时角色（读 resolver，不再抄常量）。 */
+function runtimeRoleResolved(snap: RoomSnapshot, x: number, y: number) {
+  return classifyLinkRole(
+    { x, y },
+    snap.sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
+    snap.controller ? { x: snap.controller.pos.x, y: snap.controller.pos.y } : undefined,
+    snap.storage ? { x: snap.storage.pos.x, y: snap.storage.pos.y } : undefined,
+    resolveLinkRoleRanges(CONFIG.economy.link),
+  );
+}
+
+describe("storage 角色半径：放置侧与分类侧单一真源", () => {
+  it("≤2 环铺满、3 格空闲 ⇒ 仍生成 storage link 且落在距 storage 3 的格", () => {
+    const snap = snapshotAt(6, { extensions: paveRing(26, 25, 2) });
+    const candidate = createStorageLinkTask(snap, roomWith(), optionsFor(snap));
+
+    expect(candidate).toBeDefined();
+    const dist = Math.max(Math.abs(candidate!.pos.x - 26), Math.abs(candidate!.pos.y - 25));
+    expect(dist).toBe(3);
+    // 建出来必须仍被运行时认成 storage —— 否则是无消费者的死资产（hub）。
+    expect(runtimeRoleResolved(snap, candidate!.pos.x, candidate!.pos.y)).toBe("storage");
+  });
+
+  it("3 格处已有分类为 storage 的 link ⇒ 不再重提，缺口不再恒红", () => {
+    const farStorageLink = {
+      id: "linkS",
+      pos: mockPos(29, 25), // 距 storage (26,25) = 3
+      structureType: STRUCTURE_LINK,
+      store: {
+        getUsedCapacity: () => 0,
+        getFreeCapacity: () => 800,
+        getCapacity: () => 800,
+      } as any,
+      cooldown: 0,
+      my: true,
+    } as any;
+    const snap = snapshotAt(6, { extensions: paveRing(26, 25, 2), links: [farStorageLink] });
+
+    // 旧的「紧邻 range1 才算已有」会在这里判成「仍应有」⇒ 缺口永久挂着。
+    expect(shouldHaveStorageLink(snap, 0, resolveLinkRoleRanges(CONFIG.economy.link))).toBe(false);
+    expect(createStorageLinkTask(snap, roomWith(), optionsFor(snap))).toBeUndefined();
+  });
+
+  it("classifyLinkRole：dStorage=3 且远离他锚 ⇒ storage（旧实现判成 hub）", () => {
+    const ranges = resolveLinkRoleRanges(CONFIG.economy.link);
+    const role = classifyLinkRole(
+      { x: 29, y: 25 },
+      [{ x: 10, y: 10 }],
+      { x: 40, y: 10 },
+      { x: 26, y: 25 },
+      ranges,
+    );
+    expect(role).toBe("storage");
+    // 同一格在旧的单一天径 2 下是 hub —— 这正是放宽必须两侧同改的原因。
+    expect(
+      classifyLinkRole({ x: 29, y: 25 }, [{ x: 10, y: 10 }], { x: 40, y: 10 }, { x: 26, y: 25 }, 2),
+    ).toBe("hub");
+  });
+
+  it("classifyLinkRole：dSource=2 ∧ dStorage=3 ⇒ source（放宽不劫持 source 角色）", () => {
+    const role = classifyLinkRole(
+      { x: 24, y: 25 }, // 距 source (22,25)=2，距 storage (26,25)=2
+      [{ x: 22, y: 25 }],
+      { x: 40, y: 10 },
+      { x: 26, y: 25 },
+      resolveLinkRoleRanges(CONFIG.economy.link),
+    );
+    // 等距按 controller > storage > source 裁决 ⇒ storage 胜；关键是 source 未被误降级为 hub。
+    expect(role).toBe("storage");
+    const closer = classifyLinkRole(
+      { x: 23, y: 25 }, // 距 source (22,25)=1，距 storage (26,25)=3
+      [{ x: 22, y: 25 }],
+      { x: 40, y: 10 },
+      { x: 26, y: 25 },
+      resolveLinkRoleRanges(CONFIG.economy.link),
+    );
+    expect(closer).toBe("source");
+  });
+
+  it("CONFIG 缺省与 domain 缺省不得分叉（否则「单一真源」只是换了个抄的地方）", () => {
+    expect(resolveLinkRoleRanges(CONFIG.economy.link)).toEqual(DEFAULT_LINK_ROLE_RANGES);
+  });
+
+  it("resolveLinkRoleRanges：source/controller 跟 anchorRange，storage 跟 storageAnchorRange", () => {
+    expect(resolveLinkRoleRanges({ anchorRange: 4, storageAnchorRange: 5 })).toEqual({
+      source: 4,
+      controller: 4,
+      storage: 5,
+    });
   });
 });

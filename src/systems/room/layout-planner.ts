@@ -1,5 +1,6 @@
 import { CONFIG } from "../../config";
 import type { Priority, System, TickContext, RoomSnapshot } from "../../kernel/contracts";
+import { resolveLinkRoleRanges } from "../../domain/economy/links";
 import { roomPhase } from "../../kernel/phase";
 import { globalCache } from "../../kernel/global-cache";
 import { getRoomLayoutData, markLayoutDirty } from "../../kernel/segment-store";
@@ -7,6 +8,7 @@ import { getTemplateById } from "../../domain/layout/templates";
 import { resolveLayoutMode } from "../../domain/layout/planner";
 import type { BuildTaskCandidate } from "../../domain/layout/task-factory";
 import { planRoads } from "../../domain/layout/road-planner";
+import { computeLinkReserveCells } from "../../domain/layout/link-reserve";
 import type { CorridorPathCacheStore } from "../../domain/layout/corridor-roads";
 import { evaluateCandidate, scoreCandidate } from "../../domain/layout/candidate-score";
 import { packPos, unpackPos } from "../../domain/layout/types";
@@ -321,7 +323,10 @@ function planStage0Prep(
   const queue = roomMem.buildQueue ?? [];
   const gaps = auditStructureGaps(snapshot, queue);
   // link 角色感知（2026-08-02）：总数满足但角色分布错（死资产）时暴露真实缺口。
-  mergeLinkRoleGaps(gaps, auditLinkRoleGaps(snapshot, queue));
+  mergeLinkRoleGaps(
+    gaps,
+    auditLinkRoleGaps(snapshot, queue, resolveLinkRoleRanges(CONFIG.economy.link)),
+  );
   // 死资产检测（2026-08-02，§3.3）：source link 持续 500t 三重校验失败 → 触发规划。
   // deadAssetLink key 值为死资产数量，触发 shouldPlan；拆改通道由 P1-4 实现。
   const deadAssets = getDeadAssetLinks(ctx.tick);
@@ -346,6 +351,8 @@ function planStage0Prep(
     queue,
     globalSiteCount: ctx.globalSiteCount,
     maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
+    // link 角色半径的唯一注入点：放置搜索半径与运行时分类必须同源。
+    linkRoleRanges: resolveLinkRoleRanges(CONFIG.economy.link),
   });
 
   // 阻塞黑名单：清理过期条目。
@@ -552,6 +559,24 @@ function planStage3RoadsAndFinalize(
   const { anchor, occupiedSet, existingKeys, existingPositions, segBlocked } = data;
   const isBlacklisted = (key: string): boolean => segBlocked[key] !== undefined;
 
+  // 未来 link 角色的预留格 —— 根因：引擎按 RCL 门控 link 槽位（5:2／6:3／7:4／8:6），
+  // 而道路 RCL2 就开始按棋盘格占地；不预留则等槽位到位时 storage/controller 邻域已铺死
+  // （线上 W8N3：storage 的 ≤2 环 24 格全被 extension/road/lab 占满）。
+  // 占用口径并入「已排队/阻塞的任务」，避免把格预留给一条已经排队的路、白让一格。
+  const reserveOccupancy = new Set<number>(occupiedSet);
+  for (const t of queue) {
+    if (t.state === "queued" || t.state === "blocked") {
+      reserveOccupancy.add(packPos(t.pos.x, t.pos.y));
+    }
+  }
+  const linkReserve = computeLinkReserveCells({
+    snapshot,
+    queue,
+    terrain: room.getTerrain(),
+    occupiedSet: reserveOccupancy,
+    ranges: resolveLinkRoleRanges(CONFIG.economy.link),
+  });
+
   // 3.9-5. 道路规划。
   // 【D-1/D-2 修复】从 system 层注入 globalCache 数据（交通热度 + 路径缓存），
   // domain 层不再直读 globalCache。
@@ -587,6 +612,7 @@ function planStage3RoadsAndFinalize(
       currentTraffic,
       prevTraffic,
       corridorCacheStore,
+      linkReserve,
     });
     for (const task of roadTasks) {
       const posKey = `${task.pos.x},${task.pos.y}`;
@@ -620,7 +646,8 @@ function planStage3RoadsAndFinalize(
       snapshot,
       room,
       anchor,
-      occupiedSet,
+      // hub 路把预留格视作已占用 —— 与核心路/流量路/走廊路同一让位口径。
+      linkReserve.size === 0 ? occupiedSet : new Set([...occupiedSet, ...linkReserve]),
       queue,
       existingKeys,
       existingPositions,
@@ -707,7 +734,10 @@ function planStage3RoadsAndFinalize(
   // 节流 gap-force，防止下 tick 立即被缺口强制触发抵消慢速节流。
   const gapsAfter = auditStructureGaps(snapshot, roomMem.buildQueue);
   // link 角色感知（同 stage 0 入口）：合并角色缺口，暴露死资产/角色分布错。
-  mergeLinkRoleGaps(gapsAfter, auditLinkRoleGaps(snapshot, roomMem.buildQueue));
+  mergeLinkRoleGaps(
+    gapsAfter,
+    auditLinkRoleGaps(snapshot, roomMem.buildQueue, resolveLinkRoleRanges(CONFIG.economy.link)),
+  );
   recordLayoutGaps(snapshot.roomName, gapsAfter);
   // #82：布局可观测通道重新接线。metrics.ts 此前**零调用点**（dist 里连 "layoutMetrics" 字样都没有），
   // 而 Memory.kernel.layoutMetrics 里躺着旧二进制留下的化石值 —— 读者（包括今天的我）会把它当现值。
@@ -883,7 +913,11 @@ function recordLayoutMetrics(
   const metrics = computeLayoutMetrics(
     snapshot,
     gaps,
-    auditLinkRoleSurplus(snapshot, roomMem.buildQueue ?? []),
+    auditLinkRoleSurplus(
+      snapshot,
+      roomMem.buildQueue ?? [],
+      resolveLinkRoleRanges(CONFIG.economy.link),
+    ),
     getDeadAssetLinks(tick).length,
     roomMem.dismantleCount ?? 0,
     isLinkConstrained(snapshot.roomName, tick),

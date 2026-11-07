@@ -35,6 +35,8 @@ interface RoomEconState {
   lastLedger: EnergyLedger;
   lastPools: EnergyPools;
   netFlowEma?: number;
+  /** 资本支出（自有工地 built 桶）每拍速率的 EMA —— 只喂刹车，不进 nf/G4。 */
+  capexEma?: number;
   effFactor?: number;
   /** 连续超容差窗数（≥2 触发 AccountingDrift 事件——先修核算再发展）。 */
   driftStreak: number;
@@ -154,6 +156,11 @@ export interface EconomyQuery {
   tick: number;
   /** 净流 EMA（能量/tick，可负）。 */
   netFlow: number;
+  /**
+   * 资本支出 EMA（能量/tick，≥0）—— 自有/远矿工地耗能的每拍速率。
+   * 只被失血闸消费（`kernel.brakeNetFlow`）；G4 扩张门仍读 netFlow 原样。
+   */
+  capexFlow: number;
   /** 合同储备（storage+terminal+link 水位）。 */
   contractReserve: number;
   /** 风险缓冲（断供耐受 tick 数）。 */
@@ -172,6 +179,7 @@ export function queryEconomy(roomName: string): EconomyQuery | undefined {
   return {
     tick: mem.t,
     netFlow: mem.nf / 100,
+    capexFlow: (mem.cx ?? 0) / 100,
     contractReserve: mem.cr,
     riskBuffer: mem.rb / 10,
     drift: mem.dr,
@@ -217,6 +225,9 @@ export const economySystem: System = {
         if (st.netFlowEma === undefined && roomMem.economy) {
           st.netFlowEma = roomMem.economy.nf / 100;
           st.effFactor = roomMem.economy.ef / 100;
+          // cx 是新列：换码后的旧快照里没有它 —— 缺键按 0 播种（不是回退到 nf，
+          // 那会把「没测过」伪装成「测过且等于净流」）。
+          st.capexEma = (roomMem.economy.cx ?? 0) / 100;
         }
         continue;
       }
@@ -233,6 +244,10 @@ export const economySystem: System = {
       const soldEnergy = Math.max(0, cum.sold - st.lastLedger.sold);
       const netPerTick = (w.income - (w.consumption - soldEnergy) + w.refunds) / w.ticks;
       st.netFlowEma = updateNetFlowEma(st.netFlowEma, netPerTick, acc.netFlowAlpha);
+      // 资本支出：`built` 桶（自有工地）。与 nf 用同一条 EMA 递推 ⇒ `nf + cx` 与
+      // 「先相加再平滑」逐位相等（线性），刹车因此不会因为多一道平滑而比 G4 更钝。
+      const capexEnergy = Math.max(0, cum.built - st.lastLedger.built);
+      st.capexEma = updateNetFlowEma(st.capexEma, capexEnergy / w.ticks, acc.netFlowAlpha);
       st.effFactor = updateEfficiencyFactor(
         st.effFactor,
         w.incomePerTick,
@@ -267,6 +282,7 @@ export const economySystem: System = {
         st.effFactor ?? INITIAL_EFFICIENCY_FACTOR,
         w,
         ws,
+        st.capexEma,
       );
 
       st.lastTick = ctx.tick;

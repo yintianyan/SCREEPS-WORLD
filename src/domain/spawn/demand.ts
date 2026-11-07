@@ -4,6 +4,11 @@ import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, hasRequest, spawnKey, buildSpawnRequest } from "./queue";
 import { classifyLinkRole } from "../economy/links";
+import {
+  upgradeBrakeAllows,
+  upgradeBrakeFloor,
+  type UpgradeBrakeState,
+} from "../economy/accounting";
 import { demandElasticity, logisticsElasticity } from "../economy/energy-price";
 
 /** 各角色降级时必须保留的最小部件；hauler/distributor 无需 WORK。 */
@@ -296,6 +301,13 @@ export function evaluateDemand(
   expansionPush = false,
   /** R632：扩张推进态下 CPU 是否有余量（tier ≤ comfortable）。false 时连净流够也停升级。 */
   cpuAllowsUpgrade = true,
+  /**
+   * 失血闸闩锁（回差＋最短保持期）。由 spawn-manager 现读 Memory 注入，domain 保持纯函数。
+   * 缺省 undefined ⇒ 开放，与旧实现同语义。
+   * 与 `upgraderGate`（角色闸）共用 `upgradeBrakeAllows` —— 两侧必须同一把尺，
+   * 否则会出现"签发放行、到岗即被 idle"的带内自相矛盾（那只抱能石化的 creep 就是这么来的）。
+   */
+  upgradeBrake?: UpgradeBrakeState,
 ): DemandResult {
   const requests: SpawnRequest[] = [];
   const home = snapshot.roomName;
@@ -907,7 +919,11 @@ export function evaluateDemand(
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
     !rcl8NoUpgrade &&
     (cpuAllowsThisRoomUpgrade || hasDowngradeRisk || earlyRoom) &&
-    (empireGateSum >= (expansionPush ? CONFIG.economy.upgradeReserveNetFlow : 0) ||
+    (upgradeBrakeAllows(
+      empireGateSum,
+      upgradeBrakeFloor(expansionPush, CONFIG.economy.upgradeReserveNetFlow),
+      upgradeBrake,
+    ) ||
       hasDowngradeRisk ||
       earlyRoom);
 

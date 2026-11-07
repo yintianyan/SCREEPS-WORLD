@@ -1,6 +1,7 @@
 /** 布局规划纯函数层（D2 归位：从 systems/layout-planner.ts 提取）。 */
 
 import type { RoomSnapshot } from "../../kernel/contracts";
+import type { LinkRoleRanges } from "../economy/links";
 import type { BuildTaskCandidate } from "./task-factory";
 import {
   candidateToBuildTask,
@@ -266,8 +267,10 @@ export function buildStage0PlanData(input: {
   queue: readonly BuildTask[];
   globalSiteCount: number;
   maxNormalLaneSites: number;
+  /** link 角色半径（系统层由 resolveLinkRoleRanges(CONFIG.economy.link) 注入）。 */
+  linkRoleRanges?: LinkRoleRanges;
 }): Stage0PlanData {
-  const { snapshot, anchor, queue, globalSiteCount, maxNormalLaneSites } = input;
+  const { snapshot, anchor, queue, globalSiteCount, maxNormalLaneSites, linkRoleRanges } = input;
 
   const completedKeys = collectCompletedKeys(queue);
   for (const key of collectCompletedKeysFromStructures(
@@ -292,6 +295,7 @@ export function buildStage0PlanData(input: {
     structureCounts,
     occupiedSet,
     obstacleSet,
+    linkRoleRanges,
   };
 
   const existingKeys = new Set<string>();

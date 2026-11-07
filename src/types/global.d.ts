@@ -202,6 +202,12 @@ declare global {
       ei: number;
       /** 效率系数 ×100。 */
       ef: number;
+      /**
+       * 资本支出 EMA ×100（能量/tick，自有+远矿工地的 `built` 桶）。
+       * 只喂失血闸（`kernel.brakeNetFlow`），不进 nf/G4。零值与缺列都不入账 ⇒
+       * 读侧 `?? 0`，语义是「本窗没有资本支出」，不是「没测到」。
+       */
+      cx?: number;
       /** 最近一窗各桶增量（能量，零值不入账）—— drift 点名哪个记账项缺/多。 */
       bk?: Record<string, number>;
       /** 最近一窗池快照 [trackedStart, trackedEnd, otherStart, otherEnd, looseDelta]。 */
@@ -707,6 +713,23 @@ declare global {
      * readySince 打回起点（部署税本只该落在 G6 上，不该顺手把就绪度也清零）。
      */
     gateNetFlow?: Record<string, number>;
+    /**
+     * 失血闸专用的「剔资本支出净流」EMA（按房）＝ gateNetFlow 同一条递推 + `economy.cx`。
+     *
+     * 为什么必须和 gateNetFlow 分开一条：G4 扩张门读 gateNetFlow（判据 Σ≥5），
+     * 而刹车读它自己那一条才谈得上"只掐可自由支配的消耗"。合并成一条会连带放宽扩张门槛。
+     * 同样住 Memory（heap 会在每次部署丢掉 ~2,500 拍收敛历史，见 gateNetFlow 注释）。
+     * 缺席语义：整列未写入 ⇒ 读者回退 gateNetFlow（过渡期）；某房缺键 ⇒ 按 0 参与求和。
+     * 回退规则的唯一出处是 `brakeGateSum()`，两个读者都走它。
+     */
+    brakeNetFlow?: Record<string, number>;
+    /**
+     * 失血闸闩锁（回差＋最短保持期）。**唯一写者**＝empire-economy 的 100 拍趟；
+     * 两个读者（`upgraderGate` 与签发合取）只读不写 —— 写者分散会让"哪一拍开的闸"不可推断，
+     * 也会破坏现场实测的 100 拍相位性质（长冻结起拍 10/10 枚 ≡ 57 mod 100）。
+     * 缺列＝开放（与旧实现 `gateNetFlow ?? {}` ⇒ sum 0 ⇒ 不关闸 同语义，fail-open）。
+     */
+    upgradeBrake?: { readonly closed: boolean; readonly since: number };
     /**
      * 纯观测：自举车道每轮把"哪些房被哪一道筛子掉出去"落一次数（不参与任何判据）。
      * 存在的理由 —— 堆里的 ctx.snapshots() 从 console 读不到（console 与上传的 module code

@@ -1,6 +1,6 @@
 /** 结构缺口审计器 — 目标清单驱动的布局闭环核心。 */
 import type { RoomSnapshot } from "../../kernel/contracts";
-import { classifyLinkRole } from "../economy/links";
+import { classifyLinkRole, DEFAULT_LINK_ROLE_RANGES, type LinkRoleRanges } from "../economy/links";
 import { expectedStructureCounts } from "./constraint-placer";
 
 /** 结构缺口：type → 还缺多少个（> 0 才收录）。 */
@@ -90,8 +90,10 @@ export function auditStructureGaps(
 export function auditLinkRoleGaps(
   snapshot: RoomSnapshot,
   queue: readonly BuildTask[],
+  linkRoleRanges?: LinkRoleRanges,
 ): LinkRoleGaps {
   const expected = expectedLinkRoleCounts(snapshot.rcl, snapshot.sources.length);
+  const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
 
   // 锚点坐标视图（classifyLinkRole 接受纯坐标，不依赖 RoomPosition）。
   const sourcePoints = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
@@ -104,7 +106,7 @@ export function auditLinkRoleGaps(
 
   const have: LinkRoleGaps = { source: 0, controller: 0, storage: 0, hub: 0 };
   const tally = (pos: { x: number; y: number }): void => {
-    const role = classifyLinkRole(pos, sourcePoints, controllerPoint, storagePoint);
+    const role = classifyLinkRole(pos, sourcePoints, controllerPoint, storagePoint, ranges);
     have[role]++;
   };
 
@@ -156,8 +158,13 @@ export function mergeLinkRoleGaps(gaps: StructureGaps, linkRoleGaps: LinkRoleGap
  * ⚠️输出只供仪表（layoutMetrics.linkRoleSurplus）：**不得**并进 shouldPlan 消费的缺口字典，
  * 否则等于把 #74 刚拆掉的 gap-force 钉重新钉回去。
  */
-export function auditLinkRoleSurplus(snapshot: RoomSnapshot, queue: readonly BuildTask[]): number {
+export function auditLinkRoleSurplus(
+  snapshot: RoomSnapshot,
+  queue: readonly BuildTask[],
+  linkRoleRanges?: LinkRoleRanges,
+): number {
   const expected = expectedLinkRoleCounts(snapshot.rcl, snapshot.sources.length);
+  const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
   const sourcePoints = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
   const controllerPoint = snapshot.controller
     ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
@@ -167,7 +174,7 @@ export function auditLinkRoleSurplus(snapshot: RoomSnapshot, queue: readonly Bui
     : undefined;
   const have = { source: 0, controller: 0, storage: 0 };
   const tally = (pos: { x: number; y: number }): void => {
-    const role = classifyLinkRole(pos, sourcePoints, controllerPoint, storagePoint);
+    const role = classifyLinkRole(pos, sourcePoints, controllerPoint, storagePoint, ranges);
     if (role in have) have[role as keyof typeof have]++;
   };
   for (const link of snapshot.links) tally({ x: link.pos.x, y: link.pos.y });

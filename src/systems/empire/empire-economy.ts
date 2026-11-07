@@ -17,7 +17,7 @@ import { evaluateEconomicHealth } from "../../domain/strategy/economic-health";
 import { detectImbalance } from "../../domain/strategy/imbalance";
 import { allocateEmpireBudget } from "../../domain/strategy/budget";
 import { evaluateExpansionReadiness } from "../../domain/strategy/readiness";
-import { updateNetFlowEma } from "../../domain/economy/accounting";
+import { updateNetFlowEma, brakeGateSum, nextUpgradeBrake } from "../../domain/economy/accounting";
 import { computeTieredBudget } from "../../domain/expansion/budget";
 import { evaluateSafetyMargin } from "../../domain/strategy/safety-margin";
 import { buildEmpirePlannerInput } from "../../domain/strategy/planner-input";
@@ -304,6 +304,33 @@ export const empireEconomySystem: System = {
     }
     const gateView = buildEmpireResourceView(gateProfiles, ctx.tick);
     const gateHealth = evaluateEconomicHealth(gateView);
+
+    // ── 步 4c：失血闸专用净流（剔除计划性资本支出）──
+    // 与 gateNetFlow 用同一条递推、同一个 α ⇒ 两条序列只差 `capex` 一项，差值可逐拍归因。
+    // 为什么单开一条而不是直接改 gateNetFlow：G4 扩张门也读它（实测判据 Σ≥5），
+    // 合并口径会同时放宽扩张门槛 —— 一次改动只动一件事。
+    // 只喂刹车：`upgraderGate` 与 spawn-manager 的签发合取（两者共用 brakeGateSum）。
+    const brakeStore = (Memory.kernel.brakeNetFlow ??= {});
+    for (const p of profiles) {
+      // 旧快照没有 cx ⇒ brakeNetFlow 缺席，此时退化为 netFlow（与改动前逐位相同），
+      // 而不是把「没测到」当成 0 净流。
+      const brakeInput = p.brakeNetFlow ?? p.netFlow;
+      brakeStore[p.roomName] = updateNetFlowEma(brakeStore[p.roomName], brakeInput, gateAlpha);
+    }
+    for (const roomName of Object.keys(brakeStore)) {
+      if (!profiles.some(p => p.roomName === roomName)) delete brakeStore[roomName];
+    }
+    // ── 步 4d：失血闸闩锁（双向往返各待够时长）—— 本趟是唯一写者 ──
+    // 放在这里而不是读者里：闸的两个读者（角色闸每拍、签发车道每趟）求值频次不同，
+    // 各自维护状态会让"谁在什么拍开的闸"不可推断；也让 100 拍量子的相位性质保持成立
+    // （现场 10/10 枚长冻结起拍 ≡ 57 mod 100）。
+    Memory.kernel.upgradeBrake = nextUpgradeBrake(
+      Memory.kernel.upgradeBrake,
+      brakeGateSum(brakeStore, undefined),
+      ctx.tick,
+      CONFIG.economy.brakeMinClosedTicks,
+      CONFIG.economy.brakeMinOpenTicks,
+    );
 
     // ── 步 5：Empire Economic Health ──
     const health = evaluateEconomicHealth(resourceView);

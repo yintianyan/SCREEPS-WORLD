@@ -1,7 +1,7 @@
 import { CONFIG } from "../../config";
 import { bodyCost, degradeBody } from "../../config/bodies";
 import { getRoleBounds } from "../../config/tuned";
-import { isExpansionPushPlan } from "../../domain/expansion/plan";
+import { brakeGateSum, isUpgradeReserveActive } from "../../domain/economy/accounting";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import {
   evaluateDemand,
@@ -180,13 +180,13 @@ export const spawnManagerSystem: System = {
             t => t.state === "queued",
           ).length ?? 0,
       };
-      const empireGateSum = Object.values(Memory.kernel?.gateNetFlow ?? {}).reduce(
-        (a, b) => a + b,
-        0,
+      // 刹车求和的唯一口径（含「brakeNetFlow 整列缺席则回退 gateNetFlow」的过渡规则）；
+      // 与 upgraderGate 共用同一函数，避免签发侧与在岗侧读两把尺。
+      const empireGateSum = brakeGateSum(Memory.kernel?.brakeNetFlow, Memory.kernel?.gateNetFlow);
+      const expansionPush = isUpgradeReserveActive(
+        snapshot.rcl ?? 0,
+        Memory.kernel?.expansionPlans,
       );
-      const expansionPush =
-        (snapshot.rcl ?? 0) >= 7 &&
-        (Memory.kernel?.expansionPlans ?? []).some(p => isExpansionPushPlan(p.st));
       const capTier = Memory.kernel?.capacity?.tier ?? "abundant";
       const cpuAllowsUpgrade = capTier === "abundant" || capTier === "comfortable";
       const demandResult = evaluateDemand(
@@ -200,6 +200,7 @@ export const spawnManagerSystem: System = {
         empireGateSum,
         expansionPush,
         cpuAllowsUpgrade,
+        Memory.kernel?.upgradeBrake,
       );
       const { requests, nextHysteresis } = demandResult;
       // #85：把需求阶梯的**结构钳位**抄进 Memory.kernel.demandClamps，供调优器判断

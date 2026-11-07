@@ -1,5 +1,7 @@
 /** 能量核算纯函数层（· ENERGY_ACCOUNTING_MODEL）。 */
 
+import { isExpansionPushPlan, type PlanStatus } from "../expansion/plan";
+
 // ─── L1 计数器 ──────────────────────────────────────────────
 
 /** 单房能量账本（L1 计数器）。全部非负，只增不减（不变量：income/consumption ≥ 0）。 */
@@ -339,6 +341,97 @@ export function updateNetFlowEma(
 }
 
 /**
+ * 失血闸的求和口径 —— 两个读者（`upgraderGate` 与 spawn-manager 的签发合取）必须走同一个函数：
+ * 它们读的是同一个执行许可，分两处写就是两把尺（#68 那类折叠错误的教训）。
+ *
+ * 回退规则写成一条：**`kernel.brakeNetFlow` 整体缺席时用 `gateNetFlow`**（换码后首趟经济跑
+ * 之前的过渡期），两把都缺才当 0。
+ * 注意回退的是「整列缺席」而不是「某房缺键」——后者是远矿/失房的正常清理结果，
+ * 求和时按 0 处理是对的，不许拿它触发回退（否则一房掉列就把整个刹车切回旧口径）。
+ */
+export function brakeGateSum(
+  brake: Readonly<Record<string, number>> | undefined,
+  fallback: Readonly<Record<string, number>> | undefined,
+): number {
+  const source = brake ?? fallback ?? {};
+  let sum = 0;
+  for (const value of Object.values(source)) {
+    if (Number.isFinite(value)) sum += value;
+  }
+  return sum;
+}
+
+/** 失血闸闩锁状态：`closed` 期间不允许升级，`since` 是本次翻转发生的 tick。 */
+export interface UpgradeBrakeState {
+  readonly closed: boolean;
+  readonly since: number;
+}
+
+/**
+ * 双向往返都要待够最短时长的状态转移（**单一写者**：empire-economy 的 100 拍趟）。
+ *
+ * 为什么不是"回差（deadband）"：我第一版把开闸条件写成 `Σ ≥ 2.0`，那是错的两次叠加 ——
+ * ① 这条 Σ 已经过两层低通（房间 nf EMA → 帝国 brakeNetFlow EMA，τ≈4,950 拍），
+ *    再叠一个数值的带等于把延迟平方：实测从 −4.28 爬到 +2.0 需要 ≈31 趟 ≈3,200 拍，
+ *    而爬到 +0（原条件）只需 ≈20 趟 ≈2,000 拍；
+ * ② 更糟的是**永久关死**的模式：健康运行时（升级在跑）`gateNetFlow` 的工作点实测只有
+ *    ±0.2～0.3，而建造结束后 `cx→0` ⇒ Σ 的平衡点长期低于 2.0 ⇒ 永远达不到开闸条件。
+ * 所以抖动要靠**时间**治（两侧都有最短时长），不要靠**幅度**治（幅度上限是滞后信号）。
+ *
+ * 转移规则：
+ *   开 → 关：`sum < 0` 且已开满 minOpenTicks
+ *   关 → 开：`sum ≥ 0` 且已关满 minClosedTicks
+ * 无历史时按当拍符号播种。
+ */
+export function nextUpgradeBrake(
+  prev: UpgradeBrakeState | undefined,
+  sumGate: number,
+  tick: number,
+  minClosedTicks: number,
+  minOpenTicks: number,
+): UpgradeBrakeState {
+  if (!prev) return { closed: sumGate < 0, since: tick };
+  if (prev.closed) {
+    const released = sumGate >= 0 && tick - prev.since >= minClosedTicks;
+    return released ? { closed: false, since: tick } : prev;
+  }
+  const tripped = sumGate < 0 && tick - prev.since >= minOpenTicks;
+  return tripped ? { closed: true, since: tick } : prev;
+}
+
+/**
+ * 升级预留是否生效：RCL≥7 **且** 存在推进态扩张计划（EVALUATED/…/EXECUTING）。
+ * 唯一出处 —— 三个读者（角色闸、签发车道、恢复臂）各自抄一份 `rcl>=7 && plans.some(...)`
+ * 就是三把尺，而它们判的是同一个执行许可。
+ */
+export function isUpgradeReserveActive(
+  rcl: number,
+  plans: readonly { st?: PlanStatus }[] | undefined,
+): boolean {
+  return rcl >= 7 && (plans ?? []).some(p => p.st !== undefined && isExpansionPushPlan(p.st));
+}
+
+/** 本房的刹车门槛：预留生效时抬到 `reserve`，否则 0（R617 语义）。 */
+export function upgradeBrakeFloor(reserveActive: boolean, reserve: number): number {
+  return reserveActive ? reserve : 0;
+}
+
+/**
+ * 升级是否被放行 —— **两个读者唯一共用的评价函数**。
+ * `floor` 是本房的额外预留门槛（扩张推进态 5，否则 0）：政策预留走硬阈值不加回差，
+ * 因为它离噪声带很远，加了反而掩盖"真达到预留值"的时刻。
+ * 缺列（首次部署/整列被清）⇒ 视为开放，与旧实现 `?? {}` ⇒ `sum=0 ⇒ 不关闸` 同语义。
+ */
+export function upgradeBrakeAllows(
+  sumGate: number,
+  floor: number,
+  brake: UpgradeBrakeState | undefined,
+): boolean {
+  if (brake?.closed === true) return false;
+  return sumGate >= floor;
+}
+
+/**
  * 风险缓冲（断供耐受 tick 数）＝ contractReserve ÷ P0/P1 消费速率。
  * 速率下限 ε 防零除——无消费时缓冲视为充裕（返回大数而非 ∞，便于序列化）。
  */
@@ -395,6 +488,17 @@ export interface EconomyMemorySnapshot {
   /** 效率系数 ×100。 */
   ef: number;
   /**
+   * 资本支出 EMA ×100（能量/tick）—— 本窗 `built` 桶（自有工地）的每拍速率平滑值。
+   *
+   * 为什么单独给一列：失血闸（`kernel.gateNetFlow` 的符号）把「建造」和「升级」都记成消耗，
+   * 但它唯一能掐的执行器只有升级 —— 线上 W8N3 实测：闸全程关死、升级支出为 0，
+   * 而 `ΣgateNetFlow` 仍从 −8.6 深到 −28.4，因为流出是一趟 20 万能量的 factory+labs。
+   * 于是「刹车对它想调节的量没有权限」，计划性投资把 RCL 推进冻了 27,624 拍。
+   * 本列只喂刹车（`kernel.brakeNetFlow`）；**G4 扩张门继续读 `nf` 原样**，
+   * 免得一次改动同时放宽扩张门槛（同 sold 那次的教训反向使用）。
+   */
+  cx?: number;
+  /**
    * 最近一窗各桶增量（能量，零值不入账）。
    *
    * 为什么要落盘：drift 的符号只能告诉我们"账与存量不一致"，点名不了**哪一项**。
@@ -437,6 +541,7 @@ export function toMemorySnapshot(
   effFactor: number,
   w?: AccountingWindow,
   ws?: [number, number, number],
+  capexEma?: number,
 ): EconomyMemorySnapshot {
   const snap: EconomyMemorySnapshot = {
     t: tick,
@@ -447,6 +552,10 @@ export function toMemorySnapshot(
     ei: Math.round(estimatedIncome * 10),
     ef: Math.round(effFactor * 100),
   };
+  // 零值不留痕（与 bk 同规矩）：读侧一律 `?? 0`，缺键＝「本窗无资本支出」，不是「指标坏了」。
+  if (capexEma !== undefined && Math.round(capexEma * 100) !== 0) {
+    snap.cx = Math.round(capexEma * 100);
+  }
   if (w) {
     const buckets: Record<string, number> = {};
     for (const [field, value] of Object.entries(w.byBucket)) {

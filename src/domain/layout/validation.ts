@@ -1,6 +1,7 @@
 import type { Blueprint, BlueprintCell, ValidationResult } from "./types";
 import { inBounds, packPos } from "./types";
 import type { RoomSnapshot } from "../../kernel/contracts";
+import type { LinkRoleRanges } from "../economy/links";
 
 /** validateBuildCell 的选项参数。 */
 export interface ValidationOptions {
@@ -18,6 +19,12 @@ export interface ValidationOptions {
   occupiedSet?: ReadonlySet<number>;
   /** 预计算障碍位置集合（packed，仅不可通行结构/工地），供密封守卫。 */
   obstacleSet?: ReadonlySet<number>;
+  /**
+   * link 各角色的锚定半径 —— 放置搜索半径与运行时分类共用同一个对象。
+   * 缺省 = DEFAULT_LINK_ROLE_RANGES；产线由 layout-planner 用
+   * `resolveLinkRoleRanges(CONFIG.economy.link)` 注入（domain 保持纯函数，不读 CONFIG）。
+   */
+  linkRoleRanges?: LinkRoleRanges;
 }
 
 /**

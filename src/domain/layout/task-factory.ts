@@ -8,7 +8,12 @@ import type {
 import { absPos, packPos, unpackPos } from "./types";
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { validateBuildCell, wouldSeal, type ValidationOptions } from "./validation";
-import { classifyLinkRole, type LinkRole } from "../economy/links";
+import {
+  classifyLinkRole,
+  DEFAULT_LINK_ROLE_RANGES,
+  type LinkRole,
+  type LinkRoleRanges,
+} from "../economy/links";
 
 /** 蓝图单元转任务候选 — 包含验证结果。 */
 export interface BuildTaskCandidate {
@@ -265,10 +270,17 @@ export function createControllerContainerTask(
  * source 离 storage 近时（Chebyshev ≤ 4），source 八邻域部分格会被 classifyLinkRole
  * 判为 storage → harvester 拒灌 → 该 link 永不被灌，RCL5 仅有的 2 个 link 槽位被
  * 静默浪费一个。放置侧只接受角色一致的格，从根上消除误分类。
- * anchorRange 取 2：必须与 CONFIG.economy.link.anchorRange / classifyLinkRole 默认值
- * 同步（放置侧纯函数不访问 CONFIG，改动需三处同步）。
+ *
+ * 半径不再抄常量：与调用方的搜索半径同源于 `options.linkRoleRanges`
+ * （产线由 layout-planner 用 resolveLinkRoleRanges(CONFIG.economy.link) 注入）。
  */
-function linkRoleMatch(snapshot: RoomSnapshot, x: number, y: number, expected: LinkRole): boolean {
+function linkRoleMatch(
+  snapshot: RoomSnapshot,
+  x: number,
+  y: number,
+  expected: LinkRole,
+  ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
+): boolean {
   const role = classifyLinkRole(
     { x, y },
     snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
@@ -276,7 +288,7 @@ function linkRoleMatch(snapshot: RoomSnapshot, x: number, y: number, expected: L
       ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
       : undefined,
     snapshot.storage ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y } : undefined,
-    2,
+    ranges,
   );
   return role === expected;
 }
@@ -285,8 +297,29 @@ function linkRoleMatch(snapshot: RoomSnapshot, x: number, y: number, expected: L
 function linkRolePredicate(
   snapshot: RoomSnapshot,
   expected: LinkRole,
+  ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
 ): (c: { x: number; y: number }) => boolean {
-  return c => linkRoleMatch(snapshot, c.x, c.y, expected);
+  return c => linkRoleMatch(snapshot, c.x, c.y, expected, ranges);
+}
+
+/** 已有 link（含在built工地）按角色计数 — 与放置半径同一把尺，替代旧的「几何紧邻即算有」。 */
+function countLinksByRole(
+  snapshot: RoomSnapshot,
+  ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
+): Record<LinkRole, number> {
+  const counts: Record<LinkRole, number> = { source: 0, controller: 0, storage: 0, hub: 0 };
+  const sources = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+  const ctrl = snapshot.controller
+    ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
+    : undefined;
+  const stor = snapshot.storage
+    ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y }
+    : undefined;
+  const sites = snapshot.constructionSites.filter(s => s.structureType === STRUCTURE_LINK);
+  for (const l of [...snapshot.links, ...sites]) {
+    counts[classifyLinkRole({ x: l.pos.x, y: l.pos.y }, sources, ctrl, stor, ranges)]++;
+  }
+  return counts;
 }
 
 /**
@@ -337,6 +370,7 @@ export function createSourceLinkTasks(
   maxNew = Infinity,
 ): BuildTaskCandidate[] {
   if (snapshot.rcl < 5) return [];
+  const ranges = options.linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
   const candidates: BuildTaskCandidate[] = [];
   const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
   const existingLinks = snapshot.links.length;
@@ -380,8 +414,8 @@ export function createSourceLinkTasks(
       room,
       snapshot,
       options,
-      linkRolePredicate(snapshot, "source"),
-      2,
+      linkRolePredicate(snapshot, "source", ranges),
+      ranges.source,
     );
     // 密封守卫：link 是障碍结构，出生即密封或封死邻居的位置不放。
     if (
@@ -432,16 +466,18 @@ export function createControllerLinkTask(
   options: ValidationOptions,
   queuedLinkCount = 0,
 ): BuildTaskCandidate | undefined {
-  if (!shouldHaveControllerLink(snapshot, queuedLinkCount)) return undefined;
+  if (!shouldHaveControllerLink(snapshot, queuedLinkCount, options.linkRoleRanges))
+    return undefined;
   const controller = snapshot.controller!;
+  const ranges = options.linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
 
   const adjacentPos = findAdjacentBuildable(
     controller.pos,
     room,
     snapshot,
     options,
-    linkRolePredicate(snapshot, "controller"),
-    2,
+    linkRolePredicate(snapshot, "controller", ranges),
+    ranges.controller,
   );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
@@ -463,22 +499,22 @@ export function createControllerLinkTask(
 }
 
 /**
- * 是否应有 controller link（RCL5+ + 无相邻 link + 槽位未满）。
+ * 是否应有 controller link（RCL5+ + 该角色尚无 link + 槽位未满）。
+ * 「已有」判定用运行时角色（classifyLinkRole）而非几何紧邻 —— 放置半径可以是 2，
+ * 而旧的紧邻检查只看 range1，两者不同口径会让「已建成」漏认并反复重提任务
+ * （单例 key 兜住了重复，但缺口账会一直红）。
  * P1-3 fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
  * 与「正常跳过」（已建成 / 槽位满 / RCL 不足）。
  */
-export function shouldHaveControllerLink(snapshot: RoomSnapshot, queuedLinkCount = 0): boolean {
+export function shouldHaveControllerLink(
+  snapshot: RoomSnapshot,
+  queuedLinkCount = 0,
+  linkRoleRanges?: LinkRoleRanges,
+): boolean {
   if (snapshot.rcl < 5) return false;
   if (!snapshot.controller) return false;
-  if (
-    hasAdjacentStructure(
-      snapshot.controller.pos.x,
-      snapshot.controller.pos.y,
-      snapshot,
-      STRUCTURE_LINK,
-    )
-  )
-    return false;
+  const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
+  if (countLinksByRole(snapshot, ranges).controller > 0) return false;
   const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
   const existingLinks = snapshot.links.length;
   const linkSites = snapshot.constructionSites.filter(
@@ -488,8 +524,9 @@ export function shouldHaveControllerLink(snapshot: RoomSnapshot, queuedLinkCount
 }
 
 /**
- * storage link 任务（RCL5+）：紧邻 storage（range ≤ 2），link 网络「最后一公里」，
- * hauler 从 storage link 排空到 storage。
+ * storage link 任务：link 网络「最后一公里」，hauler 从 storage link 排空到 storage。
+ * 搜索半径 = `ranges.storage`（默认 3 = anchorRange+1）—— 与运行时分类同源，
+ * 见 resolveLinkRoleRanges / CONFIG.economy.link.storageAnchorRange 的理由说明。
  * priority 1（与 controller link 同级，高于第二 source link）；调用顺序
  * （stage 2，2026-08-02）：source(1) → controller → storage → source(rest) —
  * RCL5 落 source+controller，controller 几何失败时 storage 顶上。
@@ -500,8 +537,9 @@ export function createStorageLinkTask(
   options: ValidationOptions,
   queuedLinkCount = 0,
 ): BuildTaskCandidate | undefined {
-  if (!shouldHaveStorageLink(snapshot, queuedLinkCount)) return undefined;
+  if (!shouldHaveStorageLink(snapshot, queuedLinkCount, options.linkRoleRanges)) return undefined;
   const storage = snapshot.storage!;
+  const ranges = options.linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
 
   // 角色感知：只接受运行时分类为 storage 的邻格（link 无需站桩位）。
   const adjacentPos = findAdjacentBuildable(
@@ -509,8 +547,8 @@ export function createStorageLinkTask(
     room,
     snapshot,
     options,
-    linkRolePredicate(snapshot, "storage"),
-    2,
+    linkRolePredicate(snapshot, "storage", ranges),
+    ranges.storage,
   );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
@@ -533,17 +571,21 @@ export function createStorageLinkTask(
 }
 
 /**
- * 是否应有 storage link（RCL5+ + 有 storage + 无相邻 link + 槽位未满）。
+ * 是否应有 storage link（RCL5+ + 有 storage + 该角色尚无 link + 槽位未满）。
+ * 「已有」判定用运行时角色而非几何紧邻：半径放宽到 3 之后，「建好了但仍不算相邻」
+ * 会让这条缺口永远挂着（并把规划器钉在 gap-force 慢速重试上）。
  * P1-3 fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
  * 与「正常跳过」。
  */
-export function shouldHaveStorageLink(snapshot: RoomSnapshot, queuedLinkCount = 0): boolean {
+export function shouldHaveStorageLink(
+  snapshot: RoomSnapshot,
+  queuedLinkCount = 0,
+  linkRoleRanges?: LinkRoleRanges,
+): boolean {
   if (snapshot.rcl < 5) return false;
   if (!snapshot.storage) return false;
-  if (
-    hasAdjacentStructure(snapshot.storage.pos.x, snapshot.storage.pos.y, snapshot, STRUCTURE_LINK)
-  )
-    return false;
+  const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
+  if (countLinksByRole(snapshot, ranges).storage > 0) return false;
   const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
   const existingLinks = snapshot.links.length;
   const linkSites = snapshot.constructionSites.filter(
@@ -752,6 +794,8 @@ export function createCoreRoadTasks(
   snapshot: RoomSnapshot,
   occupiedSet: ReadonlySet<number>,
   maxRoadsPerCycle = 4,
+  /** 见 domain/layout/link-reserve：道路不得吃掉未来 link 角色在半径内的最后一格。 */
+  reservedCells?: ReadonlySet<number>,
 ): BuildTaskCandidate[] {
   const candidates: BuildTaskCandidate[] = [];
   if (snapshot.rcl < 2) return candidates;
@@ -787,6 +831,7 @@ export function createCoreRoadTasks(
       if (x < 1 || x > 48 || y < 1 || y > 48) continue;
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       if (occupiedSet.has(packPos(x, y))) continue;
+      if (reservedCells?.has(packPos(x, y))) continue;
 
       let adjacentStructures = 0;
       const orthogonal: ReadonlyArray<readonly [number, number]> = [

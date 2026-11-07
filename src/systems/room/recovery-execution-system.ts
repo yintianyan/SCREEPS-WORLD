@@ -16,6 +16,12 @@ import { globalCache, publishProcurementDemands } from "../../kernel/global-cach
 import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../../config/bodies";
 import { submitRequest, hasRequest, spawnKey, buildSpawnRequest } from "../../domain/spawn/queue";
 import { energyBuyAmount } from "../../domain/economy/energy-logistics";
+import {
+  brakeGateSum,
+  isUpgradeReserveActive,
+  upgradeBrakeAllows,
+  upgradeBrakeFloor,
+} from "../../domain/economy/accounting";
 import { type RecoveryAction, GLOBAL_ROOM } from "../../domain/strategy/recovery-priority";
 // 房名一律取 `action.room`，**不要**再从 `targetFailureId` 按位置解析。
 // 该 id 的形状在各生产者之间不一致（`failure:<dim>:<tick>` 与 `failure:colony:<room>:<tick>` 并存），
@@ -751,6 +757,23 @@ function submitPopulationRebuild(
  * 所以两种结果都是对的：demand 本来就排到那个 slot ⇒ hasRequest 命中，这条不额外孵；
  * demand 排得少 ⇒ 这条把 slot 1 补上，等于"停摆期间强制保留第二个工位"，这是本动作的全部效果。
  */
+/**
+ * DEVELOPMENT_RESUME 的角色真值表（导出仅为可测 —— 判据本身在三行内）。
+ *
+ * `upgraderBrakeOpen=false` 时不请求 upgrader：闸关着孵出来的那只会在控制器旁边被 idle
+ * （role-runner 写 mode=idle 后直接 return，那一拍零意图），线上实测这样每 ≈693 拍烧掉
+ * 一枚 body、交付 0。**builder 不受这把闸管**，工地还在就应该建 —— 所以"闸关"不等于
+ * "本臂整个不动作"，那样会把建造道也一起缴械。
+ */
+export function developmentResumeRoles(input: {
+  upgraderBrakeOpen: boolean;
+  hasBuildQueue: boolean;
+}): string[] {
+  const roles: string[] = input.upgraderBrakeOpen ? ["upgrader"] : [];
+  if (input.hasBuildQueue) roles.push("builder");
+  return roles;
+}
+
 function submitDevelopmentResume(
   action: RecoveryAction,
   ctx: TickContext,
@@ -776,10 +799,31 @@ function submitDevelopmentResume(
   const energyAvailable = gameRoom?.energyAvailable ?? 0;
   const rcl = gameRoom?.controller?.level ?? 1;
 
-  const roles: string[] = ["upgrader"];
-  // builder 只在有活要建时才要：发展停摆的典型成因是"升级道被掐"，
-  // 无工地时多孵一只 builder 只会把能量挪去抢同一批 container。
-  if ((roomMem.buildQueue?.length ?? 0) > 0) roles.push("builder");
+  // 戊（拆闭环）：上面的注释「只加出口、不动任何闸」在失血闸面前不成立 ——
+  // 闸掐升级 ⇒ controller 停摆 ⇒ E5 `rclStale` 立案 ⇒ 本臂孵 upgrader ⇒ 落地即被同一把闸
+  // idle。线上实测转一圈 ≈693 拍、单枚 900–6,450 e、交付 0（25 枚，凭证 recoveryCorrelationId），
+  // 而且它写 priority:1 会抢在正常编制请求前面。
+  // 出口必须先问闸：闸关着就不孵 upgrader。这不改闸的任何判据，只是不再往闸里灌新产能。
+  // builder 不受此限 —— 它不归这把闸管，工地还在就应该建。
+  const sumGate = brakeGateSum(Memory.kernel?.brakeNetFlow, Memory.kernel?.gateNetFlow);
+  const brakeFloor = upgradeBrakeFloor(
+    isUpgradeReserveActive(rcl, Memory.kernel?.expansionPlans),
+    CONFIG.economy.upgradeReserveNetFlow,
+  );
+  const upgraderBrakeOpen = upgradeBrakeAllows(sumGate, brakeFloor, Memory.kernel?.upgradeBrake);
+
+  const roles = developmentResumeRoles({
+    upgraderBrakeOpen,
+    hasBuildQueue: (roomMem.buildQueue?.length ?? 0) > 0,
+  });
+  if (roles.length === 0) {
+    return {
+      submitted: false,
+      reason:
+        `upgrade brake closed (Σ=${sumGate.toFixed(2)} floor=${brakeFloor}) —— ` +
+        "孵出来会被同一把闸 idle，本次不动出口",
+    };
+  }
 
   const requested: string[] = [];
   for (const role of roles) {

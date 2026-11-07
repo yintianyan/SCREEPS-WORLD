@@ -457,6 +457,18 @@ export const CONFIG = {
      * 变红，说明它是策略级而不是局部优化；限定版只在“确有扩张计划且本房已成熟”时生效，
      * 早期房、无计划、终态计划都保持原语义（`Σgate<0` 才停）。可逆：删除该值即回到 0。 */
     upgradeReserveNetFlow: 5,
+    /**
+     * 关闸后的最短保持期（tick，100 的整数倍）。默认 1200 = 12 个量子。
+     * 依据：一个「取能→通勤→站桩」循环实测下限 518 拍（冷孵）～600+ 拍，而已证明有效的
+     * 生产窗是 1,076 拍 —— 保持期必须跨过循环下限，否则"开闸"在生产上等于没开
+     * （现网实测开闸窗 80–100 拍时产出恒 0，窗 1,076 拍时产出 47/拍）。
+     */
+    brakeMinClosedTicks: 1200,
+    /** 开闸后的最短保持期（tick）。默认 1200。
+     * 这条牺牲的是保护灵敏度，换来的是「窗口可用性」：不加的话 Σ 在 0 附近摆时，
+     * 开闸后 100 拍就会被再次关死，与改造前同病。代价可量化 —— 延迟关闸至多
+     * 1,200 拍 × 升级支出 ≈8 e/拍 ≈ 9,600 e，对现网 storage ≈40 万是 2.4%。 */
+    brakeMinOpenTicks: 1200,
     harvestWorkingParts: 5,
     /** 物流配额归一化的基准运力（6 CARRY = 300）：hauler 的 container 积压启发式
      * 与 distributor 的 fillTarget 折算均按此标定；实际运力更大时头数折减、更小时
@@ -579,10 +591,20 @@ export const CONFIG = {
     link: {
       /** source link 发起传输的最小能量阈值（P1-4：攒够再发，避免小额传输占冷却致 source link 溢出）。 */
       minTransfer: 400,
-      /** link 角色分类的锚定半径（Chebyshev）：classifyLinkRole 与 harvester 灌能识别
-       * 共用同一值，杜绝两侧口径漂移致「死 link」。取 2：harvester 站 container（贴 source）
-       * 上仍能 range1 够到隔一格的 link，故 source link 放 range≤2 内均可被灌能。 */
+      /** link 角色分类的锚定半径（Chebyshev）：source／controller 用此值。
+       * 取 2：harvester 站 container（贴 source）上仍能 range1 够到隔一格的 link，
+       * 故 source link 放 range≤2 内均可被灌能。
+       * ⚠️不得在此之外再抄一份数字 —— 放置侧与分类侧一律经
+       * `resolveLinkRoleRanges(CONFIG.economy.link)` 取同一个对象。 */
       anchorRange: 2,
+      /**
+       * storage 角色的半径，默认 3 = anchorRange + 1。
+       * 为什么单独放宽：link 槽位由引擎按 RCL 门控（5:2／6:3／7:4／8:6），而道路与
+       * extension 从 RCL1 就开始占地 —— 等 storage link 有槽位时 storage 的 ≤2 邻域
+       * 常已被铺满，缺口按构造不可满足（线上 W8N3：storage (21,15) 的 24 格邻域
+       * 全是 extension/road/lab ⇒ `layoutGaps.linkStorage` 恒红 + 规划器被钉在慢速重试）。
+       */
+      storageAnchorRange: 3,
       /**
        * RCL8 满级保级水位（2026-08-01）：controller link 的目标能量。满级后升级零收益
        * （controller.progress=0），默认停供（target=0）；仅降级风险
