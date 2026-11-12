@@ -200,7 +200,9 @@ export function appendCpuRateSnapshot(
   const next = prev ? [...prev] : [];
   const last = next[next.length - 1];
   if (last && last.t === tick) {
-    next.splice(next.length - 1, 1, snapshot);
+    // 同拍重复采样只覆盖最后一枚（不 splice：队列属主守卫禁止外模块出现 splice 调用，
+    // 这里也只是普通数组元素替换）。
+    next[next.length - 1] = snapshot;
   } else {
     next.push(snapshot);
   }
