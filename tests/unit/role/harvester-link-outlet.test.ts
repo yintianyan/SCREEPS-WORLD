@@ -1,5 +1,5 @@
 /** harvester source-link 灌能出口判定（2026-08-01 健壮性回归）。 */
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, beforeEach } from "vitest";
 import { harvesterRole } from "../../../src/creeps/roles/harvester";
 import {
   mockSnapshot,
@@ -10,6 +10,18 @@ import {
   mockController,
   resetGlobals,
 } from "../../support/factories";
+import { CONFIG } from "../../../src/config";
+
+const ORIGINAL_GCL = CONFIG.economy.upgrade.gclUpgrade;
+
+/** CONFIG 为 readonly 声明，测试需临时覆盖开关（用断言绕开只读修饰）。 */
+function setGclUpgrade(enabled: boolean): void {
+  (CONFIG.economy.upgrade as unknown as { gclUpgrade: boolean }).gclUpgrade = enabled;
+}
+
+afterEach(() => {
+  setGclUpgrade(ORIGINAL_GCL);
+});
 
 function posAt(x: number, y: number) {
   return {
@@ -93,13 +105,23 @@ function setup(opts: { withStorageLink: boolean; rcl: number; ctrlLinkEnergy?: n
 describe("harvester — source link 灌能出口判定", () => {
   beforeEach(() => resetGlobals());
 
-  it("RCL8 停供 + 无 storage link（rcl8-endgame 回归场景）→ 灌 container 而非死 link", () => {
+  it("GCL 关闭 + RCL8 停供 + 无 storage link → 灌 container 而非死 link", () => {
+    setGclUpgrade(false);
     const { creep, container, link, ctx } = setup({ withStorageLink: false, rcl: 8 });
 
     harvesterRole.run(creep, ctx);
 
     expect(creep.transfer).toHaveBeenCalledWith(container, "energy");
     expect(creep.transfer).not.toHaveBeenCalledWith(link, "energy");
+  });
+
+  it("GCL 开启 + RCL8 + 无 storage link → 灌 source link（controller link 仍供能升级）", () => {
+    setGclUpgrade(true);
+    const { creep, link, ctx } = setup({ withStorageLink: false, rcl: 8 });
+
+    harvesterRole.run(creep, ctx);
+
+    expect(creep.transfer).toHaveBeenCalledWith(link, "energy");
   });
 
   it("有 storage link（能量可瞬移进 hub）→ 正常灌 source link", () => {

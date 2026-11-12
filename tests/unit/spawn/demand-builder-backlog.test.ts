@@ -338,11 +338,17 @@ describe("补员方向：在编已有 builder/upgrader 时，低价格下早期�
     expect(reqsFor(snap, living("upgrader", 1)).filter(r => r.role === "upgrader")).toHaveLength(2);
   });
 
-  it("upgrader：有 storage 同一价格 ⇒ 弹性砍到 0 ⇒ 不补（对照组）", () => {
+  it("upgrader：有 storage 但非富库（20K < 50K）⇒ 弹性砍到 0 ⇒ 不补（对照组）", () => {
+    // Phase 1：storage ≥ sprintStorage(50K) 时富库豁免价格弹性；
+    // 此处用 20K 维持「非富库仍吃弹性」的对照语义。
+    const storageMid = {
+      id: "st2",
+      store: { getUsedCapacity: () => 20_000 },
+    } as unknown as StructureStorage;
     const snap = mockSnapshot({
       myConstructionSites: [],
       controllerContainer,
-      storage: storageFull,
+      storage: storageMid,
     });
     expect(reqsFor(snap, living("upgrader", 1)).filter(r => r.role === "upgrader")).toHaveLength(0);
   });

@@ -1,7 +1,12 @@
 /** Candidate Discovery */
 
 import type { RoomIntel } from "../intel";
-import { type ExpansionCandidateV2, buildCandidate, isEvaluable } from "./candidate";
+import {
+  type ExpansionCandidateV2,
+  buildCandidate,
+  isEvaluable,
+  revalidateCandidate,
+} from "./candidate";
 
 /** Discovery 输入。 */
 export interface DiscoveryInput {
@@ -60,36 +65,40 @@ export function discoverCandidates(input: DiscoveryInput): DiscoveryResult {
   let newCount = 0;
   let updatedCount = 0;
 
+  // 本轮被 Intel 覆盖的房 —— 其余候选（Intel 未刷新）走 revalidate 分支。
+  const refreshedRooms = new Set<string>();
+
   // 从各 sponsor 的邻居 Intel 提取候选
   for (const [sponsor, intel] of Object.entries(intelBySponsor)) {
     for (const [roomName, info] of Object.entries(intel)) {
+      refreshedRooms.add(roomName);
       const existing = candidateMap.get(roomName);
 
       if (existing) {
-        // 已有候选：检查 Intel 是否更新
-        if (info.lastSeen > existing.lastSeen) {
-          // Intel 刷新 → 重建候选（保留 discoveredAt 和 status 如果仍是 UNKNOWN）
-          const refreshed = buildCandidate(
-            roomName,
-            sponsor,
-            info,
-            ownedRoomNames,
-            tick,
-            myUsername,
-            releasedRoomNames,
-          );
-          refreshed.discoveredAt = existing.discoveredAt;
-          // 如果旧候选已评分，保留评分直到重新评估
-          if (existing.score > 0 && isEvaluable(refreshed)) {
-            refreshed.score = existing.score;
-            refreshed.scoreBreakdown = existing.scoreBreakdown;
-            refreshed.evaluatedAt = existing.evaluatedAt;
-            refreshed.status = existing.status;
-          }
-          candidateMap.set(roomName, refreshed);
-          updatedCount++;
+        // 已有候选：每次评估都用当前规则重建，不再只在 Intel 刷新时重建。
+        //
+        // 为什么（2026-11-08 线上实证）：地形阈值 0.3→0.5 后，W8N2（wallRatio 0.36）
+        // 的 Intel 已刷新、候选也重建了，但重建分支把 `existing.status` 覆盖回
+        // REJECTED —— 旧状态粘滞，新阈值与 myUsername 修复全部白改；W7N4/W7N6
+        // 因为 Intel 未刷新更是永远停在旧 veto。
+        // status 必须由**本次** vetoReason 决定；只保留 discoveredAt 与历史评分。
+        const refreshed = buildCandidate(
+          roomName,
+          sponsor,
+          info,
+          ownedRoomNames,
+          tick,
+          myUsername,
+          releasedRoomNames,
+        );
+        refreshed.discoveredAt = existing.discoveredAt;
+        if (existing.score > 0 && isEvaluable(refreshed)) {
+          refreshed.score = existing.score;
+          refreshed.scoreBreakdown = existing.scoreBreakdown;
+          refreshed.evaluatedAt = existing.evaluatedAt;
         }
-        // Intel 未更新 → 保留旧候选
+        candidateMap.set(roomName, refreshed);
+        updatedCount++;
       } else {
         // 新候选
         const candidate = buildCandidate(
@@ -105,6 +114,14 @@ export function discoverCandidates(input: DiscoveryInput): DiscoveryResult {
         newCount++;
       }
     }
+  }
+
+  // Intel 未覆盖的保留候选：用**当前**否决规则复算一次。
+  // 只靠 Intel 刷新重建的旧实现会让阈值调整/用户名修复对这批房永远不生效
+  // （线上实证：W6N1 墙比 0.32 在阈值降到 0.5 后仍显示 terrain-walls=0.32）。
+  for (const [roomName, candidate] of candidateMap) {
+    if (refreshedRooms.has(roomName)) continue;
+    revalidateCandidate(candidate, ownedRoomNames, releasedRoomNames ?? [], myUsername);
   }
 
   const candidates = Array.from(candidateMap.values());

@@ -178,6 +178,18 @@ function generateRoomTasks(
     }
   }
 
+  // Phase 1：FlowPlanner 的 deliver 任务。
+  // 任务由 flow-planner-system 每 tick 产出；这里用本房 creep 的 assignment 回填
+  // assignedCreeps，保证 maxWorkers 去重和 AS-1 续约口径与 haul/build 一致。
+  const flow = globalCache().flowTasks;
+  if (flow) {
+    for (const entry of flow.byRoom[roomName] ?? []) {
+      const holders = creepRefs.filter(r => r.assignment?.id === entry.id).map(r => r.name);
+      tasks.push({ ...entry, assignedCreeps: holders });
+    }
+    tasks.sort((a, b) => a.priority - b.priority);
+  }
+
   pool.setRoomTasks(roomName, tasks);
 }
 

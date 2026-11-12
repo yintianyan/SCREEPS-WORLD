@@ -614,6 +614,59 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   upgrader: [
     // 站桩升级：1 CARRY 承接 withdraw、2 MOVE 通勤，其余全 WORK。
     // RCL<8 无引擎升级上限，大 body 直接提升升速（每 WORK = 1 energy/tick）。
+    // [40W,2C,2M] @4200：RCL7 冲刺档的取能缓冲版 — 2 CARRY 缓存 100 能量，
+    // 在 controller link 冷却（私服实测 3–14 tick）期间减少取能空窗。
+    // 必须排在 1C 档**之前**：selectBody 按模板顺序取第一个可负担档，
+    // 容量 5300 会选本档；容量 4200–4249 时本档不可负担，才回退 1C。
+    {
+      parts: [
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "carry",
+        "carry",
+        "move",
+        "move",
+      ],
+      minCapacity: 4250,
+    },
     // [40W,1C,2M] @4200：RCL7(5300) 冲刺档 — 40/tick 升速，比 15W 快 2.7x。
     {
       parts: [

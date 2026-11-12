@@ -1,4 +1,5 @@
 /** Boost 决策 — 纯函数（无 Game API 依赖）。 */
+import { CONFIG } from "../../config";
 import {
   BOOST_EFFECTS,
   BOOST_EFFECT_PART,
@@ -37,7 +38,8 @@ export const DEFAULT_BOOST_POLICY: BoostPolicy = {
     builder: ["LH2O", "LH"], // T2 → T1
   },
   minRcl: 6,
-  reserveAmount: 100, // 保留 100 单位化合物用于反应链
+  // P0-C：保留量从 CONFIG 读取（默认 100），调优/私服环境可单独调整而不改代码。
+  reserveAmount: CONFIG.boost.reserveAmount,
 };
 
 /** 角色 boost 优先级（越高越先执行）。 */

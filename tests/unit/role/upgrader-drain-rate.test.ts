@@ -129,14 +129,16 @@ describe("P0-4 upgrader storage 流失率门禁 — 异常情况", () => {
   it("storage.store read throws → degrade gracefully (no throw)", () => {
     // storage.store.getUsedCapacity 抛错 → dynamicStorageLimit try/catch 退化为返回 0，
     // role.run 不抛错。
-    // 调用顺序：withdrawStorageCapped.resolve 先读一次（<=0 检查），通过后才调
-    // dynamicStorageLimit（第二次读）。故 mock 首次返回 5000 让外层检查通过，
-    // 第二次抛错触发 dynamicStorageLimit 的 try/catch。gate 走 energyAvailable 分支（rcl=3）。
+    // 调用顺序（2026-11-08 起多了一次 gate 的 richStorage 探测）：
+    //   1) upgraderGate 的 richStorage 读取（try/catch 内，读不到按 0 处理）
+    //   2) withdrawStorageCapped.resolve 的 <=0 检查
+    //   3) dynamicStorageLimit 内读取 → 这里才抛，由它自己的 try/catch 降级
+    // 故 mock 前两次返回 5000，第三次起抛错。
     const storage = mockStructure("storage", { id: "st", energy: 5000, capacity: 1000000 });
     let callCount = 0;
     storage.store.getUsedCapacity = vi.fn(() => {
       callCount++;
-      if (callCount <= 1) return 5000; // withdrawStorageCapped 的 <=0 检查通过
+      if (callCount <= 2) return 5000; // gate 探测 + withdrawStorageCapped 外层检查通过
       throw new Error("read error"); // dynamicStorageLimit 内读取抛错
     });
     const snap = mockSnapshot({ storage, rcl: 3, energyAvailable: 500 });

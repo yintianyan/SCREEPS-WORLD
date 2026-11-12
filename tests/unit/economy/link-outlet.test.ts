@@ -1,7 +1,7 @@
 /** linkHasOutlet 纯函数测试（2026-08-02，link 布局漏洞 #3）。 */
 import { describe, expect, it } from "vitest";
 import { linkHasOutlet } from "../../../src/domain/economy/link-outlet";
-import type { LinkInfo } from "../../../src/domain/economy/links";
+import { findStorageLink, type LinkInfo } from "../../../src/domain/economy/links";
 
 function makeLink(id: string, role: LinkInfo["role"]): LinkInfo {
   return { id, role, energy: 0, energyCapacity: 800, cooldown: 0 };
@@ -41,5 +41,28 @@ describe("linkHasOutlet — source link 出口判定", () => {
   it("source link + 只有 hub link → 无 outlet（hub 不是有效下游）", () => {
     const others = [makeLink("hub1", "hub")];
     expect(linkHasOutlet("source", others)).toBe(false);
+  });
+});
+
+describe("findStorageLink — 与布局分类同源（storageAnchorRange=3）", () => {
+  // W8N3 现场坐标：storage (21,15)、storage link (22,18) —— 切比雪夫距离 3。
+  const view = {
+    storage: { pos: { x: 21, y: 15 } },
+    controller: { pos: { x: 23, y: 42 } },
+    sources: [{ pos: { x: 34, y: 20 } }, { pos: { x: 30, y: 21 } }],
+    links: [
+      { id: "src1", pos: { x: 33, y: 20 } },
+      { id: "ctrl", pos: { x: 22, y: 42 } },
+      { id: "src2", pos: { x: 30, y: 20 } },
+      { id: "stor", pos: { x: 22, y: 18 } },
+    ],
+  };
+
+  it("距 storage 3 格的 link 仍判为 storage（旧 range<=2 会漏掉）", () => {
+    expect(findStorageLink(view)?.id).toBe("stor");
+  });
+
+  it("无 storage → undefined", () => {
+    expect(findStorageLink({ ...view, storage: undefined })).toBeUndefined();
   });
 });

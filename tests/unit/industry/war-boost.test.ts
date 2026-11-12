@@ -203,6 +203,30 @@ describe("evaluateBoostRequests — attacker/healer 请求生成", () => {
     );
     expect(requests).toHaveLength(0);
   });
+
+  it("P0-C：T3 不足但 T1 GH 够（reserve+30）⇒ upgrader 降级请求 GH", () => {
+    // 线上 W8N3：XGH2O=5 / GH2O=5 都不够，但 GH=295 ≥ reserve(100)+30 ⇒ 应发请求。
+    const requests = evaluateBoostRequests(
+      [{ name: "u1", role: "upgrader", ticksToLive: 1600, boosted: false }],
+      6,
+      { XGH2O: 5, GH2O: 5, GH: 295 },
+      DEFAULT_BOOST_POLICY,
+      false,
+    );
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.compound).toBe("GH");
+  });
+
+  it("P0-C：全部化合物低于 reserve+30 ⇒ 不请求（保留反应原料）", () => {
+    const requests = evaluateBoostRequests(
+      [{ name: "u1", role: "upgrader", ticksToLive: 1600, boosted: false }],
+      6,
+      { XGH2O: 5, GH2O: 5, GH: 20 },
+      DEFAULT_BOOST_POLICY,
+      false,
+    );
+    expect(requests).toHaveLength(0);
+  });
 });
 
 // ─── 4. lab-system 前馈接线 ─────────────────────────────────

@@ -13,7 +13,12 @@ import { describe, expect, it } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { updateNetFlowEma } from "../../../src/domain/economy/accounting";
 
-/** G4 的判据常量（`domain/strategy/readiness.ts` DEFAULT_READINESS_OPTIONS.minNetFlow）。 */
+/**
+ * 本文件验的是「快/慢两台仪器」的性质，用的是**演示门槛 5**（原 G4 值），
+ * 不是生产配置值（`DEFAULT_READINESS_OPTIONS.minNetFlow` 已调到 2）。
+ * 门槛取 5 是为了让脉冲序列清晰展示"快仪器翻脸、慢仪器稳住"；
+ * 生产门槛下降时，慢仪器的波动优势结论不变。
+ */
 const G4_MIN_NET_FLOW = 5;
 
 /** 把一串「每窗净流」喂给指定 α 的 EMA，返回逐窗读数。 */

@@ -10,6 +10,7 @@ import {
   getHaulFillTarget,
 } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
+import { CONFIG } from "../../../config";
 
 /**
  * 交付入账字段：只有**能量真的离开采掘那一间房**时才算「跨房导入」。
@@ -177,6 +178,47 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
         if (coreFillDemand) return undefined;
       }
       return ac.snapshot.storage;
+    },
+    execute: (ac, st) => {
+      runCountedAction(
+        ac.creep,
+        st,
+        ACTION_RANGE_NEAR,
+        importedFieldFor(ac.creep, st),
+        () => ac.creep.transfer(st, RESOURCE_ENERGY),
+        undefined,
+        () => transferIntent(ac.creep, st),
+      );
+    },
+  };
+}
+
+/**
+ * Phase C：distributor 满载回吐 —— 所有 sink 都满且 storage 低于恢复线时，把背包能量送回去。
+ *
+ * 为什么需要：distributor 刻意没有 `fillStorage`（架构约束，避免 storage→storage 循环），
+ * 所以当它取完能量、目标被其它 distributor 填满后，能量会永久卡在背包里。
+ * W8N3 实测 3 只 distributor 共约 1,110 能量卡死，同期 storage 正在低储失血。
+ *
+ * 与循环的边界：
+ * - 只在 `fillTargets` 为空（真的无处可送）且 storage < richStorageResume 时触发；
+ * - acquire 侧的 `hasDistributorFillDemand` 在 sink 满时返回 false，不会立刻又取能；
+ * - storage 高于恢复线时不做 —— 那时的满载属于正常波动，回吐只会增加无谓往返。
+ */
+export function returnEnergyToStorage(): ActionCandidate<StructureStorage> {
+  return {
+    name: "fill:storage-excess",
+    resolve: ac => {
+      const storage = ac.snapshot.storage;
+      if (!storage) return undefined;
+      const carried = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      if (carried <= 0) return undefined;
+      if ((storage.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0) <= 0) return undefined;
+      const storageEnergy = storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      if (storageEnergy >= CONFIG.economy.upgrade.richStorageResume) return undefined;
+      // 还有未填满的 sink 时让 distributorFillTarget 处理，本动作只兜「真的无处可送」。
+      if (ac.snapshot.fillTargets.length > 0) return undefined;
+      return storage;
     },
     execute: (ac, st) => {
       runCountedAction(

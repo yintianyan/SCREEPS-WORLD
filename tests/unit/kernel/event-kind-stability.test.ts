@@ -64,6 +64,7 @@ const EXPECTED: Record<string, number> = {
   RecoveryEscalation: 48,
   PostureTransition: 49,
   CreepDeathCarry: 50,
+  TickFatal: 51,
 };
 
 /** 从数字枚举对象提取 forward 映射（成员名 → 编码），忽略反向数值条目。 */

@@ -322,6 +322,34 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     expect(gaps).toEqual({ source: 0, controller: 0, storage: 1, hub: 0 });
   });
 
+  it("P2-A W8N3 现场：4 link 坐标分类正确 ⇒ 全部缺口为 0（linkStorage 误报回归）", () => {
+    // 现场：sources (34,20)/(30,21)、controller (23,42)、storage (21,15)；
+    // links (33,20)/(30,20) 贴两个 source，(22,42) 贴 controller，(22,18) 距 storage 3 格。
+    const src1 = mockSource("src1");
+    src1.pos = { x: 34, y: 20, roomName: "W8N3" };
+    const src2 = mockSource("src2");
+    src2.pos = { x: 30, y: 21, roomName: "W8N3" };
+    const ctrl = mockController({ level: 7 });
+    ctrl.pos = { x: 23, y: 42, roomName: "W8N3" };
+    const storage = mockStructure("storage", { id: "stor1" });
+    storage.pos = { x: 21, y: 15, roomName: "W8N3" };
+    const snap = mockSnapshot({
+      rcl: 7,
+      controller: ctrl,
+      sources: [src1, src2],
+      storage: storage as any,
+      links: [
+        linkAt(33, 20, "l_src1"),
+        linkAt(30, 20, "l_src2"),
+        linkAt(22, 42, "l_ctrl"),
+        linkAt(22, 18, "l_stor"),
+      ] as any,
+    });
+    // 与生产调用同一组半径：source/controller=2、storage=3。
+    const gaps = auditLinkRoleGaps(snap, [], { source: 2, controller: 2, storage: 3 });
+    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+  });
+
   it("队列中 queued link 任务计入 have（按 pos 几何分类）", () => {
     const srcLink = linkAt(10, 11, "link_src");
     const snap = snapshotWithAnchors(5, [srcLink]);

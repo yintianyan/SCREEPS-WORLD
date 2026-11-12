@@ -40,7 +40,12 @@ import {
   trySellSurplusCompound,
   trySellSurplusEnergy,
 } from "./terminal-market";
-import { tryEmpireEnergyAid, tryEmpireMineralAid, tryNukeSalvage } from "./terminal-selfaid";
+import {
+  recordExportNeed,
+  tryEmpireEnergyAid,
+  tryEmpireMineralAid,
+  tryNukeSalvage,
+} from "./terminal-selfaid";
 
 /** 取（或建行）贸易决策账本 —— heap 单例；建行走 domain 的同一处（采购侧字段由 terminal-market 写）。 */
 function tradeLedger(): TradeLedger {
@@ -495,7 +500,12 @@ function tryPlanDrivenSend(
     const resource =
       req.resource === "energy" ? RESOURCE_ENERGY : (req.resource as ResourceConstant);
     const inTerminal = terminal.store.getUsedCapacity(resource) ?? 0;
-    if (inTerminal < req.amount) continue; // 现货不足，等 distributor 转运
+    if (inTerminal < req.amount) {
+      // Phase B：Plan 要的货在 storage 而不在 terminal → 登记出口需求，
+      // 由 distributor 的 terminalExportLane 补齐（否则这条请求每轮静默失败）。
+      recordExportNeed(snapshot.roomName, req.resource, req.amount - inTerminal, Game.time);
+      continue;
+    }
 
     // 能量运费校验
     if (typeof Game.market?.calcTransactionCost === "function") {

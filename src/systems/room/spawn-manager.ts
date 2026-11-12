@@ -10,7 +10,25 @@ import {
   type SpawningSummary,
   type RoomDemandContext,
 } from "../../domain/spawn/demand";
-import type { ColonyState } from "../../kernel/contracts";
+import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
+import {
+  computeCarrierCount,
+  estimateUpgradeFeed,
+  linkPathRate,
+} from "../../domain/logistics/flow-planner";
+import {
+  classifyLinkRole,
+  findStorageLink,
+  resolveLinkRoleRanges,
+} from "../../domain/economy/links";
+import { energyReserveFor } from "../../domain/spawn/reserve";
+import { nextStorageRichActive, nextUpgradeActive } from "../../domain/economy/storage-latch";
+import {
+  HOME_MINERAL_STOP_STOCK,
+  nextHomeMineralMiningActive,
+} from "../../domain/economy/home-mining";
+import { collectRoomResourceStocks } from "../../domain/economy/resource-stock";
+import { marketOutletState } from "../../domain/industry/market-outlet";
 import {
   cleanQueue,
   hasSurvivalRequest,
@@ -24,6 +42,173 @@ import { recordSkip } from "../../kernel/memory";
 import { globalCache, bumpEnergyCounter, bumpRemoteOpLedger } from "../../kernel/global-cache";
 import { recordExecution } from "../../telemetry";
 import { log } from "../../kernel/log";
+
+/**
+ * P0-A：工业供料链是否有活可干 —— labTender 的门禁事实（适配层现读，domain 保持纯函数）。
+ *
+ * 为什么不能再用「lab 已有矿物」：实验室初始全空，而把矿搬进 lab 的正是 labTender
+ * ⇒ 旧门禁恒假、供料链自锁（W8N3 实测 6 座 lab 数小时全空、terminal 里 O/X/H 躺着）。
+ * 这里以「反应计划在账」或「labDemands 有装载/回收条目」为准；两者都没有时仍不补孵，
+ * 保留 R595 的成本约束（无工业需求时不白养一只 4C4M）。
+ */
+function hasLabSupplyDemand(roomMem: unknown, roomName: string): boolean {
+  const industry = (roomMem as { industry?: unknown } | undefined)?.industry;
+  if (industry !== undefined && industry !== null) {
+    const plan = (industry as { reactionPlan?: unknown }).reactionPlan;
+    if (plan !== undefined) return true;
+  }
+  const table = globalCache().labDemands?.byRoom[roomName];
+  return (table?.loads.length ?? 0) > 0 || (table?.unloads.length ?? 0) > 0;
+}
+
+/**
+ * Phase C：lab 侧是否真的需要该 home mineral。
+ * 只看本矿的装料需求与反应计划步骤，避免「lab 要 O」把 H 的停采闸一直顶开。
+ */
+function labNeedsHomeMineral(roomMem: unknown, roomName: string, mineral: string): boolean {
+  const table = globalCache().labDemands?.byRoom[roomName];
+  if (table?.loads.some(load => load.resource === mineral)) return true;
+
+  const plan = (
+    roomMem as
+      | {
+          industry?: {
+            reactionPlan?: {
+              steps?: readonly { input1?: string; input2?: string }[];
+            };
+          };
+        }
+      | undefined
+  )?.industry?.reactionPlan;
+  return (plan?.steps ?? []).some(step => step.input1 === mineral || step.input2 === mineral);
+}
+
+/**
+ * Phase C：home mineral 是否存在真实 ticket。
+ *
+ * ticket 来源按「谁会把矿消耗/搬走」枚举：
+ * lab 供料表、市场采购需求、跨房援助/计划出口票、真实买盘、factory 当前配方组件。
+ * 任一存在即允许采矿 —— 库存闸只拦「没有任何下游去向」的堆积。
+ */
+function hasHomeMineralDemand(
+  snapshot: RoomSnapshot,
+  roomMem: unknown,
+  mineral: string,
+  tick: number,
+): boolean {
+  if (labNeedsHomeMineral(roomMem, snapshot.roomName, mineral)) return true;
+
+  const procurement = globalCache().procurementDemands?.byRoom[snapshot.roomName] ?? [];
+  if (procurement.some(d => d.resource === mineral && d.deadline > tick)) return true;
+
+  const exports = globalCache().exportNeeds?.byRoom[snapshot.roomName] ?? [];
+  if (exports.some(n => n.resource === mineral && n.deadline > tick)) return true;
+
+  const cache = globalCache().marketOrderCache;
+  if (marketOutletState(mineral, cache, tick, CONFIG.market.interval + 50) === "yes") return true;
+
+  const target = globalCache().factoryTargets?.[snapshot.roomName];
+  if (target !== undefined) {
+    const table = (
+      globalThis as {
+        COMMODITIES?: Record<string, { components?: Record<string, number> }>;
+      }
+    ).COMMODITIES;
+    const components = table?.[target]?.components;
+    if (components !== undefined && (components[mineral] ?? 0) > 0) return true;
+  }
+
+  return false;
+}
+
+const CHEB = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
+  Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+/**
+ * Phase D：低于基础防护线（`rampartBootstrapHits`）的 wall/rampart 数量。
+ *
+ * 作为 builder 编制的真实需求信号注入 demand —— 修墙原本完全不计入编制
+ * （只有 site / 道路 / backlog 三个信号），基础档开了之后仍只养 1 只 builder。
+ */
+function countLowFortifications(snapshot: RoomSnapshot): number {
+  const ceiling = CONFIG.defense.rampartBootstrapHits;
+  let count = 0;
+  for (const f of snapshot.walls) if (f.hits < ceiling) count++;
+  for (const f of snapshot.ramparts) if (f.hits < ceiling) count++;
+  return count;
+}
+
+/**
+ * Phase D：factory 待回收量折算成「等效 fill 目标数」（每 400 运力 = 1 个目标）。
+ *
+ * 只计入超出运营水位（`stockTarget`）的部分 —— 那是必须搬走的积压；
+ * 水位内的能量是生产原料，不算分发负担。
+ */
+function countFactoryReclaimBacklog(snapshot: RoomSnapshot): number {
+  const factory = snapshot.factory;
+  if (!factory) return 0;
+  const energy = factory.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+  const battery = factory.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
+  const excess = Math.max(0, energy - CONFIG.factory.stockTarget) + battery;
+  return Math.floor(excess / 400);
+}
+
+/**
+ * Phase 2：估算本房 upgrade 车道的可持续供给（e/tick）。
+ *
+ * 供给 = link 到达（ST→CL，含损耗）+ source link 直供 + 剩余 distributor 的 creep 运力。
+ * 只作为 demand 的编制封顶信号；不参与实际任务分配（后者由 flow-planner-system 负责）。
+ */
+export function computeUpgradeFeedCap(
+  snapshot: RoomSnapshot,
+  creeps: readonly CreepSummary[],
+): number | undefined {
+  if (snapshot.storage === undefined || snapshot.controller === undefined) return undefined;
+  const ctrl = snapshot.controller;
+  const ctrlLink = snapshot.links.find(l => l.pos.getRangeTo(ctrl.pos) <= 2);
+  const storageLink = findStorageLink(snapshot);
+  const station = snapshot.controllerContainer ?? ctrlLink;
+  if (!station) return undefined;
+
+  const carry = CONFIG.economy.referenceCarryCapacity;
+  const creepRoundTrip = 2 * CHEB(snapshot.storage.pos, station.pos) + 4;
+  const links = snapshot.links.map(l => ({
+    id: l.id,
+    pos: { x: l.pos.x, y: l.pos.y },
+  }));
+
+  let linkDelivered = 0;
+  let feederCarriers = 0;
+  if (ctrlLink !== undefined && storageLink !== undefined) {
+    const feederRoundTrip = 2 * CHEB(snapshot.storage.pos, storageLink.pos) + 4;
+    const info = linkPathRate([storageLink.id, ctrlLink.id], links);
+    if (info) {
+      linkDelivered = info.deliveredRatePerTick;
+      feederCarriers = computeCarrierCount(info.sendRatePerTick, feederRoundTrip, carry);
+    }
+  }
+
+  const ranges = resolveLinkRoleRanges(CONFIG.economy.link);
+  const sourcePoints = snapshot.sources.map(s => s.pos);
+  const hasSourceLink = snapshot.links.some(
+    l =>
+      classifyLinkRole(l.pos, sourcePoints, ctrl.pos, snapshot.storage!.pos, ranges) === "source",
+  );
+  const externalSupply =
+    hasSourceLink && ctrlLink !== undefined
+      ? snapshot.sources.length * CONFIG.economy.harvestWorkingParts * 2
+      : 0;
+  const distributorCount = creeps.filter(c => c.role === "distributor").length;
+
+  return estimateUpgradeFeed({
+    linkDeliveredRate: linkDelivered,
+    externalSupplyPerTick: externalSupply,
+    distributorCount,
+    feederCarrierCount: feederCarriers,
+    carry,
+    creepRoundTripTicks: creepRoundTrip,
+  });
+}
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
@@ -53,6 +238,91 @@ export const spawnManagerSystem: System = {
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
+
+      // Phase 2.5：storage 富余闩锁（50K 停 / 100K 复），upgrade/lab/节流共用。
+      // 无 storage 的早期房不适用（否则 0 能量会让闩锁恒关，误伤 RCL1-3 的发展）。
+      let storageEnergyNow = 0;
+      try {
+        storageEnergyNow = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      } catch {
+        storageEnergyNow = 0;
+      }
+      const storageRichActive: boolean | undefined =
+        snapshot.storage === undefined
+          ? undefined
+          : nextStorageRichActive(
+              roomMem.storageRichActive,
+              storageEnergyNow,
+              CONFIG.economy.upgrade.sprintStorage,
+              CONFIG.economy.upgrade.richStorageResume,
+            );
+      if (storageRichActive === undefined) {
+        if (roomMem.storageRichActive !== undefined) delete roomMem.storageRichActive;
+      } else if (roomMem.storageRichActive !== storageRichActive) {
+        roomMem.storageRichActive = storageRichActive;
+      }
+
+      // Phase D：分级消费闸 —— 停线统一 50K，恢复线按「收益/紧迫度」分开。
+      // upgrade 60K（长期复利，最优先）< lab 120K（有资产收益）< 修墙 300K（纯消耗）。
+      let upgradeActive: boolean | undefined;
+      let labActive: boolean | undefined;
+      let fortifyActive: boolean | undefined;
+      if (snapshot.storage !== undefined) {
+        // RCL8 用 60K 回差（GCL 复利可选）；RCL<8 用 50K 单门槛（升 RCL 是刚需，
+        // 回差会在 50–60K 制造死区 → 房永远卡在当前 RCL）。见 nextUpgradeActive。
+        upgradeActive = nextUpgradeActive(
+          roomMem.upgradeActive,
+          snapshot.rcl,
+          storageEnergyNow,
+          CONFIG.economy.upgrade.sprintStorage,
+          CONFIG.economy.upgrade.gclResumeStorage,
+        );
+        labActive = nextStorageRichActive(
+          roomMem.labActive,
+          storageEnergyNow,
+          CONFIG.economy.upgrade.sprintStorage,
+          CONFIG.economy.upgrade.labResumeStorage,
+        );
+        fortifyActive = nextStorageRichActive(
+          roomMem.fortifyActive,
+          storageEnergyNow,
+          CONFIG.economy.upgrade.sprintStorage,
+          CONFIG.defense.fortifyResumeStorage,
+        );
+      }
+      for (const [key, value] of [
+        ["upgradeActive", upgradeActive],
+        ["labActive", labActive],
+        ["fortifyActive", fortifyActive],
+      ] as const) {
+        if (value === undefined) {
+          if (roomMem[key] !== undefined) delete roomMem[key];
+        } else if (roomMem[key] !== value) {
+          roomMem[key] = value;
+        }
+      }
+
+      // Phase C：home mineral 停采闩锁（10K 停 / 5K 复）。无矿物的房不启用。
+      const homeMineral = snapshot.minerals[0]?.mineralType;
+      let homeMiningActive: boolean | undefined;
+      if (homeMineral !== undefined) {
+        const homeStock = collectRoomResourceStocks(snapshot)[homeMineral] ?? 0;
+        // ticket 只在停采线以下才考虑：库存已 ≥10K 时，现有库存本身就覆盖了
+        // lab/factory/援助需求，再拿 ticket 顶开闸只会让 81K 的 H 继续涨。
+        const hasDemand =
+          homeStock < HOME_MINERAL_STOP_STOCK &&
+          hasHomeMineralDemand(snapshot, roomMem, homeMineral, ctx.tick);
+        homeMiningActive = nextHomeMineralMiningActive(
+          roomMem.homeMiningActive,
+          homeStock,
+          hasDemand,
+        );
+        if (roomMem.homeMiningActive !== homeMiningActive) {
+          roomMem.homeMiningActive = homeMiningActive;
+        }
+      } else if (roomMem.homeMiningActive !== undefined) {
+        delete roomMem.homeMiningActive;
+      }
 
       const queue = roomMem.spawnQueue ?? [];
 
@@ -112,8 +382,21 @@ export const spawnManagerSystem: System = {
       }
       //     upgrader：非 normal 且无降级风险时 demand 不再生成（allowUpgrader 门禁），
       //     对称撤销残留请求，避免 recovery 期间孵出发展角色加剧赤字。
-      if (colonyState !== "normal" && roomMem.controllerDowngradeRisk !== true) {
+      //     Phase D：改读升级专用闸（恢复线 60K），不再被 lab/修墙的 100K/300K 拖住。
+      if (
+        (colonyState !== "normal" || upgradeActive === false) &&
+        roomMem.controllerDowngradeRisk !== true
+      ) {
         removeRequestsByRole(queue, "upgrader", snapshot.roomName);
+      }
+      // Phase D：lab 工业孵化跟随 labActive（恢复线 120K），与升级闸解耦。
+      if (labActive === false && roomMem.controllerDowngradeRisk !== true) {
+        removeRequestsByRole(queue, "mineralMiner", snapshot.roomName);
+        removeRequestsByRole(queue, "labTender", snapshot.roomName);
+      }
+      // Phase C：home mineral 已到停采线 → 撤销在途矿工请求（存量继续工作，不强制回收）。
+      if (homeMiningActive === false) {
+        removeRequestsByRole(queue, "mineralMiner", snapshot.roomName);
       }
       //     distributor：填充需求已清零且存活编制达 minCount 地板时撤销扩编请求。
       //     不撤销的后果：请求在 TTL 窗口内仍会孵化 — 需求早已消失的常驻编制。
@@ -167,6 +450,18 @@ export const spawnManagerSystem: System = {
         haulerPendingTarget: computeHaulerPendingTarget(snapshot.roomName),
         // R6a：议程注入（rcl-push 放宽 upgrader 冲刺门槛）。
         agendaInitiative: Memory.kernel?.agenda?.initiative,
+        // P0-A：工业搬料需求注入 —— 决定 labTender 能否孵化（空 lab 不再自锁）。
+        labSupplyNeeded: hasLabSupplyDemand(roomMem, snapshot.roomName),
+        // Phase 2：upgrade 可持续供给，供 demand 按 feed 封顶 upgrader 编制。
+        upgradeFeedCap: computeUpgradeFeedCap(snapshot, creepsByRoom.get(snapshot.roomName) ?? []),
+        // Phase 2.5：富 storage 闩锁（50K 停 / 100K 复）。
+        richStorageActive: storageRichActive,
+        // Phase D：升级专用闸（50K 停 / 60K 复）—— 与 lab/修墙解耦。
+        upgradeActive,
+        // Phase D：lab 专用闸（50K 停 / 120K 复）—— 覆盖 labTender 与 mineralMiner。
+        labActive,
+        // Phase C：home mineral 停采闩锁（10K 停 / 5K 复）。
+        homeMiningActive,
         // 【G-J 合规】churn 冻结表注入（写者=本系统 cleanQueue；domain 不触 Memory）。
         churnFreezeUntil: roomMem?.churnFreezeUntil as Record<string, number> | undefined,
         // #156：帝国合计储量注入（数据源=各房 economy.cr＝storage+terminal+link 水位；domain 不触 Memory）。
@@ -179,6 +474,14 @@ export const spawnManagerSystem: System = {
           (roomMem?.buildQueue as readonly { state?: string }[] | undefined)?.filter(
             t => t.state === "queued",
           ).length ?? 0,
+        // Phase D：低血工事计数 —— builder 的真实需求信号。
+        // 修墙原本不参与编制（只有 site/道路/backlog），基础档开了之后 60+ 个低血工事
+        // 仍只养 1 只 builder，排队期间 rampart 塌毁（W6N1 实测 4 分钟塌 18 个）。
+        lowFortificationCount: countLowFortifications(snapshot),
+        // Phase D：factory 待回收量 → distributor 编制的等效 fill 目标。
+        // spawn/ext 与塔全满时 fillCount=0、编制只剩 1 只，而 factory 可能堆着几十 K
+        // 解压能量 —— 运力不足会让解压链被水位阀锁死。
+        factoryReclaimBacklog: countFactoryReclaimBacklog(snapshot),
       };
       // 刹车求和的唯一口径（含「brakeNetFlow 整列缺席则回退 gateNetFlow」的过渡规则）；
       // 与 upgraderGate 共用同一函数，避免签发侧与在岗侧读两把尺。
@@ -442,9 +745,13 @@ export function remoteSpawnPovertyBlocked(
 ): boolean {
   if (survival || !REMOTE_LINE_ROLES.has(role)) return false;
   // 深贫困（<4,000）：连替换也停 —— 2026-10-24 现场：2,886 storage 时替换仍在补员，
-  // 维持成本把 storage 继续往下拉。轻度贫困（4,000–8,000）只拦首孵/扩编。
+  // 维持成本把 storage 继续往下拉。
   if (storageEnergy < 4000) return true;
-  return !key.includes(":repl:") && storageEnergy < CONFIG.remote.roomMinStorage;
+  // 替换 = 保住现有线收入的最小支出，只受上面的深贫困地板约束。
+  if (key.includes(":repl:")) return false;
+  // Phase 2.5：低储回血期暂停远矿「首孵/扩编」—— 新编制是净支出，先让 home storage
+  // 回到 expansionMinStorage(100K)。现役成员与替换不受影响，收入线不断。
+  return storageEnergy < CONFIG.remote.expansionMinStorage;
 }
 
 /**
@@ -517,6 +824,12 @@ export function trySpawn(
   if (replacementReserve) {
     reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }
+  // Phase 2：常态预留 —— 大 body 孵化后保留 1200（小容量房按 25% 钳制），
+  // 避免双 spawn 同 tick 把现金池抽到 0，distributor 需多趟才能接上。
+  reserve = Math.max(
+    reserve,
+    energyReserveFor(snapshot.energyCapacityAvailable ?? 0, CONFIG.spawn.energyReserve),
+  );
   // R647：低容量房（RCL1-2，<400）不持有恢复预留。200 的预留占掉 300 容量的 2/3，
   // 而 replacementHorizonTicks=600 让「采集者临近换代」在这类房里近乎常真 ⇒ 除采集者外
   // 所有请求永久落进 noDegrade/degradeGateClosed，spawn 满能空转、新房停在 RCL2
@@ -591,8 +904,12 @@ export function trySpawn(
     //      colonyState 可能仍为 normal（worker 维持 reserve 稳定，相位系统检测不到），
     //      不降级则「等满额能量 → 永远凑不够 → 永远排队」死锁。
     //      线上 W37S58 实测：crisisCount=93 但 colonyState=normal，hauler 排队 4000+ tick。
-    //   4. P2 饥饿超时 + 经济压力降级：请求等待超 10× 孵化耗时 且 economyPressure > 0.5，
-    //      双条件避免 bootstrap/低速增长期 P2 过早出小 body 占满人口配额（回归测试）。
+    //   4. P2 饥饿超时降级：请求等待超 4× 孵化耗时仍未孵化 → 允许降到当前现金
+    //      能支付的最大 body。时间窗口本身已排除「过早小 body」（4 个完整孵化周期），
+    //      不再叠加 economyPressure 门槛 —— 该信号在 storage 富余的冲刺房恒为 0，
+    //      会把这条通道结构性关死（线上 W8N3：40W upgrader 43 件 ⇒ 10×=1290 拍 ≈
+    //      寿命 1628 的 79%，叠加 pressure 门后队列四条全 degradeGateClosed，
+    //      controller.progress 冻结 2,634 拍）。
     //   5. 饥饿降级成本地板：starved 路径产物须 ≥ starvationDegradeFloor，低于地板继续
     //      排队（不算失败，不烧 retries）— 无地板的后果（线上实测回路）：能量低谷铸出
     //      1C1M 残废 → 吞吐塌方 → 水位低迷 → 自强化直至人工干预。
@@ -620,16 +937,17 @@ export function trySpawn(
       // 全部 degradeGateClosed。RCL1-2 有 spawnReserveFor 的低容量钳位与既有集成覆盖，
       // 不纳入本次豁免（避免 RCL1 新手期被 P2 小 body 吃掉孵化能量）。
       const noStorageYoung = snapshot.storage === undefined && snapshot.rcl === 3;
-      const economyPressure = roomMem?.economyPressure ?? 0;
       const spawnTime = req.body.length * 3;
       const waitTicks = Game.time - (req.createdAt ?? Game.time);
       const starvedP1 = req.priority === 1 && waitTicks >= spawnTime * 2;
-      const starvedP2 =
-        req.priority === 2 &&
-        waitTicks >= spawnTime * 10 &&
-        (economyPressure > 0.5 || noStorageYoung);
+      // P2 饥饿窗口取 4× 孵化耗时：既给足「等现金攒到整身」的宽限（P1 的 2× 再留一倍），
+      // 又不至于像旧实现的 10× 那样对大 body 退化成「死亡后永不补员」——
+      // 40W upgrader 43 件 ⇒ spawnTime=129，10×=1290 拍已占寿命 1628 的 79%。
+      // 时间条件本身足以排除「过早小 body」，因此不再叠加 economyPressure：
+      // storage 富余的冲刺房该信号恒为 0，会与 10× 一起把降级通道结构性锁死。
+      const starvedP2 = req.priority === 2 && waitTicks >= spawnTime * 4;
       // R686：**预留单独挡住的 P2**。本房现金付得起整身，只是扣掉 200 预留后不够 —
-      // 这类请求在 pressure=0 的富房永远等不到 starvedP2（其条件是 pressure>0.5），
+      // 这类请求不必等饥饿窗口（旧实现还要等 10× 且 pressure>0.5，在富房双重不可达），
       // 而道路优化档的 body 恰好按 `capacity-100` 裁（RCL4 hauler 16C8M=1200 / 容量 1300），
       // 预留 200 把它永久挡在 1100 之外 ⇒ 请求只能 TTL 到期重建，人口停止补员。
       // 线上 W39S55 实测：energyAvailable=1300=capacity、storage 259K、economyPressure=0，

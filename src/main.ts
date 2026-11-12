@@ -1,3 +1,6 @@
 import { kernel } from "./bootstrap";
+import { runWithFatalGuard } from "./kernel/safe-run";
 
-export const loop = (): void => kernel.run();
+export const loop = (): void => {
+  runWithFatalGuard(() => kernel.run());
+};

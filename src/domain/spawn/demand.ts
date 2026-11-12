@@ -3,7 +3,7 @@ import { degradeBody, minimalBodyFor, RECOVERY_BODY, selectBody } from "../../co
 import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, hasRequest, spawnKey, buildSpawnRequest } from "./queue";
-import { classifyLinkRole } from "../economy/links";
+import { classifyLinkRole, findStorageLink } from "../economy/links";
 import {
   upgradeBrakeAllows,
   upgradeBrakeFloor,
@@ -52,6 +52,34 @@ export interface RoomDemandContext {
   economyPressure: number;
   /** 能量边际价值 (0..1)，0=紧缺、1=充裕；用于弹性调节供需编制。 */
   energyPrice?: number;
+  /**
+   * Phase 2：upgrade 车道的可持续供给（e/tick），由 spawn-manager 从 snapshot 估算后注入。
+   * 用于按 feed 封顶 upgrader 数量，避免「3 只 40W 抢 31 e/t 链路」的空转。
+   */
+  upgradeFeedCap?: number;
+  /**
+   * Phase 2.5：富 storage 闩锁（50K 停 / 100K 复）。
+   * true = 允许升级/工业消费；false = 低储回血期，暂停非关键孵化；
+   * undefined = 调用方未注入（单测/无 storage 房）→ 回退原始水位判定。
+   */
+  richStorageActive?: boolean;
+  /**
+   * Phase D：升级专用闸（50K 停 / 60K 复）。undefined 时回退 richStorageActive。
+   * 与 lab/修墙解耦的原因：三者收益不同，共用 100K 恢复线会让双 source 房永远
+   * 到不了门槛而彻底停升级。
+   */
+  upgradeActive?: boolean;
+  /**
+   * Phase D：lab 专用闸（50K 停 / 55K 复）。undefined 时回退 richStorageActive。
+   * 覆盖 labTender 与 mineralMiner —— 两者同属工业链，收益形式是化合物/矿物资产。
+   * 恢复线低于升级（60K）：lab 反应约 1 e/t/trio，成本比单只 upgrader（15 e/t）低一个量级。
+   */
+  labActive?: boolean;
+  /**
+   * Phase C：home mineral 停采闩锁。false = 库存已达停采线且无 ticket，
+   * 不再补 mineralMiner；undefined = 未注入（单测/旧路径）→ 保持旧行为。
+   */
+  homeMiningActive?: boolean;
   /** storage 超满仓阈值 — 触发限采 + 加速消费。 */
   storageNearFull?: boolean;
   /** 流动性危机分 (0-100)（方案 C）：能量冻在 container / spawn 破产的物流死锁；
@@ -63,6 +91,23 @@ export interface RoomDemandContext {
   churnFreezeUntil?: Record<string, number>;
   /** 【G-J 合规】buildQueue backlog 计数（construction-manager 维护，注入）。 */
   buildQueueBacklog?: number;
+  /**
+   * Phase D：低于基础防护线（`rampartBootstrapHits`）的 wall/rampart 数量。
+   *
+   * 为什么需要：修墙需求原本完全不参与 builder 编制 —— 只有 site / 道路 / backlog
+   * 三个信号。基础防护档开了之后，W6N1 有 60+ 个低血工事却仍只养 1 只 builder，
+   * 排队期间 rampart 持续衰减到塌毁（实测 4 分钟塌 18 个、防线出缺口）。
+   */
+  lowFortificationCount?: number;
+  /**
+   * Phase D：factory 内待回收的能量/产物折算的「等效 fill 目标数」。
+   *
+   * 为什么需要：distributor 编制只看 `fillTargets`（spawn/extension/tower），
+   * 而 factory 回收（`reclaimFactoryOutput`）完全不计入。W8N3 实测 spawn/ext 与塔
+   * 全满 ⇒ fillCount=0 ⇒ 编制只剩 minCount(1)，而 factory 堆着 40,410 能量要 101 趟
+   * —— 1 只 distributor 永远搬不完，解压链因此被运力阀锁死。
+   */
+  factoryReclaimBacklog?: number;
   /**
    * P1-J：上一 tick 迟滞状态（适配层从 RoomMemory 读出注入）：distScaleUpSince
    * （distributor 扩编确认计时器）与 builderPressureState（压力迟滞带）。
@@ -78,6 +123,13 @@ export interface RoomDemandContext {
   /** R6a：帝国议程 initiative（empire-strategy 发布，spawn-manager 适配层注入）。
    *  "rcl-push" 时 upgrader 冲刺门槛放宽一档 — 目标驱动主动冲级，而非等水位自然触发。 */
   agendaInitiative?: string;
+  /**
+   * P0-A：工业供料链是否有活可干（反应计划在账 / labDemands 有装载或回收需求）。
+   * 由 spawn-manager 从 Memory.industry / globalCache.labDemands 现读后注入；
+   * domain 不访问 Memory。用途＝替代 labTender 的旧门禁「≥2 lab 已有矿物」——
+   * 后者在实验室初始全空时恒假，而把矿搬进 lab 的正是 labTender ⇒ 自锁。
+   */
+  labSupplyNeeded?: boolean;
   /**
    * #156（人已授权）：帝国各房已储藏能量合计（适配层注入；domain 纯函数不触 Memory）。
    *
@@ -318,6 +370,11 @@ export function evaluateDemand(
   const inCrisis = colonyState === "recovery";
   // Storage 满仓信号 — 限采 + 加速消费。
   const storageNearFull = roomCtx.storageNearFull === true;
+  // Phase 2.5：低储回血期（闩锁显式关闭）。undefined 视为未注入，不节流。
+  // Phase D：分级 —— 升级看 upgradeActive(60K)，工业看 labActive(55K)。
+  // 未注入时统一回退 richStorageActive(100K)。
+  const upgradeLatchClosed = (roomCtx.upgradeActive ?? roomCtx.richStorageActive) === false;
+  const labLatchClosed = (roomCtx.labActive ?? roomCtx.richStorageActive) === false;
   // 供需价格信号 — 0=紧缺（抑制消费），1=充裕（鼓励消费）。
   const energyPrice = roomCtx.energyPrice ?? 0.5;
   // 消费端 + 物流端弹性系数（crisis 时不应用弹性调节 — crisis 路径已有独立收缩逻辑）。
@@ -590,7 +647,9 @@ export function evaluateDemand(
     // 2. Storage link 积压信号（RCL5+ link 网络最后一公里）：link-system 将 source link
     //    能量瞬移到 storage link，需 hauler 排空到 storage；无 storage 时不存在 storage link。
     if (snapshot.storage) {
-      const storageLink = snapshot.links.find(l => l.pos.getRangeTo(snapshot.storage!) <= 2);
+      // 与布局分类同源：旧 range<=2 找不到距 3 格的 storage link（W8N3 实测），
+      // 于是 hauler 编制从不感知 storage link 积压。
+      const storageLink = findStorageLink(snapshot);
       if (storageLink) {
         // ②b 守卫：controller link 缺能时 storage link 被 distributor 用于灌升级链（非 source
         // 背压）且 withdrawStorageLink 挡住 hauler 不抽 — 满不代表需排空，不计入，避免过孵。
@@ -598,8 +657,12 @@ export function evaluateDemand(
         const ctrlLink = ctrl
           ? snapshot.links.find(l => l.id !== storageLink.id && l.pos.getRangeTo(ctrl) <= 2)
           : undefined;
+        // P0-C：只有 controller 真缺能（free ≥ 400）时才抑制 hauler 扩编；
+        // 缺口 <400 属于正常补给窗口，storage link 的积压应计入运力需求。
         const feedingController =
-          ctrlLink !== undefined && ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
+          ctrlLink !== undefined &&
+          ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) >=
+            CONFIG.economy.link.controllerFeedSuppressFree;
         if (!feedingController) {
           const linkCap = storageLink.store.getCapacity(RESOURCE_ENERGY) || 1;
           const linkFillRatio = storageLink.store.getUsedCapacity(RESOURCE_ENERGY) / linkCap;
@@ -685,7 +748,16 @@ export function evaluateDemand(
   // distributor 分发（storage→sink）；无 storage 时 hauler 直接 container→sink 直送。
   // 数量基于 fillTarget 需求量。
   const distConfig = getRoleBounds("distributor", home);
-  const distTotal = (counts.distributor ?? 0) + pending.distributor;
+  // 2026-11-08：distributor 也做平滑补员 —— 4 只同批死亡会把 ext 现金池打回 300，
+  // 补员又因现金池低而卡住（实测 4 只 → 1 只 → ext 324）。临死的提前计为缺口。
+  const distHealthy =
+    creeps.filter(
+      c =>
+        c.role === "distributor" &&
+        c.home === home &&
+        (c.ticksToLive ?? 0) >= CONFIG.spawn.upgraderReplaceHorizon,
+    ).length + spawning.filter(s => s.role === "distributor" && s.home === home).length;
+  const distTotal = distHealthy + pending.distributor;
   const hasStorage = snapshot.storage !== undefined;
   let distTarget = 0;
   if (hasStorage) {
@@ -722,12 +794,17 @@ export function evaluateDemand(
       2,
       Math.floor((countBodyParts(distBody, "carry") * 50) / 150),
     );
+    // Phase D：factory 回收也是分发工作量 —— 折算成等效 fill 目标并入编制信号。
+    const reclaimBacklog = roomCtx.factoryReclaimBacklog ?? 0;
+    const effectiveFillCount = fillCount + reclaimBacklog;
     distTarget = Math.min(
       distConfig.maxCount,
-      Math.max(distConfig.minCount, Math.ceil(fillCount / fillPerDistributor)),
+      Math.max(distConfig.minCount, Math.ceil(effectiveFillCount / fillPerDistributor)),
     );
-    // 物流端弹性：价格信号缩放。
-    distTarget = Math.max(1, Math.round(distTarget * logisticsFactor));
+    // 物流端弹性：价格信号缩放。富 storage（≥50K）时 pump 是升级/孵化的命脉，
+    // 价格=0 把 4 只砍成 2 只会让 core/upgrade 车道互相抢人（Phase 2 实盘 W8N3）。
+    const distFactor = storageEnergy >= CONFIG.economy.distributorTiers.full ? 1 : logisticsFactor;
+    distTarget = Math.max(1, Math.round(distTarget * distFactor));
     // 高耗远距 sink 排空反馈（镜像 hauler 积压反馈，方向相反）：fillCount 把 cc 当
     // 「1 个待填结构」，但 cc 是高抽取率 sink（upgrader 连续抽）且常远离 storage，
     // 缺的是并行运力而非「多算 1 个目标」（大 body 的 fillPerDistributor 会稀释）。
@@ -818,6 +895,8 @@ export function evaluateDemand(
   // （矿物收入不耗能量，是脱困路径）；bootstrap 不开（保命孵化优先）。
   const mineral = snapshot.minerals[0];
   if (
+    roomCtx.homeMiningActive !== false &&
+    !labLatchClosed &&
     (colonyState === "normal" || colonyState === "recovery") &&
     snapshot.rcl >= 6 &&
     snapshot.extractor !== undefined &&
@@ -859,8 +938,14 @@ export function evaluateDemand(
   // bootstrap 与 recovery 不开：保命孵化优先，工业是投资不是救生索。
   // R595：无“可反应”条件时（<2 个带矿物 lab）不补孵 labTender —— 现场 2 只全 idle，
   // 4C4M 身子 + 维持纯属浪费；实验室能工作时再放开。
-  const labWorkPossible = snapshot.labs.filter(l => l.mineralAmount > 0).length >= 2;
+  // P0-A 修正：旧判据在「实验室初始全空」时恒假，而把矿搬进 lab 的正是 labTender
+  // ⇒ 结构性自锁（W8N3 实测：6 座 lab 连续数小时全空、terminal 里 O/X/H 一直躺着）。
+  // 现改为「有反应计划或有搬运需求表」即放行 —— 空 lab 也能孵出第一个搬运工；
+  // 无任何工业需求时仍不补孵，保留 R595 的成本约束。
+  const labWorkPossible =
+    roomCtx.labSupplyNeeded === true || snapshot.labs.filter(l => l.mineralAmount > 0).length >= 2;
   if (
+    !labLatchClosed &&
     colonyState === "normal" &&
     snapshot.rcl >= 6 &&
     snapshot.labs.length >= 3 &&
@@ -892,9 +977,11 @@ export function evaluateDemand(
 
   // P2：Upgrader — 仅 normal；有降级风险时 recovery/bootstrap 也允许（P1 优先级）。
   const hasDowngradeRisk = roomCtx.controllerDowngradeRisk;
-  // RCL8 满级后升级零收益（progress=0）：无降级风险时停孵/停替换；
-  // 存量由角色 gate 停烧（upgrader.ts）、老死不补。
-  const rcl8NoUpgrade = snapshot.rcl >= 8 && !hasDowngradeRisk;
+  // RCL8 满级：关闭 GCL 升级时停孵/停替换（存量由角色 gate 停烧、老死不补）；
+  // 开启 gclUpgrade 后继续孵化 —— RCL8 的 upgrade 能量计入 GCL 进度，
+  // 编制由下方 RCL8 的 maxWorkParts(15) 折算上限（15W body → 1 只，恰好顶满引擎）。
+  const rcl8NoUpgrade =
+    snapshot.rcl >= 8 && !hasDowngradeRisk && !CONFIG.economy.upgrade.gclUpgrade;
   // 早期房（无 storage）**不因相位抖进 crisis/recovery 就失去整条升级道**。
   // 理由不是"它更需要升级"这种偏好，而是这条闸对它**测的不是它声称测的东西**：
   // recovery 的语义是"保库存"，而无 storage 的房没有库存可保 —— 它的 reserve 负值
@@ -915,17 +1002,34 @@ export function evaluateDemand(
   // 升级器本来就已经存活（CPU 花在角色上），让它们工作只增加动作开销。
   const cpuAllowsThisRoomUpgrade =
     !expansionPush || cpuAllowsUpgrade || roomCtx.storageNearFull === true;
+  // Phase 1：与 `upgrader.ts` 的 richStorage 同一把尺。
+  // 帝国净流闸在 storage 富余房会结构性关死升级（W8N3 878K、W7N2 999K 都曾 0 upgrader）；
+  // storage ≥ sprintStorage 时升级是把库存换 RCL 复利，不应被帝国净流和挡住。
+  // Phase 2.5：优先用闩锁；未注入时回退原始水位（单测/无 storage 房）。
+  // Phase D：升级读专用闸 upgradeActive（恢复线 60K），与 lab/修墙解耦。
+  const rawRichStorage =
+    snapshot.storage !== undefined &&
+    snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) >= CONFIG.economy.upgrade.sprintStorage;
+  const richStorageForUpgrade =
+    roomCtx.upgradeActive === undefined
+      ? roomCtx.richStorageActive === undefined
+        ? rawRichStorage
+        : roomCtx.richStorageActive
+      : roomCtx.upgradeActive;
   const allowUpgrader =
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
     !rcl8NoUpgrade &&
     (cpuAllowsThisRoomUpgrade || hasDowngradeRisk || earlyRoom) &&
-    (upgradeBrakeAllows(
-      empireGateSum,
-      upgradeBrakeFloor(expansionPush, CONFIG.economy.upgradeReserveNetFlow),
-      upgradeBrake,
-    ) ||
+    (richStorageForUpgrade ||
       hasDowngradeRisk ||
-      earlyRoom);
+      earlyRoom ||
+      // 闩锁显式关闭时连净流闸也不放行：低储期只允许保级路径，先让 storage 回血。
+      (!upgradeLatchClosed &&
+        upgradeBrakeAllows(
+          empireGateSum,
+          upgradeBrakeFloor(expansionPush, CONFIG.economy.upgradeReserveNetFlow),
+          upgradeBrake,
+        )));
 
   // #85：本 tick 需求阶梯对 upgrader **实际生效的结构钳位**（undefined = 该分支直接用 maxCount）。
   // 存在的理由：调优器只看"在场数 ≥ 当前上限"就提 upgrader.maxCount ↑，而很多分支根本不用 maxCount
@@ -939,7 +1043,17 @@ export function evaluateDemand(
 
   if (allowUpgrader && !frozenRoles.has("upgrader")) {
     const upgraderConfig = getRoleBounds("upgrader", home);
-    const upgraderTotal = (counts.upgrader ?? 0) + pending.upgrader;
+    // P1-C：平滑补员 — 只把「健康窗口内」的 upgrader 计入编制。临死者（ttl <
+    // upgraderReplaceHorizon）提前计为缺口，新替补在旧个体死亡前孵化/通勤到位，
+    // 避免同批死亡后 129 拍孵化 + 30 格通勤造成的升级断档（线上实测 0→45→0 波动）。
+    const upgraderHealthy =
+      creeps.filter(
+        c =>
+          c.role === "upgrader" &&
+          c.home === home &&
+          (c.ticksToLive ?? 0) >= CONFIG.spawn.upgraderReplaceHorizon,
+      ).length + spawning.filter(s => s.role === "upgrader" && s.home === home).length;
+    const upgraderTotal = upgraderHealthy + pending.upgrader;
 
     // A2：升级功率由「storage 水位 + 大 body WORK 数」驱动，替代固定小 body 数量梯度 —
     // 盈余能量优先灌 controller（RCL 是复利）；15W 大 body 站桩 1 只即跑满 ≈15/tick，
@@ -995,13 +1109,15 @@ export function evaluateDemand(
       upgraderTarget = pressure <= 0.7 ? upgraderConfig.minCount : 0;
       upgraderClamp = upgraderConfig.minCount;
     } else if (hasStorage && storageEnergy >= sprintStorageGate && pressure <= sprintPressureGate) {
-      // 冲刺：库存充足且经济健康，烧库存换 RCL 复利（2 个满 body 站桩）；
+      // 冲刺：库存充足且经济健康，烧库存换 RCL 复利（3 个满 body 站桩）；
       // P0-1：storage 满仓时拉满 maxCount — 盈余必须被消化，否则在源头被浪费。
+      // P1-A：非满仓封顶 2 → 3。W8N3 实测 CPU 9.8/100、storage 819k，2×40W 的
+      // 实际吞吐仅 ~45 progress/tick（理论 80），加一只可再提 ~50%，且 CPU 仍有余量。
       upgraderTarget = storageNearFull
         ? upgraderConfig.maxCount
-        : Math.min(upgraderConfig.maxCount, 2);
-      // ⚠️这一行就是 #85 的现场病灶：非满仓时需求封顶在 2，`maxCount` 里超出 2 的那部分是惰性的。
-      upgraderClamp = storageNearFull ? undefined : 2;
+        : Math.min(upgraderConfig.maxCount, 3);
+      // ⚠️这一行就是 #85 的现场病灶：非满仓时需求封顶在 3，`maxCount` 里超出 3 的那部分是惰性的。
+      upgraderClamp = storageNearFull ? undefined : 3;
     } else if (hasStorage && storageEnergy >= upgradeCfg.sustainedStorage) {
       // 维持：1 个大 body 站桩 ≈ 15/tick，盈余全喂 controller。
       upgraderTarget = 1;
@@ -1035,7 +1151,24 @@ export function evaluateDemand(
     //   早期房支出以"建/升级自己"为主，缩编制压低支出、再压低读数，形成自锁。
     //   仍保留的压力阶梯（0.3/0.7 分段）、WORK 限速与保级覆盖不受影响。
     if (hasStorage && !hasDowngradeRisk && !crisisNeedsGuard) {
-      upgraderTarget = Math.round(upgraderTarget * demandFactor);
+      // 富 storage 不吃价格弹性：W7N2 energyPrice=0 曾把 target 乘成 0。
+      const consumptionFactor = richStorageForUpgrade ? 1 : demandFactor;
+      upgraderTarget = Math.round(upgraderTarget * consumptionFactor);
+    }
+
+    // Phase 2：按可持续供给封顶 upgrader 数量。
+    // 例：W8N3 feed≈65 e/t、workPerBody=40 ⇒ cap=1；3 只 40W 只会空转。
+    if (
+      hasStorage &&
+      !hasDowngradeRisk &&
+      !crisisNeedsGuard &&
+      roomCtx.upgradeFeedCap !== undefined
+    ) {
+      // floor：feed 37 e/t、workPerBody 30 ⇒ 只留 1 只。多只 upgrader 只是把
+      // 同一股供给切成两半（总 progress 不变），但多出的空仓个体会来回 acquire/idle。
+      const feedCap = Math.max(1, Math.floor(roomCtx.upgradeFeedCap / Math.max(1, workPerBody)));
+      upgraderTarget = Math.min(upgraderTarget, feedCap);
+      upgraderClamp = Math.min(upgraderClamp ?? feedCap, feedCap);
     }
 
     // 无 storage 的房（storage 要 RCL4，所以这覆盖的全部是早期房）不因 economyPressure 失去整条升级道。
@@ -1056,6 +1189,9 @@ export function evaluateDemand(
       const maxWorkParts = upgradeCfg.maxWorkParts ?? upgradeCfg.rcl8MaxWorkParts;
       const maxCountByWork = Math.max(1, Math.floor(maxWorkParts / workPerBody));
       upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
+      // #85：WORK 限速也是真实生效的结构钳位，必须写进 clamp ——
+      // 否则调优器会把 target 压在 1 误读成「阶梯封顶 3」，抬 maxCount 永远落不了地。
+      upgraderClamp = Math.min(upgraderClamp ?? maxCountByWork, maxCountByWork);
     }
     // 保级覆盖：控制器快降级时至少保留 minCount。
     if (crisisNeedsGuard || hasDowngradeRisk) {
@@ -1101,9 +1237,16 @@ export function evaluateDemand(
   // backlog，backlogWeighted 补盲；roomMem 由 construction-manager 每 tick 维护。
   const queuedBacklog = roomCtx.buildQueueBacklog ?? 0;
   const backlogWeighted = Math.floor(queuedBacklog * 0.5);
+  // Phase D：低血工事也是 builder 的真实需求。数量多时按 2 只扩编 ——
+  // 单个 builder 要同时建造/修路/修墙，60+ 个低血 rampart 会让修墙长期排不上队。
+  const lowFortifications = roomCtx.lowFortificationCount ?? 0;
+  const fortificationDemand = lowFortifications >= 20 ? 2 : lowFortifications > 0 ? 1 : 0;
   if (
     colonyState !== "bootstrap" &&
-    (snapshot.myConstructionSites.length > 0 || roadRepairDemand || backlogWeighted > 0) &&
+    (snapshot.myConstructionSites.length > 0 ||
+      roadRepairDemand ||
+      backlogWeighted > 0 ||
+      fortificationDemand > 0) &&
     !frozenRoles.has("builder")
   ) {
     const builderConfig = getRoleBounds("builder", home);
@@ -1119,6 +1262,7 @@ export function evaluateDemand(
         backlogWeighted,
         // 纯维修需求保底 1 个 — minCount 可能为 0（成熟房 tuning 收缩后）。
         roadRepairDemand ? 1 : 0,
+        fortificationDemand,
       ),
     );
     // B-5：编制感知取能供给（水位权限表）— site 数是需求信号，但编制不得超过供给可承载：
@@ -1133,6 +1277,21 @@ export function evaluateDemand(
       } else if (builderStorageEnergy < supplyTiers.sustained) {
         dynamicBuilderTarget = Math.min(dynamicBuilderTarget, Math.max(builderConfig.minCount, 1));
       }
+    }
+    // Phase 2.5：低储回血期 builder 缩到 1 个 —— 工地是长期投资，孵化与运力先让给
+    // core/spawn 补能与 hauler 回库；存量 builder 继续干，不撤单。
+    // Phase D 修正：缩编线从 richStorageActive(100K) 改为 sustainedStorage×2(20K)。
+    // 100K 恢复线在修复升级/lab 闸后几乎永远是 false（storage 稳定在 40–60K），
+    // 导致所有房 builder 被永久压到 1 只 —— 这正是 W6N1 一次塌 18 个 rampart 的深层原因。
+    // 20K 是生存线的 2 倍，低于它才真的该把所有运力让给补员。
+    const builderStorageNow = snapshot.storage
+      ? snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY)
+      : undefined;
+    if (
+      builderStorageNow !== undefined &&
+      builderStorageNow < CONFIG.economy.upgrade.sustainedStorage * 2
+    ) {
+      dynamicBuilderTarget = Math.min(dynamicBuilderTarget, Math.max(builderConfig.minCount, 1));
     }
     // TD-016：economyPressure 迟滞带替代单阈值开关 — 进入收缩 >0.35、退出 <=0.25，
     // 带内保持状态，消除阈值附近的目标跳变振荡。P1-J：prev→next 显式传递，

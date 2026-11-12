@@ -236,7 +236,28 @@ export const towerDefenseSystem: System = {
       // recovery/bootstrap 期间保留 tower 能量应对突发，不浪费在墙上。
       const roomMem = Memory.rooms[snapshot.roomName];
       const colonyState = roomMem?.colonyState ?? "normal";
-      const wallMaintenanceAllowed = colonyState === "normal";
+      // Phase D：和平期塔维修跟随修墙专用闸 fortifyActive（停 50K / 复 300K），
+      // 与 `repairFortifications` 同一把尺。否则 builder 被闸住、塔照旧灌墙 ——
+      // 闸只是换了个执行器（W8N3 实测 `towerSpendWalls` 13–22 e/t，且全程 fortify=false）。
+      //
+      // ⚠️ 这里**不能**因 `underSiege` 放宽到 sustainedStorage：本分支在
+      // `hostileCreeps.length > 0` 时已 `continue`（见上方），所以走到这里必然
+      // **当前无敌人**，`underSiege` 只代表 `lastHostileAt` 记忆窗口（10,000 tick）。
+      // W8N3 实测：2,216 拍前一次 invader 目击 ⇒ `towerSpent` 全部落在 walls 桶、
+      // combat 为 0（没有战斗），但塔持续以 13–40 e/t 灌 118 个 10M 目标的 rampart。
+      // 「记住挨过打」不等于「正在挨打」—— 真正的应急补墙在威胁路径（无闸）。
+      // `underSiege` 仍参与 `findWallRepairTarget` 的目标血量：备战期目标更高，
+      // 但只有闸开时才真的去修。
+      // 无 storage 的早期房（RCL1-4）保持放行：塔是那阶段唯一的防线维护者。
+      const fortifyLatch = roomMemForSiege?.fortifyActive ?? roomMemForSiege?.storageRichActive;
+      const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      const fortifyGateOpen =
+        snapshot.storage === undefined
+          ? true
+          : fortifyLatch === undefined
+            ? storageEnergy >= CONFIG.economy.upgrade.sprintStorage
+            : fortifyLatch === true;
+      const wallMaintenanceAllowed = colonyState === "normal" && fortifyGateOpen;
 
       for (const tower of snapshot.towers) {
         // G-DF-07：能量 < 50 时不维修（保留攻击能量）；能量 = 0 时跳过。

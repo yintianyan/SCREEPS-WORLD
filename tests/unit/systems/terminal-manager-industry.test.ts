@@ -161,12 +161,30 @@ describe("terminal-manager — power 买", () => {
     });
     const room = roomSnapshot({
       terminal: terminalMock({ energy: 20000 }),
+      // Phase C：power 的唯一消费者是 powerSpawn，无它不买入。
+      powerSpawn: { energy: 1000, power: 0 },
     });
 
     terminalManagerSystem.run(makeContext([room]));
 
     // 缺口 = powerSpawnPowerTarget 100，affordable 充足 → 成交 100。
     expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith("ps1", 100, "W7N4");
+  });
+
+  it("Phase C：无 powerSpawn → 不买 power（无消费者的死资本）", () => {
+    setupMarket({
+      credits: CONFIG.market.powerBuyCreditFloor + 1000,
+      getAllOrders: vi.fn((opts: any) =>
+        opts.type === "sell" && opts.resourceType === "power" ? powerSellOrders(0.3) : [],
+      ),
+    });
+    const room = roomSnapshot({
+      terminal: terminalMock({ energy: 20000 }),
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
   });
 
   it("credits 低于高信用门禁 → 不买（预算让位矿物/能量采购）", () => {
@@ -230,8 +248,12 @@ describe("terminal-manager — 帝国矿物互济", () => {
    * 构造双房：donor 产 U 盈余、receiver 缺 U。
    * storage 能量统一 30k（低于 aidDonorFloor 50k、高于 recipientFloor 20k）
    * — 避免能量互济分支先行消费 terminal 或干扰断言。
+   *
+   * Phase B：donor terminal 必须携带 U 现货 — `terminal.send` 只能从 terminal 出货。
+   * 旧用例把 U 只放在 storage 仍期望 send 成功，是 mock 不校验库存造成的假绿；
+   * 真引擎会返回 ERR_NOT_ENOUGH_RESOURCES，现在的实现会转为 exportNeed。
    */
-  function aidRooms(donorTerminal = terminalMock({ energy: 13000 })) {
+  function aidRooms(donorTerminal = terminalMock({ energy: 13000, U: 5000 })) {
     const donor = roomSnapshot({
       roomName: "W1N1",
       homeMineral: "U",
@@ -263,12 +285,24 @@ describe("terminal-manager — 帝国矿物互济", () => {
   it("捐赠方 terminal 能量不足（运费+储备地板）→ 不发送", () => {
     setupMarket();
     // 100(fee) + 2000(reserve) = 2100 > 2000 → 预算不足。
-    const rooms = aidRooms(terminalMock({ energy: 2000 }));
+    const rooms = aidRooms(terminalMock({ energy: 2000, U: 5000 }));
 
     terminalManagerSystem.run(makeContext(rooms));
 
     expect(rooms[0].terminal.send).not.toHaveBeenCalled();
     expect(mineralAidEvents()).toHaveLength(0);
+  });
+
+  it("Phase B：donor 货在 storage 而 terminal 无现货 → 不发 send，登记 exportNeed", () => {
+    setupMarket();
+    // terminal 只有能量，U 全在 storage。
+    const rooms = aidRooms(terminalMock({ energy: 13000 }));
+
+    terminalManagerSystem.run(makeContext(rooms));
+
+    expect(rooms[0].terminal.send).not.toHaveBeenCalled();
+    const needs = (globalThis as any).exportNeeds?.byRoom?.["W1N1"] ?? [];
+    expect(needs).toEqual([expect.objectContaining({ resource: "U", amount: 500 })]);
   });
 
   it("单房 → 不互济", () => {

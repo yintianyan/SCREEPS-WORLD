@@ -9,7 +9,10 @@ declare global {
     id: string;
     kind: TaskKind;
     targetId?: Id<_HasId>;
-    sourceId?: Id<Source>;
+    /** Phase 2：汇组任务（core）的目标组；执行时解析具体结构。 */
+    targetGroup?: string;
+    /** deliver 任务的源可以是 storage/container，不再只限 Source。 */
+    sourceId?: Id<Source> | Id<AnyStructure>;
     revision: number;
     assignedAt: number;
     leaseUntil: number;
@@ -416,6 +419,35 @@ declare global {
      */
     distScaleUpSince?: number;
     /**
+     * Phase 2.5：富 storage 闩锁。storage ≥ richStorageResume(100K) 置 true，
+     * < sprintStorage(50K) 置 false；upgrade/lab/节流共用这一把尺。
+     */
+    storageRichActive?: boolean;
+    /**
+     * Phase D：分级消费闸（停线统一 sprintStorage=50K，恢复线各自独立）。
+     * - upgradeActive：GCL 升级，恢复线 60K（长期复利，最优先）
+     * - labActive：lab 反应，恢复线 55K（成本仅 1–3 e/t，可早于升级开闸）
+     * - fortifyActive：wall/rampart 维修，恢复线 300K（纯消耗、无直接收益）
+     */
+    upgradeActive?: boolean;
+    labActive?: boolean;
+    fortifyActive?: boolean;
+    /**
+     * Phase C：home mineral 停采闩锁。总库存 ≥10K 且无 ticket 置 false，
+     * <5K 或有新 ticket 恢复 true；由 spawn-manager 每 tick 计算。
+     */
+    homeMiningActive?: boolean;
+    /**
+     * Phase 1 能量流观测瘦摘要（flow-planner 写，每 5 tick 一次）：
+     * a=allocations（lane/via/rate/carriers），u=unmet（lane/rate/reason）。
+     * 只供采样与排障，不参与任何决策。
+     */
+    flowPlan?: {
+      t: number;
+      a?: { l: string; v: string; r: number; c: number }[];
+      u?: { l: string; r: number; w: string }[];
+    };
+    /**
      * 远矿运营 — 从本房管理的远程采矿操作，key = 目标房名。
      * 由 remote-mining-manager 每 10 tick 评估/更新。
      */
@@ -501,6 +533,10 @@ declare global {
        *
        * `total` 是「每拍拍尾都采」的均值 —— 分档唯一该吃的读数；`cpuAvg10` 的采样点
        * 落在遥测+刷段的重活拍上，官服实测稳定偏高约 2.6/t。见 pickCpuUsagePerTick。
+       *
+       * **窗口口径**：由 heap 里最近 ~600 拍的 `cpuCumulative` 快照做差得出，不是
+       * 自进程启动的生涯均值（后者会让早期高开销永不退出，容量闸长期判 constrained）。
+       * global reset 后窗口需重建；未建立前该项被删除，消费侧退回 `cpuAvg10`。
        */
       cpuRate?: {
         windowTicks: number;

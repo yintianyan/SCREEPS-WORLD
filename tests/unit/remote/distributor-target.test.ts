@@ -294,4 +294,45 @@ describe("distributor storage-link 灌能 controller-link（②b 0通勤升级�
     const target = getDistributorFillTarget(creep as any, snap);
     expect(target?.id).not.toBe(storageLink.id);
   });
+
+  it("现金池缺口 ≥ 2000 ⇒ 生产优先，不抽人去灌 storage link", () => {
+    // W8N3 现场：ext 只有 2209/5000、spawn 0/300，大 body（4200）请求被 degradeGateClosed 卡死。
+    // 此时 3 只 distributor 必须全部填 spawn/extension。
+    const storage = struct("storage", 10, 10, 50000, 1000000);
+    const storageLink = struct("link", 12, 10, 0, 800);
+    const ctrlLink = struct("link", 24, 25, 0, 800);
+    const spawn = struct("spawn", 30, 30, 0, 300);
+    const snap = mockSnapshot({
+      storage,
+      controller: { pos: mockPos(25, 25) } as any,
+      links: [storageLink, ctrlLink] as any,
+      fillTargets: [spawn] as any,
+      energyAvailable: 1000,
+      energyCapacityAvailable: 5600,
+    });
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+
+    const target = getDistributorFillTarget(creep as any, snap);
+    expect(target?.id).toBe(spawn.id);
+    expect(target?.id).not.toBe(storageLink.id);
+  });
+
+  it("现金池接近满（缺口 < 2000）⇒ 允许一只灌 storage link（升级链补给）", () => {
+    const storage = struct("storage", 10, 10, 50000, 1000000);
+    const storageLink = struct("link", 12, 10, 0, 800);
+    const ctrlLink = struct("link", 24, 25, 0, 800);
+    const spawn = struct("spawn", 30, 30, 300, 300); // 满，primary 无目标
+    const snap = mockSnapshot({
+      storage,
+      controller: { pos: mockPos(25, 25) } as any,
+      links: [storageLink, ctrlLink] as any,
+      fillTargets: [spawn] as any,
+      energyAvailable: 5200,
+      energyCapacityAvailable: 5600,
+    });
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+
+    const target = getDistributorFillTarget(creep as any, snap);
+    expect(target?.id).toBe(storageLink.id);
+  });
 });

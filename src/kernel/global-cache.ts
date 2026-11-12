@@ -1,4 +1,6 @@
 import type { TaskPool } from "../domain/assignment/task-pool";
+import type { AssignmentTaskEntry } from "../domain/assignment/service";
+import type { RoomFlowPlan } from "../domain/logistics/flow-types";
 import type { RemoteOpLedger, RemoteOpLedgerField } from "../domain/remote/op-ledger";
 import type { RoadBuildCounters } from "../domain/logistics/road-build";
 import type { ObserveCounters } from "../domain/intel";
@@ -96,6 +98,26 @@ export interface ActionCpuEntry {
   maxCpu: number;
 }
 
+/**
+ * CPU 速率滑动窗的一枚快照（heap 专用，见 telemetry-collector 的
+ * `appendCpuRateSnapshot`）。
+ *
+ * 为什么不落 Memory：600 / 10 = 60 枚 × 几十个键，序列化后是数十 KB 的纯缓存；
+ * 部署后重建只需 600 拍。快照丢了只会让容量闸短暂退回偏高的 avg10（保守侧）。
+ */
+export interface CpuRateSnapshot {
+  /** 快照拍（Game.time）。 */
+  t: number;
+  /** 截至该拍的累计 CPU（拍尾口径）。 */
+  total: number;
+  systems: Record<string, number>;
+  roles: Record<string, number>;
+  phases?: Record<string, number>;
+  tail?: number;
+  /** 截至该拍真正走到拍尾的拍数；与 `t` 配对才能算出漏采拍数。 */
+  ticks?: number;
+}
+
 /** Screeps 沙箱 `global` 对象的形态 — 所有字段可选且可重建。
  * 字段按前缀约定分域维护：
  *  - `__` 前缀：per-tick 共享缓存（hostiles/threats/sources/containers 等），tick 间可丢弃
@@ -161,10 +183,24 @@ export interface GlobalCache {
   /** per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，telemetry-collector flush。 */
   eventBuffer?: { events: import("./event-log").GameEvent[] };
   assignment?: AssignmentCache;
+  /** FlowPlanner 每 tick 产出的房间流量计划（Phase 1 只含 upgrade 车道）。 */
+  flowPlans?: { tick: number; byRoom: Record<string, RoomFlowPlan> };
+  /** 由 flowPlan 合成的 deliver 任务；assignment-service 每 tick 合并进任务槽。 */
+  flowTasks?: { tick: number; byRoom: Record<string, AssignmentTaskEntry[]> };
   /** 本 tick 已被 hauler 预约的填充目标结构 id 集合（防多 hauler 抢同一目标拥堵）。 */
   fillReservations?: Set<string>;
   /** fillReservations 上次重置所在的 tick（用于惰性按 tick 重置）。 */
   fillReservationTick?: number;
+  /**
+   * 本 tick 各房 RCL8 升级**已入账**的能量（creep → controller 的动作点计量）。
+   *
+   * 为什么需要：引擎对 RCL8 的限制是「每 tick 每 controller 最多 15 能量」，
+   * 而不是「每只 creep 15」。多只 upgrader 同时升级时，第二只实际只分到剩余额度
+   * （甚至 0），若按每只各记 min(carry, WORK) 就会成倍多记 —— 线上实测两只
+   * 15W 各记满额 ⇒ `bk.upgraded` 30 e/t，正好是引擎上限的两倍。
+   * 本字段按 intent 签发顺序先到先得，与引擎的额度分配顺序一致。
+   */
+  upgradeLedgerTick?: { tick: number; byRoom: Record<string, number> };
   /** 本 tick 拥有 builder/worker creep 的房间名集合（Kernel.buildSnapshots 预构建，P1-3）；
    * tower-defense 消费，避免独立全量 Game.creeps 扫描。 */
   repairRooms?: ReadonlySet<string>;
@@ -226,6 +262,14 @@ export interface GlobalCache {
      */
     ticks?: number;
   };
+  /**
+   * CPU 速率滑动窗快照（heap）。
+   *
+   * `cpuCumulative` 自进程启动累计，直接拿它算速率得到的是「生涯均值」——旧样本
+   * 永不退出，容量闸会长期读出一个不再成立的结论（线上扩张被 G6 锁死的根因）。
+   * 这里保留最近 ~600 拍的累计快照，用差值算窗口速率；global reset 后重建即可。
+   */
+  cpuRateSnapshots?: CpuRateSnapshot[];
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
   /** 远矿每 op 收支账本（key = remoteOpKey(home, target)）。
@@ -363,6 +407,20 @@ export interface GlobalCache {
    * key = 资源类型，value = 盈余量（库存 - boost 储备目标）。
    * heap 存储 — global reset 丢失可接受（下 tick 重建）。无 schema 变更。 */
   surplusCompounds?: { tick: number; items: Record<string, number> };
+  /**
+   * Phase B：terminal 出口需求（terminal-manager 写，distributor 的 terminal 车道读）。
+   *
+   * 为什么需要它：跨房矿物援助/Plan 驱动的 terminal.send 只能从 terminal 现货出货，
+   * 而货常常压在 storage。无市场（私服 orders=0）时 storage 里的矿物/化合物/commodity
+   * 没有任何回 terminal 的车道 —— 出口实际断裂。这里把「send 因现货不足失败」转成
+   * 一张出口票，让 distributor 把货从 storage 搬到 terminal。
+   *
+   * 按房存、带 deadline；heap 存储，global reset 丢失可接受（terminal-manager 会重发）。
+   */
+  exportNeeds?: {
+    tick: number;
+    byRoom: Record<string, { resource: string; amount: number; deadline: number }[]>;
+  };
   /** 市场行情快照（terminal-manager 每 interval 采集写入）。
    * key = 资源类型，value = { sellMin, buyMax } — 当前市场最低卖价与最高买价。
    * 所有买/卖决策以行情快照为基准计算动态价格门禁，替代 CONFIG 中的死价格。

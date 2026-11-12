@@ -99,10 +99,7 @@ describe("Links — planLinkTransfers", () => {
   });
 
   it("sends remaining source to storage via second link when first fills controller", () => {
-    // link 每 tick 只能传输一次。两个 source link：一个填 controller，一个补缺口。
-    // 损耗补偿：s1 发 300 → 到账 291，controller 仍缺 9；
-    // s2 补 controller 缺口（targetFree=9, sendForNeeds(9)=10 → 受 targetFree 限制发 9，
-    // 到账 8，controller 仍缺 1 — 由 Step 3 storage→controller 补齐）。
+    // P0-B：source link 按能量降序 —— s2(400) 先发，s1(300) 补缺口。
     const links = [
       link("s1", "source", 300),
       link("s2", "source", 400),
@@ -111,9 +108,9 @@ describe("Links — planLinkTransfers", () => {
     ];
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(3);
-    expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 300 });
-    // s1 到账 291，controller 仍缺 9 → s2 发 9（targetFree=9 限制），到账 8
-    expect(transfers[1]).toEqual({ fromId: "s2", toId: "c1", amount: 9 });
+    expect(transfers[0]).toEqual({ fromId: "s2", toId: "c1", amount: 300 });
+    // s2 到账 291，controller 仍缺 9 → s1 发 9（targetFree=9 限制），到账 8
+    expect(transfers[1]).toEqual({ fromId: "s1", toId: "c1", amount: 9 });
     // controller 仍缺 1 → storage→controller 补齐（targetFree=1，发 1，到账 0 — 下 tick 再补）
     expect(transfers[2]).toEqual({ fromId: "st", toId: "c1", amount: 1 });
   });
@@ -125,11 +122,29 @@ describe("Links — planLinkTransfers", () => {
       link("c1", "controller", 100), // needs 700
     ];
     const transfers = planLinkTransfers(links);
-    // 损耗补偿：s1 发 200 → 到账 194，剩需 506；
-    // s2 发 300 → 到账 291，剩需 215（无法继续，无更多 source link）。
+    // P0-B：s2(300) 先发，到账 291，剩需 409；s1(200) 再发，到账 194，剩需 215。
     expect(transfers).toHaveLength(2);
-    expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 200 });
-    expect(transfers[1]).toEqual({ fromId: "s2", toId: "c1", amount: 300 });
+    expect(transfers[0]).toEqual({ fromId: "s2", toId: "c1", amount: 300 });
+    expect(transfers[1]).toEqual({ fromId: "s1", toId: "c1", amount: 200 });
+  });
+
+  it("P0-B：storageSinkMinFree=200 时，storage 只剩 2 格不发小额传输", () => {
+    const links = [
+      link("s1", "source", 500),
+      link("c1", "controller", 800), // 满，不需要
+      link("st", "storage", 798), // free=2
+    ];
+    expect(planLinkTransfers(links, { storageSinkMinFree: 200 })).toHaveLength(0);
+  });
+
+  it("P0-B：storageSinkMinFree=200 且有 200 格空闲 ⇒ 正常溢出回收", () => {
+    const links = [
+      link("s1", "source", 500),
+      link("c1", "controller", 800),
+      link("st", "storage", 600), // free=200
+    ];
+    const transfers = planLinkTransfers(links, { storageSinkMinFree: 200 });
+    expect(transfers).toEqual([{ fromId: "s1", toId: "st", amount: 200 }]);
   });
 
   it("storage fills controller when no source links available", () => {

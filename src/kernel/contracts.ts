@@ -21,7 +21,16 @@ export type CreepMode = "acquire" | "work" | "idle" | "flee";
 export type FortificationRole = "perimeter" | "core" | "utility";
 
 /** assignment-service 可分发的任务类型。 */
-export type TaskKind = "harvest" | "haul" | "fill" | "upgrade" | "build" | "repair" | "reserve";
+export type TaskKind =
+  | "harvest"
+  | "haul"
+  | "fill"
+  | "upgrade"
+  | "build"
+  | "repair"
+  | "reserve"
+  /** Phase 1：FlowPlanner 合成的源→汇组运输任务。 */
+  | "deliver";
 
 export interface System {
   readonly name: string;
@@ -71,6 +80,14 @@ export interface CreepRole {
    * （RCL3 落 tower、容量抬升），成熟房在恢复态仍冻结以保能量链。
    */
   readonly recoveryEligibleYoungRoom?: boolean;
+  /**
+   * 2026-11-08：关键产出角色不参与 idle-cadence 节流。
+   * 默认 idle creep 在 healthy 档也每 5 tick 才运行一次（省 CPU），但 upgrader 这类
+   * "只要 link 有能量就能立刻工作"的角色一旦被误判 idle，吞吐直接降到 1/5 ——
+   * 线上 W8N3 实测 2 只满能量 upgrader 停在 controller 旁，progress 只有 ~8/tick
+   * （理论 80）。声明本标志的角色 idle 时仍每 tick 运行。
+   */
+  readonly noIdleCadence?: boolean;
   /**
    * 战斗角色标志：attacker / healer / defender / remote-defender 自报 true。
    * 用于 recovery 殖民地态门禁的紧急旁路——帝国在 war 姿态或本房有真实在房威胁时，

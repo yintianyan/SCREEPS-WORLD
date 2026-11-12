@@ -1,22 +1,35 @@
 /** Spawn 需求评估测试（A2 升级功率 + A4 替换路程项）。 */
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   evaluateDemand,
   estimateTravelTicks,
   needsReplacement,
 } from "../../../src/domain/spawn/demand";
 import { bodyCost } from "../../../src/config/bodies";
+import { CONFIG } from "../../../src/config";
 import {
   mockController,
   mockHostile,
+  mockPos,
   mockSnapshot,
   mockSource,
   mockStructure,
   resetGlobals,
 } from "../../support/factories";
 
+const ORIGINAL_GCL = CONFIG.economy.upgrade.gclUpgrade;
+
+/** CONFIG 为 readonly 声明，测试需临时覆盖开关（用断言绕开只读修饰）。 */
+function setGclUpgrade(enabled: boolean): void {
+  (CONFIG.economy.upgrade as unknown as { gclUpgrade: boolean }).gclUpgrade = enabled;
+}
+
 beforeEach(() => {
   resetGlobals();
+});
+
+afterEach(() => {
+  setGclUpgrade(ORIGINAL_GCL);
 });
 
 /** 造一个有一台存活 harvester 的最小场景，避免触发 P0 恢复 worker 短路。 */
@@ -55,7 +68,7 @@ function stationSnapshot(overrides: Parameters<typeof mockSnapshot>[0]) {
 }
 
 describe("A2 — storage 水位驱动升级功率", () => {
-  it("冲刺：storage ≥ 50k 且健康 → 2 个大 body upgrader（烧库存换 RCL，RCL<8 不限速）", () => {
+  it("冲刺：storage ≥ 50k 且健康 → 3 个大 body upgrader（烧库存换 RCL，RCL<8 不限速）", () => {
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
     const { requests } = evaluateDemand(
@@ -69,9 +82,37 @@ describe("A2 — storage 水位驱动升级功率", () => {
     );
 
     const upgraders = requests.filter(r => r.role === "upgrader");
-    // RCL<8 解除自限速：冲刺 2 个 40W 大 body = 80/tick。
-    expect(upgraders).toHaveLength(2);
+    // P1-A：RCL<8 解除自限速，冲刺 3 个 40W 大 body = 120/tick（CPU 有余量）。
+    expect(upgraders).toHaveLength(3);
     expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(40);
+  });
+
+  it("P1-C：临死 upgrader（ttl < 400）不计入编制 ⇒ 提前补员", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
+    const creeps = [
+      ...livingHarvester(),
+      {
+        name: "u-old",
+        role: "upgrader",
+        home: "W7N4",
+        ticksToLive: 200,
+        bodyLength: 43,
+        spawnIndex: 0,
+      },
+      {
+        name: "u-new",
+        role: "upgrader",
+        home: "W7N4",
+        ticksToLive: 1500,
+        bodyLength: 43,
+        spawnIndex: 1,
+      },
+    ];
+    const { requests } = evaluateDemand(snap, [], "normal", creeps, [], normalCtx(0), 1000);
+    const upgraders = requests.filter(r => r.role === "upgrader");
+    // 健康 1 只（u-new）计入编制，目标 3 ⇒ 请求 2 只替补；临死的 u-old 不占名额。
+    expect(upgraders).toHaveLength(2);
   });
 
   it("维持：storage ≥ 10k 且 < 50k → 1 个 15W body upgrader（≈15/tick 平衡效率）", () => {
@@ -152,7 +193,8 @@ describe("A2 — storage 水位驱动升级功率", () => {
     expect(requests.filter(r => r.role === "upgrader")).toHaveLength(3);
   });
 
-  it("RCL8 满级后停孵（升级零收益，W7N4 存不下能量主因修复）", () => {
+  it("GCL 关闭 + RCL8 满级后停孵（旧行为：升级不计收益）", () => {
+    setGclUpgrade(false);
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = stationSnapshot({ storage, rcl: 8, energyCapacityAvailable: 12300 });
     const { requests } = evaluateDemand(
@@ -167,6 +209,24 @@ describe("A2 — storage 水位驱动升级功率", () => {
 
     const upgraders = requests.filter(r => r.role === "upgrader");
     expect(upgraders).toHaveLength(0);
+  });
+
+  it("GCL 开启 + RCL8 满级继续孵 upgrader（累计 GCL，WORK 限速折算 1 只）", () => {
+    setGclUpgrade(true);
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 8, energyCapacityAvailable: 12300 });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+    );
+
+    const upgraders = requests.filter(r => r.role === "upgrader");
+    expect(upgraders.length).toBeGreaterThan(0);
   });
 
   it("RCL8 + 降级风险 → 保级 1 个 upgrader（P1 优先，15W 顶满限速）", () => {
@@ -254,8 +314,11 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
       energy: opts.storageLinkEnergy ?? 0,
       capacity: opts.storageLinkCapacity ?? 800,
     });
-    storageLink.pos.getRangeTo = () => 1;
-    storage.pos.getRangeTo = () => 1;
+    // 真实几何：storage (10,10)、storage link (12,10)（距 storage 2，距默认
+    // controller/source (25,25) 足够远）。findStorageLink 用 classifyLinkRole 的
+    // 「最近锚获胜」，全同坐标会被 controller 抢走，必须给可区分的坐标。
+    storage.pos = mockPos(10, 10);
+    storageLink.pos = mockPos(12, 10);
 
     const containers = (opts.containers ?? []).map((c, i) =>
       mockStructure("container", { id: `c${i}`, energy: c.energy, capacity: c.capacity }),
@@ -354,9 +417,10 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
     const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 }); // >80%
     const ctrlLink = mockStructure("link", { id: "clink", energy: 0, capacity: 800 }); // 缺能=灌能中
-    storageLink.pos.getRangeTo = () => 1;
-    ctrlLink.pos.getRangeTo = () => 1;
-    storage.pos.getRangeTo = () => 1;
+    // 真实几何：storage (10,10) + storage link (12,10)；controller link (24,25) 贴默认 controller (25,25)。
+    storage.pos = mockPos(10, 10);
+    storageLink.pos = mockPos(12, 10);
+    ctrlLink.pos = mockPos(24, 25);
     const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 }); // >80% +2
     const snap = mockSnapshot({
       storage,
@@ -637,8 +701,9 @@ describe("TD-015 — 物流角色 economyPressure 衰减因子", () => {
   function logisticsSnapshot() {
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
     const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
-    storageLink.pos.getRangeTo = () => 1;
-    storage.pos.getRangeTo = () => 1;
+    // 真实几何（findStorageLink 依赖 classifyLinkRole 的最近锚判定）。
+    storage.pos = mockPos(10, 10);
+    storageLink.pos = mockPos(12, 10);
     const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
     return mockSnapshot({
       storage,
@@ -1370,22 +1435,22 @@ describe("labTender 孵化门禁（反应链最后一公里的执行人）", () 
     }) as never;
   }
 
-  function reqsFor(state: string, snap: never) {
+  function reqsFor(state: string, snap: never, extraCtx: { labSupplyNeeded?: boolean } = {}) {
     const { requests } = evaluateDemand(
       snap,
       [],
       state as never,
       livingHarvester(),
       [],
-      normalCtx(0),
+      { ...normalCtx(0), ...extraCtx },
       1000,
     );
     return requests.filter(r => r.role === "labTender");
   }
 
-  it("RCL8 + lab≥3 + terminal + 可反应 → 孵 1 个，且身子只有 carry+move", () => {
+  it("RCL8 + lab≥3 + terminal + 可反应 → 孵 2 个（两 trio 并行供料），身子只有 carry+move", () => {
     const tenders = reqsFor("normal", labSnap({ labs: richLabs as never }));
-    expect(tenders).toHaveLength(1);
+    expect(tenders).toHaveLength(2);
     expect(tenders[0]!.body.every(p => p === "carry" || p === "move")).toBe(true);
   });
 
@@ -1397,6 +1462,23 @@ describe("labTender 孵化门禁（反应链最后一公里的执行人）", () 
 
   it("lab≥3 但无带矿物 lab（无法反应）→ 不孵化（R595）", () => {
     expect(reqsFor("normal", labSnap())).toHaveLength(0);
+  });
+
+  it("P0-A：lab 全空但有工业供料需求 ⇒ 孵 labTender（旧门禁自锁）", () => {
+    // 线上 W8N3：6 座 lab 数小时全空、terminal 里 O/X/H 躺着 —— 旧门禁
+    // 「≥2 lab 已有矿物」恒假，而搬矿的正是 labTender ⇒ 结构性自锁。
+    // 2026-11-08 提到 maxCount=2：两只并行覆盖两个反应 trio。
+    expect(reqsFor("normal", labSnap(), { labSupplyNeeded: true })).toHaveLength(2);
+  });
+
+  it("P0-A：无供料需求且 lab 全空 ⇒ 仍不孵（保留 R595 成本约束）", () => {
+    expect(reqsFor("normal", labSnap(), { labSupplyNeeded: false })).toHaveLength(0);
+  });
+
+  it("P0-A：供料需求注入不改变「有矿 lab」的旧路径", () => {
+    expect(
+      reqsFor("normal", labSnap({ labs: richLabs as never }), { labSupplyNeeded: false }),
+    ).toHaveLength(2);
   });
 
   it("无 terminal（化合物没有落点）→ 不孵化", () => {
@@ -1557,8 +1639,9 @@ describe("P2-2 haulerPendingTarget — tuning pending 期间主动收敛 haulerT
     // 恢复测试的证伪能力（若 undefined 被错误覆盖，结果会变成 NaN/0 而非 3）。
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
     const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
-    storageLink.pos.getRangeTo = () => 1;
-    storage.pos.getRangeTo = () => 1;
+    // 真实几何（findStorageLink 依赖 classifyLinkRole 的最近锚判定）。
+    storage.pos = mockPos(10, 10);
+    storageLink.pos = mockPos(12, 10);
     const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
     const snap = mockSnapshot({
       storage,
@@ -1583,8 +1666,9 @@ describe("P2-2 haulerPendingTarget — tuning pending 期间主动收敛 haulerT
     // 与"pending 覆盖=4"可区分。若短路被破坏，pending 生效 → haulerTarget=4 ≠ 2。
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
     const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
-    storageLink.pos.getRangeTo = () => 1;
-    storage.pos.getRangeTo = () => 1;
+    // 真实几何（findStorageLink 依赖 classifyLinkRole 的最近锚判定）。
+    storage.pos = mockPos(10, 10);
+    storageLink.pos = mockPos(12, 10);
     const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
     const snap = mockSnapshot({
       storage,
@@ -1612,8 +1696,9 @@ describe("P2-2 haulerPendingTarget — tuning pending 期间主动收敛 haulerT
     // 流动性陷阱时 hauler 是解药，必须满量孵化打破死锁（W37S58 根因之一）
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
     const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
-    storageLink.pos.getRangeTo = () => 1;
-    storage.pos.getRangeTo = () => 1;
+    // 真实几何（findStorageLink 依赖 classifyLinkRole 的最近锚判定）。
+    storage.pos = mockPos(10, 10);
+    storageLink.pos = mockPos(12, 10);
     const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
     const snap = mockSnapshot({
       storage,
@@ -1739,8 +1824,8 @@ describe("#85 — upgraderClamp：需求阶梯当前把编制压在哪个结构�
     return r.upgraderClamp;
   }
 
-  it("冲刺非满仓 ⇒ 钳位 = 2（`min(maxCount, 2)` 那一支；此时 maxCount=3 的那一份是惰性的）", () => {
-    expect(clampOf(60000)).toBe(2);
+  it("冲刺非满仓 ⇒ 钳位 = 3（`min(maxCount, 3)` 那一支）", () => {
+    expect(clampOf(60000)).toBe(3);
   });
 
   it("冲刺 + 满仓 ⇒ 无钳位（盈余必须被消化，maxCount 真的在用）", () => {
@@ -1763,16 +1848,21 @@ describe("#85 — upgraderClamp：需求阶梯当前把编制压在哪个结构�
     expect(clampOf(60000, { noStation: true })).toBe(1);
   });
 
-  it("RCL8 满级且无降级风险 ⇒ 钳位留空（整条阶梯被 rcl8NoUpgrade 关掉，读作'放行'）", () => {
+  it("GCL 关闭 + RCL8 满级且无降级风险 ⇒ 钳位留空（整条阶梯被 rcl8NoUpgrade 关掉）", () => {
     // 这一条是本轮动手时把自己写的注释纠正过来的地方：原先以为"WORK 部件限速也是一支钳位"，
-    // 但那条 min() 只在 allowUpgrader 为真时才跑得到，而 RCL8 无风险时 allowUpgrader 就是假；
+    // 但那条 min() 只在 allowUpgrader 为真时才跑得到，而 RCL8 无风险 + GCL 关闭时 allowUpgrader 就是假；
     // 有风险时走的是保级分支（本来就不钳）⇒ 那一支按构造观测不到，删掉而不是留着当死码。
-    // 真正的拦截落在提案侧的 `upgraderCount >= current`（满级房里 upgrader 为 0，提案自然不成）。
+    setGclUpgrade(false);
     expect(clampOf(60000, { rcl: 8 })).toBeUndefined();
   });
 
-  it("钳位与弹性无关：同一场景只改容量档位不动水位 ⇒ 钳位仍是 2", () => {
-    expect(clampOf(60000, { capacity: 1800 })).toBe(2);
+  it("GCL 开启 + RCL8 ⇒ 钳位来自 WORK 限速（15/15 = 1 只）", () => {
+    setGclUpgrade(true);
+    expect(clampOf(60000, { rcl: 8 })).toBe(1);
+  });
+
+  it("钳位与弹性无关：同一场景只改容量档位不动水位 ⇒ 钳位仍是 3", () => {
+    expect(clampOf(60000, { capacity: 1800 })).toBe(3);
   });
 });
 
@@ -1833,5 +1923,76 @@ describe("R684 — R632 的 CPU 门只应作用于 expansionPush 房", () => {
       false,
     );
     expect(requests.some(r => r.role === "upgrader")).toBe(true);
+  });
+});
+
+describe("Phase 1 — 富 storage 豁免升级需求闸", () => {
+  it("帝国净流为负 + 扩张推进态：storage 878K 仍生成 upgrader 请求", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 878000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+      -10, // 帝国净流和 < floor 2
+      true, // expansionPush（floor=2）
+      true,
+    );
+    const upgraders = requests.filter(r => r.role === "upgrader");
+    expect(upgraders).toHaveLength(3);
+  });
+
+  it("energyPrice=0：富 storage 不吃价格弹性，target 不被乘成 0", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 999000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      { ...normalCtx(0), energyPrice: 0 },
+      1000,
+      0,
+      false,
+      true,
+    );
+    const upgraders = requests.filter(r => r.role === "upgrader");
+    expect(upgraders).toHaveLength(3);
+  });
+
+  it("Phase 2：upgradeFeedCap 按可持续供给封顶（feed 31 / 40W → 1 只）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      { ...normalCtx(0), upgradeFeedCap: 31 },
+      1000,
+    );
+    const upgraders = requests.filter(r => r.role === "upgrader");
+    expect(upgraders).toHaveLength(1);
+  });
+
+  it("Phase 2：feed 65 / 40W → floor 封顶 1 只（避免多只空仓）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      { ...normalCtx(0), upgradeFeedCap: 65 },
+      1000,
+    );
+    expect(requests.filter(r => r.role === "upgrader")).toHaveLength(1);
   });
 });

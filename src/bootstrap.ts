@@ -37,6 +37,7 @@ import { powerFarmManagerSystem } from "./systems/military/power-farm-manager";
 import { agendaManagerSystem } from "./systems/empire/agenda-manager";
 import { layoutPlannerSystem } from "./systems/room/layout-planner";
 import { logisticsSystem } from "./systems/room/logistics";
+import { flowPlannerSystem } from "./systems/room/flow-planner-system";
 import { labSystem } from "./systems/room/lab-system";
 import { linkSystem } from "./systems/room/link-system";
 import { pixelSystem } from "./systems/empire/pixel-system";
@@ -130,6 +131,8 @@ export const registry = new Registry()
   // P0：物流请求池（搬运 Demand 一等来源；先于 assignment-service 合并进任务槽）。
   //   帝国物流规划（TransportPlan/运力/健康度，每 100t 相位门）并入本系统
   .registerSystem(logisticsSystem)
+  // P1：能量流规划（Phase 1 upgrade 车道；先于 assignment-service 合成 deliver 任务）
+  .registerSystem(flowPlannerSystem)
   // P1：任务分配（先于 P1 角色）
   .registerSystem(assignmentSystem)
   // P1：link 能量传输（瞬移替代 hauler 往返）

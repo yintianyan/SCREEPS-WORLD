@@ -3,9 +3,51 @@ import { CONFIG } from "../../../config";
 import type { ActionCandidate } from "../action-types";
 import { moveToTarget, registerAnchor } from "../../movement";
 import { countedIntent } from "./helpers";
+import { bumpEnergyCounter, globalCache } from "../../../kernel/global-cache";
 
 /** upgradeController 的交互距离（官方机制：range ≤ 3 可升级）。 */
 const UPGRADE_RANGE = 3;
+
+/** RCL8 的引擎升级上限：每 tick 每 controller 最多消耗 15 能量（= 15 WORK 部件）。 */
+const RCL8_MAX_UPGRADE_PER_TICK = 15;
+
+/**
+ * 签发升级并记账（RCL8 特例）。
+ *
+ * 为什么 RCL8 必须单独补记：`economy` 的 `upgraded` 桶来自 `controller.progress`
+ * 的跨 tick 差分，而 **RCL8 的升级计入 GCL，progress 恒不增长** ⇒ 差分恒 0。
+ * 结果本房的升级消耗完全不入账：`nf` 高估、`drift` 每窗负（W8N3 实测 Σdrift
+ * −14 e/t，与单只 15W upgrader 的 15 e/t 同量级）。
+ *
+ * 计量：min(背包能量, WORK 部件数, **本 tick 本房剩余额度**)。引擎上限是
+ * 「每 controller 15 e/t」而非「每 creep 15」—— 多只 upgrader 同时升级时按
+ * intent 签发顺序先到先得，与引擎的额度分配一致。不做这层截断就会成倍多记
+ * （线上实测两只 15W ⇒ `bk.upgraded` 30 e/t）。
+ * RCL<8 不补记，交给 progress 差分，避免重复计数。
+ */
+function countUpgrade(creep: Creep, ctrl: StructureController): number {
+  const result = countedIntent("upgrade", () => creep.upgradeController(ctrl));
+  if (result === OK && ctrl.level === 8) {
+    const room = creep.memory.home ?? creep.room.name;
+    const carry = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+    const work = creep.body.filter(p => p.type === WORK).length;
+    const want = Math.min(carry, work);
+    if (want > 0) {
+      const g = globalCache();
+      const tick = Game.time;
+      if (g.upgradeLedgerTick === undefined || g.upgradeLedgerTick.tick !== tick) {
+        g.upgradeLedgerTick = { tick, byRoom: {} };
+      }
+      const used = g.upgradeLedgerTick.byRoom[room] ?? 0;
+      const spent = Math.min(want, Math.max(0, RCL8_MAX_UPGRADE_PER_TICK - used));
+      if (spent > 0) {
+        g.upgradeLedgerTick.byRoom[room] = used + spent;
+        bumpEnergyCounter(room, "upgraded", spent);
+      }
+    }
+  }
+  return result;
+}
 
 /**
  * 升一次控制器，否则向控制器靠拢。
@@ -21,7 +63,7 @@ function upgradeOrApproach(creep: Creep, ctrl: StructureController): void {
     moveToTarget(creep, ctrl, UPGRADE_RANGE);
     return;
   }
-  if (countedIntent("upgrade", () => creep.upgradeController(ctrl)) === ERR_NOT_IN_RANGE) {
+  if (countUpgrade(creep, ctrl) === ERR_NOT_IN_RANGE) {
     moveToTarget(creep, ctrl, UPGRADE_RANGE);
   }
 }
@@ -85,7 +127,7 @@ export function stationaryUpgrade(): ActionCandidate<StationaryUpgradeTarget> {
       // 同 tick 取 + 升：稳态下 carry 恒接近满，升级永不断粮（满 WORK 效率）。返回码无需处理 —
       // carry 满时 withdraw 返回 ERR_FULL（无害 no-op），下一 tick 升级腾出空间即补。
       countedIntent("withdraw", () => ac.creep.withdraw(t.source, RESOURCE_ENERGY));
-      countedIntent("upgrade", () => ac.creep.upgradeController(t.controller));
+      countUpgrade(ac.creep, t.controller);
       // 站桩锚定：防被过路 creep 从取能/升级位推离。
       registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorStation);
     },

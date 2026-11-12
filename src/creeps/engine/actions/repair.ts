@@ -159,14 +159,52 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       );
 
       const storage = ac.snapshot.storage;
+      // Phase D 之后修：两级防护档。
+      //
+      // 死区问题：`repairFreshRampart` 只在 < 1,500 hits（bootstrap 的 15%）时急救，
+      // 而本条要求 fortifyActive（300K）。两者之间 1,500–10,000 无人维护 ——
+      // 线上实测 W8N3 最低 7,001、W7N4 2,201、W8N4 2,681、W6N1 1,101，
+      // 一次普通 invader 攻击就能破盾。
+      //
+      // 成本核算：118 个 rampart 从 5K 补到 10K 共需约 5,900 能量（1 能量 = 100 hits），
+      // 一次性；而修到 RCL8 的 10M 目标需 1.18B hits（约 11.8M 能量），永不可达。
+      // 所以「基础防护」与「RCL 目标」必须分开：
+      //   - 基础档：storage ≥ sustainedStorage(10K) 即开，目标 = min(10K, storage/10)。
+      //     按水位缩放是关键 —— 固定 10K 目标在 storage 20K 时会把储备抽干
+      //     （全房补一遍要 6,400–11,800 能量）；storage/10 让目标随血量同步收缩
+      //     （storage 100K → 10K、50K → 5K、20K → 2K），既保墙又留出补员余量。
+      //   - 全目标档：仅 fortifyActive（300K）开，修到 RCL 分层目标。
+      let capHits = Infinity;
       if (storage) {
-        // 和平期全额灌墙要求真盈余（sprintStorage）；受袭期放宽（sustainedStorage）。
-        const surplusGate = underSiege
-          ? CONFIG.economy.upgrade.sustainedStorage
-          : CONFIG.economy.upgrade.sprintStorage;
-        if (storage.store.getUsedCapacity(RESOURCE_ENERGY) < surplusGate) {
-          return undefined;
-        }
+        // 和平期全额灌墙要求真盈余；受袭记忆窗口内目标血量升档（见下方 targetOf），
+        // 但**开闸线不因受袭记忆放宽**。
+        //
+        // Phase C 修正：和平期改用回差闩锁，而不是裸 50K 判断。
+        // 裸阈值有两个问题：① storage 刚过 50K 就开门、修到 49K 又关门，形成振荡；
+        // ② RCL8 的 118 个 rampart 目标是 1,000 万 hits ⇒ 一旦开门就是无底洞
+        // （W8N3 实测 16 e/t 长期失血，storage 从 67K 一路跌回 47K）。
+        //
+        // Phase D：改用修墙专用闸 fortifyActive（停 50K / 复 300K）。
+        // 修墙是三类消费里唯一「没有资产收益」的纯消耗（升级给 GCL、lab 给化合物），
+        // 与升级共用 60K 恢复线会让它抢走刚回血的那点盈余。
+        //
+        // ⚠️ 原实现在 `underSiege` 时把闸放宽到 sustainedStorage(10K) —— 这是个漏洞：
+        // `underSiege` 只代表 `lastHostileAt` 记忆窗口（10,000 tick）或帝国战备姿态，
+        // 不代表此刻有敌人。W8N3 实测：一次 invader 目击后的 10,000 拍里，塔与 builder
+        // 持续以 13–40 e/t 灌 118 个 10M 目标的 rampart，而同期 combat 支出为 0。
+        // 「记住挨过打」不等于「正在挨打」—— 正在被拆的应急维修由 `repairCritical`
+        // 与塔的威胁路径承担（都不受本闸约束）。因此全目标档只看 fortifyActive。
+        const storageEnergy = storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+        if (storageEnergy < CONFIG.economy.upgrade.sustainedStorage) return undefined;
+        const roomMem = Memory.rooms[ac.snapshot.roomName];
+        const richActive = roomMem?.fortifyActive ?? roomMem?.storageRichActive;
+        const richGateOpen =
+          richActive === undefined
+            ? storageEnergy >= CONFIG.economy.upgrade.sprintStorage
+            : richActive === true;
+        capHits = richGateOpen
+          ? Infinity
+          : Math.min(CONFIG.defense.rampartBootstrapHits, Math.floor(storageEnergy / 10));
       }
       // 无 storage（RCL1-4）— 放宽门禁，靠 work chain 优先级保证不抢生存行为。
 
@@ -189,7 +227,9 @@ export function repairFortifications(): ActionCandidate<Fortification> {
         if (ac.snapshot.towers.length > 0 && !isTowerCovered(f.pos, ac.snapshot.towers)) {
           return Math.min(base, CONFIG.defense.rampartBootstrapHits);
         }
-        return base;
+        // 基础防护档：闸未到 fortifyActive 时只允许补到 bootstrap 线（10K），
+        // 填上 1,500–10,000 的死区。全目标档 capHits=Infinity 不生效。
+        return Math.min(base, capHits);
       };
 
       // 优先复用持久化目标 — 验证它仍是墙/城防且仍低于自身档位目标。
@@ -354,6 +394,15 @@ function roadRepairAction(
       if (!urgent && ac.budget.tier === "conserve") return undefined;
       if (ac.snapshot.threatCreeps.length > 0) return undefined;
 
+      // Phase C：低储期收紧常规修路。storage < sprintStorage(50K) 时只接 hits < 30% 的道路，
+      // 把满速维修（16W ≈ 16 e/t）让给 storage 回血；急救档不受限（塌路重建约 6 倍成本）。
+      const lowStorage =
+        ac.snapshot.storage !== undefined &&
+        (ac.snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) <
+          CONFIG.economy.upgrade.sprintStorage;
+      const entryThreshold =
+        !urgent && lowStorage ? CONFIG.construction.lowStorageRoadHits : threshold;
+
       // 目标缓存：急救用独立字段 urgentRoadId（共享 repairTargetId 会被常规修路/工事维修写入
       // 非危路目标，急救接手会越过链上更紧急的修复）；常规用共享 repairTargetId。
       // 两者都修到各自放手线才换（hysteresis）：急救到 40% 放手回去建造，常规到 90% 消除贴线抖动。
@@ -364,7 +413,9 @@ function roadRepairAction(
         if (
           cached &&
           cached.structureType === STRUCTURE_ROAD &&
-          cached.hits < cached.hitsMax * ceiling
+          cached.hits < cached.hitsMax * ceiling &&
+          // 低储时缓存目标也必须满足更严格的进场线，否则清掉重选（防止旧目标继续吃 16 e/t）。
+          (!lowStorage || urgent || cached.hits < cached.hitsMax * entryThreshold)
         ) {
           return cached;
         }
@@ -372,7 +423,7 @@ function roadRepairAction(
       }
       // 无有效缓存目标 — 修血量最低且低于进场线的道路。
       let worst: StructureRoad | undefined;
-      let worstRatio = threshold;
+      let worstRatio = entryThreshold;
       for (const r of ac.snapshot.roads) {
         const ratio = r.hits / r.hitsMax;
         if (ratio < worstRatio) {

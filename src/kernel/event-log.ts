@@ -167,6 +167,12 @@ export enum EventKind {
    * d = [roleCode, carryEnergy, natural(0/1)]。与 CreepDeath 同拍相邻，用于把
    * 死亡区间注入受踪池的能量逐笔对到房。 */
   CreepDeathCarry = 50,
+  /** 顶层 tick 致命异常（main.loop 的兜底边界写）。
+   * d = []；明细走 `Memory.kernel.stats.lastError`（label="loop-fatal"）。
+   * 为什么需要它：kernel.run() 的分段已有 safeRun，但 createBudget / Context /
+   * emitSummary 等骨架仍在边界之外 —— 那里抛错会直接杀死整拍，且此前没有
+   * 任何事件痕迹，只能靠日志转瞬即逝的一行。 */
+  TickFatal = 51,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

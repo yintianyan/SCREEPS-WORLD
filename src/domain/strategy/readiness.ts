@@ -83,13 +83,18 @@ export const DEFAULT_READINESS_OPTIONS: ReadinessOptions = {
   stronglyMinCoreRooms: 2,
   minCpuTier: "comfortable",
   stronglyMinCpuTier: "abundant",
-  minNetFlow: 5,
+  // G4 净流门槛：线上 W8N3（2026-11-08）升级支出把净流压在 -0.3~2.1 之间，
+  // 永远达不到 5，扩张候选池 10 个全部 REJECTED、计划长期为 0。
+  // 降到 2：仍要求正向盈余（负值/接近零时 G3 仍会挡），但允许"边升级边缓慢扩张"。
+  minNetFlow: 2,
   stronglyMinNetFlow: 15,
   minExpansionBudget: 2000,
   blockOnLiveThreat: true,
   blockOnStruggling: true,
   // A3.2 扩展 Gate 默认值
-  minCandidateScore: 0.5,
+  // 2026-11-08：0.5 → 0.45。私服 W8N3 唯一的 U 矿房 W7N6 得分 0.49，被 0.5 差一点挡死；
+  // 0.45 仍拒绝低分房，只放开这一档边缘候选。
+  minCandidateScore: 0.45,
   maxRiskScore: 0.8,
 };
 

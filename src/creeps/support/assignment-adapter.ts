@@ -119,6 +119,7 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
     id: chosen.id,
     kind: chosen.kind as CreepAssignment["kind"],
     targetId: chosen.targetId as Id<_HasId> | undefined,
+    targetGroup: chosen.targetGroup,
     sourceId: chosen.sourceId as Id<Source> | undefined,
     revision: layoutRevision,
     assignedAt: ctx.tick,

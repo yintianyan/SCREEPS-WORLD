@@ -14,6 +14,7 @@ import { withdrawStorageLink } from "../../../src/creeps/engine/actions/withdraw
 import {
   mockContext,
   mockCreep,
+  mockPos,
   mockSnapshot,
   mockStructure,
   resetGlobals,
@@ -23,13 +24,26 @@ function makeAc(
   opts: {
     storageLinkEnergy?: number;
     storageEnergy?: number;
+    /** 传入则额外放一条 controller link；能量越低缺口越大。 */
+    controllerLinkEnergy?: number;
   } = {},
 ) {
-  const { storageLinkEnergy = 800, storageEnergy = 0 } = opts;
+  const { storageLinkEnergy = 800, storageEnergy = 0, controllerLinkEnergy } = opts;
   const storage = mockStructure("storage", { id: "st", energy: storageEnergy, capacity: 1000000 });
+  storage.pos = mockPos(10, 10);
   const storageLink = mockStructure("link", { id: "sl", energy: storageLinkEnergy, capacity: 800 });
-  storageLink.pos = { x: 33, y: 29, getRangeTo: () => 1 } as never;
-  const snap = mockSnapshot({ storage, links: [storageLink] });
+  storageLink.pos = mockPos(12, 10);
+  const links = [storageLink];
+  if (controllerLinkEnergy !== undefined) {
+    const ctrlLink = mockStructure("link", {
+      id: "cl",
+      energy: controllerLinkEnergy,
+      capacity: 800,
+    });
+    ctrlLink.pos = mockPos(24, 25);
+    links.push(ctrlLink);
+  }
+  const snap = mockSnapshot({ storage, links });
   const creep = mockCreep({
     name: "hauler_1",
     role: "hauler",
@@ -53,10 +67,22 @@ describe("withdrawStorageLink — 无守卫直接排空", () => {
     expect(r).toBe(storageLink);
   });
 
-  it("storage link 满 800 → 仍返回 link（不阻止排空）", () => {
+  it("storage link 满 800 → 仍返回 link（controller 不缺能时正常排空）", () => {
     const { ac, storageLink } = makeAc({ storageLinkEnergy: 800 });
     const r = withdrawStorageLink().resolve!(ac)!;
     expect(r).toBe(storageLink);
+  });
+
+  it("controller link 真缺能（free ≥ 400）→ 保留 storage link 给 link-system Step3", () => {
+    // controller link 能量 300 ⇒ free 500 ≥ 400：hauler 不排空，让 storage→controller 先补。
+    const { ac } = makeAc({ storageLinkEnergy: 700, controllerLinkEnergy: 300 });
+    expect(withdrawStorageLink().resolve!(ac)).toBeUndefined();
+  });
+
+  it("controller link 接近满（free < 400）→ 恢复排空", () => {
+    // controller link 能量 500 ⇒ free 300 < 400：正常排空。
+    const { ac, storageLink } = makeAc({ storageLinkEnergy: 700, controllerLinkEnergy: 500 });
+    expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
   });
 
   it("storage link 无能量 → undefined", () => {

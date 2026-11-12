@@ -2,7 +2,7 @@
 
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, type CpuRateSnapshot } from "../kernel/global-cache";
 import { systemPhase } from "../kernel/phase";
 import { freshTailDropStat } from "../kernel/tail-drop";
 import {
@@ -160,6 +160,108 @@ export function computeCpuRate(
     // 而 `unphased` 用的是全量求和 ⇒ 一旦截断把某项切出表，读数人拿 `total − ΣbyPhase` 就得到**假残差**
     // （两者只在标签数 ≤ 上限时同值；补248 落了 `phase/early` 后正好装满前十，下一枚标签就会分叉）。
     byPhase: perTick(cum.phases ?? {}, Number.POSITIVE_INFINITY),
+  };
+}
+
+/**
+ * CPU 速率滑动窗长度（tick）。
+ *
+ * 600 = 容量闸升档窗口（300 拍）的 2 倍：窗必须比滞回窗口长，否则升档过程中分母
+ * 仍在滚动，驻留计数会被半窗数据反复清零。取 600 也让一次完整的 spawn 周期
+ * （含 300 拍孵化）落在同一窗口内。
+ */
+export const CPU_RATE_WINDOW_TICKS = 600;
+
+/** 累计 CPU 账的形状（与 computeCpuRate 入参一致，便于单测构造）。 */
+type CpuCumulativeLike = Parameters<typeof computeCpuRate>[0];
+
+/**
+ * 把当前累计账复制成一份窗口快照。
+ *
+ * 快照只进 heap（`globalCache().cpuRateSnapshots`）：600 / 10 = 60 枚 × 几十个键
+ * 落 Memory 会白涨数十 KB，而部署后重建窗口只需 600 拍。同一拍重复调用覆盖最后
+ * 一枚，保证幂等。
+ */
+export function appendCpuRateSnapshot(
+  prev: readonly CpuRateSnapshot[] | undefined,
+  cum: CpuCumulativeLike,
+  tick: number,
+  windowTicks = CPU_RATE_WINDOW_TICKS,
+): CpuRateSnapshot[] {
+  const snapshot: CpuRateSnapshot = {
+    t: tick,
+    total: cum.total,
+    systems: { ...cum.systems },
+    roles: { ...cum.roles },
+    phases: cum.phases ? { ...cum.phases } : undefined,
+    tail: cum.tail,
+    ticks: cum.ticks,
+  };
+  const next = prev ? [...prev] : [];
+  const last = next[next.length - 1];
+  if (last && last.t === tick) {
+    next.splice(next.length - 1, 1, snapshot);
+  } else {
+    next.push(snapshot);
+  }
+
+  // 采样长期间断（recovery 跳过遥测 / 部署）后，旧基线已不能代表「最近 600 拍」：
+  // 直接丢弃，让消费侧先退回偏高的 avg10（保守），再花 100 拍重建新窗。
+  const first = next[0];
+  if (first && next.length >= 2 && tick - first.t > windowTicks * 2) return [snapshot];
+
+  const cutoff = tick - windowTicks;
+  while (next.length > 2) {
+    const head = next[0];
+    if (!head || head.t >= cutoff) break;
+    next.shift();
+  }
+  return next;
+}
+
+/**
+ * 用「当前累计账 − 窗口起点快照」得到窗口内的真实差值。
+ *
+ * 没有可用基线时返回 undefined：消费侧（容量闸）会退回 avg10。
+ * `windowTicks` 用真实跨度（含中途 CPU 触顶、没走到拍尾的拍），与 `ticks`
+ * 差值配对后，`computeCpuRate` 才能如实报出 unsampledTicks。
+ */
+export function buildCpuRateWindow(
+  cum: CpuCumulativeLike,
+  snapshots: readonly CpuRateSnapshot[] | undefined,
+  tick: number,
+): { cum: CpuCumulativeLike; windowTicks: number } | undefined {
+  if (!snapshots || snapshots.length < 2) return undefined;
+  const base = snapshots[0];
+  if (!base) return undefined;
+  const span = tick - base.t;
+  if (span <= 0) return undefined;
+
+  const subtract = (
+    cur: Record<string, number> | undefined,
+    old: Record<string, number> | undefined,
+  ): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const key of new Set([...Object.keys(cur ?? {}), ...Object.keys(old ?? {})])) {
+      const value = (cur?.[key] ?? 0) - (old?.[key] ?? 0);
+      if (value !== 0) out[key] = value;
+    }
+    return out;
+  };
+
+  return {
+    windowTicks: span,
+    cum: {
+      total: Math.max(0, cum.total - base.total),
+      systems: subtract(cum.systems, base.systems),
+      roles: subtract(cum.roles, base.roles),
+      phases: subtract(cum.phases, base.phases),
+      tail: Math.max(0, (cum.tail ?? 0) - (base.tail ?? 0)),
+      ticks:
+        cum.ticks !== undefined && base.ticks !== undefined
+          ? Math.max(0, cum.ticks - base.ticks)
+          : undefined,
+    },
   };
 }
 
@@ -546,9 +648,23 @@ function sampleMemorySize(_tick: number): void {
             phases?: Record<string, number>;
           }
         | undefined;
-      const boot = g.processBootTick as number | undefined;
-      if (cum && typeof boot === "number") {
-        (Memory.kernel.stats as any).cpuRate = computeCpuRate(cum, Game.time - boot);
+      if (cum) {
+        // `cpuCumulative` 是**自进程启动**的累计值，直接除以寿命会得到生涯均值：
+        // 旧样本永不退出，容量闸会长期读出一个不再成立的档位（线上扩张被 G6 锁死）。
+        // 用 heap 里的窗口快照做差，才是真正的「最近 N 拍」口径。
+        const snapshots = (g.cpuRateSnapshots = appendCpuRateSnapshot(
+          g.cpuRateSnapshots,
+          cum,
+          Game.time,
+        ));
+        const window = buildCpuRateWindow(cum, snapshots, Game.time);
+        if (window) {
+          (Memory.kernel.stats as any).cpuRate = computeCpuRate(window.cum, window.windowTicks);
+        } else {
+          // 窗未建立时清掉旧进程留下的读数：否则消费侧会继续把部署前的生涯均值
+          // 当成当前窗口（rateWindowTicks 仍是旧值），新口径要多等一整个窗口才生效。
+          delete (Memory.kernel.stats as any).cpuRate;
+        }
       }
     }
     if (g.roadBuildLedger && Object.keys(g.roadBuildLedger).length > 0) {

@@ -24,6 +24,17 @@ describe("Bodies — bodyCost", () => {
 });
 
 describe("Bodies — selectBody", () => {
+  it("P1-A：upgrader 容量 5300 选 [40W,2C,2M]@4200；4200 回退 1C@4150", () => {
+    const big = selectBody("upgrader", 5300, { rcl: 7 });
+    expect(bodyCost(big)).toBe(4200);
+    expect(big.filter(p => p === "work")).toHaveLength(40);
+    expect(big.filter(p => p === "carry")).toHaveLength(2);
+
+    const mid = selectBody("upgrader", 4200, { rcl: 7 });
+    expect(bodyCost(mid)).toBe(4150);
+    expect(mid.filter(p => p === "carry")).toHaveLength(1);
+  });
+
   it("selects the best body that fits energy capacity", () => {
     expect(selectBody("harvester", 650)).toEqual([
       "work",

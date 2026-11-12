@@ -2,7 +2,7 @@
 import { CONFIG } from "../../config";
 import type { TickContext } from "../../kernel/contracts";
 import { EventKind, recordEvent } from "../../kernel/event-log";
-import { bumpEnergyCounter } from "../../kernel/global-cache";
+import { bumpEnergyCounter, globalCache } from "../../kernel/global-cache";
 import { log } from "../../kernel/log";
 import { planEnergyAid, type RoomEnergyState } from "../../domain/economy/energy-logistics";
 import { planMineralAid, type RoomMineralState } from "../../domain/economy/mineral-logistics";
@@ -142,6 +142,37 @@ export function tryEmpireEnergyAid(ctx: TickContext): void {
 }
 
 /**
+ * Phase B：登记一条 terminal 出口需求（现货不足 → distributor 从 storage 搬）。
+ *
+ * 触发场景：跨房援助/Plan 驱动 send 已规划成功，但 terminal 里没有足够现货 —
+ * 货压在 storage，而 `terminal.send` 只能从 terminal 出货。无市场（私服 orders=0）时
+ * 这是唯一能让 storage 沉淀重新流动的通道，因此必须把「发不出去」转成一张搬运票。
+ *
+ * 按房累积、resource 去重取最大值、deadline = 2×市场周期；heap 存储，reset 可丢。
+ */
+export function recordExportNeed(
+  roomName: string,
+  resource: string,
+  amount: number,
+  tick: number,
+): void {
+  if (amount <= 0) return;
+  const g = globalCache();
+  g.exportNeeds ??= { tick, byRoom: {} };
+  g.exportNeeds.tick = tick;
+  const deadline = tick + CONFIG.market.interval * 2;
+  const list = (g.exportNeeds.byRoom[roomName] ?? []).filter(n => n.deadline > tick);
+  const existing = list.find(n => n.resource === resource);
+  if (existing) {
+    existing.amount = Math.max(existing.amount, amount);
+    existing.deadline = deadline;
+  } else {
+    list.push({ resource, amount, deadline });
+  }
+  g.exportNeeds.byRoom[roomName] = list;
+}
+
+/**
  * 帝国矿物互济 — 每轮至多一笔（决策纯函数 planMineralAid，本函数只做采集与执行）。
  * 与能量互济同款预算口径：发送方 terminal 须同时承担 货量 + 能量运费 + 储备地板。
  */
@@ -172,6 +203,15 @@ export function tryEmpireMineralAid(ctx: TickContext): void {
 
   const terminal = ctx.getSnapshot(plan.from)?.terminal;
   if (!terminal || terminal.cooldown > 0) return;
+
+  // Phase B：terminal 现货不足时登记出口需求，让 distributor 从 storage 补货。
+  // 旧实现直接 send，缺货时静默失败 → storage 里的矿物永远不会被搬到 terminal，
+  // 援助计划每轮重算同一笔、每轮失败（无市场私服的长期断流形态）。
+  const held = terminal.store.getUsedCapacity(plan.mineral as ResourceConstant) ?? 0;
+  if (held < plan.amount) {
+    recordExportNeed(plan.from, plan.mineral, plan.amount - held, ctx.tick);
+    return;
+  }
 
   const fee = Game.market.calcTransactionCost(plan.amount, plan.from, plan.to);
   const energyInTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY);

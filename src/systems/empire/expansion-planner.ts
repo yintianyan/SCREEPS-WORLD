@@ -31,6 +31,15 @@ import {
 } from "../../domain/expansion/candidate";
 import type { RoomIntel } from "../../domain/intel";
 
+/** 从首个自有 controller 取帝国用户名；无自有房时返回 undefined（候选按无主处理）。 */
+function resolveMyUsername(): string | undefined {
+  for (const rn of Object.keys(Game.rooms)) {
+    const ctrl = Game.rooms[rn]?.controller;
+    if (ctrl?.my && ctrl.owner) return ctrl.owner.username;
+  }
+  return undefined;
+}
+
 /**
  * Expansion Planner 系统 — Intelligence 层薄壳。
 
@@ -124,7 +133,11 @@ export const expansionPlannerSystem: System = {
       releasedRoomNames,
       intelBySponsor,
       tick: ctx.tick,
-      myUsername: (Game as unknown as { username?: string }).username,
+      // myUsername：`Game` 没有官方 username 字段（旧写法 `Game.username` 恒 undefined），
+      // 导致 candidate 的 `isHostileReserved` 把所有 `reservedBy` 都当敌方 —
+      // 线上 W8N3 的己方预定房 W8N2/W7N4 因此被 veto 成 `reservedBy=admin`。
+      // 与 war-planner 同口径：从首个自有 controller 的 owner 取。
+      myUsername: resolveMyUsername(),
       existingCandidates,
     });
     // R7b 节奏自适应的第三路输出（minSources）此前无人消费：它唯一的旧调用方

@@ -1,5 +1,5 @@
 /** Upgrader 角色场景测试。 */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { upgraderRole } from "../../../src/creeps/roles/upgrader";
 import {
   mockContext,
@@ -11,10 +11,22 @@ import {
   mockStructure,
   resetGlobals,
 } from "../../support/factories";
+import { CONFIG } from "../../../src/config";
+
+const ORIGINAL_GCL = CONFIG.economy.upgrade.gclUpgrade;
+
+/** CONFIG 为 readonly 声明，测试需临时覆盖开关（用断言绕开只读修饰）。 */
+function setGclUpgrade(enabled: boolean): void {
+  (CONFIG.economy.upgrade as unknown as { gclUpgrade: boolean }).gclUpgrade = enabled;
+}
 
 beforeEach(() => {
   resetGlobals();
   vi.clearAllMocks();
+});
+
+afterEach(() => {
+  setGclUpgrade(ORIGINAL_GCL);
 });
 
 describe("upgrader — work 模式", () => {
@@ -124,7 +136,8 @@ describe("upgrader — work 模式", () => {
 });
 
 describe("upgrader — RCL8 满级停烧（W7N4 存不下能量主因修复）", () => {
-  it("RCL8 无降级风险 → gate 拦截：不升级、转 idle", () => {
+  it("GCL 关闭 + RCL8 无降级风险 → gate 拦截：不升级、转 idle", () => {
+    setGclUpgrade(false);
     const controller = mockController({ level: 8, ticksToDowngrade: 20000 });
     const snap = mockSnapshot({ rcl: 8, controller });
     const creep = mockCreep({
@@ -140,6 +153,25 @@ describe("upgrader — RCL8 满级停烧（W7N4 存不下能量主因修复）",
 
     expect(creep.upgradeController).not.toHaveBeenCalled();
     expect(creep.memory.mode).toBe("idle");
+  });
+
+  it("GCL 开启 + RCL8 无降级风险 → 继续升级（累计 GCL）", () => {
+    setGclUpgrade(true);
+    const controller = mockController({ level: 8, ticksToDowngrade: 20000 });
+    const snap = mockSnapshot({ rcl: 8, controller });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.memory.mode).not.toBe("idle");
   });
 
   it("RCL8 + 降级风险 → 保级放行（紧急覆盖，照常升级）", () => {
@@ -188,7 +220,8 @@ describe("upgrader — 降级风险与 room-state 共用一把尺（迟滞带内
     expect(creep.memory.mode).not.toBe("idle");
   });
 
-  it("带内反向：ttd=12000 但标志已清零 → RCL8 停烧（标志说了算，不再回头看原始阈值）", () => {
+  it("带内反向：ttd=12000 但标志已清零 + GCL 关闭 → RCL8 停烧（标志说了算）", () => {
+    setGclUpgrade(false);
     (globalThis as any).Memory.rooms.W7N4.controllerDowngradeRisk = false;
     const controller = mockController({ level: 8, ticksToDowngrade: 12000 });
     const snap = mockSnapshot({ rcl: 8, controller });
@@ -742,9 +775,9 @@ describe("upgrader — claim-secure 护栏（脆弱新房放宽取能地板）",
 
 // R617：限定版扩张预留——只有“本房 RCL≥7 且有扩张推进态计划”才把刹车抬到 5。
 describe("upgrader — 扩张推进态的升级预留（R617 限定版）", () => {
-  it("有计划(EVALUATED) 且 RCL7、净流 3<5 ⇒ 暂停升级", () => {
+  it("有计划(EVALUATED) 且 RCL7、净流 1<2 ⇒ 暂停升级（2026-11-08 门槛 5→2）", () => {
     (globalThis as any).Memory.kernel = {
-      gateNetFlow: { A: 2, B: 1 },
+      gateNetFlow: { A: 1, B: 0 },
       expansionPlans: [{ st: "EVALUATED" }],
     };
     const controller = mockController();
@@ -763,9 +796,9 @@ describe("upgrader — 扩张推进态的升级预留（R617 限定版）", () =
     expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 
-  it("有计划但净流达 6≥5 ⇒ 放行", () => {
+  it("有计划但净流达 2≥2 ⇒ 放行", () => {
     (globalThis as any).Memory.kernel = {
-      gateNetFlow: { A: 3, B: 3 },
+      gateNetFlow: { A: 1, B: 1 },
       expansionPlans: [{ st: "EVALUATED" }],
     };
     const controller = mockController();
@@ -778,7 +811,7 @@ describe("upgrader — 扩张推进态的升级预留（R617 限定版）", () =
 
 // R632：扩张推进态 + CPU 无余量时，连“净流够”的升级也停。
 describe("upgrader — 扩张推进态的 CPU 余量闸（R632）", () => {
-  it("有计划且 tier=tight ⇒ 即使净流 6≥5 也暂停升级", () => {
+  it("有计划且 tier=tight ⇒ 即使净流 6≥2 也暂停升级", () => {
     (globalThis as any).Memory.kernel = {
       gateNetFlow: { A: 3, B: 3 },
       expansionPlans: [{ st: "EVALUATED" }],

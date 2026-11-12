@@ -1,5 +1,6 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
+import { findStorageLink } from "../../domain/economy/links";
 import { globalCache, tickCacheEntry } from "../../kernel/global-cache";
 import { classifyThreats } from "../../domain/defense/threat";
 import { getObjectById } from "./obj-cache";
@@ -307,14 +308,11 @@ export function storageLinkForControllerFeed(
   snapshot: RoomSnapshot,
   exclude: StructureLink,
 ): StructureLink | undefined {
-  const st = snapshot.storage;
-  if (!st) return undefined;
-  return snapshot.links.find(
-    l =>
-      l.id !== exclude.id &&
-      l.pos.getRangeTo(st) <= 2 &&
-      l.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-  );
+  // 与布局分类同源：旧 range<=2 找不到距 3 格的 storage link（W8N3 的 (22,18)），
+  // distributor 因此无法把 storage 能量灌入中继 link，controller 补给少一条道。
+  const link = findStorageLink(snapshot);
+  if (!link || link.id === exclude.id) return undefined;
+  return link.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? link : undefined;
 }
 
 /**
@@ -363,6 +361,29 @@ export function getDistributorFillTarget(
   // spawn/extension 是同一孵化能量池，所有档位都完整服务 —
   // 低水位的节流由取能限额（withdrawStorageForDistribution）承担。
   const spawnTypes: string[] = [STRUCTURE_SPAWN, STRUCTURE_EXTENSION];
+
+  // 0. controller 补给：storage link 是 storage → controller 的中转。
+  // 为什么必须排在 spawn/extension 之前：本房 spawn+extension 通常有 50+ 个目标，
+  // 6 只 distributor 的 primary 预约永远填不满 ⇒ 原第 3 步的 storage link 分支
+  // 永远轮不到，storage link 恒 0，controller 只能靠 source link 的 ~20/tick 采集。
+  // 只派一只（reservation 去重），且仅在 controller 真缺能（free ≥ 400）时启用。
+  // 生产优先：现金池（spawn+extension）缺口大时，全部 distributor 先填生产池，
+  // 不给升级链留人 —— 否则 ext 长期 40-50%、大 body 请求一直 degradeGateClosed。
+  const cashGap = snapshot.energyCapacityAvailable - snapshot.energyAvailable;
+  if (tier < 2 && cashGap < CONFIG.economy.link.distributorLinkMinCashGap) {
+    const ctrlLink = controllerLinkNeedingEnergy(snapshot);
+    if (
+      ctrlLink &&
+      ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) >=
+        CONFIG.economy.link.controllerFeedSuppressFree
+    ) {
+      const storageLink = storageLinkForControllerFeed(snapshot, ctrlLink);
+      if (storageLink && !reserved.has(storageLink.id)) {
+        reserved.add(storageLink.id);
+        return storageLink as unknown as AnyOwnedStructure;
+      }
+    }
+  }
 
   // 1. spawn / extension —— 生产引擎，最高优先。
   const primary = pickFillTarget(creep, snapshot.fillTargets, reserved, spawnTypes);

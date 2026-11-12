@@ -27,6 +27,7 @@ export {
   distributorFillTarget,
   fillEmptiestContainer,
   fillStorage,
+  returnEnergyToStorage,
 } from "./fill";
 export { buildAssignmentSite, buildNearestSite } from "./build";
 export type { BuildAssignmentOptions } from "./build";
@@ -53,4 +54,5 @@ export {
   stockPowerSpawn,
   stockNuker,
   salvageStorageToTerminal,
+  terminalExportLane,
 } from "./industry";

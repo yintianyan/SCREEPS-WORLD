@@ -149,7 +149,15 @@ const policy: RolePolicy = {
     // repairUrgentRoads 接管），但老化会把它周期性提到链首，防「永远没人修路」。
     scored(claimedRepair(repairRoads()), (_ac, r) => 15 + 35 * hpDeficit(r)),
     // fallback: 防御工事维修（盈余门禁 + 无威胁时）。
-    scored(claimedRepair(repairFortifications()), (_ac, f) => 10 + 15 * hpDeficit(f)),
+    // 分数按血量分档：垫底的 10+15×deficit（≤25）会被 fillTarget(35) 与 repairRoads(≤50)
+    // 永久压住 ⇒ rampart 在排队中衰减到塌毁（W6N1 实测 4 分钟塌 18 个、防线出缺口）。
+    // 基础防护档的成本其实极低（全房补一遍约 1,000 能量），必须先于填能与修路执行：
+    //   - < 3,000 hits：真濒死（约 500 tick 生命），提到 150 —— 高于建造，低于 fresh(180)
+    //   - < 10,000 hits：基础防护档，提到 70 —— 高于 buildNearest(≤50) 与 fillTarget(35)
+    //   - 其余：保持链尾（常规档只在 fortifyActive 时才有目标，本就是宽裕期工作）
+    scored(claimedRepair(repairFortifications()), (_ac, f) =>
+      f.hits < 3000 ? 150 : f.hits < 10000 ? 70 : 10 + 15 * hpDeficit(f),
+    ),
     // 所有候选均不匹配 → park 待命。builder 不 fallback 到升级 — 升级是 upgrader 的职责，
     // 等待新 construction site 出现而非消耗能量去升级。
   ],

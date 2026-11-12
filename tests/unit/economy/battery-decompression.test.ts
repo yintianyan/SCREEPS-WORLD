@@ -1,4 +1,14 @@
-/** Battery 解压回能决策测试（纯函数）。 */
+/**
+ * Battery 解压回能判定。
+ *
+ * 官方配方（私服 `@screeps/common/lib/constants.js`）：
+ *   battery: { amount: 50, cooldown: 10, components: { energy: 600 } }  → 600 energy → 50 battery
+ *   energy:  { amount: 500, cooldown: 10, components: { battery: 50 } } → 50 battery → 500 energy
+ * 往返损耗 16.7%，存储密度 10 倍。
+ *
+ * 语义修正：battery 不是常规能源储备，而是「storage 满仓时的溢出容器」。
+ * storage 未达目标水位就应解压，而不是等到 5K 危机线。
+ */
 import { describe, expect, it } from "vitest";
 import {
   shouldDecompressBattery,
@@ -6,14 +16,16 @@ import {
   DECOMPRESS_BATCH_ENERGY,
 } from "../../../src/domain/economy/battery-decompression";
 
+const TARGET = 300_000;
+
 describe("shouldDecompressBattery — battery 解压回能判定", () => {
-  it("全条件满足时返回 true", () => {
+  it("storage 未达目标水位 + battery 够一批 → true", () => {
     expect(
       shouldDecompressBattery({
-        storageEnergy: 3000,
-        batteryInFactory: 10,
+        storageEnergy: 55_000,
+        batteryInFactory: 50,
         factoryCooldown: 0,
-        energyCrisisFloor: 5000,
+        storageTarget: TARGET,
       }),
     ).toBe(true);
   });
@@ -21,32 +33,32 @@ describe("shouldDecompressBattery — battery 解压回能判定", () => {
   it("factory 冷却中 → false", () => {
     expect(
       shouldDecompressBattery({
-        storageEnergy: 3000,
-        batteryInFactory: 10,
+        storageEnergy: 55_000,
+        batteryInFactory: 50,
         factoryCooldown: 5,
-        energyCrisisFloor: 5000,
+        storageTarget: TARGET,
       }),
     ).toBe(false);
   });
 
-  it("factory 内 battery 不足一批（< 5）→ false", () => {
+  it("battery 不足一批（49）→ false", () => {
     expect(
       shouldDecompressBattery({
-        storageEnergy: 3000,
-        batteryInFactory: 4,
+        storageEnergy: 55_000,
+        batteryInFactory: 49,
         factoryCooldown: 0,
-        energyCrisisFloor: 5000,
+        storageTarget: TARGET,
       }),
     ).toBe(false);
   });
 
-  it("恰好够一批（= 5）→ true", () => {
+  it("恰好够一批（50）→ true", () => {
     expect(
       shouldDecompressBattery({
-        storageEnergy: 3000,
+        storageEnergy: 55_000,
         batteryInFactory: DECOMPRESS_BATCH_BATTERY,
         factoryCooldown: 0,
-        energyCrisisFloor: 5000,
+        storageTarget: TARGET,
       }),
     ).toBe(true);
   });
@@ -55,53 +67,63 @@ describe("shouldDecompressBattery — battery 解压回能判定", () => {
     expect(
       shouldDecompressBattery({
         storageEnergy: undefined,
-        batteryInFactory: 10,
+        batteryInFactory: 50,
         factoryCooldown: 0,
-        energyCrisisFloor: 5000,
+        storageTarget: TARGET,
       }),
     ).toBe(false);
   });
 
-  it("storage 能量 ≥ 危机线 → false（不危机不解压）", () => {
+  it("storage 已达目标（300K）→ false（有余时不付 16.7% 折损）", () => {
     expect(
       shouldDecompressBattery({
-        storageEnergy: 5000,
-        batteryInFactory: 10,
+        storageEnergy: TARGET,
+        batteryInFactory: 50,
         factoryCooldown: 0,
-        energyCrisisFloor: 5000,
+        storageTarget: TARGET,
       }),
     ).toBe(false);
   });
 
-  it("storage 能量刚好低于危机线（4999）→ true", () => {
+  it("storage 差 1 到目标（299,999）→ true", () => {
     expect(
       shouldDecompressBattery({
-        storageEnergy: 4999,
-        batteryInFactory: 10,
+        storageEnergy: TARGET - 1,
+        batteryInFactory: 50,
         factoryCooldown: 0,
-        energyCrisisFloor: 5000,
+        storageTarget: TARGET,
       }),
     ).toBe(true);
   });
 
-  it("energy=0 极端危机 + 大量 battery → true", () => {
+  it("storage=0 + 大量 battery → true", () => {
     expect(
       shouldDecompressBattery({
         storageEnergy: 0,
         batteryInFactory: 500,
         factoryCooldown: 0,
-        energyCrisisFloor: 5000,
+        storageTarget: TARGET,
       }),
     ).toBe(true);
   });
+
+  it("回归：storage 55K（W8N3 实际水位）在旧危机线（5K）下不触发，新语义下触发", () => {
+    const input = {
+      storageEnergy: 55_000,
+      batteryInFactory: 50,
+      factoryCooldown: 0,
+    };
+    expect(shouldDecompressBattery({ ...input, storageTarget: 5_000 })).toBe(false);
+    expect(shouldDecompressBattery({ ...input, storageTarget: TARGET })).toBe(true);
+  });
 });
 
-describe("DECOMPRESS_BATCH 常量", () => {
-  it("解压一批消耗 5 battery", () => {
-    expect(DECOMPRESS_BATCH_BATTERY).toBe(5);
+describe("DECOMPRESS_BATCH 常量（官方配方）", () => {
+  it("解压一批消耗 50 battery", () => {
+    expect(DECOMPRESS_BATCH_BATTERY).toBe(50);
   });
 
-  it("解压一批产出 50 energy", () => {
-    expect(DECOMPRESS_BATCH_ENERGY).toBe(50);
+  it("解压一批产出 500 energy", () => {
+    expect(DECOMPRESS_BATCH_ENERGY).toBe(500);
   });
 });

@@ -100,6 +100,9 @@ export function resetGlobals(): void {
   delete g.procurementDemands;
   delete g.procurementPublished;
   delete g.procurementAttempted;
+  // Phase B/C：市场订单缓存与 terminal 出口票 — 按房/按资源键，跨用例会串味。
+  delete g.marketOrderCache;
+  delete g.exportNeeds;
   // CPU 累计账与通勤建路账本 — 两份都是跨拍累加的 heap 账，漏清会把上一条用例的总量带进来。
   delete g.cpuCumulative;
   delete g.roadBuildLedger;

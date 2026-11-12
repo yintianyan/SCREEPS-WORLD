@@ -31,6 +31,10 @@ import {
 import { CONFIG } from "../../config";
 import { collectFullInventory } from "../../domain/industry/inventory";
 import { expandReactionDemands } from "../../domain/industry/procurement";
+import {
+  selectLocallyFeasibleTarget,
+  shouldAbandonReaction,
+} from "../../domain/industry/feasibility";
 import type { ProcurementDemand } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";
 import { moveToTarget } from "../../creeps/movement";
@@ -63,6 +67,9 @@ interface IndustryMemory {
   /** 本轮"有计划但缺料"的起点 tick；能执行或已完成时清掉。
    * 有这个字段是因为"缺料"与"完成"曾经共用一个 null，线上分不开到底在等谁。 */
   reactionWait?: number;
+  /** P0-B：目标被判定为本地不可达（市场无货且反应链缺基础矿）时写入；
+   *  市场恢复或目标可闭环后删除。用途＝停止每 tick 重规划与幽灵采购。 */
+  blockedReason?: string;
 }
 
 function getIndustryMemory(roomName: string): IndustryMemory {
@@ -243,6 +250,33 @@ export function computeLabDemands(labPlan: LabPlan): LabDemandTable {
   return { loads, unloads };
 }
 
+/**
+ * P0-A：休眠期发布「预装料」需求表 —— 用反应计划的第一步作为预装步骤。
+ *
+ * 为什么必须每 tick 发布：supplyLabs 的 lab 角色绑定只认这张表；休眠分支原先
+ * 直接 continue，表随之过期（labDemandTtl=20），于是 labTender/distributor
+ * 都拿不到「该把哪个化合物搬进哪座 lab」。结果是 terminal 里的 O/X/H 一直躺着，
+ * lab 永远空，缺料状态又被当成「无活可干」再次休眠 —— 自锁。
+ *
+ * 只做分配 + 需求表，不执行 runReaction（原料未齐时引擎会拒绝）；
+ * 采购需求仍由调用方的 50 拍窗口重评估，避免 CPU 抖动。
+ */
+function publishPreloadLabDemands(
+  snapshot: RoomSnapshot,
+  industryMem: IndustryMemory,
+  tick: number,
+): void {
+  const firstStep = industryMem.reactionPlan?.steps[0];
+  if (!firstStep) return;
+  const labPlan = planLabs(snapshot, [], firstStep);
+  const demandTable = computeLabDemands(labPlan);
+  const g = globalCache();
+  if (!g.labDemands || g.labDemands.tick !== tick) {
+    g.labDemands = { tick, byRoom: {} };
+  }
+  g.labDemands.byRoom[snapshot.roomName] = demandTable;
+}
+
 // ─── 系统实现 ───────────────────────────────────────────────
 
 export const labSystem: System = {
@@ -259,6 +293,15 @@ export const labSystem: System = {
       if (!room) continue;
 
       const industryMem = getIndustryMemory(snapshot.roomName);
+
+      // P0-B：市场可用性 —— 有挂单才认为"买得到"。私服实测 market.orders=0，
+      // 采购需求发布后永远无成交，必须走本地降级/blocked 路径而不是无限等待。
+      const marketAvailable =
+        typeof Game.market?.getAllOrders === "function" &&
+        Object.keys(Game.market?.orders ?? {}).length > 0;
+      if (marketAvailable && industryMem.blockedReason !== undefined) {
+        delete industryMem.blockedReason;
+      }
 
       // war 前馈激活判定（boost 战前强化链）：war 姿态且本房是 sponsor（或
       // 计划未立 — sponsor 未知时所有 RCL6+ 房先备料，反正化合物不浪费）。
@@ -277,44 +320,93 @@ export const labSystem: System = {
       // 休眠期间低频重评估：每 50 tick 重新规划一次反应链并发布采购需求，
       // 平衡 CPU 开销与响应速度。
       if (industryMem.idleUntil !== undefined && ctx.tick < industryMem.idleUntil) {
-        // 每 50 tick 一次窗口：重新规划 + 发布采购需求（不执行 lab 分配/反应）。
-        if (ctx.tick % 50 !== systemPhase("lab-manager", 50)) continue;
-
+        // P0-C：boost 需求优先于休眠 —— 反应缺料不等于工业无事可做。
+        // 若存在可执行的 boost 请求，退出休眠并落到下方正常分支执行 boost；
+        // 否则 idle 会持续跳过 boost，化合物永远进不了 lab，upgrader 只能裸奔。
         const idleInventory = collectCompoundInventory(snapshot);
+        const idleBoostRequests = evaluateBoostRequests(
+          (globalCache().creepRefs ?? [])
+            .filter(r => r.home === snapshot.roomName)
+            .map(r => ({
+              name: r.name,
+              role: r.role,
+              ticksToLive: r.ticksToLive ?? 0,
+              boosted: (industryMem.boostedCreeps ?? []).includes(r.name),
+              body: r.body,
+            })),
+          snapshot.rcl,
+          idleInventory,
+          DEFAULT_BOOST_POLICY,
+          false,
+        );
 
-        // idle 期间重新设定默认目标（idle 前可能已清除 reactionTarget）。
-        if (!industryMem.reactionTarget) {
-          industryMem.reactionTarget = "XGH2O";
-          industryMem.reactionAmount = 300;
-        }
-        if (
-          !industryMem.reactionPlan ||
-          industryMem.reactionPlan.target !== industryMem.reactionTarget
-        ) {
-          industryMem.reactionPlan =
-            planReactionChain(
-              industryMem.reactionTarget,
-              industryMem.reactionAmount ?? 300,
+        if (idleBoostRequests.length > 0) {
+          delete industryMem.idleUntil;
+        } else {
+          // P0-A：休眠期仍每 tick 发布预装料需求表 —— 缺料不等于「没活干」：
+          // 已有原料（O/X/H 等）必须先搬进 lab，反应才能在料齐后立即开工。
+          publishPreloadLabDemands(snapshot, industryMem, ctx.tick);
+
+          // 每 50 tick 一次窗口：重新规划 + 发布采购需求（不执行 lab 分配/反应）。
+          if (ctx.tick % 50 !== systemPhase("lab-manager", 50)) continue;
+
+          // P0-B 修正：已 blocked 但本地出现可行目标（反应只是慢/料已搬到位）→ 恢复。
+          // 否则一条"可达但慢"的链会被永久钉在 blocked，反应与 boost 一起停摆。
+          if (industryMem.blockedReason !== undefined) {
+            const rescue = selectLocallyFeasibleTarget(
               idleInventory,
-            ) ?? undefined;
-        }
-
-        // 发布采购需求 — terminal-manager 据此买入基础矿。
-        if (industryMem.reactionPlan) {
-          const demands = expandReactionDemands(
-            industryMem.reactionPlan,
-            idleInventory,
-            ctx.tick,
-            CONFIG.market.interval + 50,
-          );
-          // 发布决策的足迹要留在护栏**外面**：published=0 单独存在时，分不清
-          // 「这一行没走到」与「走到了但算出 0 条需求」，而这两种止步要修的是不同模块。
-          recordProcurementAttempt(snapshot.roomName, demands.length, ctx.tick);
-          if (demands.length > 0) {
-            publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
+              snapshot.minerals.map(m => m.mineralType as string),
+              industryMem.reactionAmount ?? 300,
+            );
+            if (rescue !== undefined) {
+              delete industryMem.blockedReason;
+              industryMem.reactionTarget = rescue;
+              industryMem.reactionAmount = 300;
+              industryMem.reactionPlan = undefined;
+              delete industryMem.reactionWait;
+              delete industryMem.idleUntil;
+            }
           }
+
+          // idle 期间重新设定默认目标（idle 前可能已清除 reactionTarget）。
+          // P0-B：blocked 期间不再重设 —— 否则每 50 拍就会撤销"不可达"判定，
+          // 重新开始一轮 600 拍缺料等待 + 幽灵采购。blocked 由市场恢复或
+          // 显式目标切换解除（见 run 开头与 waitingInput 分支）。
+          if (!industryMem.reactionTarget && industryMem.blockedReason === undefined) {
+            industryMem.reactionTarget = "XGH2O";
+            industryMem.reactionAmount = 300;
+          }
+          const idleTarget = industryMem.reactionTarget;
+          if (
+            idleTarget !== undefined &&
+            (!industryMem.reactionPlan || industryMem.reactionPlan.target !== idleTarget)
+          ) {
+            industryMem.reactionPlan =
+              planReactionChain(idleTarget, industryMem.reactionAmount ?? 300, idleInventory) ??
+              undefined;
+          }
+
+          // 发布采购需求 — terminal-manager 据此买入基础矿。
+          if (industryMem.reactionPlan) {
+            const demands = expandReactionDemands(
+              industryMem.reactionPlan,
+              idleInventory,
+              ctx.tick,
+              CONFIG.market.interval + 50,
+            );
+            // 发布决策的足迹要留在护栏**外面**：published=0 单独存在时，分不清
+            // 「这一行没走到」与「走到了但算出 0 条需求」，而这两种止步要修的是不同模块。
+            recordProcurementAttempt(snapshot.roomName, demands.length, ctx.tick);
+            if (demands.length > 0) {
+              publishProcurementDemands(
+                snapshot.roomName,
+                demands as ProcurementDemand[],
+                ctx.tick,
+              );
+            }
+          }
+          continue;
         }
-        continue;
       }
 
       const inventory = collectCompoundInventory(snapshot);
@@ -489,6 +581,37 @@ export const labSystem: System = {
             // 旧写法在这里和"完成"共用一个 null，于是"还等料"被当成"这轮做完了"，
             // 计划被清 ⇒ 需求不再发布 ⇒ 刚买来的料用不完也不再补 ⇒ 自锁。
             if (industryMem.reactionWait === undefined) industryMem.reactionWait = ctx.tick;
+            // P0-B：市场无货且缺料等待超过 3 个市场周期 ⇒ 当前目标不可达。
+            // 先尝试本地可闭环的降级目标（XGH2O→GH2O→GH→OH），全部不可行才 blocked。
+            // blocked 会清空计划并写长休眠，避免每 tick 重规划与幽灵采购。
+            if (shouldAbandonReaction(industryMem.reactionWait, ctx.tick, marketAvailable)) {
+              const ownMineralTypes = snapshot.minerals.map(m => m.mineralType as string);
+              const fallback = selectLocallyFeasibleTarget(
+                inventory,
+                ownMineralTypes,
+                industryMem.reactionAmount ?? 300,
+              );
+              if (fallback !== undefined && fallback !== industryMem.reactionTarget) {
+                // 当前目标不可达，但存在可本地闭环的降级目标 ⇒ 切换。
+                industryMem.reactionTarget = fallback;
+                industryMem.reactionAmount = 300;
+                industryMem.reactionPlan = undefined;
+                delete industryMem.reactionWait;
+              } else if (fallback === undefined) {
+                // 连降级目标都不可行 ⇒ 真正没有本地闭环路径，标记 blocked。
+                industryMem.blockedReason = "unreachable-inputs";
+                industryMem.reactionTarget = undefined;
+                industryMem.reactionAmount = undefined;
+                industryMem.reactionPlan = undefined;
+                delete industryMem.reactionWait;
+                industryMem.idleUntil = ctx.tick + 1000;
+              } else {
+                // fallback === 当前目标：第一步原料在手，只是反应慢/料在途（labTender 搬运中），
+                // **不能**判成"不可达"——否则会反复清空计划、停掉正在推进的反应链。
+                // 重新计时，每 3 个市场周期再评估一次。
+                industryMem.reactionWait = ctx.tick;
+              }
+            }
           } else {
             // 反应链完成（产物已达批量目标），清除目标让下 tick 重新评估。
             industryMem.reactionTarget = undefined;
@@ -617,7 +740,28 @@ export const labSystem: System = {
       // ── 5. 执行反应（多三元组并行）──
       // 每个 input1+input2+output 三元组独立执行 runReaction —
       // RCL8 有 10 个 lab 时可并行 3 组，产能 5→15/tick。
-      if (labPlan.reaction) {
+      // Phase 2.5：低储回血期暂停反应（每个 trio 每 10 tick 消耗 10 能量 ≈ 1 e/t）。
+      // Phase D：改读 lab 专用闸（50K 停 / 55K 复）—— 与升级（60K）和修墙（300K）解耦。
+      // lab 成本比单只升级（15 e/t）低一个量级，因此恢复线设得比升级更低：
+      // storage 一过 55K 就让工业链转起来，把 ZK/UL/G 的储备推进（nuker 目标 5,000 G）。
+      const storageLatch =
+        Memory.rooms[snapshot.roomName]?.labActive ??
+        Memory.rooms[snapshot.roomName]?.storageRichActive;
+      let reactionEnergyOk: boolean;
+      if (storageLatch !== undefined) {
+        reactionEnergyOk = storageLatch;
+      } else {
+        // mock/旧房未注入闩锁：回退原始水位，保持既有行为。
+        try {
+          reactionEnergyOk =
+            snapshot.storage !== undefined &&
+            snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) >=
+              CONFIG.economy.upgrade.sprintStorage;
+        } catch {
+          reactionEnergyOk = true;
+        }
+      }
+      if (labPlan.reaction && reactionEnergyOk) {
         const input1Assignments = labPlan.assignments.filter(a => a.role === "input1");
         const input2Assignments = labPlan.assignments.filter(a => a.role === "input2");
         const outputAssignments = labPlan.assignments.filter(a => a.role === "output");

@@ -3,6 +3,9 @@ import type { ActionCandidate, ActionContext } from "../action-types";
 import { ACTION_RANGE_NEAR, runAction } from "./helpers";
 import { globalCache } from "../../../kernel/global-cache";
 import { findClosestContainerWithEnergy, findRichestContainer } from "../../support/targeting";
+import { computeControllerLinkTarget, findStorageLink } from "../../../domain/economy/links";
+import { resolveControllerDowngradeRisk } from "../../../domain/economy/downgrade-risk";
+import { CONFIG } from "../../../config";
 
 /** 从最满 container 取能。 */
 export function withdrawRichestContainer(): ActionCandidate<StructureContainer> {
@@ -173,12 +176,42 @@ export function withdrawStorageLink(): ActionCandidate<StructureLink> {
   return {
     name: "withdraw:storage-link",
     resolve: ac => {
-      const st = ac.snapshot.storage;
-      if (!st) return undefined;
-      const storageLink = ac.snapshot.links.find(
-        l => l.pos.getRangeTo(st) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      // controller 真缺能时保留 storage link 给 link-system Step2（storage→controller），
+      // 不让 hauler 把最后这管油抽走 —— 否则 storage 90 万库存也补不到 controller。
+      //
+      // Phase C 修正：旧实现只看「controller link 有空位」就抑制，导致 RCL8 满级
+      // （controller 目标水位 = 0，Step2 永不执行）时 storage link 永远无人排空 —
+      // W8N3 实测 storage link 800/800 → source link 全满 → 采集端堵死、storage 卡在 51K。
+      // 现在以「Step2 真的会抽能」为前提：目标水位 > 0 才保留。
+      const ctrlLink = ac.snapshot.links.find(
+        l =>
+          ac.snapshot.controller !== undefined && l.pos.getRangeTo(ac.snapshot.controller.pos) <= 2,
       );
-      if (!storageLink) return undefined;
+      if (ctrlLink && ac.snapshot.controller) {
+        const target = computeControllerLinkTarget(
+          ac.snapshot.rcl,
+          ac.snapshot.controller,
+          ac.snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+          ctrlLink.store.getCapacity(RESOURCE_ENERGY),
+          resolveControllerDowngradeRisk(
+            Memory.rooms?.[ac.snapshot.roomName]?.controllerDowngradeRisk,
+            ac.snapshot.controller,
+          ),
+        );
+        if (
+          target > 0 &&
+          ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) >=
+            CONFIG.economy.link.controllerFeedSuppressFree
+        ) {
+          return undefined;
+        }
+      }
+      // 与布局分类同源（storageAnchorRange=3）：旧实现写死 range<=2，
+      // W8N3 的 storage link (22,18) 距 storage 3 格 ⇒ 永远找不到 ⇒ 常年 799 无人排空。
+      const storageLink = findStorageLink(ac.snapshot);
+      if (!storageLink || storageLink.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) {
+        return undefined;
+      }
       return storageLink;
     },
     execute: (ac, link) => {

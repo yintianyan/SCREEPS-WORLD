@@ -201,7 +201,7 @@ describe("R686 预留单独挡住的 P2", () => {
     expect(bodyCost(body)).toBe(1200);
   });
 
-  it("反例：未扣预留的预算都不够（cost > energyBudget）⇒ 仍等能量，不借道降级", () => {
+  it("反例：未扣预留的预算都不够（cost > energyBudget）⇒ 未到饥饿窗口仍等能量，不借道降级", () => {
     const spawn = mockSpawn(900, 1300);
     const queue = [
       makeRequest({ key: "hauler:W7N4:0", role: "hauler", priority: 2, body: fullHauler }),
@@ -212,6 +212,63 @@ describe("R686 预留单独挡住的 P2", () => {
     expect(spawn.spawnCreep).not.toHaveBeenCalled();
     expect(queue).toHaveLength(1);
     expect(rejects()?.budget).toBe(1);
+    expect(rejects()?.degradeGateClosed).toBe(1);
+  });
+});
+
+/**
+ * 线上 W8N3 现场：冲刺档 upgrader 请求是 [40W,1C,2M]（43 件，cost 4150），
+ * storage 富余使 economyPressure 恒为 0；旧实现要求 waitTicks ≥ 10×129=1290
+ * 且 pressure>0.5，两个条件叠加后降级通道结构性关闭 ⇒ 请求永远 degradeGateClosed，
+ * controller.progress 冻结。新语义：4× 孵化耗时后无条件降级到当前现金可支付 body。
+ */
+describe("P2 饥饿降级 — 窗口与寿命/现金池成比例（W8N3 upgrader 现场）", () => {
+  const bigUpgrader = [...Array(40).fill("work"), "carry", "move", "move"] as BodyPartConstant[]; // 4150
+  const rejects = () =>
+    (Memory.rooms.W7N4 as (RoomMemory & { spawnRejects?: SpawnRejectStats }) | undefined)
+      ?.spawnRejects;
+
+  it("40W upgrader 等待超 4×孵化耗时 ⇒ 降到现金可支付 body 并孵化（pressure=0 不再挡路）", () => {
+    const spawn = mockSpawn(1900, 5300);
+    const queue = [
+      makeRequest({
+        key: "upgrader:W7N4:0",
+        role: "upgrader",
+        priority: 2,
+        body: bigUpgrader,
+        memory: { role: "upgrader", home: "W7N4", mode: "acquire" } as CreepMemory,
+        // 4×spawnTime = 4×129 = 516；这里等 600 拍。
+        createdAt: (globalThis as any).Game.time - 600,
+      }),
+    ];
+
+    trySpawn(mockSnapshot({ spawns: [spawn], energyCapacityAvailable: 5300 }), queue, 3);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+    const body = spawn.spawnCreep.mock.calls[0]![0] as BodyPartConstant[];
+    expect(bodyCost(body)).toBeLessThanOrEqual(1900);
+    expect(bodyCost(body)).toBeGreaterThanOrEqual(CONFIG.spawn.starvationDegradeFloor);
+    expect(queue).toHaveLength(0);
+    expect(rejects()?.degradeGateClosed ?? 0).toBe(0);
+  });
+
+  it("边界：未到 4× 窗口仍等能量（不提前铸小 body）", () => {
+    const spawn = mockSpawn(1900, 5300);
+    const queue = [
+      makeRequest({
+        key: "upgrader:W7N4:0",
+        role: "upgrader",
+        priority: 2,
+        body: bigUpgrader,
+        memory: { role: "upgrader", home: "W7N4", mode: "acquire" } as CreepMemory,
+        createdAt: (globalThis as any).Game.time - 500, // < 516
+      }),
+    ];
+
+    trySpawn(mockSnapshot({ spawns: [spawn], energyCapacityAvailable: 5300 }), queue, 3);
+
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(queue).toHaveLength(1);
     expect(rejects()?.degradeGateClosed).toBe(1);
   });
 });

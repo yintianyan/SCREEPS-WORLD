@@ -1,6 +1,6 @@
 /** safe-run 错误边界测试 — K-2 冷却三修的回归保护。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { safeRun } from "../../../src/kernel/safe-run";
+import { recordTickFatal, runWithFatalGuard, safeRun } from "../../../src/kernel/safe-run";
 import { EventKind } from "../../../src/kernel/event-log";
 import { resetGlobals } from "../../support/factories";
 
@@ -109,5 +109,51 @@ describe("safeRun — critical 永不冷却", () => {
       true,
     );
     expect(ran).toBe(true);
+  });
+});
+
+describe("runWithFatalGuard — main.loop 顶层兜底", () => {
+  it("action 抛错时被兜住，lastError 落盘且不二次抛出", () => {
+    expect(() =>
+      runWithFatalGuard(() => {
+        throw new Error("fatal-boom");
+      }),
+    ).not.toThrow();
+
+    const last = g().Memory.kernel.stats.lastError;
+    expect(last.label).toBe("loop-fatal");
+    expect(last.msg).toContain("fatal-boom");
+    expect(last.tick).toBe(g().Game.time);
+  });
+
+  it("记 TickFatal 事件并按 errorLogInterval 限频", () => {
+    recordTickFatal(new Error("e1"));
+    recordTickFatal(new Error("e2"));
+    const first = (g().eventBuffer?.events ?? []).filter((e: any) => e.k === EventKind.TickFatal);
+    expect(first).toHaveLength(1);
+
+    g().Game.time += 26; // 超过默认 25 tick 日志限频窗
+    recordTickFatal(new Error("e3"));
+    const second = (g().eventBuffer?.events ?? []).filter((e: any) => e.k === EventKind.TickFatal);
+    expect(second).toHaveLength(2);
+  });
+
+  it("诊断自身写入失败时不二次抛出（Memory 不可访问）", () => {
+    const original = g().Memory;
+    Object.defineProperty(globalThis, "Memory", {
+      configurable: true,
+      get() {
+        throw new Error("memory-broken");
+      },
+    });
+    try {
+      expect(() => recordTickFatal(new Error("fatal-x"))).not.toThrow();
+    } finally {
+      Object.defineProperty(globalThis, "Memory", {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
   });
 });

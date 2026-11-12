@@ -489,6 +489,10 @@ export function trySellCommodity(snapshot: RoomSnapshot, terminal: StructureTerm
  * stockPowerSpawn 从 terminal 搬到 powerSpawn。
  */
 export function tryBuyPower(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
+  // Phase C 硬门禁：power 的唯一本地消费者是 powerSpawn（1 power + 50 energy → 1 GPL）。
+  // 无 powerSpawn 的房买入只会把 credits 换成堆在 terminal/storage 的死资本
+  // （W8N3 实证：无 powerSpawn 却满足 credits ≥ 20K 的全部买入条件）。
+  if (!snapshot.powerSpawn) return false;
   if (Game.market.credits < CONFIG.market.powerBuyCreditFloor) return false;
 
   const have =

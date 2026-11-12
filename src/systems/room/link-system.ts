@@ -86,6 +86,7 @@ function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
   const transfers = planLinkTransfers(infos, {
     minTransfer: CONFIG.economy.link.minTransfer,
     controllerTargetEnergy,
+    storageSinkMinFree: CONFIG.economy.link.storageSinkMinFree,
   });
   for (const t of transfers) {
     const from = linkMap.get(t.fromId);

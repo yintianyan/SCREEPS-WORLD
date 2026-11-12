@@ -260,7 +260,10 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
     expect(rejects()?.degradeGateClosed ?? 0).toBe(0);
   });
 
-  it("R679 控制组：有 storage 的成熟房仍要求 economyPressure（幼房豁免不外溢）", () => {
+  it("有 storage 的成熟房：P2 饥饿超 4×孵化耗时 ⇒ 同样允许降级（pressure 不再是必要条件）", () => {
+    // 旧语义要求 economyPressure>0.5 才降级；富房该信号恒 0，P2 大 body 请求
+    // 因此永卡 degradeGateClosed（线上 W8N3 upgrader 冻结 2,634 拍）。
+    // 新语义：4× 孵化耗时（12 件 ⇒ 144 拍）足以排除「过早小 body」，时间到即放行。
     const spawn = mockSpawn(300);
     const storage = mockStructure("storage", { id: "st", energy: 1000, capacity: 100000 });
     const req = makeRequest({
@@ -282,8 +285,8 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
       createdAt: (globalThis as any).Game.time - 400,
     });
     trySpawn(mockSnapshot({ spawns: [spawn], storage }), [req], 3, 1, false);
-    expect(spawn.spawnCreep).not.toHaveBeenCalled();
-    expect(rejects()?.degradeGateClosed).toBe(1);
+    expect(spawn.spawnCreep).toHaveBeenCalled();
+    expect(rejects()?.degradeGateClosed ?? 0).toBe(0);
   });
 
   it("R679 控制组：幼房但未饥饿 ⇒ 不提前降级", () => {

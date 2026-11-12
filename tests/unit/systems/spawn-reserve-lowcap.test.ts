@@ -4,6 +4,7 @@ import {
   recoveryRoomDegradeAllowed,
   spawnReserveFor,
 } from "../../../src/systems/room/spawn-manager";
+import { energyReserveFor } from "../../../src/domain/spawn/reserve";
 
 describe("spawnReserveFor — 低容量房预留钳位（R647）", () => {
   it("RCL1-2（容量 300）⇒ 预留归零（否则 200/300 会孵不出任何非采集者）", () => {
@@ -26,6 +27,16 @@ describe("spawnReserveFor — 低容量房预留钳位（R647）", () => {
   it("无预留时不受影响", () => {
     expect(spawnReserveFor(300, 0)).toBe(0);
     expect(spawnReserveFor(1300, 0)).toBe(0);
+  });
+});
+
+describe("energyReserveFor — Phase 2 常态预留钳位", () => {
+  it("容量 <2000 → 0；2300 → 575；5600 → 1200；2000 → 500", () => {
+    expect(energyReserveFor(300, 1200)).toBe(0);
+    expect(energyReserveFor(1999, 1200)).toBe(0);
+    expect(energyReserveFor(2000, 1200)).toBe(500);
+    expect(energyReserveFor(2300, 1200)).toBe(575);
+    expect(energyReserveFor(5600, 1200)).toBe(1200);
   });
 });
 

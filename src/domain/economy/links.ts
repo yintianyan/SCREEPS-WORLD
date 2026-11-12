@@ -45,8 +45,21 @@ export function computeControllerLinkTarget(
   if (!controller || !controller.my) return 0;
   const upgradeCfg = CONFIG.economy.upgrade;
   const linkCfg = CONFIG.economy.link;
-  // RCL8 满级：升级零收益 → 默认停供；降级风险时保级小水位。
-  if (rcl >= 8) return downgradeRisk ? linkCfg.maintainTarget : 0;
+  // RCL8 满级：关闭 GCL 升级时停供（降级风险时保级小水位）；
+  // 开启后与 RCL<8 共用 storage 水位分级 —— RCL8 的 upgrade 计入 GCL 进度，
+  // 停供等于把唯一的房间上限增长通道关死。
+  if (rcl >= 8) {
+    if (!upgradeCfg.gclUpgrade) {
+      return downgradeRisk ? linkCfg.maintainTarget : 0;
+    }
+    const byStorage =
+      storageEnergy >= upgradeCfg.sustainedStorage
+        ? linkCapacity
+        : storageEnergy >= linkCfg.lowSupplyStorage
+          ? Math.round(linkCapacity * linkCfg.lowSupplyRatio)
+          : Math.round(linkCapacity * linkCfg.maintainRatio);
+    return downgradeRisk ? Math.max(byStorage, linkCfg.maintainTarget) : byStorage;
+  }
   // RCL<8：按 storage 水位分级（满功率冲刺 / 半供慢升 / 枯竭保级）。
   if (storageEnergy >= upgradeCfg.sustainedStorage) return linkCapacity;
   if (storageEnergy >= linkCfg.lowSupplyStorage) {
@@ -85,6 +98,12 @@ export interface LinkTransferOptions {
    * （link-system）按升级需求计算（RCL8 停供 / 保级 / RCL<8 分级）。
    */
   controllerTargetEnergy?: number;
+  /**
+   * source→storage 的最小目标空闲量（缺省 0 = 旧行为）。storage link 只剩 1-2 格时
+   * 不发小额传输：私服 link 每 tick 一次 + 3-14 tick cooldown，用一次冷却换 1-2 单位
+   * 到账是纯亏损。link-system 传 CONFIG.economy.link.storageSinkMinFree。
+   */
+  storageSinkMinFree?: number;
 }
 
 export function planLinkTransfers(
@@ -97,7 +116,11 @@ export function planLinkTransfers(
   const transfers: LinkTransfer[] = [];
   const sent = new Set<string>();
 
-  const sourceLinks = links.filter(l => l.role === "source" && l.energy > 0 && l.cooldown === 0);
+  // P0-B：按能量降序排列 source link —— 旧的固定遍历顺序会让数组里第一条永远先发，
+  // 第二条长期 800 满仓（W8N3 的 (30,20) 就是这样被饿成死水的）。满的先发，先解背压。
+  const sourceLinks = links
+    .filter(l => l.role === "source" && l.energy > 0 && l.cooldown === 0)
+    .sort((a, b) => b.energy - a.energy);
   const controllerLink = links.find(l => l.role === "controller");
   const storageLink = links.find(l => l.role === "storage");
 
@@ -148,25 +171,10 @@ export function planLinkTransfers(
     controllerReceived += arrived;
   }
 
-  // 2. source → storage（溢出回收）
-  // storage 回收不追求精确补偿损耗：溢出回收场景下多传少传均可，下 tick 会重新评估。
-  if (storageLink) {
-    let storageFree = storageLink.energyCapacity - storageLink.energy;
-    for (const src of sourceLinks) {
-      if (sent.has(src.id) || storageFree <= 0) continue;
-      if (!meetsThreshold(src)) continue;
-      // 发送量不超过目标空闲容量（引擎会拒绝超容量的传输）。
-      const amount = Math.min(src.energy, storageFree);
-      if (amount <= 0) continue;
-      transfers.push({ fromId: src.id, toId: storageLink.id, amount });
-      sent.add(src.id);
-      // 目标空闲按到账量扣减（到账量 ≤ 发送量）。
-      storageFree -= receivedAfterLoss(amount);
-    }
-  }
-
-  // 3. storage → controller（controller 仍缺能时补充）
-  // 损耗补偿：同路由 1，发送 sendForNeeds(needs) 以确保到达量覆盖缺口。
+  // 2. storage → controller（controller 的第二供给源，先于 source 溢出回收）
+  // storage link 是 controller 的备用油箱：source link 受 3–14 tick cooldown 限制时，
+  // 由它把 storage 侧能量补进 controller，缩短 upgrader 的取能空窗。
+  // 损耗补偿：发送 sendForNeeds(needs) 以确保到达量覆盖缺口。
   if (
     storageLink &&
     storageLink.cooldown === 0 &&
@@ -178,6 +186,28 @@ export function planLinkTransfers(
     const sendAmount = Math.min(storageLink.energy, targetFree, sendForNeeds(controllerNeeds));
     if (sendAmount > 0) {
       transfers.push({ fromId: storageLink.id, toId: controllerLink.id, amount: sendAmount });
+    }
+  }
+
+  // 3. source → storage（溢出回收）
+  // storage 回收不追求精确补偿损耗：溢出回收场景下多传少传均可，下 tick 会重新评估。
+  // P0-B：目标空闲不足 minFree 时整段不发 —— 用一次 source link 的传输冷却换
+  // 1-2 单位到账是纯亏损（storage link 常年 798/799 的放大器）。
+  if (storageLink) {
+    const minFree = opts.storageSinkMinFree ?? 0;
+    let storageFree = storageLink.energyCapacity - storageLink.energy;
+    if (storageFree >= minFree) {
+      for (const src of sourceLinks) {
+        if (sent.has(src.id) || storageFree < minFree) continue;
+        if (!meetsThreshold(src)) continue;
+        // 发送量不超过目标空闲容量（引擎会拒绝超容量的传输）。
+        const amount = Math.min(src.energy, storageFree);
+        if (amount <= 0) continue;
+        transfers.push({ fromId: src.id, toId: storageLink.id, amount });
+        sent.add(src.id);
+        // 目标空闲按到账量扣减（到账量 ≤ 发送量）。
+        storageFree -= receivedAfterLoss(amount);
+      }
     }
   }
 
@@ -267,4 +297,31 @@ export function classifyLinkRole(
 
   candidates.sort((a, b) => a.dist - b.dist || b.pri - a.pri);
   return candidates[0]!.role;
+}
+
+/**
+ * 从快照中找出 storage 角色的 link（与 `classifyLinkRole` 同一组半径）。
+ *
+ * 为什么必须有这个函数：storage link 的布局半径是 `storageAnchorRange=3`，
+ * 而运行时消费者（hauler 排空、harvester 出口判定、hauler 编制、distributor 中转）
+ * 曾各自写死 `getRangeTo(storage) <= 2` —— W8N3 的 storage link (22,18) 距
+ * storage (21,15) 恰好 3 格，四处全部找不到它，于是 storage link 常年 799、
+ * source link 无出口、controller link 只能靠 source 单路补给。
+ * 统一到本函数后，放置侧与消费侧共用同一把尺。
+ */
+export function findStorageLink<T extends { pos: { x: number; y: number } }>(
+  view: {
+    storage?: { pos: { x: number; y: number } } | undefined;
+    controller?: { pos: { x: number; y: number } } | undefined;
+    sources: readonly { pos: { x: number; y: number } }[];
+    links: readonly T[];
+  },
+  ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
+): T | undefined {
+  const st = view.storage;
+  if (!st) return undefined;
+  const sourcePoints = view.sources.map(s => s.pos);
+  return view.links.find(
+    l => classifyLinkRole(l.pos, sourcePoints, view.controller?.pos, st.pos, ranges) === "storage",
+  );
 }

@@ -131,8 +131,12 @@ describe("distributor — work 模式", () => {
     expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
   });
 
-  it("fillTargets 全满时 idle（不回退到 fillStorage）", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
+  it("fillTargets 全满 + storage 富余 → idle（不回退到 fillStorage）", () => {
+    const storage = mockStructure("storage", {
+      id: "storage_1",
+      energy: 120000,
+      capacity: 1000000,
+    });
     const snap = mockSnapshot({ fillTargets: [], storage });
     const creep = mockCreep({
       name: "dist_1",
@@ -145,15 +149,14 @@ describe("distributor — work 模式", () => {
 
     distributorRole.run(creep, ctx);
 
-    // 架构约束：distributor 永不存入 storage。
+    // 架构约束：storage 高于恢复线时，distributor 不向 storage 回吐（避免 storage→storage 循环）。
     // fillTargets 全满 → idle，等待 sink 释放容量。
     expect(creep.transfer).not.toHaveBeenCalledWith(storage, "energy");
     expect(creep.memory.mode).toBe("idle");
   });
 
-  it("架构约束：永不向 storage transfer（消除循环依赖）", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
-    // fillTargets 为空，distributor 携带能量但无下游 — 不能存回 storage。
+  it("Phase C 例外：fillTargets 全满 + storage 低储 → 回吐 storage（防满载卡死）", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 1000000 });
     const snap = mockSnapshot({ fillTargets: [], storage });
     const creep = mockCreep({
       name: "dist_1",
@@ -166,8 +169,29 @@ describe("distributor — work 模式", () => {
 
     distributorRole.run(creep, ctx);
 
-    // 核心架构约束：distributor 的 work 链没有 fillStorage。
-    // 如果加了 fillStorage，就会重新引入 storage→storage 循环。
+    expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+  });
+
+  it("架构约束：storage 富余时永不向 storage transfer（消除循环依赖）", () => {
+    const storage = mockStructure("storage", {
+      id: "storage_1",
+      energy: 120000,
+      capacity: 1000000,
+    });
+    // fillTargets 为空，distributor 携带能量但无下游 — storage 富余时不能存回。
+    const snap = mockSnapshot({ fillTargets: [], storage });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
+    const ctx = mockContext(snap);
+
+    distributorRole.run(creep, ctx);
+
+    // 核心架构约束：distributor 的 work 链没有 fillStorage；唯一的回吐是低储例外。
     const storageTransfers = creep.transfer.mock.calls.filter(
       (call: any[]) => call[0]?.id === "storage_1",
     );

@@ -6,7 +6,11 @@ import { CONFIG } from "../../../config";
 import { moveToTarget, registerAnchor } from "../../movement";
 import { ACTION_RANGE_NEAR, countedIntent, runAction } from "./helpers";
 import { getSource } from "../../support/targeting";
-import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/economy/links";
+import {
+  classifyLinkRole,
+  computeControllerLinkTarget,
+  findStorageLink,
+} from "../../../domain/economy/links";
 import { resolveControllerDowngradeRisk } from "../../../domain/economy/downgrade-risk";
 
 /**
@@ -175,12 +179,18 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
 function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
   const snap = ac.snapshot;
   if (snap.storage) {
-    const storageLink = snap.links.find(
-      l => l.id !== link.id && l.pos.getRangeTo(snap.storage!) <= 2,
-    );
+    // 与布局分类同源（storageAnchorRange=3）：旧实现 range<=2 找不到距 3 格的 storage link，
+    // 于是 storage 分支恒假、退化到 controller link；controller 满时 source link 无出口。
+    const storageLink = findStorageLink(snap);
     // storage link 存在且有空闲容量 → source link 有出口（hauler 排空 + link-system 传输）。
     // storage link 满（free=0）→ 无出口 → harvester 应倒 container 而非灌满 source link。
-    if (storageLink && storageLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return true;
+    if (
+      storageLink &&
+      storageLink.id !== link.id &&
+      storageLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    ) {
+      return true;
+    }
   }
   const ctrl = snap.controller;
   if (!ctrl || !ctrl.my) return false;

@@ -292,9 +292,12 @@ export class Kernel {
     );
 
     // 拍尾实测 = 本拍真正的计费点。
-    // 累计总量在这里累加（拍中那次只留作被减数），于是 cpuRate.total 与 stats.cpuAvg10
-    // 量的终于是同一个东西：**两份独立采样的口径必须收敛，不收敛本身就是缺陷信号**，
-    // 而尾差单独成桶后，「榜外剩余」才真的是没归属的 CPU，不再等于"采样点之后的一切"。
+    // `cpuCumulative` 在这里累加（拍中那次只留作尾差的被减数）；**它仍然是自进程启动的
+    // 累计值，只作归因账本**，不再直接拿它除以寿命当均值。telemetry 侧的 cpuRate 由最近
+    // `CPU_RATE_WINDOW_TICKS`（600）拍的累计快照差值算出（见 telemetry-collector 的
+    // appendCpuRateSnapshot/buildCpuRateWindow）：生涯口径会让早期高开销永不退出，
+    // 容量闸据此长期判 constrained，扩张被 G6 锁死。
+    // 尾差单独成桶后，「榜外剩余」才真的是没归属的 CPU，不再等于"采样点之后的一切"。
     measuredRun("cpu/tick-tail", () =>
       safeRun(
         "cpu/tick-tail",
@@ -1102,6 +1105,7 @@ export class Kernel {
       const commutingHome = home !== undefined && home !== creep.room?.name;
       if (
         mode === "idle" &&
+        !role.noIdleCadence &&
         stuck === 0 &&
         !creep.memory.recycle &&
         !creep.memory.remoteTarget &&

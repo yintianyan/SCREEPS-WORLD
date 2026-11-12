@@ -101,6 +101,39 @@ export function safeRunBuild<T>(label: string, factory: () => T, critical = fals
   }
 }
 
+/**
+ * 顶层致命异常边界 — 只给 `main.loop` 用。
+ *
+ * `kernel.run()` 内部的分段已有 safeRun，但 `createBudget` / `Context` / `emitSummary`
+ * 等骨架仍在边界之外：那里抛一次错就会杀死整拍，且此前没有任何持久痕迹。这里兜住
+ * 它们，并保证诊断自身的失败不会二次抛出。
+ */
+export function runWithFatalGuard(action: () => void): void {
+  try {
+    action();
+  } catch (error) {
+    recordTickFatal(error);
+  }
+}
+
+/**
+ * 记录一次顶层致命异常：限频日志 + `lastError` 快照 + 限频事件。
+ *
+ * 与 `safeRun` 的区别是**不冷却**——kernel 骨架每拍都该有机会自愈，不能因为连续
+ * 失败就跳过整个 tick。事件用独立 key 限频，避免和日志共用冷却表时把「日志已记」
+ * 误当成「事件也记过」。
+ */
+export function recordTickFatal(error: unknown): void {
+  try {
+    handleError("loop-fatal", error, true);
+    if (!shouldSuppress("loop-fatal-event", Game.time)) {
+      recordEvent(EventKind.TickFatal, "", []);
+    }
+  } catch {
+    // 诊断写入失败绝不放大故障（与 recordLastErrorSnapshot 同一纪律）
+  }
+}
+
 /** 执行操作并测量其 CPU 消耗用于遥测。返回 CPU 消耗量。 */
 export function measuredRun(label: string, action: () => void): number {
   const before = Game.cpu.getUsed();

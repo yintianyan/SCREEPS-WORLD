@@ -66,7 +66,8 @@ jobs:
 
       # Bundle 尺寸预算：global reset 时 bundle 加载成本与 tickLimit 直接相关
       # （见 CONFIG.pixel 注释的 reload death loop 事故）。超预算响亮失败，
-      # 迫使压缩/拆分而不是静默滑向危险区。当前基线 ~754KB（A4.3-A6.6 功能累积）。
+      # 迫使压缩/拆分而不是静默滑向危险区。当前基线 ~805KB（2026-11-12 去掉
+      # 全量 mangle.reserved 后：854,786 → 805,587）。
       - name: Bundle size budget
         run: |
           SIZE=$(wc -c < dist/main.js)

@@ -7,6 +7,8 @@ import { getObjectById } from "../../support/obj-cache";
 import { claimTaskTarget, taskTargetClaimedByOther } from "../../support/task-claims";
 import { moveToTarget } from "../../movement";
 import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../domain/war/planning";
+import { collectBuyOrderResources } from "../../../domain/industry/market-outlet";
+import { firstTicketOf, planTerminalLane } from "../../../domain/economy/terminal-lane";
 
 /** haulMineralsToStorage 的 resolve 返回类型（仅 deposit 相：倒已携带的矿物）。 */
 type MineralHaulTarget = {
@@ -544,15 +546,18 @@ type FactoryBatteryTarget =
   | { dest: StructureFactory; phase: "deposit" }
   | { source: StructureStorage | StructureTerminal; phase: "withdraw" };
 
-/** crisis 时 factory 内 battery 解压原料的目标量（够 5 批解压 = 250 能量缓冲）。 */
-const FACTORY_CRISIS_BATTERY_TARGET = 25;
+/** factory 内 battery 解压原料的目标量（2 批 = 100，减少搬运往返）。 */
+const FACTORY_DECOMPRESS_BATTERY_TARGET = 100;
 
 /**
  * 为 factory 补给 battery 解压原料（storage/terminal → factory）。
- * 仅在 storage 能量危机时触发 — battery 解压是 crisis 救助链，
- * 正常水位下不搬 battery 进 factory（battery 在 terminal 待卖或 storage 保值）。
- * 双相候选：空载取 storage/terminal、满载送 factory。
- * 优先 storage（terminal 的 battery 可能挂单中）。
+ * 触发条件与 `tryDecompressBattery` 同口径：storage 低于 `decompressStorageTarget`（300K）。
+ *
+ * 为什么不再是「仅危机」：battery 不是常规能源储备，而是 storage 满仓时的溢出容器
+ * （压缩 600→50、解压 50→500，往返损耗 16.7%）。storage 只要不满仓，它就该还原成
+ * 能量参与经济 —— W8N3 实测 210,850 battery 在 55K storage 里躺着，而旧门禁是 20K，
+ * 中间的 20K–900K 全是死区。
+ * 双相候选：空载取 storage/terminal、满载送 factory。优先 storage（terminal 的 battery 可能挂单中）。
  */
 export function stockFactoryBattery(): ActionCandidate<FactoryBatteryTarget> {
   return {
@@ -561,12 +566,12 @@ export function stockFactoryBattery(): ActionCandidate<FactoryBatteryTarget> {
       const factory = ac.snapshot.factory;
       const storage = ac.snapshot.storage;
       if (!factory || !storage) return undefined;
-      // 仅 crisis 时触发（与 tryDecompressBattery 的触发条件同口径）。
+      // 触发条件与 tryDecompressBattery 同口径（storage < 解压目标水位）。
       const storageEnergy = storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-      if (storageEnergy >= CONFIG.market.storageEnergyFloor) return undefined;
+      if (storageEnergy >= CONFIG.factory.decompressStorageTarget) return undefined;
 
       const batteryInFactory = factory.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
-      if (batteryInFactory >= FACTORY_CRISIS_BATTERY_TARGET) return undefined;
+      if (batteryInFactory >= FACTORY_DECOMPRESS_BATTERY_TARGET) return undefined;
 
       // deposit 相：creep 携带 battery → 送 factory。
       const carrying = ac.creep.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
@@ -598,7 +603,13 @@ export function stockFactoryBattery(): ActionCandidate<FactoryBatteryTarget> {
 /** reclaimFactoryOutput 的 resolve 返回类型。 */
 type FactoryReclaimTarget =
   | { dest: StructureStorage | StructureTerminal; resource: ResourceConstant; phase: "deposit" }
-  | { source: StructureFactory; resource: ResourceConstant; phase: "withdraw" };
+  | {
+      source: StructureFactory;
+      resource: ResourceConstant;
+      phase: "withdraw";
+      /** 仅取指定数量（运营上限回收时保留 stockTarget）；undefined = 取满。 */
+      amount?: number;
+    };
 
 /** commodity 回收阈值 — 与 battery 共用，factory 总容量 50k 产出无出路必堵死。 */
 const FACTORY_RECLAIM_THRESHOLD = 100;
@@ -622,17 +633,28 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
       const factory = ac.snapshot.factory;
       if (!factory) return undefined;
 
-      // ── crisis 能量回收：storage 能量低于危机线时，factory 内的解压能量
-      // 优先搬到 storage（供 spawn 使用）。这是 battery 解压链的搬运出口 —
-      // 不搬出去则 factory 能量积满后 produce(RESOURCE_ENERGY) 必返 ERR_FULL，
-      // 解压链死锁。crisis 门槛低于 reclaim 阈值（50 energy 不够攒批就搬 —
-      // spawn 急需）。非 crisis 时跳过（能量是 factory 运营原料）。
+      // ── 能量回收：两种触发 ──
+      // ① crisis（storage < 20K）：解压能量必须立刻搬出供 spawn，否则 factory 积满
+      //    后 produce(RESOURCE_ENERGY) 返 ERR_FULL，解压链死锁；
+      // ② 运营上限（factory energy 超水位且 storage 未达目标）：
+      //    只回收「超出运营水位」的部分，保留 stockTarget 作为生产原料。
+      //    旧实现只有 crisis 分支 ⇒ W8N3 实测 49,865 能量长期躺在 factory 里，
+      //    既不在 storage 也不参与 spawn，是标准的死库存。
+      //
+      // Phase D：解压期（storage < decompressStorageTarget=300K）把回收水位从
+      // 2×stockTarget(6K) 降到 stockTarget(3K)。解压每 10 tick 产 500 能量，
+      // 堆到 6K 要 120 tick —— 期间这些能量既不升级也不修墙，只是换了地方滞留。
       const storageEnergy = ac.snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      const factoryEnergy = factory.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
       const inCrisis = storageEnergy < CONFIG.market.storageEnergyFloor;
-      if (inCrisis) {
-        const factoryEnergy = factory.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      const decompressPhase = storageEnergy < CONFIG.factory.decompressStorageTarget;
+      const reclaimCap = decompressPhase
+        ? CONFIG.factory.stockTarget
+        : CONFIG.factory.stockTarget * 2;
+      const overOperatingCap = factoryEnergy > reclaimCap && decompressPhase;
+      if (inCrisis || overOperatingCap) {
         if (factoryEnergy > 0) {
-          // deposit 相：creep 携带能量 → 送 storage（crisis 时 storage 优先于 terminal）。
+          // deposit 相：creep 携带能量 → 送 storage（storage 优先于 terminal）。
           const carrying = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
           if (carrying > 0 && ac.snapshot.storage) {
             return {
@@ -641,9 +663,19 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
               phase: "deposit" as const,
             };
           }
-          // withdraw 相：从 factory 取能量。
+          // withdraw 相：crisis 全搬；运营上限只搬超出 stockTarget 的部分。
           if (ac.creep.store.getFreeCapacity() > 0) {
-            return { source: factory, resource: RESOURCE_ENERGY, phase: "withdraw" as const };
+            const amount = inCrisis
+              ? undefined
+              : Math.max(0, factoryEnergy - CONFIG.factory.stockTarget);
+            if (amount !== 0) {
+              return {
+                source: factory,
+                resource: RESOURCE_ENERGY,
+                phase: "withdraw" as const,
+                amount,
+              };
+            }
           }
         }
       }
@@ -689,6 +721,19 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
     execute: (ac, t) => {
       if (t.phase === "deposit") {
         runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.resource));
+      } else if (t.amount !== undefined) {
+        // ⚠️ amount 必须按背包空闲截断。resolve 给的「超出运营上限的部分」是库存口径
+        // （W8N3 实测 42,410 − 3,000 = 39,410），而 distributor 容量只有 400 ——
+        // 直接把 39,410 传给 withdraw 会返回 ERR_FULL，**一格能量都取不到**。
+        // 这正是「7 只空仓 distributor 围着 factory 转了上千拍、库存纹丝不动」的根因。
+        const amount = Math.min(
+          t.amount,
+          ac.creep.store.getFreeCapacity(t.resource as ResourceConstant),
+        );
+        if (amount <= 0) return;
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, t.resource, amount),
+        );
       } else {
         runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
           ac.creep.withdraw(t.source, t.resource),
@@ -772,6 +817,153 @@ export function stockNuker(): ActionCandidate<NukerStockTarget> {
           ac.creep.withdraw(t.source, t.resource, amount),
         );
       }
+    },
+  };
+}
+
+// ─── Phase B：terminal 出口车道 ─────────────────────────────
+
+/** terminalExportLane 的 resolve 返回类型（四相）。 */
+type TerminalLaneTarget =
+  | { phase: "trim-deposit"; dest: StructureStorage; resource: ResourceConstant }
+  | {
+      phase: "trim-withdraw";
+      source: StructureTerminal;
+      resource: ResourceConstant;
+      amount: number;
+    }
+  | { phase: "export-deposit"; dest: StructureTerminal; resource: ResourceConstant }
+  | {
+      phase: "export-withdraw";
+      source: StructureStorage;
+      resource: ResourceConstant;
+      amount: number;
+    };
+
+/** store → 纯资源表（过滤方法键与零/负值）。 */
+function storeToStocks(store: unknown): Record<string, number> {
+  const stocks: Record<string, number> = {};
+  for (const [resource, amount] of Object.entries(store as Record<string, unknown>)) {
+    if (typeof amount === "number" && amount > 0) stocks[resource] = amount;
+  }
+  return stocks;
+}
+
+/** 订单缓存在与行情同窗口内视为新鲜。 */
+const MARKET_CACHE_TTL = CONFIG.market.interval + 50;
+
+/** 读取本房未过期的跨房出口需求（terminal-manager 写入）。 */
+function collectAidNeeds(roomName: string): { resource: string; amount: number }[] {
+  const table = globalCache().exportNeeds;
+  if (!table) return [];
+  const list = table.byRoom[roomName];
+  if (!list) return [];
+  return list
+    .filter(need => need.deadline > Game.time)
+    .map(need => ({ resource: need.resource, amount: need.amount }));
+}
+
+/**
+ * terminal 出口车道（Phase B）— storage ↔ terminal 的双向搬运。
+ *
+ * 两个方向、四个相：
+ * - `trim`：terminal 内资源超过契约配额 → 搬回 storage。terminal 是 300K 共享瓶颈，
+ *   实测 W8N3 battery 占 70%，不清退则矿物/factory 产物/买入落地全部无处可放。
+ * - `export`：storage 有货、terminal 配额有空间、且有真实出口需求（跨房援助或市场买盘）
+ *   → 搬进 terminal。没有 ticket 的资源绝不搬 — 那只是把沉淀从 storage 移到 terminal。
+ *
+ * 为什么必须双向：旧实现里矿物/化合物/commodity 只有 `terminal→market` 出口，
+ * 而货在 storage；`trySellHomeMineral` 等只看 terminal 现货，于是 storage 成了终点站。
+ * trim 先于 export：先腾出容量，再谈搬入。
+ */
+export function terminalExportLane(): ActionCandidate<TerminalLaneTarget> {
+  return {
+    name: "haul:terminal-export-lane",
+    resolve: ac => {
+      const terminal = ac.snapshot.terminal;
+      const storage = ac.snapshot.storage;
+      if (!terminal || !storage) return undefined;
+
+      const tickets = planTerminalLane({
+        storageStocks: storeToStocks(storage.store),
+        terminalStocks: storeToStocks(terminal.store),
+        terminalFree: terminal.store.getFreeCapacity() ?? 0,
+        homeMineral: ac.snapshot.minerals[0]?.mineralType,
+        buyOrderResources: collectBuyOrderResources(
+          globalCache().marketOrderCache,
+          Game.time,
+          MARKET_CACHE_TTL,
+        ),
+        surplusCompounds: globalCache().surplusCompounds?.items,
+        aidNeeds: collectAidNeeds(ac.snapshot.roomName),
+        reserveFree: CONFIG.market.buyFreeCapacityFloor,
+        sellReserve: CONFIG.market.sellReserve,
+      });
+      if (tickets.length === 0) return undefined;
+
+      // 生命线守卫：spawn/extension 有空位时让位给补能。
+      // trim 的动机是「terminal 容量被堵死」，而孵化池空位是更硬的生存约束；
+      // 把 trim 排在补能之后会让它永远轮不到（controller link 差 1 点也会命中补能门禁）。
+      if (
+        ac.snapshot.fillTargets.some(
+          t => t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION,
+        )
+      ) {
+        return undefined;
+      }
+
+      // 携载分支：按该资源的票据方向决定送往 storage 还是 terminal。
+      const carried = (Object.keys(ac.creep.store) as ResourceConstant[]).find(
+        resource => resource !== RESOURCE_ENERGY && (ac.creep.store[resource] ?? 0) > 0,
+      );
+      if (carried) {
+        if (tickets.some(t => t.direction === "trim" && t.resource === carried)) {
+          return { phase: "trim-deposit", dest: storage, resource: carried };
+        }
+        if (tickets.some(t => t.direction === "export" && t.resource === carried)) {
+          return { phase: "export-deposit", dest: terminal, resource: carried };
+        }
+        return undefined;
+      }
+
+      // 背着能量的 distributor 必须让位给 spawn/extension 填充：本车道只搬非能量资源，
+      // 否则会把「刚取到能量准备补能」的个体劫去 terminal 取 battery，饿死孵化池。
+      if ((ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) > 0) return undefined;
+
+      // 空载：trim 优先（释放 terminal 容量），其次 export。
+      const trim = firstTicketOf(tickets, "trim");
+      if (trim) {
+        return {
+          phase: "trim-withdraw",
+          source: terminal,
+          resource: trim.resource as ResourceConstant,
+          amount: trim.amount,
+        };
+      }
+      const exportTicket = firstTicketOf(tickets, "export");
+      if (exportTicket) {
+        return {
+          phase: "export-withdraw",
+          source: storage,
+          resource: exportTicket.resource as ResourceConstant,
+          amount: exportTicket.amount,
+        };
+      }
+      return undefined;
+    },
+    execute: (ac, t) => {
+      if (t.phase === "trim-deposit" || t.phase === "export-deposit") {
+        // 目的地满则本 tick 放弃（下一 tick 计划会重算，不空转 intent）。
+        if ((t.dest.store.getFreeCapacity(t.resource) ?? 0) <= 0) return;
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.resource));
+        return;
+      }
+      const available = t.source.store.getUsedCapacity(t.resource) ?? 0;
+      const amount = Math.min(available, ac.creep.store.getFreeCapacity() ?? 0, t.amount);
+      if (amount <= 0) return;
+      runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+        ac.creep.withdraw(t.source, t.resource, amount),
+      );
     },
   };
 }

@@ -6,6 +6,8 @@ export interface AssignmentTaskEntry {
   id: string;
   kind: string;
   targetId?: string;
+  /** Phase 2：汇组任务（如 core）的目标组；执行时解析具体结构。 */
+  targetGroup?: string;
   sourceId?: string;
   /** build 任务对应的结构类型 — 用于识别道路任务以预留 builder。 */
   structureType?: string;
@@ -76,6 +78,8 @@ const ROLE_TASK_KINDS: Readonly<Record<string, readonly string[]>> = {
   worker: ["fill"],
   harvester: ["fill"],
   hauler: ["haul", "fill"],
+  /** Phase 1：distributor 只接 flowPlan 合成的 deliver，不再用 fill 任务占位。 */
+  distributor: ["deliver"],
   upgrader: ["upgrade"],
   // builder 只收 build：其 work 对 spawn/extension 结构调 creep.build() 会
   // ERR_INVALID_TARGET 死循环；填充/维修/升级由 builder.ts fallback 链自行处理。

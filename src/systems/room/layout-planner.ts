@@ -323,10 +323,8 @@ function planStage0Prep(
   const queue = roomMem.buildQueue ?? [];
   const gaps = auditStructureGaps(snapshot, queue);
   // link 角色感知（2026-08-02）：总数满足但角色分布错（死资产）时暴露真实缺口。
-  mergeLinkRoleGaps(
-    gaps,
-    auditLinkRoleGaps(snapshot, queue, resolveLinkRoleRanges(CONFIG.economy.link)),
-  );
+  const linkRoleRanges = resolveLinkRoleRanges(CONFIG.economy.link);
+  mergeLinkRoleGaps(gaps, auditLinkRoleGaps(snapshot, queue, linkRoleRanges));
   // 死资产检测（2026-08-02，§3.3）：source link 持续 500t 三重校验失败 → 触发规划。
   // deadAssetLink key 值为死资产数量，触发 shouldPlan；拆改通道由 P1-4 实现。
   const deadAssets = getDeadAssetLinks(ctx.tick);

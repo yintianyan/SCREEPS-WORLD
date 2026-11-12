@@ -220,6 +220,8 @@ export const CONFIG = {
     maxRetries: 12,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
+    /** Phase 2：常态预留（非 P0 请求的可支付上限），按房容量 25% 钳制。 */
+    energyReserve: 1200,
     /** P3 风险预留门槛：风险缓冲（断供耐受 tick 数，economy 瘦快照 rb/10）低于此值时，
      * 非 P0 孵化预算额外扣除 recoveryEnergyReserve——RCL4+ storage 经济的排产预留
      * （ECONOMY §2.1-7①；B1 冷启动崩塌对策）。仅合同储备 >0 的房间生效。 */
@@ -245,6 +247,10 @@ export const CONFIG = {
      * 引入「等满配 → 永远凑不够」死锁（W37S58）。
      */
     requestTtl: 1000,
+    /** P1-C：upgrader 平滑补员的「健康窗口」——ttl 低于此值的 upgrader 不计入编制，
+     *  提前请求替补，避免同批死亡后集中补员造成 129 拍孵化 + 通勤的升级断档。
+     *  取值 400 ≈ 3 个孵化周期（body 43 件 × 3 = 129）＋通勤余量；重叠期最多 1-2 只。 */
+    upgraderReplaceHorizon: 400,
   },
 
   /**
@@ -373,6 +379,14 @@ export const CONFIG = {
     /** 道路维修判定的血量比例阈值：repairRoads 动作与 builder 维修需求信号共用，
      * 保证「何时算需要修」口径一致。0.4 在任何地形下给约 20000 tick 修复窗口。 */
     roadRepairThreshold: 0.4,
+    /**
+     * Phase C：低储期的常规修路进场线（更严格）。storage 能量 < sprintStorage(50K) 时，
+     * 常规修路只接 hits < 此比例的道路，把 16W builder 的维修支出让给 storage 回血。
+     * W8N3 实测：132/134 条路受损、1 只 16W builder 满速维修 ≈ 16 e/t，
+     * 正好抵消全部采集净流入（storage 67K→47K），闩锁永远回不到 100K。
+     * 急救档（<15%）不受此限：塌路重建成本约 6 倍且占建造名额。
+     */
+    lowStorageRoadHits: 0.3,
     /** 维修驱动 builder 的道路数门槛：待修道路达此数量时，即使无建造 site 也维持
      * 1 个 builder 巡修。成熟房 site 归零 → builder 消亡而塔不修路，道路只能塌毁
      * 重建（耗能约为持续维修 6 倍，且窗口期物流减速）。3 条起孵避免为单条路养 builder。 */
@@ -452,11 +466,12 @@ export const CONFIG = {
     labDemandTtl: 20,
     /** R617：扩张推进态的升级预留净流（e/tick）。**仅在**本房 RCL≥7 且存在
      * `isExpansionPushPlan` 计划（EVALUATED/READY/APPROVED/WAITING_EXECUTION/EXECUTING）
-     * 时，升级刹车从 0 抬到本值——把盈余留给扩张门 G4（`readiness` 要求 ΣnetFlow ≥5）。
-     * 为什么限定：R607 的全局版（无条件抬到 5）会让 RCL 冲刺/站桩取能链等 15 例测试
-     * 变红，说明它是策略级而不是局部优化；限定版只在“确有扩张计划且本房已成熟”时生效，
-     * 早期房、无计划、终态计划都保持原语义（`Σgate<0` 才停）。可逆：删除该值即回到 0。 */
-    upgradeReserveNetFlow: 5,
+     * 时，升级刹车从 0 抬到本值——把盈余留给扩张门 G4。
+     * 2026-11-08：5 → 2，与 G4 `minNetFlow` 同步。实测 W8N3 净流在 5.1 附近抖动，
+     * 一个 EVALUATED 的 W6N1 计划把升级刹车钉在 5 ⇒ 每次升级消耗把净流压到 4.x
+     * 就触发 gate 关闭、停升，随后净流回升又开 —— progress 被切成 0.2/tick 的碎拍。
+     * 两处门槛必须同源：G4 既然接受 2 以上就算"有盈余"，升级就不该在 2–5 之间被误杀。 */
+    upgradeReserveNetFlow: 2,
     /**
      * 关闸后的最短保持期（tick，100 的整数倍）。默认 1200 = 12 个量子。
      * 依据：一个「取能→通勤→站桩」循环实测下限 518 拍（冷孵）～600+ 拍，而已证明有效的
@@ -506,8 +521,48 @@ export const CONFIG = {
     upgrade: {
       /** storage 能量 ≥ 此值且 pressure ≤ 0.3 时进入升级冲刺（燃烧库存换 RCL 复利）。 */
       sprintStorage: 50000,
+      /** Phase 2.5：richStorage 闩锁的恢复水位。低于 sprintStorage 停升级/工业，
+       *  必须回到此值才恢复，避免 50K 阈值每 tick 穿越的振荡。 */
+      richStorageResume: 100000,
+      /**
+       * Phase D：升级（GCL）专用恢复线。
+       *
+       * 旧的单一 100K 恢复线把「升级 / lab 反应 / 修墙」绑在一起：三者收益完全不同，
+       * 却共用同一个开关。双 source 房净盈余只有约 3–4 e/t，永远到不了 100K
+       * （W8N3 实测 5–6 万反复振荡），于是升级被永久关死；而 W7N2 有 50 万时
+       * 三闸全开（15+16+e/t），把库存烧到 7.4 万。
+       *
+       * 分级后：升级 60K 就恢复（长期复利，最该优先），lab 55K，修墙 300K。
+       * 停线仍统一为 sprintStorage(50K)，形成 10K/5K/250K 的回差。
+       */
+      gclResumeStorage: 60000,
+      /**
+       * Phase D：lab 反应恢复线。
+       *
+       * 实测成本远低于原设：一个反应 trio 每 10 tick 消耗 10 能量 ⇒ **约 1 e/t**，
+       * 三个 trio 也不过 3 e/t（升级单只是 15 e/t）。原来取 120K 是把 lab 当成
+       * 与升级同量级的消费，导致 24 个 lab 在 40–58K 的经济规模下**永久停摆**：
+       * 半成品（ZK 230 / UL 300 / Z 300 / K 300）卡在 lab 里，nuker 的 G 储备
+       * 停在 245/5,000 无法推进。
+       *
+       * 55K = 停线(50K) + 5K：成本比升级低一个量级，可以早于升级开闸，
+       * 同时留出足够回差吸收补员脉冲。原料来自 terminal（Z/K/U/L 均在 5K+）。
+       */
+      labResumeStorage: 55000,
       /** storage 能量 ≥ 此值时维持大 body 满功率升级（≈ 盈余全喂 controller）。 */
       sustainedStorage: 10000,
+      /**
+       * RCL8 是否继续升级以累计 GCL。
+       *
+       * Screeps 中 RCL8 房间的 controller 仍接受 upgrade，能量按 1:1 计入 GCL 进度，
+       * 是扩大房间上限的唯一增长通道。旧实现按「RCL8 满级后升级零收益」直接停供
+       * （demand 停孵 + upgrader gate 停烧 + controller link 目标 0），把这条通道关死。
+       *
+       * 开启后：RCL8 与 RCL<8 共用 storage 水位分级供能；引擎 15 energy/tick 上限
+       * 由 maxWorkParts 折算成 upgrader 编制上限（15W body → 1 只），不会过量占人。
+       * 关闭后回到旧行为（仅降级风险时保级小水位）。
+       */
+      gclUpgrade: true,
       /** RCL8 时引擎硬限制（15 energy/tick），RCL<8 时无引擎上限。
        * 此值仅在 RCL8 时生效，用于匹配引擎硬限制；RCL<8 时不限速——
        * upgrader 数量由 storage 水位 + economyPressure 驱动的 demand 逻辑自然调节。
@@ -589,8 +644,24 @@ export const CONFIG = {
     },
     /** Link 传输参数。 */
     link: {
-      /** source link 发起传输的最小能量阈值（P1-4：攒够再发，避免小额传输占冷却致 source link 溢出）。 */
-      minTransfer: 400,
+      /** source link 发起传输的最小能量阈值（P1-4：攒够再发，避免小额传输占冷却致 source link 溢出）。
+       * Phase 1：400 → 300。W8N3 两个 source link 实测停在 300，低于 400 永不发；
+       * 对 300 能量 + 3% 损耗 + cooldown=距离（22/23）仍是正收益，且能补 ~20 e/t 给 controller link。 */
+      minTransfer: 300,
+      /** source→storage 的最小目标空闲量：storage link 只剩 1-2 格时不再发小额传输。
+       *  私服 link 每 tick 只能发一次、发后还有 3-14 tick cooldown —— 用一次冷却换 1-2 单位
+       *  到账是纯亏损，也是 storage link 常年 798/799 的放大器。200 保证每次传输有实际意义。 */
+      storageSinkMinFree: 200,
+      /** P0-C：controller link 缺口小于此值时，不再用「喂升级链」为由抑制 hauler 扩编。
+       *  controller 缺 1-399 能量属于正常补给窗口，storage link 的积压应正常计入运力需求；
+       *  只有缺口 ≥400（真正的供能不足）时才让 hauler 编制让位。 */
+      controllerFeedSuppressFree: 400,
+      /** distributor 灌 storage link（controller 补给链）的最低现金池裕度。
+       *  现金池缺口（energyCapacityAvailable - energyAvailable）≥ 本值时，
+       *  distributor 必须优先填 spawn/extension，不得抽一只去灌 storage link —
+       *  否则 5000 容量的 ext 长期只有 40–50%，大 body（4200）请求被 degradeGateClosed
+       *  卡死（线上 W8N3 累计 105,795 次）。ext 接近满后才允许给升级链留一只。 */
+      distributorLinkMinCashGap: 2000,
       /** link 角色分类的锚定半径（Chebyshev）：source／controller 用此值。
        * 取 2：harvester 站 container（贴 source）上仍能 range1 够到隔一格的 link，
        * 故 source link 放 range≤2 内均可被灌能。
@@ -705,6 +776,14 @@ export const CONFIG = {
      * 不灌血必死于首个衰减周期，塌毁后重建又 1 hit，形成「建了就塌」死循环。
      * 低于此线由 repairFreshRampart 无门禁急救，灌到 10k ≈ 3300 tick 存活余量。 */
     rampartBootstrapHits: 10_000,
+    /**
+     * Phase D：修墙闸恢复线。和平期 storage 必须回到此值才允许 creep 维修 wall/rampart。
+     *
+     * 为什么单独一条且远高于升级/lab：RCL8 的 perimeter 目标是 1,000 万 hits，
+     * 118 个 rampart 全在目标线以下 ⇒ 一旦开门就是 16 e/t 的无底洞，且**没有任何
+     * 直接的 RCL/GCL 收益**。旧实现与升级共用 100K 闩锁，导致「升级刚恢复就被修墙吃掉」。
+     */
+    fortifyResumeStorage: 300_000,
     /** 受袭记忆窗口（tick）：lastHostileAt 距今小于此值视为受袭姿态。 */
     siegeMemoryTicks: 10000,
     /** R683：min-cut 割集被当前塔火力覆盖的最低比例。低于此值不建整房墙——
@@ -729,7 +808,10 @@ export const CONFIG = {
   roles: {
     harvester: { minCount: 2, maxCount: 4 },
     hauler: { minCount: 2, maxCount: 6 },
-    distributor: { minCount: 1, maxCount: 3 },
+    // 2026-11-08：3 → 4。W8N3 实测 50 个 extension（容量 5000）+ 2 spawn 的现金池
+    // 长期只有 378–2209，大 body（upgrader 4200）请求反复 degradeGateClosed（累计 106k）。
+    // 3 只 6C6M（carry 300）= 900/趟，填满 5600 需 6 趟；4 只把并行运力提到 1200/趟。
+    distributor: { minCount: 1, maxCount: 4 },
     upgrader: { minCount: 1, maxCount: 3 },
     builder: { minCount: 1, maxCount: 4 },
     worker: { minCount: 0, maxCount: 2 },
@@ -750,7 +832,10 @@ export const CONFIG = {
     mineralMiner: { minCount: 0, maxCount: 1 },
     // 化合物 lab 供料专职（见 roles/lab-tender.ts：取料相在 distributor/hauler 上都结构性
     // 不可达）。同时是 recyclePass 的在役白名单 — 漏配会让它孵出即被判废弃回收。
-    labTender: { minCount: 0, maxCount: 1 },
+    // P0-D（2026-11-08 实测）：单只 6C6M（300/趟）要同时服务 2 个反应 trio 的
+    // ZK/UL/H 装料，GH 产出被压在 +5/1700 拍、boost 阈值 130 永远差一截。
+    // 提到 2 只：两只并行覆盖两个 trio，载重 600/趟，CPU 增量 <0.1/tick。
+    labTender: { minCount: 0, maxCount: 2 },
     // 跨房远征攻击者：仅 war 姿态时由 war-planner 孵化（CONFIG.roles 兼任
     // recyclePass「在役角色」白名单 — 漏配会让攻击者孵出即被判废弃回收）。
     // maxCount 8 覆盖 war 编队与 PB 野采编队（4）并行峰值。
@@ -838,6 +923,10 @@ export const CONFIG = {
      * 单房日常 boost 消费低频（creep 存活 1500 tick，换代才需新 boost），
      * 300 够一个换代周期 + 余量。超出部分卖出变现，防止 lab output 积压死锁。 */
     dailyStockpile: 300,
+    /** 反应原料保留量：化合物库存低于「本值 + 单次强化用量(30)」时不发起 boost，
+     * 避免把反应链最后的原料吃掉导致下一批反应断料。
+     * P0-C：从 DEFAULT_BOOST_POLICY 硬编码 100 提升为可调配置（行为值不变）。 */
+    reserveAmount: 100,
   },
 
   debug: {
@@ -971,6 +1060,11 @@ export const CONFIG = {
      * 收入天花板的唯一杠杆。8000 仍留一层缓冲防真嫩房过早分兵。 */
     roomMinRcl: 5,
     roomMinStorage: 8000,
+    /** Phase 2.5：低储期暂停远矿「首孵/扩编」的水位线（替换请求不受此限）。
+     * 与 upgrade.richStorageResume 同一刻度：storage 跌破 50K 后，先回血到 100K
+     * 再投资新远矿点位，避免新增编制把刚恢复的库存再次抽干（W8N3/W7N2 审计：
+     * 47–49K 时 storage 持续净失血）。现役编队照常工作，收入不断。 */
+    expansionMinStorage: 100000,
     /** 远矿房威胁的危险冷却（tick）— 冷却期内不作为新远矿/扩张候选。 */
     dangerCooldown: 2000,
     /** 普通威胁的失明保持窗口（tick，RM-2）：有视野见威胁后，失明期间维持威胁态
@@ -1062,6 +1156,19 @@ export const CONFIG = {
     interval: 10,
     /** battery 单批配方能量（COMMODITIES battery: 600 energy → 50 battery）。 */
     batchEnergy: 600,
+    /**
+     * battery 解压目标水位（storage 能量）：低于此值就把 battery 还原成能量。
+     *
+     * 依据：battery **不是**常规能源储备，而是「storage 满仓时防止采集溢出」的容器
+     * （压缩 600 energy → 50 battery，解压 50 battery → 500 energy，往返损耗 16.7%、
+     * 存储密度 10 倍）。storage 不满时它既不产生收益又占用 21% 柜位 —— W8N3 实测
+     * 210,850 battery 在 55K storage 里躺了数小时，而解压触发线是 5,000（危机线），
+     * 中间的 5K–900K 全是死区。
+     *
+     * 取 300K = `fortifyResumeStorage`：storage 到 30 万才算「宽裕」（修墙才开闸），
+     * 在那之下 battery 应该全部回流成能量，去支撑升级 / lab / 基础防护。
+     */
+    decompressStorageTarget: 300_000,
     /** distributor 为 factory 维持的能量库存目标（5 批缓冲）。 */
     stockTarget: 3000,
     /** commodity 采购需求的价格闸（比例，非绝对价）：只有

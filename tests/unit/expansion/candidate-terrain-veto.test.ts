@@ -18,10 +18,16 @@ describe("buildCandidate — R651 选点前置否决", () => {
     expect(c.vetoReason).toMatch(/terrain-walls|anchor-far-ctrl/);
   });
 
-  it("墙占比 0.31 ⇒ 拒（R662 阈值收紧到 0.3）", () => {
-    const c = build({ wallRatio: 0.31, anchorToController: 10, bestAnchorScore: 15 });
+  it("墙占比 0.51 ⇒ 拒（2026-11-08 阈值放宽到 0.5）", () => {
+    const c = build({ wallRatio: 0.51, anchorToController: 10, bestAnchorScore: 15 });
     expect(c.status).toBe("REJECTED");
     expect(c.vetoReason).toContain("terrain-walls");
+  });
+
+  it("墙占比 0.36 ⇒ 放行（私服 W8N2 实测墙比，旧 0.3 阈值会误杀 H 矿房）", () => {
+    const c = build({ wallRatio: 0.36, anchorToController: 10, bestAnchorScore: 15 });
+    expect(c.status).toBe("DISCOVERED");
+    expect(c.vetoReason).toBeUndefined();
   });
 
   it("锚点周围可放率 0.8 ⇒ 拒；0.9 ⇒ 放行（R662）", () => {

@@ -1,7 +1,10 @@
 /** Factory Manager */
 import { CONFIG } from "../../config";
 import { shouldProcessPower, PROCESS_POWER_ENERGY } from "../../domain/economy/power-processing";
-import { shouldDecompressBattery } from "../../domain/economy/battery-decompression";
+import {
+  shouldDecompressBattery,
+  DECOMPRESS_BATCH_ENERGY,
+} from "../../domain/economy/battery-decompression";
 import {
   missingComponents,
   selectCommodityTarget,
@@ -18,6 +21,8 @@ import type { ProcurementDemand } from "../../kernel/global-cache";
 import { collectFullInventory } from "../../domain/industry/inventory";
 import { commodityBatchRoi } from "../../domain/industry/market-pricing";
 import { expandCommodityDemands } from "../../domain/industry/procurement";
+import { getResourceContract } from "../../domain/economy/resource-contract";
+import { marketOutletState, type MarketOutletState } from "../../domain/industry/market-outlet";
 
 export const factoryManagerSystem: System = {
   name: "factory-manager",
@@ -64,6 +69,8 @@ export const factoryManagerSystem: System = {
       // 能量应流向 upgrade/build，压缩的 1/6 折损划不来。
       if (Memory.rooms[snapshot.roomName]?.storageNearFull !== true) continue;
       if (factory.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.factory.batchEnergy) continue;
+      // Phase C 停止阀：battery 总量达到硬上限，或超过软上限且无真实出口 → 停止压缩。
+      if (!batteryCompressionAllowed(snapshot)) continue;
       const result = factory.produce(RESOURCE_BATTERY);
       if (result === OK) {
         bumpEnergyCounter(
@@ -115,9 +122,8 @@ function tryProduceCommodity(
     { prices: g.marketPrices?.prices ?? {}, margin: CONFIG.factory.commodityRoiMargin },
   );
   // 目标缓存：distributor 的 stockFactoryComponents 消费（undefined 时清锚）。
-  if (target) g.factoryTargets[snapshot.roomName] = target.resourceType;
-  else delete g.factoryTargets[snapshot.roomName];
   if (!target) {
+    delete g.factoryTargets[snapshot.roomName];
     // 选不出可行目标 ≠ 不该报缺口。旧实现在这里直接 return，于是
     // 「缺料 ⇒ 选不出目标 ⇒ 永不发布需求 ⇒ 贸易侧永远不知道要买什么 ⇒ 永远缺料」
     // 是一条静默自锁（与 16.3k 拍 0 交付同族）。现在按「期望目标」上报缺口，
@@ -125,6 +131,13 @@ function tryProduceCommodity(
     publishDesiredCommodityDemands(snapshot, recipes, ctx);
     return;
   }
+  // Phase C 停止阀：产物无真实出口或库存已达高水位 → 停止生产并清掉补料锚。
+  // 清锚是必需项：否则 distributor 仍会把组件搬进 factory，原料变成新的死库存。
+  if (!commodityCanProduce(snapshot, target.resourceType)) {
+    delete g.factoryTargets[snapshot.roomName];
+    return;
+  }
+  g.factoryTargets[snapshot.roomName] = target.resourceType;
 
   // ── 阶段 1：发布 commodity 原料缺口需求 ──
   // V1 边界（登记取舍）不变：只为凑料搬 storage 存量，不主动市场买入 —
@@ -165,6 +178,70 @@ function produceEnergyCost(resourceType: string): number {
   return table?.[resourceType]?.components?.energy ?? 0;
 }
 
+/** 行情缓存与 terminal-manager 同窗口视为新鲜。 */
+const MARKET_CACHE_TTL = CONFIG.market.interval + 50;
+
+/** storage + terminal + factory 的资源合计（产物库存口径）。 */
+function totalStoredResource(snapshot: RoomSnapshot, resource: string): number {
+  let total = 0;
+  for (const store of [
+    snapshot.storage?.store,
+    snapshot.terminal?.store,
+    snapshot.factory?.store,
+  ]) {
+    if (!store) continue;
+    const amount = (store as unknown as Record<string, number>)[resource];
+    if (typeof amount === "number") total += amount;
+  }
+  return total;
+}
+
+/** 本房是否有该资源的跨房出口票（援助/计划驱动 send）。 */
+function hasExportTicket(roomName: string, resource: string): boolean {
+  const needs = globalCache().exportNeeds?.byRoom[roomName];
+  if (!needs) return false;
+  return needs.some(need => need.resource === resource && need.deadline > Game.time);
+}
+
+/**
+ * 产物出口状态。跨房援助票优先（它不依赖市场），其次市场买盘。
+ * 缓存缺失/过期 → unknown；调用方只在明确 no 时停止生产（判不了 ≠ 该拦）。
+ */
+function commodityOutletState(roomName: string, resource: string): MarketOutletState {
+  if (hasExportTicket(roomName, resource)) return "yes";
+  return marketOutletState(resource, globalCache().marketOrderCache, Game.time, MARKET_CACHE_TTL);
+}
+
+/**
+ * commodity 生产前置闸（Phase C）：
+ * - 产物库存达到高水位 → 停止（避免无上限堆积）；
+ * - 有明确「无买盘且无援助票」→ 停止，并清掉补料锚，防止继续把原料搬进 factory。
+ */
+function commodityCanProduce(snapshot: RoomSnapshot, resource: string): boolean {
+  const contract = getResourceContract(resource);
+  if (totalStoredResource(snapshot, resource) >= contract.highWater) return false;
+  return commodityOutletState(snapshot.roomName, resource) !== "no";
+}
+
+/**
+ * battery 压缩前置闸（Phase C）：
+ * - 总量 ≥ 硬上限（150K）→ 无条件停止压缩；
+ * - 总量 ≥ 软上限（100K）且明确无卖出/援助票 → 停止。
+ * 缓存判不了时不拦，保持旧行为。
+ */
+function batteryCompressionAllowed(snapshot: RoomSnapshot): boolean {
+  const contract = getResourceContract(RESOURCE_BATTERY);
+  const total = totalStoredResource(snapshot, RESOURCE_BATTERY);
+  if (total >= contract.hardCap) return false;
+  if (
+    total >= contract.highWater &&
+    commodityOutletState(snapshot.roomName, RESOURCE_BATTERY) === "no"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * 「期望目标」的原料缺口上报（纯决策的外层包装）。
  * 期望目标 = 等级允许的最高档配方（`recipes` 已由 collectRecipes 按等级筛过并梯度降序），
@@ -178,6 +255,9 @@ function publishDesiredCommodityDemands(
 ): void {
   const desired = recipes[0];
   if (!desired) return;
+  // Phase C 停止阀：期望产物本身没有出口/库存已满 → 不发布采购需求。
+  // 否则会花钱把原料买进来，产成一个卖不掉的成品（把死库存从原料换成成品）。
+  if (!commodityCanProduce(snapshot, desired.resourceType)) return;
 
   const inventory = collectFullInventory(snapshot);
   const missing: Record<string, number> = {};
@@ -266,13 +346,16 @@ function toStockView(store: Record<string, number>): StockView {
   return view;
 }
 
+/** 解压期间 factory 内能量的水位阀（超过则暂停解压，等回收链搬运）。 */
+const DECOMPRESS_FACTORY_ENERGY_CAP = 20_000;
+
 /**
- * battery 解压回能：storage 能量危机时，把 factory 内的 battery 逆向生产为能量。
-
- * 官方配方（COMMODITIES[RESOURCE_ENERGY]）：5 battery → 50 energy，cooldown 10。
+ * battery 解压回能：storage 未达目标水位时，把 factory 内的 battery 逆向生产为能量。
+ *
+ * 官方配方（`@screeps/common/lib/constants.js`）：**50 battery → 500 energy**，cooldown 10。
  * 产出能量留在 factory.store 内 — distributor 需将其搬到 storage 供 spawn 使用。
- * 与 reclaimFactoryOutput 配合：distributor 在 crisis 时优先搬 factory 能量到 storage。
-
+ * 与 reclaimFactoryOutput 配合：storage 低于目标水位时优先搬 factory 能量到 storage。
+ *
  * 返回 true = 已执行 produce（消耗 factory 本 tick 的 produce 窗口，跳过 commodity/压缩）。
  * 返回 false = 条件不满足，继续后续 commodity/压缩链。
  */
@@ -284,10 +367,21 @@ function tryDecompressBattery(snapshot: RoomSnapshot, factory: StructureFactory)
       storageEnergy,
       batteryInFactory,
       factoryCooldown: factory.cooldown,
-      energyCrisisFloor: CONFIG.energy.energyBuyFloor,
+      storageTarget: CONFIG.factory.decompressStorageTarget,
     })
   )
     return false;
+
+  // 产出 500 energy 需要 factory 有空间 —— 满仓时 produce 返 ERR_FULL，先让回收链搬运。
+  if (factory.store.getFreeCapacity(RESOURCE_ENERGY) < DECOMPRESS_BATCH_ENERGY) return false;
+
+  // 回收链运力阀：解压 50 e/t 的注入速率远超 distributor 的搬运能力
+  // （W8N3 实测 3 只 8C ≈ 1,200/趟），factory energy 一度堆到 19.9K。
+  // 超过此水位就暂停解压，等 reclaimFactoryOutput 把能量搬回 storage 再继续 ——
+  // 否则堆到容量 50K 后 produce 返 ERR_FULL，整条解压链静默停摆。
+  if (factory.store.getUsedCapacity(RESOURCE_ENERGY) >= DECOMPRESS_FACTORY_ENERGY_CAP) {
+    return false;
+  }
 
   factory.produce(RESOURCE_ENERGY);
   return true;

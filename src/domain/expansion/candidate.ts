@@ -176,7 +176,10 @@ export function buildCandidate(
   else if (released.has(roomName)) vetoReason = "recently-released";
   // R651 选点前置：地形/布局在 claim **之前** 就用同一套锚点尺否决。
   // W38S58 实测反例：wallRatio 0.50、anchorToController 28 ⇒ 必须在立项前被拒。
-  else if (intel.wallRatio !== undefined && intel.wallRatio > 0.3)
+  // 2026-11-08 放宽 0.3→0.5：私服 W8N3 周边 10 个候选的墙比集中在 0.32–0.49，
+  // 0.3 会把 U/L/H/O 矿房全部挡死（原料扩张长期为 0）；0.5 仍拒绝 0.62 的 Z 房，
+  // 且 anchorPlaceableRatio < 0.85 等布局门继续兜底。
+  else if (intel.wallRatio !== undefined && intel.wallRatio > 0.5)
     vetoReason = `terrain-walls=${intel.wallRatio.toFixed(2)}`;
   else if (intel.anchorToController !== undefined && intel.anchorToController > 25)
     vetoReason = `anchor-far-ctrl=${intel.anchorToController}`;
@@ -213,6 +216,59 @@ export function buildCandidate(
     discoveredAt: tick,
     vetoReason,
   };
+}
+
+/**
+ * 用候选自身已存的 terrain/controller 字段重算硬否决（纯函数）。
+ *
+ * 为什么需要：Intel 编译期不刷新时，候选会被原样保留（`discovery` 的保留分支），
+ * 而**否决规则本身可能已经变了**（阈值调整、myUsername 修复）——
+ * 线上实证 2026-11-08：wallRatio 阈值 0.3→0.5 后 W6N1(0.32) 仍顶着旧
+ * `terrain-walls=0.32`，W7N4/W7N6 因 Intel 未刷新永远停在旧 veto。
+ * 本函数让"保留"也走一遍当前规则，只依赖候选已有字段。
+ */
+export function revalidateCandidate(
+  candidate: ExpansionCandidateV2,
+  ownedRoomNames: readonly string[],
+  releasedRoomNames: readonly string[] = [],
+  myUsername?: string,
+): void {
+  const owned = new Set(ownedRoomNames);
+  const released = new Set(releasedRoomNames);
+  const t = candidate.terrain;
+  const ctrl = candidate.controller;
+  const isHostileReserved =
+    ctrl.reservedBy !== undefined &&
+    ctrl.reservedBy !== myUsername &&
+    ctrl.reservedBy !== "Invader";
+
+  let vetoReason: string | undefined;
+  if (candidate.kind !== "normal") vetoReason = `kind=${candidate.kind}`;
+  else if (candidate.roomStatus !== "normal") vetoReason = `status=${candidate.roomStatus}`;
+  else if (ctrl.hasOwner && !ctrl.isMine) vetoReason = `owner=${ctrl.owner}`;
+  else if (isHostileReserved) vetoReason = `reservedBy=${ctrl.reservedBy}`;
+  else if (owned.has(candidate.roomName)) vetoReason = "already-owned";
+  else if (released.has(candidate.roomName)) vetoReason = "recently-released";
+  else if (t.wallRatio !== undefined && t.wallRatio > 0.5)
+    vetoReason = `terrain-walls=${t.wallRatio.toFixed(2)}`;
+  else if (t.anchorToController !== undefined && t.anchorToController > 25)
+    vetoReason = `anchor-far-ctrl=${t.anchorToController}`;
+  else if (t.bestAnchorScore !== undefined && t.bestAnchorScore < 0)
+    vetoReason = `anchor-score=${t.bestAnchorScore.toFixed(1)}`;
+  else if (t.leftoverSpawnToAnchor !== undefined && t.leftoverSpawnToAnchor > 12)
+    vetoReason = `leftover-spawn-far=${t.leftoverSpawnToAnchor}`;
+  else if (t.anchorPlaceableRatio !== undefined && t.anchorPlaceableRatio < 0.85)
+    vetoReason = `anchor-fit=${t.anchorPlaceableRatio.toFixed(2)}`;
+
+  candidate.vetoReason = vetoReason;
+  if (vetoReason) {
+    candidate.status = "REJECTED";
+  } else if (candidate.sourceCount === undefined) {
+    candidate.status = "UNKNOWN";
+  } else if (candidate.status === "REJECTED") {
+    // 旧规则否掉的候选在新规则下通过 ⇒ 退回可评估态，由 scoreCandidates 重新打分。
+    candidate.status = "DISCOVERED";
+  }
 }
 
 /**
