@@ -7,7 +7,9 @@ import type { EmpireRoomRole } from "./empire-role";
 /**
  * Economy 查询结果接口（镜像 systems/economy.ts EconomyQuery）。
  * domain 层不能 import systems 层（合规测试 R1），故在此定义结构等效类型。
- * 系统侧薄壳调用 buildRoomEconomicProfile 时传入 EconomyQuery（结构兼容）。
+ * 系统侧薄壳调用 buildRoomEconomicProfile 时**整个 EconomyQuery 直接传入**（结构兼容）：
+ * 不许在调用点重抄一份字段清单——两处各抄过一份，`capexFlow` 落地时都没跟上，
+ * 线上 `kernel.brakeNetFlow` 因此与 `kernel.gateNetFlow` 逐位相同（丁静默失效）。
  */
 export interface EconomyQueryInput {
   tick: number;

@@ -1,7 +1,7 @@
 /** Agenda Manager 系统 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache, querySquad } from "../../kernel/global-cache";
-import { queryEconomy, type EconomyQuery } from "../room/economy";
+import { queryEconomy } from "../room/economy";
 import {
   buildRoomEconomicProfile,
   canExportEnergy,
@@ -409,20 +409,9 @@ export const agendaManagerSystem: System = {
       const roomMem = Memory.rooms[roomName] as RoomEconomicMemory | undefined;
       if (!roomMem) continue;
 
-      const economyQuery: EconomyQuery | undefined = queryEconomy(roomName);
-      const economyInput = economyQuery
-        ? {
-            tick: economyQuery.tick,
-            netFlow: economyQuery.netFlow,
-            contractReserve: economyQuery.contractReserve,
-            riskBuffer: economyQuery.riskBuffer,
-            drift: economyQuery.drift,
-            estimatedIncome: economyQuery.estimatedIncome,
-            efficiency: economyQuery.efficiency,
-          }
-        : undefined;
-
-      const profile = buildRoomEconomicProfile(snapshot, roomMem, economyInput, ctx.tick);
+      // 同 empire-economy 步 1+3：整个查询对象过桥，字段清单不在这里抄（历史上抄漏
+      // `capexFlow` 让丁在线上静默失效）。
+      const profile = buildRoomEconomicProfile(snapshot, roomMem, queryEconomy(roomName), ctx.tick);
       profiles.push(profile);
     }
 
