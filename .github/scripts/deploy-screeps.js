@@ -4,8 +4,8 @@
  * 取代「push 到 screeps 分支 + Screeps 端手动/绑定 pull」的半自动链路：
  * CI build 完直接调用官方 code API，代码即时进游戏，无需任何手动同步。
  *
- * 用 Node 内置 https/http，不引入 screeps-api 依赖 —— 与 deploy job 的
- * `npm ci --ignore-scripts` 配合，整条部署链完全避开 isolated-vm 原生编译。
+ * 用 Node 内置 https/http，不引入 screeps-api 依赖 —— deploy job 的 npm ci
+ * 无需任何额外部署包，部署零依赖。
  *
  * 配置（环境变量，CI 中来自 GitHub Secrets）：
  *   SCREEPS_TOKEN     官服 API token（screeps.com/a/#!/account/auth）
@@ -18,10 +18,10 @@
  */
 const fs = require("fs");
 const path = require("path");
-require("../load-env"); // 本地手动部署时从 tools/.env 读取 token；CI 中 env 已由 workflow 注入
-// 部署闸门（R274 加，成因＝本仓一次把"只读核对线上 sha"敲成 `node tools/official/deploy-screeps.js --check-code`，
+require("./load-env"); // CI 中 env 已由 workflow 注入（本目录无 .env 时 no-op）；本地手动部署走 tmp 双胞胎副本（读 tmp/tools/.env）
+// 部署闸门（R274 加，成因＝本仓一次把"只读核对线上 sha"敲成 `node .github/scripts/deploy-screeps.js --check-code`，
 // 而本脚本历史上零 argv 分支 ⇒ 任何一次调用都是真实上传，等价于未经批复的部署）。
-// 规矩：本脚本唯一的职责是上传。只读核对一律走 tools/official/check-code.mjs。
+// 规矩：本脚本唯一的职责是上传。只读核对一律走 tmp/tools/official/check-code.mjs。
 //   · 任何未知参数 ⇒ 拒绝（不猜意图，绝不把"看起来像 dry-run 的参数"当 dry-run）
 //   · 非 CI 环境 ⇒ 必须显式 SCREEPS_DEPLOY_CONFIRM=1 或参数 --confirm-deploy
 //   · CI（GITHUB_ACTIONS=true，workflow 里无参数调用）⇒ 行为逐字不变
@@ -31,7 +31,7 @@ require("../load-env"); // 本地手动部署时从 tools/.env 读取 token；CI
   if (unknown.length > 0) {
     console.error(
       "[Deploy] ✗ 拒绝执行：本脚本无只读模式，未知参数 " + JSON.stringify(unknown) +
-      " 会被当作上传指令。只读核对请用 tools/official/check-code.mjs；" +
+      " 会被当作上传指令。只读核对请用 tmp/tools/official/check-code.mjs；" +
       "确要部署请显式加 --confirm-deploy 或设 SCREEPS_DEPLOY_CONFIRM=1。"
     );
     process.exit(1);
@@ -42,8 +42,8 @@ require("../load-env"); // 本地手动部署时从 tools/.env 读取 token；CI
   if (!confirmed) {
     console.error(
       "[Deploy] ✗ 拒绝执行：未经确认的部署调用（安全内核第 3 条：未经批复不部署）。\n" +
-      "  确认部署：SCREEPS_DEPLOY_CONFIRM=1 node tools/official/deploy-screeps.js\n" +
-      "  只想看线上跑的是哪一版：node tools/official/check-code.mjs"
+      "  确认部署：SCREEPS_DEPLOY_CONFIRM=1 node .github/scripts/deploy-screeps.js\n" +
+      "  只想看线上跑的是哪一版：node tmp/tools/official/check-code.mjs"
     );
     process.exit(1);
   }
@@ -54,13 +54,15 @@ require("../load-env"); // 本地手动部署时从 tools/.env 读取 token；CI
 
 const token = process.env.SCREEPS_TOKEN;
 const branch = process.env.SCREEPS_BRANCH || "default";
-const distFile = process.env.DIST_FILE || path.join(__dirname, "../../", "dist", "main.js");
+// 2026-10-31 修复（R672b 实测教训）：__dirname/../../ 锚在脚本搬迁后会落到陈旧 dist 副本，
+// 部署返回 ✓ 线上却还是旧代码。改以 cwd 为锚（CI 与本地都是仓库根执行），DIST_FILE 可覆盖。
+const distFile = process.env.DIST_FILE || path.join(process.cwd(), "dist", "main.js");
 
 if (!token) {
   console.error(
     "[Deploy] ✗ SCREEPS_TOKEN 未设置 — 无可用部署路径。\n" +
     "  CI：在仓库 Settings → Secrets and variables → Actions 添加 SCREEPS_TOKEN。\n" +
-    "  本地：填入 tools/.env 的 SCREEPS_TOKEN。",
+    "  本地手动部署：走 tmp/tools/official/deploy-screeps.js（读 tmp/tools/.env）。",
   );
   process.exit(1);
 }

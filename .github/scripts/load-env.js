@@ -1,5 +1,5 @@
 /**
- * 从 tools/.env 加载环境变量到 process.env（本地手动部署时使用）。
+ * 从本目录 .env 加载环境变量到 process.env（本地手动部署时使用）。
  * CI 中环境变量已由 GitHub Actions workflow 直接注入，此文件为 no-op。
  */
 const fs = require("fs");

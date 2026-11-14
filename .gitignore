@@ -38,8 +38,6 @@ coverage/
 .screeps.json
 
 # Screeps telemetry & export data (generated, not source)
-tools/
-scripts/
 data/
 /server
 
@@ -51,5 +49,4 @@ data/
 *.bak
 *.orig
 /tmp
-/docker
 /audit

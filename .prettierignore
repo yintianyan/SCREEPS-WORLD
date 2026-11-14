@@ -1,10 +1,9 @@
 dist/
 node_modules/
 tmp/
-tools/
-scripts/
 coverage/
 .husky/
+.github/scripts/
 *.config.mjs
 *.config.ts
 package-lock.json
