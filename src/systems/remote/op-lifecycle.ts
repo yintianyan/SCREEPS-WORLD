@@ -423,6 +423,37 @@ export function roomReadyForNewRemote(
   return storageEnergy >= CONFIG.remote.roomMinStorage;
 }
 
+/**
+ * 新开远矿的经济前提（与 spawn-manager 的首孵贫困闸同一把尺）。
+ *
+ * `roomMinStorage`（8K）只回答“有没有一点缓冲”，而首孵/扩编要过
+ * `expansionMinStorage`（100K）。若开点只看 8K，会出现「刚开的点永远孵不出人 →
+ * 空编队超时废弃 → 立刻重开」的 churn（私服 W9N4/W8N5 实测每 3,000 拍一轮）。
+ */
+export function remoteExpansionAffordable(storageEnergy: number): boolean {
+  return storageEnergy >= CONFIG.remote.expansionMinStorage;
+}
+
+/**
+ * 经济贫困期是否允许重开某条远矿 op —— 只认「确需清核」的救援线。
+ *
+ * 判定顺序：
+ * 1. op 上有 `needCoreClear`（视野已确认次级核心）→ 允许重开，驱动 clearer；
+ * 2. 否则要求 intel 仍显示 Invader 预定 — 覆盖 W37S57「从未见过核心、但邻房全被
+ *    Invader 预定」的探测路径（不重开就永远没有 active op 去获得视野/派 clearer）；
+ * 3. 若已确认核心被拆（`coreClearedAt` 存在），则不再按残留预定重开——核心拆除后
+ *    预定会残留到 endTime（私服 W7N3 实测 ~4,900 tick），否则会白孵 clearer 去空房，
+ *    再走一轮「1500t 零编队废弃 → 立即重开」。
+ */
+export function coreClearReopenAllowed(
+  op: { needCoreClear?: boolean; coreClearedAt?: number } | undefined,
+  reservedByInvader: boolean,
+): boolean {
+  if (op?.needCoreClear === true) return true;
+  if (!reservedByInvader) return false;
+  return op?.coreClearedAt === undefined;
+}
+
 /** 统计 active 状态的运营数。 */
 export function countActiveOps(remoteOps: Readonly<Record<string, RemoteOp>>): number {
   let count = 0;
@@ -474,8 +505,23 @@ export function censusStalledOps(
     if (op.state !== "active") continue;
     const entry = byTarget.get(roomName);
     if (!entry || entry.total === 0) {
-      // 编队归零（新开点孵化中 / 换代替换窗口）— 不计空转。
-      if (op.stallSince !== undefined) op.stallSince = undefined;
+      // 新开点孵化中 / 换代替换窗口：先给一个宽限窗口，不立即判死。
+      const established = tick - (op.stateSince ?? op.createdAt) > CONFIG.remote.stallAbandonTicks;
+      if (!established) {
+        if (op.stallSince !== undefined) op.stallSince = undefined;
+        continue;
+      }
+      // 已建立却长期 0 编队（全员死亡/孵化被贫困闸挡住）——旧实现直接清零计时，
+      // 于是 active op 永远不回收入也不被废弃，只留下一条僵尸线和一队永远刷新的请求。
+      if (op.stallSince === undefined) {
+        op.stallSince = tick;
+      } else if (tick - op.stallSince > CONFIG.remote.stallAbandonTicks) {
+        abandonOp(op, homeRoom, roomName, REMOTE_ABANDON.Stalled, tick, [
+          0,
+          tick - op.stallSince,
+          CONFIG.remote.stallAbandonTicks,
+        ]);
+      }
       continue;
     }
     if (entry.stalled === entry.total) {

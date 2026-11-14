@@ -100,9 +100,151 @@ export function decideWarReactionTarget(
   stockpileTarget: number,
   compounds: readonly Compound[] = ["XUH2O", "XLHO2"],
 ): Compound | undefined {
-  if (!warActive) return undefined;
+  return decideCombatReactionTarget(warActive, inventory, stockpileTarget, compounds);
+}
+
+/**
+ * combat 前馈反应目标：war 姿态与 PB 野采任务共用同一化合物链
+ * （attacker XUH2O → healer XLHO2）。PB 编队的 killWindow 由 creep 寿命
+ * 反推后事实上以 boost 为前提（裸 body 满足不了窗口，见 power-farm.ts），
+ * 所以 PB 任务存在期间必须与 war 一样前馈备产，而不是等新生 creep 的
+ * boost 请求 —— 请求驱动滞后数百 tick，编队等不起。
+ */
+export function decideCombatReactionTarget(
+  active: boolean,
+  inventory: Readonly<Record<string, number>>,
+  stockpileTarget: number,
+  compounds: readonly Compound[] = ["XUH2O", "XLHO2"],
+): Compound | undefined {
+  if (!active) return undefined;
   for (const compound of compounds) {
     if ((inventory[compound] ?? 0) < stockpileTarget) return compound;
+  }
+  return undefined;
+}
+
+/**
+ * PB 编队 healer 的 lab 分配优先级增量（healer 25 + 10 = 35 > attacker 30）。
+ * PB 孵化序是 healer 先行（先到 PB 房等编队），lab 必须同序供给 —
+ * war 的 attacker-first 口径会让后孵的 attacker 永远等不到 lab。
+ */
+export const PB_HEALER_LAB_PRIORITY_BUMP = 10;
+
+/**
+ * PB 编队 boost 驻留的寿命下限（剩余寿命 ≥ 此值时驻留等强化）。
+ * = 驻留上限 800t（1500 − 700）：超龄未强化成员放行出征，由任务超时/
+ * 战损止损兜底 — 不在 home 永久罚站烧寿命，也不无限占住 boost 请求。
+ */
+export const PB_BOOST_HOLD_MIN_TTL = 700;
+
+// ─── PB 编队强化（原子对 + 分层） ───────────────────────────
+
+/**
+ * PB 编队 boost 化合物分档（先 T3 后 T2 兜底）。
+ *
+ * 为什么 PB 允许 T2 而 war 战斗角色不允许：PB 房无塔，反弹伤害与自身 DPS
+ * 成正比 — T2（×3）同样满足寿命反推的击杀窗口（kill 556 ≤ 750）与治疗覆盖
+ * （8×36×4... 288×8 ≥ 900×2），而 T3 需要催化剂 X（私服实证 W8N3 无 X，
+ * XGH2O 链直接断供休眠，XUH2O 同样断供）— T2 只吃 U/H/O 基础矿，供给链
+ * 完全本地。war 的塔下 alpha 伤害必须 ×4 治疗才站得住，那条不降级规则不适用。
+ */
+export const PB_SQUAD_BOOST_TIERS: ReadonlyArray<{
+  attackFactor: number;
+  healFactor: number;
+  attack: Compound;
+  heal: Compound;
+}> = [
+  { attackFactor: 4, healFactor: 4, attack: "XUH2O" as Compound, heal: "XLHO2" as Compound },
+  { attackFactor: 3, healFactor: 3, attack: "UH2O" as Compound, heal: "LHO2" as Compound },
+];
+
+/** 兼容别名（闸门/前馈默认 T3 口径）。 */
+export const PB_SQUAD_COMPOUNDS = PB_SQUAD_BOOST_TIERS[0]!;
+
+/** 任务实际选用的 boost 档位（闸门/前馈/boost 请求三方共用）。 */
+export interface PbBoostTierChoice {
+  attack: Compound;
+  heal: Compound;
+  attackFactor: number;
+  healFactor: number;
+}
+
+/** PB 编队的 boost 备料需求（按规划的部件数 × 30/部件，引擎 boostCreep 消耗）。 */
+export interface PbBoostNeed {
+  attackUnits: number;
+  healUnits: number;
+}
+
+/** 按编队规划计算两种化合物的需求量。 */
+export function pbSquadBoostNeed(
+  attackers: number,
+  attackParts: number,
+  healers: number,
+  healParts: number,
+): PbBoostNeed {
+  return {
+    attackUnits: attackers * attackParts * 30,
+    healUnits: healers * healParts * 30,
+  };
+}
+
+/**
+ * PB boost 库存原子判定：指定化合物对必须同时够量才允许该档位。
+ *
+ * 为什么必须成对：boost 后攻击手 DPS ×N → 反弹也 ×N（引擎 POWER_BANK_HIT_BACK
+ * 按「实际造成伤害」的 50% 回打攻击者本人），治疗若不 ×N，反弹覆盖崩盘，
+ * 攻击手速死；反过来只 boost 治疗则击杀窗口打不进（killTicks 超寿命）—
+ * 两种单边状态都比全裸更糟。任一化合物缺料 → 整体按裸 body 口径（1.0）规划。
+ */
+export function isPbBoostStockSufficient(
+  need: PbBoostNeed,
+  inventory: Readonly<Record<string, number>>,
+  reserveAmount: number,
+  compounds: { attack: Compound; heal: Compound } = PB_SQUAD_COMPOUNDS,
+): boolean {
+  return (
+    (inventory[compounds.attack] ?? 0) - reserveAmount >= need.attackUnits &&
+    (inventory[compounds.heal] ?? 0) - reserveAmount >= need.healUnits
+  );
+}
+
+/**
+ * 分层选档：按 T3 → T2 顺序找第一档「两种化合物都够量」的组合。
+ * 返回 undefined = 全档缺料（前馈按最低可产档位补产）。
+ */
+export function selectPbBoostTier(
+  need: PbBoostNeed,
+  inventory: Readonly<Record<string, number>>,
+  reserveAmount: number,
+): PbBoostTierChoice | undefined {
+  for (const tier of PB_SQUAD_BOOST_TIERS) {
+    if (isPbBoostStockSufficient(need, inventory, reserveAmount, tier)) {
+      return {
+        attack: tier.attack,
+        heal: tier.heal,
+        attackFactor: tier.attackFactor,
+        healFactor: tier.healFactor,
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * PB 前馈目标（纯函数）：按指定化合物对逐个检查缺口。
+ * 缺口顺序 attack → heal（无 DPS 再多奶也无用）。
+ */
+export function decidePbReactionTarget(
+  inventory: Readonly<Record<string, number>>,
+  needAttackUnits: number,
+  needHealUnits: number,
+  compounds: { attack: Compound; heal: Compound } = PB_SQUAD_COMPOUNDS,
+): Compound | undefined {
+  if ((inventory[compounds.attack] ?? 0) < needAttackUnits) {
+    return compounds.attack;
+  }
+  if ((inventory[compounds.heal] ?? 0) < needHealUnits) {
+    return compounds.heal;
   }
   return undefined;
 }
@@ -113,6 +255,14 @@ export interface BoostCreepSummary {
   role: string;
   ticksToLive: number;
   boosted: boolean;
+  /** memory.mission — PB 编队（powerBank）据此抬高 healer 的 lab 分配优先级。 */
+  mission?: string;
+  /**
+   * PB 任务档位化合物（sponsor 任务 boostCompounds 透传）：PB creep 的请求
+   * 按「任务实际档位」选化合物，而不是 policy 的固定 T3 — 防任务用 T2
+   * 而请求仍要 XUH2O 的错位（X 断供时请求永远发不出）。
+   */
+  missionBoost?: { attack: Compound; heal: Compound };
   /** 可选：creep body（传入则按匹配部件数生成请求，缺省回退 5 部件权宜值）。
    * boost 用 unknown — 官方 typings 中 CLAIM 部件为 string|number，此处只做真值判断。 */
   body?: readonly { type: BodyPartConstant; boost?: unknown }[];
@@ -160,8 +310,15 @@ export function evaluateBoostRequests(
 
     if (!isWithinBoostWindow(creep.role, creep.ticksToLive, warBuildPhase)) continue;
 
-    // 降级 boost 选择：首选 T3 不足时自动降级到 T2/T1。
-    const targetCompound = selectBoostCompound(creep.role, storage, policy);
+    // PB 编队按任务档位选化合物（任务契约），其余角色走 policy 降级链。
+    let targetCompound: Compound | undefined;
+    if (creep.mission === "powerBank" && creep.missionBoost) {
+      const mine = creep.role === "healer" ? creep.missionBoost.heal : creep.missionBoost.attack;
+      targetCompound = (storage[mine] ?? 0) - policy.reserveAmount >= 30 ? mine : undefined;
+    } else {
+      // 降级 boost 选择：首选 T3 不足时自动降级到 T2/T1。
+      targetCompound = selectBoostCompound(creep.role, storage, policy);
+    }
     if (!targetCompound) continue;
 
     // 按实际可强化部件数备料（传入 body 时）：备料不足时 lab-system 执行端
@@ -172,7 +329,14 @@ export function evaluateBoostRequests(
       partType && creep.body ? creep.body.filter(p => p.type === partType && !p.boost).length : 0;
     const bodyParts = matchedParts > 0 ? matchedParts : 5;
 
-    const priority = ROLE_BOOST_PRIORITY[creep.role] ?? 0;
+    // PB 编队 healer 抬到 attacker 之上：war 是「先炮后奶」（DPS 优先抢占 lab），
+    // PB 相反 — healer 先孵先强化（healer 先到 PB 房等编队），attacker 后孵；
+    // 若 lab 优先级沿用 war 口径，attacker 出生时 3 个 lab 全被 healer 之外的
+    // 请求占住/换矿中，报到窗口（100t）一过就裸奔出征，反弹 600/t 无覆盖必死。
+    const basePriority = ROLE_BOOST_PRIORITY[creep.role] ?? 0;
+    const priority =
+      basePriority +
+      (creep.mission === "powerBank" && creep.role === "healer" ? PB_HEALER_LAB_PRIORITY_BUMP : 0);
     requests.push({
       creepName: creep.name,
       compound: targetCompound,

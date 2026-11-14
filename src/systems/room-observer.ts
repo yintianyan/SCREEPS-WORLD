@@ -1,10 +1,11 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { summarizeTerrain } from "../domain/layout/terrain-intel";
-import { classifyRoomByName } from "../domain/intel";
+import { classifyRoomByName, highwayRoomNamesInRange } from "../domain/intel";
 import type { ColonyPhase } from "../domain/economy/phase";
 import {
   computeSealedExits,
   scanNeighborIntel,
+  type DepositIntel,
   type IntelSource,
   type RoomIntel,
   type RoomObservation,
@@ -29,6 +30,20 @@ const OBSERVE_INTERVAL = 25;
 /** intel 视野数据的陈旧阈值（tick）— 超过则值得用 observer 刷新。 */
 const INTEL_STALE_AFTER = 2000;
 
+/** observer 射程（线性距离，房数）。
+ * 引擎上限是 10，但实测距离 10 的目标经常拿不到视野（lostVision），
+ * 且 8 房以外的 deposit 通勤成本过高 —— 取 8，把观察预算留给可运营的资源点。 */
+const OBSERVER_RANGE = 8;
+
+/** 已知有 Deposit/Power Bank 的 highway 房刷新周期（tick）：资源点寿命约 5,000，1,500 足够。 */
+const RESOURCE_HIGHWAY_REFRESH_AGE = 1500;
+
+/** 空 highway 房的巡检周期（tick）：用于发现“后来新生成”的 Deposit/Power Bank。 */
+const EMPTY_HIGHWAY_REFRESH_AGE = 3000;
+
+/** 视野失败后的冷却（tick）：避免反复挑中不存在的房，把观察窗口全耗在 lostVision 上。 */
+const OBSERVE_LOST_VISION_COOLDOWN = 5000;
+
 /** 观察交接缓冲上限（条）。超限丢弃最旧——观察可复采，丢弃无损失风险。 */
 const INTEL_HANDOFF_CAP = 128;
 
@@ -42,7 +57,9 @@ const INTEL_HANDOFF_CAP = 128;
  */
 export const roomObserverSystem: System = {
   name: "room-observer",
-  priority: 3 as Priority,
+  // P2：观察是 intelligence（P2 消费者）的上游生产者 —— 同为 P2 可保证
+  // conserve 档（max=P2）下不被饿死；recovery 档仍按既有降级跳过。
+  priority: 2 as Priority,
   interval: 1,
   run(ctx: TickContext): void {
     // 上一 tick 通过 observer 请求的视野本 tick 生效 — 优先捕获（仅一次机会）。
@@ -107,6 +124,19 @@ function pendingSlot(): { pending?: PendingObservation } {
   return g.__observePending;
 }
 
+/** 该房是否在「视野失败」冷却中（过期即清）。 */
+function isObserveBlacklisted(roomName: string, tick: number): boolean {
+  const blacklist = globalCache().observeBlacklist;
+  if (!blacklist) return false;
+  const until = blacklist[roomName];
+  if (until === undefined) return false;
+  if (tick >= until) {
+    delete blacklist[roomName];
+    return false;
+  }
+  return true;
+}
+
 /**
  * 观察结果入队交接缓冲（intelligence 系统采用为 IntelEntry，本系统不直写状态）。
  */
@@ -123,8 +153,17 @@ function submitObservation(
 }
 
 /**
- * 挑选最值得刷新的邻房并请求 observer 视野。
- * 优先级：从未有过视野（sources 未知）> 视野数据最陈旧且超过阈值。
+ * 挑选最值得刷新的房间并请求 observer 视野。
+ *
+ * 候选优先级（从高到低）：
+ * 1) 从未有过视野的普通邻房（扩张/远矿选址最需要）；
+ * 2) 已知有 Deposit/Power Bank 的 highway 房（射程内，资源车道的数据源）；
+ * 3) 超过 INTEL_STALE_AFTER 的普通邻房；
+ * 4) 从未观测过的 highway 房（轮转，逐步扫完射程内高速网）；
+ * 5) 超过 EMPTY_HIGHWAY_REFRESH_AGE 的空 highway 房（发现新生成的资源点）。
+ *
+ * 旧实现只考虑 `describeExits` 的 4 个邻房并显式跳过 highway ——
+ * 而 highway 是 Deposit/Power Bank 的唯一产地，导致两类资源点永远进不了 intel。
  */
 function requestObservation(observer: StructureObserver, homeRoom: string, tick: number): void {
   const counters = observeCounters(homeRoom);
@@ -136,30 +175,89 @@ function requestObservation(observer: StructureObserver, homeRoom: string, tick:
     return;
   }
 
-  let target: string | undefined;
-  let staleness = -1;
+  const normalNeighbors: string[] = [];
+  const highwayTargets = new Set<string>();
   for (const neighbor of Object.values(exits)) {
     if (!neighbor) continue;
+    if (classifyRoomByName(neighbor) === "highway") highwayTargets.add(neighbor);
+    else normalNeighbors.push(neighbor);
+  }
+  // observer 射程内的 highway 房 — Deposit/Power Bank 的唯一产地。
+  for (const name of highwayRoomNamesInRange(homeRoom, OBSERVER_RANGE)) {
+    highwayTargets.add(name);
+  }
+
+  let target: string | undefined;
+  let staleness = -1;
+  // 1) 从未有视野的普通邻房 — 原地优先（与旧行为逐字一致）。
+  for (const neighbor of normalNeighbors) {
+    if (isObserveBlacklisted(neighbor, tick)) continue;
     const payload = getRoomIntel(neighbor)?.payload;
-    if (payload?.kind === "highway") continue; // 公路房无 source/controller，观察无收益。
     if (payload?.sources === undefined) {
-      // 从未有过视野 — 最高优先。
       target = neighbor;
       staleness = Infinity;
       break;
     }
-    const age = tick - payload.lastSeen;
-    if (age > INTEL_STALE_AFTER && age > staleness) {
-      target = neighbor;
-      staleness = age;
+  }
+
+  // 2-5) 收集其余维度，按优先级裁决。
+  if (!target) {
+    let resourceHighway: { name: string; age: number } | undefined;
+    let staleNormal: { name: string; age: number } | undefined;
+    const unknownHighways: string[] = [];
+    let emptyHighway: { name: string; age: number } | undefined;
+
+    for (const neighbor of normalNeighbors) {
+      if (isObserveBlacklisted(neighbor, tick)) continue;
+      const payload = getRoomIntel(neighbor)?.payload;
+      if (!payload) continue;
+      const age = tick - payload.lastSeen;
+      if (age > INTEL_STALE_AFTER && age > staleness) {
+        staleness = age;
+        staleNormal = { name: neighbor, age };
+      }
+    }
+
+    for (const name of highwayTargets) {
+      if (isObserveBlacklisted(name, tick)) continue;
+      const entry = getRoomIntel(name);
+      const payload = entry?.payload;
+      if (!payload) {
+        unknownHighways.push(name);
+        continue;
+      }
+      const age = tick - payload.lastSeen;
+      const hasResource = (payload.deposits?.length ?? 0) > 0 || payload.powerBank === true;
+      if (hasResource && age >= RESOURCE_HIGHWAY_REFRESH_AGE) {
+        if (!resourceHighway || age > resourceHighway.age) resourceHighway = { name, age };
+      } else if (!hasResource && age >= EMPTY_HIGHWAY_REFRESH_AGE) {
+        if (!emptyHighway || age > emptyHighway.age) emptyHighway = { name, age };
+      }
+    }
+
+    if (resourceHighway) {
+      target = resourceHighway.name;
+    } else if (staleNormal) {
+      target = staleNormal.name;
+    } else if (unknownHighways.length > 0) {
+      // 轮转选择：按观察序号取模，避免总盯同一个未观测房导致其余永远扫不到。
+      unknownHighways.sort((a, b) => a.localeCompare(b));
+      target = unknownHighways[Math.floor(tick / OBSERVE_INTERVAL) % unknownHighways.length];
+    } else if (emptyHighway) {
+      target = emptyHighway.name;
     }
   }
+
   if (!target) {
     counters.noTarget++;
     return;
   }
 
   const code = observer.observeRoom(target);
+  // 观测留痕：stats.observe 只有分桶计数，回答不了“最近扫的是哪一间”；
+  // 排查 Deposit/Power Bank 为什么没进 intel 时需要目标房名。
+  if (!Memory.kernel) Memory.kernel = {};
+  Memory.kernel.observerLastRequest = { t: tick, r: target, c: code };
   if (code === OK) {
     counters.ok++;
     pendingSlot().pending = { tick, targetRoom: target, homeRoom };
@@ -191,6 +289,9 @@ function captureObservedIntel(tick: number): void {
   const room = Game.rooms[pending.targetRoom];
   if (!room) {
     counters.lostVision++;
+    // 目标房不在视野/未必存在于 db.rooms：冷却期内不再重复挑它。
+    const blacklist = (globalCache().observeBlacklist ??= {});
+    blacklist[pending.targetRoom] = tick + OBSERVE_LOST_VISION_COOLDOWN;
     return;
   }
 
@@ -252,6 +353,14 @@ interface RoomVisionIntel {
   wallCount: number;
   sealedExits: number[];
   powerBank: boolean;
+  /** PB 剩余 hits（有 PB 时记录）— 野采编队火力/时间可行性输入。 */
+  powerBankHits?: number;
+  /** PB 预计消失 tick（有 PB 时记录）。 */
+  powerBankUntil?: number;
+  /** PB 内含 power 数量（有 PB 时记录）— collector 规模/价值门输入。 */
+  powerBankPower?: number;
+  /** Highway 资源点（Deposit 车道的数据源）；空数组 = 有视野且确认当前无 deposit。 */
+  deposits: DepositIntel[];
 }
 
 /**
@@ -273,7 +382,20 @@ function collectRoomVision(room: Room): RoomVisionIntel {
       s.structureType === STRUCTURE_WALL ||
       (s.structureType === STRUCTURE_RAMPART && !(s as StructureRampart).my),
   );
-  const powerBank = structures.some(s => s.structureType === STRUCTURE_POWER_BANK);
+  const powerBankStructure = structures.find(s => s.structureType === STRUCTURE_POWER_BANK) as
+    StructurePowerBank | undefined;
+  const powerBank = powerBankStructure !== undefined;
+  // Deposit 观测：highway 房是唯一产地，有视野即全量覆写（空数组 = 已确认无）。
+  // 私服/旧 mock 可能没有 FIND_DEPOSITS 常量，缺失时按空列表处理而不是抛错。
+  const deposits: DepositIntel[] =
+    typeof FIND_DEPOSITS === "undefined"
+      ? []
+      : room.find(FIND_DEPOSITS).map(deposit => ({
+          id: deposit.id,
+          type: deposit.depositType,
+          decay: deposit.ticksToDecay,
+          cooldown: deposit.lastCooldown,
+        }));
   let sealedExits: number[] = [];
   if (walls.length > 0) {
     const wallSet = new Set<number>();
@@ -326,6 +448,14 @@ function collectRoomVision(room: Room): RoomVisionIntel {
     wallCount: walls.length,
     sealedExits,
     powerBank,
+    ...(powerBankStructure
+      ? {
+          powerBankHits: powerBankStructure.hits,
+          powerBankUntil: Game.time + (powerBankStructure.ticksToDecay ?? 0),
+          powerBankPower: powerBankStructure.power,
+        }
+      : {}),
+    deposits,
   };
 }
 

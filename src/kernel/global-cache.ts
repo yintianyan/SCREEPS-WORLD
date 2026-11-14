@@ -174,6 +174,14 @@ export interface GlobalCache {
   roadBuildLedger?: Record<string, import("../domain/logistics/road-build").RoadBuildCounters>;
   /** Observer 请求账本（写者 systems/room-observer.ts，读者 telemetry-collector 的 flush）。 */
   observeLedger?: Record<string, import("../domain/intel").ObserveCounters>;
+  /**
+   * observer 视野失败黑名单（heap，房名 → 冷却到期 tick）。
+   *
+   * 私服/未生成的地图区域里，`observeRoom` 会返回 OK，但目标房不在 db.rooms 中 ⇒
+   * 下一拍 `Game.rooms[target]` 仍为空。没有黑名单时调度会反复挑中同一批不存在的房，
+   * 把观察窗口全部浪费在 lostVision 上。冷却后重试即可（房可能被其他 bot 走出来了）。
+   */
+  observeBlacklist?: Record<string, number>;
   /** Safe mode 出口账本（写者 systems/military/tower-defense.ts，读者 telemetry-collector 的 flush）。 */
   safeModeLedger?: Record<string, SafeModeCounters>;
   /** 遗留物回收账本（写者 creeps/engine/actions/pickup.ts，读者 telemetry-collector 的 flush）。 */
@@ -270,6 +278,13 @@ export interface GlobalCache {
    * 这里保留最近 ~600 拍的累计快照，用差值算窗口速率；global reset 后重建即可。
    */
   cpuRateSnapshots?: CpuRateSnapshot[];
+  /**
+   * 资源流状态的库存基线（heap）：房名 → 上一评估窗的末库存。
+   *
+   * 只在 heap：窗口差分的基线换码即清，下一窗重新播种即可；落 Memory 会白涨体积。
+   * reset 后首窗按「只播种不结算」处理（与 economy 的窗口基线同一约定）。
+   */
+  resourceFlowStocks?: Record<string, { t: number; stocks: Record<string, number> }>;
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
   /** 远矿每 op 收支账本（key = remoteOpKey(home, target)）。
@@ -278,6 +293,14 @@ export interface GlobalCache {
   remoteOpLedgers?: Map<string, RemoteOpLedger>;
   /** P3 物流请求池槽位（logistics 系统每 tick 重导出；assignment-service 同 tick 合并）。 */
   transportPool?: { tick: number; rooms: Record<string, unknown[]> };
+  /**
+   * 跨房运输延迟样本（heap，logistics 系统写、logistics-planner 读）。
+   *
+   * 每房 ring 在 logistics 模块私有 Map 里，planner 读不到；这里保留最近 N 个
+   * “请求从首次出现在册到被认领”的 tick 差，供 logisticsHealth 判拥堵。
+   * global reset 后清空属可接受：下一批认领即重建。
+   */
+  logisticsLatencyRing?: number[];
   // 【F-DEAD-1 已删除】logisticsCounters — L1 物流指标从未落地，全库零引用。
   // 物流空载率指标为纸面功能，若需重引入须同时接线生产者与消费者。
   // 【WO-4 已删除】lastDriftDiag — 只写不读的诊断字段，已清理。
@@ -804,6 +827,8 @@ export interface CreepRef {
   remoteTarget?: string;
   /** memory.mode — 当前模式（acquire/work/idle/flee）。 */
   mode?: string;
+  /** memory.mission — 任务标记（powerBank/powerCollect）；lab-system 给 PB healer 抬 lab 优先级。 */
+  mission?: string;
   assignment?: {
     id: string;
     kind: string;

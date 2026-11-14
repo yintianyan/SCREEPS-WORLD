@@ -180,7 +180,10 @@ export const CONFIG = {
       // R602：link-system 5→10 —— link 有 400~800 能量缓冲，source link 产 10/拍，
       // 10 拍窗口最多积 100，不会溢出；控制器 link 被 upgrader 连续抽，10 拍补一次足够。
       "link-system": 10,
-      "room-observer": 5,
+      // room-observer **不得**在这里降频：observeRoom 的视野只存活下一 tick，
+      // 且系统内部用绝对 tick 的 25/50 拍门。被覆盖成 5 时运行拍是 tick≡2 (mod 5)，
+      // 与 tick%25==0 永无交集 —— 线上实测系统每 5 拍都在跑、observer 却一次都没请求过
+      // （stats.observe 恒空、Power Bank/Deposit 永远进不了 intel）。系统自身只在到点拍做重活。
     } as Record<string, number>,
   },
 
@@ -563,6 +566,18 @@ export const CONFIG = {
        * 关闭后回到旧行为（仅降级风险时保级小水位）。
        */
       gclUpgrade: true,
+      /**
+       * RCL8 冲 GCL 的容量比例富线（占总容量比）：**RCL8 专属** — RCL<8 的
+       * upgrade 是房间刚需（升 RCL 本身），沿用绝对刻度低线；RCL8 的 upgrade
+       * 只产出账号级 GCL，是奢侈品，必须等 storage 真正富余：
+       * ≥ gclPushStartRatio(50% = 500K/1M) 才开冲，跌破 gclPushStopRatio
+       * (30% = 300K) 停冲。旧绝对刻度 50K 只有总容量的 2%（20 倍差），
+       * 等于常年裸奔冲 GCL，把 PB 任务（36K/次）、war 储备、boost 能量
+       * 的池子抽在警戒线上。比例刻度随引擎容量自缩放。
+       */
+      gclPushStartRatio: 0.5,
+      /** RCL8 冲 GCL 的停冲水位（占比）— 与起始线构成 20% 容量回差防振荡。 */
+      gclPushStopRatio: 0.3,
       /** RCL8 时引擎硬限制（15 energy/tick），RCL<8 时无引擎上限。
        * 此值仅在 RCL8 时生效，用于匹配引擎硬限制；RCL<8 时不限速——
        * upgrader 数量由 storage 水位 + economyPressure 驱动的 demand 逻辑自然调节。
@@ -840,10 +855,10 @@ export const CONFIG = {
     // recyclePass「在役角色」白名单 — 漏配会让攻击者孵出即被判废弃回收）。
     // maxCount 8 覆盖 war 编队与 PB 野采编队（4）并行峰值。
     attacker: { minCount: 0, maxCount: 8 },
-    // 治疗者（heal-tank 编队）：仅 war 姿态时由 war-planner 按 healerSquadRatio
-    // 配比孵化，同样依赖此表作为 recyclePass 白名单。maxCount 4 覆盖 war 编队
-    // （healerSquadRatio 上取整）与 PB 野采编队（2 healer）并行峰值。
-    healer: { minCount: 0, maxCount: 4 },
+    // 治疗者（heal-tank 编队）：war 姿态由 war-planner 按 healerSquadRatio 孵化；
+    // PB 野采按「2 治疗/攻击手」覆盖 PB 50% 反弹伤害（单任务最多 12）。
+    // 依赖此表作为 recyclePass 白名单。
+    healer: { minCount: 0, maxCount: 12 },
     // 远程攻击者（kiting 战术）：RANGED_ATTACK 射程 3 无反击风险。
     // 仅 war/defense 姿态时孵化。maxCount 4 覆盖 kiting 编队 + 防御 NPC 入侵者。
     // 依赖此表作为 recyclePass 白名单（与 attacker/healer 同口径）。
@@ -853,15 +868,19 @@ export const CONFIG = {
     dismantler: { minCount: 0, maxCount: 2 },
     // 侦察兵（R6b）：prospect 任务临时孵化，同一时刻至多 1 只。
     scout: { minCount: 0, maxCount: 1 },
-    // PB 野采捡运者（审计缺口 2）：power-farm-manager collect 阶段一次性孵化，
-    // 捡完掉落 power 送回 home 后 recycle。依赖此表作为 recyclePass 白名单。
-    pbCollector: { minCount: 0, maxCount: 1 },
+    // PB 野采捡运者（审计缺口 2）：PB 击破前预置到目标房，ruin 只活 10 tick，
+    // 数量由 power-farm-manager 按 PB 内含 power 规划（可多只并行）。
+    // 依赖此表作为 recyclePass 白名单。
+    pbCollector: { minCount: 0, maxCount: 8 },
     // 次级 Invader Core 清核者（P1）：拆 level-0 reserve-only 核心回收远矿 op 名额。
     // 每房至多 1 只在场（demand 单只节流），maxCount 2 防替补窗口真空。
     coreClearer: { minCount: 0, maxCount: 2 },
     // A3.0 跨房调拨搬运工：由 agenda-manager 按 Operation 需求孵化，
     // 不走 demand 评估（maxCount 6 覆盖多对多调拨峰值）。
     carrier: { minCount: 0, maxCount: 6 },
+    // 远矿 deposit 采集者：由 deposit-manager 按可见 deposit 派工（每 home 至多 1 条线）。
+    // 不走 demand 评估；本表同时是 recyclePass 的在役白名单，漏配会让它孵出即被回收。
+    depositHarvester: { minCount: 0, maxCount: 1 },
   },
 
   war: {
@@ -1423,7 +1442,13 @@ export const CONFIG = {
     maxConcurrentMissions: 2,
     /** PB 情报新鲜度上限（tick）：PB 出现后 ~5000 tick 自动消失，旧情报大概率扑空。 */
     intelFreshness: 2000,
-    /** 派遣最大线性距离（房）。 */
+    /**
+     * 出击距离上限 = **行军路线长度**（正交口径，规避驻守房后的实际路径房数），
+     * 不是 Chebyshev — 规避会把路线拉长，Chebyshev 7 的目标正交可能 11 房，
+     * creep 寿命（1500，highway 无法续命）根本不够用。与寿命账本
+     * （travel + boostWait + kill + safety ≤ 1500）构成双重闸门；
+     * selectPowerBankTarget 对 linearDistance 的过滤保留作廉价预筛。
+     */
     maxRange: 7,
     /** 战斗编队 attacker 数（4 × [4A] = 480 hits/tick → 2M hits ≈ 4200 tick，
      * 留足 PB 衰减余量）。 */
@@ -1437,6 +1462,84 @@ export const CONFIG = {
     casualtyMultiplier: 2,
     /** collect 阶段（PB 击破后）等待 collector 的宽限（tick）。 */
     collectGraceTicks: 2000,
+    /**
+     * boost 停滞收摊（tick）：boost 口径任务超过此时长仍无任何成员强化成功
+     * → 判 lab 供给链断（无 labTender/化合物耗尽/换矿死锁），收摊止损。
+     * 取值 > 孵化全队时长（~600t）× 余量，让「还没轮到」与「永远轮不到」分开。
+     */
+    boostStallTicks: 3000,
+    /**
+     * 行军威胁房记忆 TTL（tick）：intel 的 room 域是 heap、global reset 即空，
+     * 驻守房（NPC/玩家塔防）靠 kernel.threatRooms 跨重启记忆规避。塔防不会
+     * 频繁迁移，取 50000 ≈ PB 天然重生周期量级，过期自然洗白。
+     */
+    threatMemoryTicks: 50000,
+    /**
+     * boost 等料驻留估算（tick）：hold 设计下编队孵化后等 lab 进料才出征，
+     * 这段烧寿命 — boost 口径任务的寿命检查含此段（travel + boostWait + kill
+     * + safety ≤ 1500）。实测 labTender 换矿喂料 200-400t，取 300。
+     * 660t 行军（11 房正交路线）的任务在此口径下不可行 — 只开短路线任务。
+     */
+    boostWaitTicks: 300,
+    /**
+     * boost 需求留痕 TTL（tick）：候选「数学可行但库存不足」时需求写
+     * kernel.pbBoostDemand 驱动前馈补产，deadline 过期自然失效。取值要覆盖
+     * T3 化合物从基础矿到产出的整链时长（数百至上千 tick），取 5000。
+     */
+    boostDemandTtlTicks: 5000,
+    /**
+     * 目标击杀窗口（tick）：按此窗口反推攻击手数量。PB 有 200 万 hits，
+     * 窗口内打不完说明 RCL/body/boost 还不够，直接判不可行 —— 派队硬打只会
+     * 被反弹烧光。
+     *
+     * 取值由 creep 寿命反推（引擎 CREEP_LIFE_TIME=1500，highway 无法 renew）：
+     * 在场时钟 = maxRange×travel(7×60=420) + kill + safety(300) ≤ 1500
+     * → kill ≤ 780，取 750 留微余量。旧值 2500 允许 kill=1667，编队必然
+     * 寿终在战斗中途，替换波零退款（自然死亡 dropRate×剩余寿命比≈0），
+     * 毛成本翻倍（私服审计实证）。RCL8 裸 body 满足此窗口需要 5 攻击手，
+     * 反弹治疗覆盖不上（12 healer×96 < 5×300）→ 判不可行；X 系 T3 boost
+     * 后 2 攻击手 kill=417，单寿命内完成 — PB 野采事实上以 boost 为前提。
+     */
+    killWindowTicks: 750,
+    /** 单任务攻击手上限（弱 body 时可多派，防无限扩张）。 */
+    maxAttackers: 6,
+    /** 单任务治疗手上限：PB 反弹 50%，HEAL 必须覆盖攻击手反伤。 */
+    maxHealers: 12,
+    /**
+     * 出力联盟上限（多房协同）：单房扛整套编队 = 30k+ 能量 + 串行孵化 +
+     * 单房 lab 喂料三重瓶颈；多房各出一份（splitShare 均摊），孵化并行、
+     * 负担分摊，编队集结更快。按路线距离就近取房，各自过路由/寿命/预算/闸门。
+     */
+    maxSponsors: 2,
+    /**
+     * 单任务预置 collector 上限。PB 摧毁后 power 在 ruin 里只留 10 tick
+     * （引擎 RUIN_DECAY_STRUCTURES.powerBank=10），必须击破前到位、一次抢完。
+     * PB 内含 power ∈ [500, 10000]（引擎 POWER_BANK_CAPACITY_MIN/MAX=500/5000，
+     * POWER_BANK_CAPACITY_CRIT=0.3 概率再加满额 5000）— 10×1000 carry 恰好
+     * 覆盖理论上限；旧值 6 只够 6000，约 22% 的 crit PB 会漏收最高 4000
+     * power（市值数万 credits）烂在 ruin 里。超出 maxCollectors 的部分由
+     * plan.powerOverflow 记录（日志留痕，不拒开任务）。
+     */
+    maxCollectors: 10,
+    /** 预估每房通勤 tick（含出入房），用于时间可行性判定。 */
+    travelTicksPerRoom: 60,
+    /** 每 body 部件孵化 tick（3 tick/part）。 */
+    spawnTicksPerPart: 3,
+    /** 规划的安全余量（孵化抖动/走位/交通）。 */
+    planSafetyTicks: 300,
+    /** 低于此 power 的 PB 不值得一套编队（collector 一次抢回口径）。 */
+    minPowerLoot: 1000,
+    /** intel 未带 hits 时的规划值（引擎 POWER_BANK_HITS）。 */
+    defaultPowerBankHits: 2_000_000,
+    /** intel 未带 power 时的规划值（引擎容量均值量级）。 */
+    defaultPowerBankPower: 5000,
+    /**
+     * 单任务编队成本占 sponsor storage 能量的上限。
+     * 取 0.75 而非更保守的 0.5：Screeps 回收按剩余寿命退还 body 能量
+     * （引擎 _die dropRate=1），PB 编队收摊后大部分成本会以掉落形式回到 spawn 旁，
+     * 真正的净支出远低于孵化峰值；0.75 只负责不让孵化瞬间抽干 storage。
+     */
+    maxStorageFraction: 0.75,
   },
 
   /** 主动情报（R6b）— 侦察任务：为扩张决策主动获取候选房视野。 */

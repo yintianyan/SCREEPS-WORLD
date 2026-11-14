@@ -3,10 +3,33 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
-import { getPbRoomCache } from "../support/room-scans";
+import { getPbRoomCache, getPowerBankCached } from "../support/room-scans";
 
 /** 目标房内可捡的 power 载荷（掉落堆或含 power 的废墟）。 */
 type PowerPickupTarget = { kind: "dropped"; resource: Resource } | { kind: "ruin"; ruin: Ruin };
+
+/**
+ * 击破前预置：停在 PB 附近（range 2），等它被打掉。
+ *
+ * 为什么必须预置：PB 摧毁后 power 落在 ruin 里，引擎的
+ * RUIN_DECAY_STRUCTURES.powerBank = 10 tick —— 从家里再赶过来根本来不及。
+ * range 2 是为了不占攻击手的贴身位；击破后 1 步即可进入 withdraw 射程。
+ */
+function stageAtPowerBank(): ActionCandidate<StructurePowerBank> {
+  return {
+    name: "pb-collector:stage",
+    resolve: ac => {
+      const target = ac.creep.memory.remoteTarget;
+      if (!target || ac.creep.room.name !== target) return undefined;
+      // 已经抢到 power → 优先回仓，不在 PB 旁继续等。
+      if (ac.creep.store.getUsedCapacity(RESOURCE_POWER) > 0) return undefined;
+      return getPowerBankCached(ac.creep.room);
+    },
+    execute: (ac, pb) => {
+      if (ac.creep.pos.getRangeTo(pb) > 2) moveToTarget(ac.creep, pb, 2);
+    },
+  };
+}
 
 /** 捡起目标房内的 power（空载相）。 */
 function pickupPower(): ActionCandidate<PowerPickupTarget> {
@@ -58,15 +81,20 @@ function depositPower(): ActionCandidate<PowerDepositTarget> {
     execute: (ac, target) => {
       if (ac.creep.transfer(target, RESOURCE_POWER) === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, target);
+      } else if (ac.creep.store.getUsedCapacity(RESOURCE_POWER) === 0) {
+        // 一次性角色：卸完即回收，不再折返 PB 房（ruin 已消失，回去只会空跑）。
+        ac.creep.memory.recycle = true;
       }
     },
   };
 }
 
-/** 任务完成自检（gate）：背包空且目标房无掉落 power → 自标记 recycle。 */
+/** 任务完成自检（gate）：背包空且目标房无 PB/无掉落 power → 自标记 recycle。 */
 function collectorGate(ac: ActionContext): boolean {
   const target = ac.creep.memory.remoteTarget;
   if (target && ac.creep.room.name === target) {
+    // PB 还活着 → 预置等待，不能回收（否则击破时无人抢 ruins）。
+    if (getPowerBankCached(ac.creep.room)) return true;
     if (ac.creep.store.getUsedCapacity(RESOURCE_POWER) === 0) {
       const cache = getPbRoomCache(ac.creep.room);
       if (cache.droppedPower.length === 0 && cache.powerRuins.length === 0) {
@@ -81,8 +109,8 @@ function collectorGate(ac: ActionContext): boolean {
 const policy: RolePolicy = {
   park: true,
   gate: collectorGate,
-  acquire: [pickupPower()],
-  work: [pickupPower(), depositPower()],
+  acquire: [stageAtPowerBank(), pickupPower()],
+  work: [stageAtPowerBank(), pickupPower(), depositPower()],
 };
 
 export const pbCollectorRole = defineRole("pbCollector", 3 as Priority, policy);

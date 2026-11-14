@@ -210,6 +210,8 @@ export const flowPlannerSystem: System = {
       tasks[roomName] = roomTasks;
       plannedRooms.add(roomName);
       // 观测瘦摘要：每 5 tick 写一次，避免 Memory 抖动。
+      // `u`（unmet）只做诊断：补员由 spawn-manager 的 distributor/ccFill 反馈负责，
+      // FlowPlanner 不据此发孵化请求，防止两套编制信号互相放大。
       if (roomMem !== undefined && ctx.tick % 5 === 0) {
         roomMem.flowPlan = {
           t: ctx.tick,

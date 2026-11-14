@@ -386,9 +386,58 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   // 侦察兵（R6b）：[MOVE] 即足 — 无疲劳全速穿行、50 能量可抛弃；
   // 使命是「到达目标房提供一 tick 视野」，不是战斗（敌意房由 flee 保全）。
   scout: [{ parts: ["move"], minCapacity: 50 }],
-  // PB 捡运者（审计缺口 2）：纯 CARRY+MOVE 一次性 — PB 击破后进场捡掉落
-  // power（2k-6k）送回 home。无战斗件（PB 反击会秒杀，只在 collect 阶段进场）。
+  // PB 捡运者（审计缺口 2）：纯 CARRY+MOVE 一次性 — 必须在 PB 击破前预置到目标房，
+  // 击破后 power 只在 ruin 里保留 10 tick，来不及从家里再赶过去。
   pbCollector: [
+    // RCL7+ 大运力档 [20C,20M] @2000 成本：carry 1000。
+    // PB 摧毁后 power 在 ruin 里只保留 10 tick（引擎 RUIN_DECAY_STRUCTURES.powerBank=10），
+    // 必须靠「击破前预置的 collector × 单趟容量」一次抢完；容量从 500 提到 1000，
+    // 同样 6 只可覆盖 6k power（多数 PB）。
+    {
+      parts: [
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ],
+      minCapacity: 2600,
+    },
     // RCL7+ 大运力档 [10C,10M] @1000 成本：运 5000 power 一趟清（大 PB 掉落 6k 一趟搞定）。
     // minCapacity=1300：与 [5C,5M] 同在 RCL4(1300) 解锁，但排在更高档位。
     // 低于 1300 容量退回 [5C,5M]（5C5M 成本 750，1250 门槛确保 RCL3(800) 不用此档）。
@@ -470,6 +519,74 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
       ],
       minCapacity: 620,
     },
+  ],
+  // 远矿 deposit 采集者：WORK 采集（deposit 有冷却，产量随 WORK 数放大）、
+  // CARRY 单趟运力、MOVE 跨房无路通勤。三种部件等量配比 —— 1:1 平原满速。
+  // 顶档 10W10C10M：单趟 500 单位，减少跨房往返趟数（通勤是这条线的主要成本）。
+  depositHarvester: [
+    {
+      parts: [
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ],
+      minCapacity: 2000,
+    },
+    // RCL4 档 5W5C5M @1000：运力 250，孵化 15 tick。
+    {
+      parts: [
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ],
+      minCapacity: 1000,
+    },
+    // RCL3 过渡档 3W3C3M @600。
+    {
+      parts: ["work", "work", "work", "carry", "carry", "carry", "move", "move", "move"],
+      minCapacity: 600,
+    },
+    // 最低档 [1W,1C,1M] @200（bodies 契约要求每个非战斗角色有 200 档）。
+    { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   worker: [
     // R669：bootstrap 通勤载重档 —— 旧模板最大只有 1 CARRY（50 能量/趟），

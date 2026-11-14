@@ -187,6 +187,53 @@ describe("pickCpuUsagePerTick — 用哪一份 CPU 均值分档", () => {
       ).tier,
     ).toBe("tight");
   });
+
+  // 新鲜度修复：cpuRate 曾每 100 拍才更新一次，消费侧可能拿上个进程/上个窗口的读数分档。
+  it("提供了 tick 但读数缺采样时刻 ⇒ 不采信（旧 Memory 的 cpuRate 没有 at）", () => {
+    expect(
+      pickCpuUsagePerTick({
+        avg10: 13.2,
+        rateTotal: 10.56,
+        rateWindowTicks: 420,
+        rateUnsampledTicks: 0,
+        tick: 5000,
+      }),
+    ).toBe(13.2);
+  });
+
+  it("读数超龄（年龄 > MAX_RATE_AGE_TICKS）⇒ 退回 avg10；恰好 50 拍仍采信", () => {
+    expect(
+      pickCpuUsagePerTick({
+        avg10: 13.2,
+        rateTotal: 10.56,
+        rateWindowTicks: 420,
+        rateUnsampledTicks: 0,
+        rateAt: 4950,
+        tick: 5001,
+      }),
+    ).toBe(13.2);
+    expect(
+      pickCpuUsagePerTick({
+        avg10: 13.2,
+        rateTotal: 10.56,
+        rateWindowTicks: 420,
+        rateUnsampledTicks: 0,
+        rateAt: 4950,
+        tick: 5000,
+      }),
+    ).toBe(10.56);
+  });
+
+  it("调用方不提供 tick ⇒ 保持旧行为（只校验窗长/漏采）", () => {
+    expect(
+      pickCpuUsagePerTick({
+        avg10: 13.2,
+        rateTotal: 10.56,
+        rateWindowTicks: 420,
+        rateUnsampledTicks: 0,
+      }),
+    ).toBe(10.56);
+  });
 });
 
 // R614：升档窗口的单位是“拍”，不是“评估次数”。

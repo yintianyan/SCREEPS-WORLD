@@ -1,5 +1,88 @@
 /** Nuke 响应决策 — 纯函数层（审计缺口 1+3：核弹落点感知 + 资产抢救）。 */
 
+/** 核弹伤害半径（Chebyshev 距离）：落点 5 格内的 creep/结构都会受伤。 */
+export const NUKE_DAMAGE_RADIUS = 5;
+
+/**
+ * 核弹撤离窗口（tick）：只在落点前这么短时间内接管非战斗 creep。
+ *
+ * 核弹从发射到落地有数万 tick；过早撤离会让资产抢救/正常工作停摆。
+ * 100 tick 足够从落点走到 5 格半径外（每 tick 1 格），又不会让 40,000 tick
+ * 的预警把整个房间的经济冻结。
+ */
+export const NUKE_EVAC_WINDOW_TICKS = 100;
+
+/** 核弹落点（只依赖位置，便于纯函数测试）。 */
+export interface NukeImpactPoint {
+  pos: { x: number; y: number };
+  /** 剩余落地 tick；缺省视为立即生效（测试/旧数据兼容）。 */
+  timeToLand?: number;
+}
+
+function chebyshev(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+}
+
+const EVASION_DIRECTIONS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+];
+
+/**
+ * 找一个「核弹伤害半径之外」的撤离目标格；不在危险区或无安全格时返回 undefined。
+ *
+ * 只做几何选点，不访问 Game；移动由 creep 层 `evadeNuke` 执行。选点优先最近的
+ * 半径外格，其次房间角落兜底；多个核弹时要求同时避开所有落点。
+ */
+export function findNukeEvasionTarget(
+  pos: { x: number; y: number },
+  nukes: readonly NukeImpactPoint[],
+  radius = NUKE_DAMAGE_RADIUS,
+  maxTimeToLand = NUKE_EVAC_WINDOW_TICKS,
+): { x: number; y: number } | undefined {
+  if (nukes.length === 0) return undefined;
+  const active = nukes.filter(n => n.timeToLand === undefined || n.timeToLand <= maxTimeToLand);
+  if (active.length === 0) return undefined;
+  const inDanger = active.some(n => chebyshev(pos, n.pos) <= radius);
+  if (!inDanger) return undefined;
+
+  let best: { x: number; y: number; dist: number } | undefined;
+  for (let step = radius + 1; step <= radius + 3; step++) {
+    for (const [dx, dy] of EVASION_DIRECTIONS) {
+      const x = Math.max(0, Math.min(49, pos.x + dx * step));
+      const y = Math.max(0, Math.min(49, pos.y + dy * step));
+      if (active.some(n => chebyshev({ x, y }, n.pos) <= radius)) continue;
+      const dist = chebyshev(pos, { x, y });
+      if (
+        best === undefined ||
+        dist < best.dist ||
+        (dist === best.dist && (x < best.x || (x === best.x && y < best.y)))
+      ) {
+        best = { x, y, dist };
+      }
+    }
+    if (best !== undefined) return { x: best.x, y: best.y };
+  }
+
+  // 兜底：多个核弹可能覆盖环上的全部候选，退到房间角落里找一个安全点。
+  const corners = [
+    { x: 0, y: 0 },
+    { x: 49, y: 0 },
+    { x: 0, y: 49 },
+    { x: 49, y: 49 },
+  ];
+  for (const corner of corners) {
+    if (active.every(n => chebyshev(corner, n.pos) > radius)) return corner;
+  }
+  return undefined;
+}
+
 /** 资产抢救接收房候选（由执行层从 snapshot 采集，纯函数不访问 Game）。 */
 export interface SalvageCandidate {
   roomName: string;

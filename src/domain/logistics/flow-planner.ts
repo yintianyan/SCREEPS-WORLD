@@ -11,11 +11,8 @@
 import type {
   FlowAllocation,
   FlowLinkNode,
-  FlowLane,
-  FlowLinkTransfer,
   FlowPlannerInput,
   FlowPoint,
-  FlowSpawnNeed,
   FlowUnmet,
   FlowUnmetReason,
   RoomFlowPlan,
@@ -210,22 +207,8 @@ export function planRoomFlows(input: FlowPlannerInput): RoomFlowPlan {
   let carriersRemaining = Math.max(0, input.carrierPool.count);
 
   const allocations: FlowAllocation[] = [];
-  const linkTransfers: FlowLinkTransfer[] = [];
   const unmet: FlowUnmet[] = [];
-  const spawnMap = new Map<string, FlowSpawnNeed>();
   let totalCreepRate = 0;
-
-  const addSpawnNeed = (role: FlowSpawnNeed["role"], lane: FlowLane, count: number): void => {
-    if (count <= 0) return;
-    const key = `${role}:${lane}`;
-    const prev = spawnMap.get(key);
-    spawnMap.set(key, {
-      role,
-      lane,
-      count: (prev?.count ?? 0) + count,
-      carry: input.carrierPool.carry,
-    });
-  };
 
   const sinks = [...input.sinks].sort((a, b) => a.priority - b.priority);
   for (const sink of sinks) {
@@ -296,17 +279,8 @@ export function planRoomFlows(input: FlowPlannerInput): RoomFlowPlan {
                 carriersNeeded: feederNeeded,
                 priority: sink.priority,
               });
-              linkTransfers.push({
-                fromId: sink.linkFromId,
-                toId: sink.linkToId,
-                path,
-                ratePerTick: sendRate,
-                burstAmount: linkCapacity,
-                hops: info.hops,
-              });
               if (storageFed) storageAvailable -= sendRate;
               carriersRemaining -= feederNeeded;
-              addSpawnNeed("distributor", sink.lane, feederNeeded);
               remaining -= delivered;
             }
           }
@@ -352,7 +326,6 @@ export function planRoomFlows(input: FlowPlannerInput): RoomFlowPlan {
           totalCreepRate += delivered;
           if (isStorageSource) storageAvailable -= delivered;
           carriersRemaining -= needed;
-          addSpawnNeed(isStorageSource ? "distributor" : "hauler", sink.lane, needed);
           remaining -= delivered;
         }
       }
@@ -382,8 +355,6 @@ export function planRoomFlows(input: FlowPlannerInput): RoomFlowPlan {
   return {
     tick: input.tick,
     allocations,
-    linkTransfers,
-    spawnNeeds: [...spawnMap.values()],
     unmet,
     totalCreepRate,
   };

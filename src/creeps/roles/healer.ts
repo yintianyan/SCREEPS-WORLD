@@ -30,23 +30,27 @@ function readTacticalIntent(creepName: string): TacticalIntent | null {
 /** 战斗角色集合 — healer 可跟从的编队成员。 */
 const COMBAT_ROLES = new Set(["attacker", "rangedAttacker", "dismantler", "defender"]);
 
-/** 目标房内己方 combat creep — 跟随/救治对象。
- * 不限于 attacker，rangedAttacker / dismantler / defender 也需要治疗覆盖。 */
-function findBuddy(creep: Creep): Creep | undefined {
-  let best: Creep | undefined;
-  let bestRange = Infinity;
-  for (const c of findMyCreepsCached(creep.room)) {
-    if (!COMBAT_ROLES.has(c.memory.role)) continue;
-    const range = creep.pos.getRangeTo(c.pos);
-    if (range < bestRange) {
-      bestRange = range;
-      best = c;
-    }
-  }
-  return best;
+/**
+ * 治疗手 → 战斗成员的稳定分工（按名字排序后轮询分配）。
+ *
+ * 为什么不用「最近的受伤者」：PB 房所有攻击手都会被反弹伤害打成残血，就近选择会让
+ * 多个治疗手堆在同一只身上（过量治疗），其余攻击手无人覆盖而被打死。按排序轮询
+ * 可保证 N 个治疗手均匀覆盖 M 个攻击手（PB 编队按 2 治疗/攻击手规划）。
+ */
+function findAssignedBuddy(creep: Creep): Creep | undefined {
+  const my = findMyCreepsCached(creep.room);
+  const combat = my
+    .filter(c => COMBAT_ROLES.has(c.memory.role))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (combat.length === 0) return undefined;
+  const healers = my
+    .filter(c => c.memory.role === "healer")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const index = healers.findIndex(c => c.name === creep.name);
+  return combat[(index >= 0 ? index : 0) % combat.length];
 }
 
-/** 目标房内受伤己方（含自身）最近者 — 就近救治，集火谁奶谁。 */
+/** 目标房内受伤己方（含自身）最近者 — 兜底救治（分配目标缺失时）。 */
 function findWounded(creep: Creep): Creep | undefined {
   let best: Creep | undefined;
   let bestRange = Infinity;
@@ -119,11 +123,16 @@ export function healAllies(): ActionCandidate<Creep> {
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;
 
+      // 优先分配给自己的战斗成员：PB 房多治疗手必须均匀覆盖，不能全部扑向最近残血。
+      const buddy = findAssignedBuddy(ac.creep);
+      if (buddy) return buddy;
+      // 无战斗成员时的兜底：先照顾自己（避免治疗手裸奔掉血）。
       const wounded = findWounded(ac.creep);
       if (wounded) return wounded;
-      const buddy = findBuddy(ac.creep);
-      if (buddy) return buddy;
-      // 编队不存在（attacker 全灭且无人受伤）→ 回收止损，不裸奔站桩。
+      // PB 编队：攻击手可能还没到齐（分波孵化/通勤），此时等待由任务管理器收摊，
+      // 不能按「无编队」自标记回收 —— 否则先到的治疗手会集体自杀。
+      if (ac.creep.memory.mission === "powerBank") return undefined;
+      // 非 PB 编队（war）：无战斗成员且无人受伤 → 回收止损，不裸奔站桩。
       ac.creep.memory.recycle = true;
       return undefined;
     },

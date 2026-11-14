@@ -7,6 +7,7 @@ import {
   upgradeBrakeFloor,
 } from "../../domain/economy/accounting";
 import { resolveControllerDowngradeRisk } from "../../domain/economy/downgrade-risk";
+import { gclPushBand } from "../../domain/economy/links";
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
@@ -89,6 +90,20 @@ function downgradeRisk(ac: ActionContext): boolean {
     Memory.rooms[ac.snapshot.roomName]?.controllerDowngradeRisk,
     ac.snapshot.controller,
   );
+}
+
+/**
+ * RCL8 冲 GCL 的容量比例富线判定（纯函数便于单测）：
+ * 富线（总容量 × gclPushStartRatio）以上才开冲，取带与 link 供能共用 gclPushBand；
+ * 降级风险（保级优先）或背包已载能（烧完再停，防抱能死亡掉落）豁免。
+ */
+export function rcl8GclPushAllowed(
+  storageEnergy: number,
+  downgradeRisk: boolean,
+  carryingEnergy: boolean,
+): boolean {
+  if (downgradeRisk || carryingEnergy) return true;
+  return gclPushBand(storageEnergy) === "push";
 }
 
 /**
@@ -193,6 +208,23 @@ function upgraderGate(ac: ActionContext): boolean {
   // 开启 gclUpgrade 后继续工作：RCL8 的 upgrade 计入 GCL 进度。
   // 降级风险（isEmergency）时上面已放行保级。
   if (ac.snapshot.rcl >= 8 && !CONFIG.economy.upgrade.gclUpgrade) return false;
+
+  // RCL8 冲 GCL 容量比例富线：storage < gclPushStart(50% 容量) 不冲 —
+  // RCL8 的 upgrade 只产出账号级 GCL（奢侈品），必须让位给 PB 任务/war/boost
+  // 的储备需求（私服实测：绝对刻度 50K 只有容量 2%，storage 被抽穿警戒线）。
+  // 背包已载能的个体放行烧完（同闩锁豁免口径）；降级风险豁免（保级优先）。
+  if (ac.snapshot.rcl >= 8 && CONFIG.economy.upgrade.gclUpgrade) {
+    if (
+      !rcl8GclPushAllowed(
+        storageEnergy,
+        downgradeRisk(ac),
+        ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      )
+    ) {
+      nudgeToStation(ac);
+      return false;
+    }
+  }
 
   // 仅阻止 acquire 模式。
   if (ac.creep.memory.mode !== "acquire") return true;

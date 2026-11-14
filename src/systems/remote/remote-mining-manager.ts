@@ -7,7 +7,13 @@ import { INVADER_USERNAME } from "../../domain/intel";
 import { newRemoteCpuAllowed } from "../../domain/remote/staffing";
 import { isExpansionPushPlan } from "../../domain/expansion/plan";
 import { evaluateRemoteDemand } from "../../domain/remote/demand";
-import { submitRequest } from "../../domain/spawn/queue";
+import { queryRoomIntel } from "../intelligence";
+import {
+  rememberedThreatRooms,
+  rememberThreatRooms,
+  threatRoomsFromIntel,
+} from "../../domain/war/march-threats";
+import { submitRequest, removeRequestsByTarget } from "../../domain/spawn/queue";
 import {
   globalCache,
   querySquad,
@@ -37,6 +43,8 @@ import {
   censusStalledOps,
   countActiveOps,
   roomReadyForNewRemote,
+  remoteExpansionAffordable,
+  coreClearReopenAllowed,
   reevaluateActiveOps,
   enforceMeasuredEconomics,
   syncOpLedger,
@@ -65,7 +73,13 @@ import {
 } from "./road-planner";
 
 // 保留既有导入面（单测直接从 remote-mining-manager 引用各子模块的 @internal 导出）。
-export { syncOpLedger, enforceMeasuredEconomics, roomReadyForNewRemote } from "./op-lifecycle";
+export {
+  syncOpLedger,
+  enforceMeasuredEconomics,
+  roomReadyForNewRemote,
+  remoteExpansionAffordable,
+  coreClearReopenAllowed,
+} from "./op-lifecycle";
 export { recycleExcessRemoteCreeps } from "./creep-recycle";
 export {
   collectRemoteThreats,
@@ -74,6 +88,16 @@ export {
   type RemoteBlockerState,
 } from "./blocker-intel";
 export { fulfillContainerRequests, selectWalkedRoadTiles, walkedHeatKeys } from "./road-planner";
+
+/** 远矿 op 废弃时需要一并撤销的请求角色（不含 depositHarvester —— 它可能指向同一 highway 房）。 */
+const REMOTE_QUEUE_ROLES: ReadonlySet<string> = new Set([
+  "remoteHarvester",
+  "remoteHauler",
+  "reserver",
+  "remoteDefender",
+  "dismantler",
+  "coreClearer",
+]);
 
 export const remoteMiningManagerSystem: System = {
   name: "remote-mining-manager",
@@ -207,8 +231,9 @@ export const remoteMiningManagerSystem: System = {
       );
 
       // 逐房就绪门（Phase 1b）：帝国姿态放行（newOpsAllowed）之外，本房还须自身经济
-      // 成熟才「新开」远矿 — RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余，
-      // 防 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。现役 op 维护/重估不受影响。
+      // 成熟才「新开」远矿 — RCL≥roomMinRcl、colonyState=normal、storage ≥ roomMinStorage。
+      // 经济前提在候选过滤里再收紧到 expansionMinStorage（与首孵贫困闸同一把尺）；
+      // Invader 预定的清核路径豁免，否则 abandoned 的 coreClearer 线永远重不开。
       if (
         newOpsAllowed &&
         cpuAllowsNewOp &&
@@ -226,10 +251,23 @@ export const remoteMiningManagerSystem: System = {
           myUsername: snapshot.controller?.owner?.username,
           ownedRooms,
         });
+        const expansionAffordable = remoteExpansionAffordable(
+          snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+        );
+        // 贫困期只允许「确需清核」的线重开：仅凭 Invader 预定会在核心拆除后被
+        // 残留预定骗出新一轮 废弃→重开（见 coreClearReopenAllowed）。
+        const usableCandidates = expansionAffordable
+          ? candidates
+          : candidates.filter(c =>
+              coreClearReopenAllowed(
+                remoteOps[c.roomName],
+                intel[c.roomName]?.reservedBy === INVADER_USERNAME,
+              ),
+            );
         // 只补充到有效上限。
         const needed = maxOpsWithCapacity - activeCount;
-        for (let i = 0; i < Math.min(needed, candidates.length); i++) {
-          const candidate = candidates[i]!;
+        for (let i = 0; i < Math.min(needed, usableCandidates.length); i++) {
+          const candidate = usableCandidates[i]!;
           // Invader 预定 = Core 占坑：无视野时也先标 needCoreClear，demand 首波孵
           // clearer 而不是经济编队（否则第一波 harvester 进房即被核心压制、再走
           // 回收→失明）。有视野后 collectRemoteBlockers 会按 lesser/stronghold/clear 校正。
@@ -430,18 +468,25 @@ export const remoteMiningManagerSystem: System = {
           // 有视野且确认核心消失 — 提前解封两类标记。
           if (op.blockedUntil !== undefined) op.blockedUntil = undefined;
           if (op.needCoreClear) op.needCoreClear = undefined;
+          // 预定仍在但无核心 = 拆核后的残留预定：记录标记，屏蔽贫困期按预定重开。
+          // 兼容旧状态（needCoreClear 已在旧版本清除）——只要见到残留预定就补记一次。
+          if (op.coreClearedAt === undefined && intel[rn]?.reservedBy === INVADER_USERNAME) {
+            op.coreClearedAt = ctx.tick;
+          }
           continue;
         }
         if (observed.kind === "stronghold") {
           // 大要塞（带守卫/建筑）：维持现有 blockedUntil + recycle 规避，等自然 decay。
           op.blockedUntil = ctx.tick + CONFIG.remote.coreBlockCooldown;
           if (op.needCoreClear) op.needCoreClear = undefined; // 不是可拆的 lesser core
+          op.coreClearedAt = undefined; // 又见到核心 — 残留预定标记作废
           blockedRooms.add(rn);
           continue;
         }
         // observed.kind === "lesser"：次级 reserve-only 核心，无守卫 → 派 clearer 拆，不阻塞。
         // 不写 blockedUntil（核心清除后 demand 立即恢复），只标 needCoreClear 驱动孵 clearer。
         if (op.needCoreClear !== true) op.needCoreClear = true;
+        op.coreClearedAt = undefined;
         clearRooms.add(rn);
       }
 
@@ -527,6 +572,13 @@ export const remoteMiningManagerSystem: System = {
       // siteCount 实测校正 + tick 配额仲裁（让位 emergency）+ 全局总量判定。
       fulfillContainerRequests(remoteOps, ctx, snapshot.roomName);
 
+      // 废弃 op 的远矿请求立即出队：需求端已不再为它提交，但旧请求可能被之前每轮的
+      // submitRequest 刷新过 expiresAt，等 TTL 会继续占着队列并触发 spawnQueueStale。
+      for (const [target, op] of Object.entries(remoteOps)) {
+        if (op.state !== "abandoned") continue;
+        removeRequestsByTarget(queue, target, REMOTE_QUEUE_ROLES);
+      }
+
       // P0-2：主房 crisis 期暂停远矿 spawn 推送（病灶 2 根因）。
       // 旧逻辑 colonyState 只挡「新开点」（roomReadyForNewRemote）+ demand 内部挡
       // bootstrap/reserver，不挡现役 op 的 remoteHarvester/remoteHauler 推送 — 主房
@@ -538,6 +590,22 @@ export const remoteMiningManagerSystem: System = {
         colonyState === "recovery" || colonyState === "bootstrap" || colonyState === "defense";
       if (!crisisPaused) {
         const cpuBefore = Game.cpu.getUsed();
+        // 行军规避房：与 PB/deposit 同一威胁记忆口径（intel 观测 write-through
+        // kernel.threatRooms + TTL 记忆）。全部远矿派工 creep memory.avoidRooms。
+        const intelByRoom = new Map(queryRoomIntel().map(e => [e.subject, e.payload] as const));
+        const myName = snapshot.controller?.owner?.username;
+        const observedThreats = threatRoomsFromIntel(intelByRoom, myName, CONFIG.defense.allies);
+        if (observedThreats.length > 0 && Memory.kernel) {
+          Memory.kernel.threatRooms = rememberThreatRooms(Memory.kernel, observedThreats, ctx.tick);
+        }
+        const avoidRooms = new Set([
+          ...observedThreats,
+          ...rememberedThreatRooms(
+            Memory.kernel ?? {},
+            ctx.tick,
+            CONFIG.powerFarm.threatMemoryTicks,
+          ),
+        ]);
         const { requests } = evaluateRemoteDemand({
           homeRoom: snapshot.roomName,
           colonyState,
@@ -549,6 +617,7 @@ export const remoteMiningManagerSystem: System = {
           remoteThreats,
           blockedRooms,
           clearRooms,
+          avoidRooms,
           travelCosts: Object.fromEntries(
             Object.keys(remoteOps).map(roomName => [roomName, intel[roomName]?.pathCost]),
           ),

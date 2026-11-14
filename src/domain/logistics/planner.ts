@@ -64,12 +64,42 @@ export function planLogistics(input: PlannerInput): TransportPlan {
   let totalRisk = 0;
   let expectedDelivery = 0;
 
+  // 供需索引：合同派单必须对着**当前**的供给/需求节点，而不是签发时的那一对。
+  // 同一源/目标的多条合同共享额度，防止各自独立计算后合计越过安全储备。
+  const supplyIndex = new Map<string, SupplyNode>();
+  for (const supply of surpluses) supplyIndex.set(`${supply.room}|${supply.resource}`, supply);
+  const demandIndex = new Map<string, DemandNode>();
+  for (const demand of deficits) demandIndex.set(`${demand.room}|${demand.resource}`, demand);
+  const claimedSupply = new Map<string, number>();
+  const claimedDemand = new Map<string, number>();
+
   // 步骤 1: 从 Contract 派生 Request
   for (const contract of contracts) {
     if (!isContractActive(contract.status)) continue;
 
-    const cycleAmount = computeCycleAmount(contract, 100);
+    const supplyKey = `${contract.sourceRoom}|${contract.resource}`;
+    const demandKey = `${contract.targetRoom}|${contract.resource}`;
+    const supply = supplyIndex.get(supplyKey);
+    const demand = demandIndex.get(demandKey);
+    // 供需任一消失 ⇒ 这条合同当前没有可执行的现实基础。合同本身由 specialization-planner
+    // 的宽限窗口负责清理；这里只保证不继续派单（旧实现无条件派单，需求消失后仍永久抽源房）。
+    if (!supply || !demand) continue;
+
+    const demandLeft = Math.max(0, demand.remaining - (claimedDemand.get(demandKey) ?? 0));
+    if (demandLeft <= 0) continue;
+
+    // 安全储备：取合同声明与供给节点自带 safety 的较大者 —— 两者都是“不许抽走”的地板。
+    const reserve = Math.max(contract.minimumReserve, supply.safety);
+    const supplyLeft = Math.max(
+      0,
+      supply.available - supply.reserved - reserve - (claimedSupply.get(supplyKey) ?? 0),
+    );
+    if (supplyLeft <= 0) continue;
+
+    const cycleAmount = Math.min(computeCycleAmount(contract, 100), demandLeft, supplyLeft);
     if (cycleAmount <= 0) continue;
+    claimedSupply.set(supplyKey, (claimedSupply.get(supplyKey) ?? 0) + cycleAmount);
+    claimedDemand.set(demandKey, (claimedDemand.get(demandKey) ?? 0) + cycleAmount);
 
     const source: TransportEndpoint = {
       room: contract.sourceRoom,

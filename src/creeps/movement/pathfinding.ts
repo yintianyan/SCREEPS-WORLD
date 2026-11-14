@@ -930,6 +930,12 @@ export function ensureHome(creep: Creep): boolean {
       (mode === "idle" && creep.room.name !== remoteTarget) ||
       (mode === "idle" && isRemoteHauler && creep.room.name === remoteTarget && hasHalfLoad) ||
       (mode === "work" && (isRemoteHauler || creep.memory.role === "coreClearer")) ||
+      // pbCollector：载 power → 回 home 卸货；空载留在目标房预置（等 PB 击破后 10 tick 抢 ruins）。
+      (mode === "work" &&
+        creep.memory.role === "pbCollector" &&
+        creep.store.getUsedCapacity(RESOURCE_POWER) > 0) ||
+      // depositHarvester：work=满载回 home 落仓（与 coreClearer 同向），acquire=去 deposit 房采集。
+      (mode === "work" && creep.memory.role === "depositHarvester") ||
       (isCarrier && (mode === "acquire" || mode === "idle"));
     const dest = goHome ? home : remoteTarget;
     if (creep.room.name === dest) {

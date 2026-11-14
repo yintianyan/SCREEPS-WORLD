@@ -22,6 +22,12 @@ import {
   type RoomFlowSample,
 } from "../../domain/economy/accounting";
 import { CONFIG } from "../../config";
+import { collectRoomResourceStocks, diffResourceStocks } from "../../domain/economy/resource-stock";
+import {
+  evaluateResourceFlows,
+  toResourceFlowMemory,
+  type ResourceFlowSample,
+} from "../../domain/economy/resource-flow-status";
 
 /** RoomEnergyCounters（kernel 镜像结构）→ EnergyLedger（domain 权威结构）。结构一致，直接换型。 */
 function toLedger(c: RoomEnergyCounters | undefined): EnergyLedger {
@@ -188,6 +194,50 @@ export function queryEconomy(roomName: string): EconomyQuery | undefined {
   };
 }
 
+/**
+ * Phase A：用相邻两窗的库存快照差评估资源流状态，写入 `Memory.rooms[room].resourceFlow`。
+ *
+ * 基线住 heap（换码即清）：首窗只播种、不结算；跳窗超过 3 个窗口按断档重播种 ——
+ * 跨断口算出来的「流入」是部署期间累积的库存跳变，不是真实流量。
+ *
+ * 只做评估与落盘。停止阀由消费方读取（factory-manager 的产物/电池 stuck 闸）——
+ * 评估层不执行任何游戏动作。
+ */
+function updateResourceFlowStatus(
+  snapshot: RoomSnapshot,
+  roomMem: RoomMemory,
+  tick: number,
+  windowTicks: number,
+): void {
+  const g = globalCache();
+  const baselines = (g.resourceFlowStocks ??= {});
+  const current = collectRoomResourceStocks(snapshot);
+  const previous = baselines[snapshot.roomName];
+  baselines[snapshot.roomName] = { t: tick, stocks: current };
+  if (!previous) return;
+
+  const elapsed = tick - previous.t;
+  if (elapsed <= 0 || elapsed > windowTicks * 3) return;
+
+  const samples: ResourceFlowSample[] = diffResourceStocks(previous.stocks, current, elapsed).map(
+    flow => ({
+      resource: flow.resource,
+      stock: flow.stock,
+      inflowPerTick: flow.inflowPerTick,
+      outflowPerTick: flow.outflowPerTick,
+      // stuck 计数跨窗累计：上一窗的 k 是本窗的输入，连续无流出才会继续增长。
+      previousStuckTicks: roomMem.resourceFlow?.r[flow.resource]?.k ?? 0,
+      elapsedTicks: elapsed,
+    }),
+  );
+  roomMem.resourceFlow = toResourceFlowMemory(
+    evaluateResourceFlows(samples),
+    samples,
+    tick,
+    elapsed,
+  );
+}
+
 export const economySystem: System = {
   name: "economy",
   priority: 1 as Priority,
@@ -205,6 +255,10 @@ export const economySystem: System = {
       if ((ctx.tick + roomHash(roomName)) % acc.windowTicks !== 0) continue;
       const roomMem = Memory.rooms[roomName];
       if (!roomMem) continue;
+
+      // Phase A：资源流状态与 economy 共用同一条 50 拍窗口（房间错峰）。
+      // 放在账本结算之前：即使本窗 economy 因断档只播种，流量基线也要照常滚动。
+      updateResourceFlowStatus(snapshot, roomMem, ctx.tick, acc.windowTicks);
 
       const st = stateFor(roomName);
       const cum = toLedger(g.energyLedger?.rooms[roomName]);

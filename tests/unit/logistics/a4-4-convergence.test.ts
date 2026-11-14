@@ -7,12 +7,6 @@ import {
   hasActiveContract,
   isContractActive,
 } from "../../../src/domain/economy/supply-contract";
-import {
-  bridgeToSupplyNode,
-  bridgeToDemandNode,
-  type ProducerSnapshot,
-  type ConsumerSnapshot,
-} from "../../../src/domain/economy/contract-node-bridge";
 import { createRequest } from "../../../src/domain/logistics/transport-request";
 import {
   createAccounting,
@@ -25,16 +19,7 @@ import {
   isComplete,
   hasLoss,
 } from "../../../src/domain/logistics/transport-accounting";
-import {
-  validateDelivery,
-  isFullyDelivered,
-  isPartialDelivery,
-  isZeroDelivery,
-} from "../../../src/domain/logistics/delivery-validation";
-import {
-  createAssignment,
-  type TransportAssignment,
-} from "../../../src/domain/logistics/transport-assignment";
+import { createAssignment } from "../../../src/domain/logistics/transport-assignment";
 import { createRoute } from "../../../src/domain/logistics/route";
 import { RouteCache } from "../../../src/domain/logistics/route-cache";
 import { planLogistics, type PlannerInput } from "../../../src/domain/logistics/planner";
@@ -386,52 +371,6 @@ describe("A4.4-E2E-009: Route Cache 失效与重建", () => {
 // ─── E2E-010: Supply Contract → Request 闭环 ─────────────
 
 describe("A4.4-E2E-010: Supply Contract → TransportRequestV2 闭环", () => {
-  it("从 Supply Contract 派生 TransportRequestV2", () => {
-    const contract = createActiveSupplyContract(
-      "W1N1",
-      "W2N1",
-      "energy",
-      10, // targetRate: 10 energy/tick
-      5000, // minimumReserve
-      2, // priority
-      TICK,
-    );
-
-    expect(contract.status).toBe("active");
-    expect(isContractActive(contract.status)).toBe(true);
-
-    const cycleAmount = computeCycleAmount(contract, 100);
-    expect(cycleAmount).toBe(1000); // 10 * 100 = 1000
-
-    // 从 Contract 派生 SupplyNode + DemandNode
-    const producer: ProducerSnapshot = {
-      room: "W1N1",
-      storageEnergy: 50000,
-      storageCapacity: 100000,
-      transferable: 40000,
-      reserved: 0,
-    };
-    const consumer: ConsumerSnapshot = {
-      room: "W2N1",
-      storageEnergy: 5000,
-      storageCapacity: 100000,
-      deficitAmount: 1000,
-      criticality: "normal",
-      firstSeen: TICK,
-    };
-
-    const supplyNode = bridgeToSupplyNode(contract, producer, TICK);
-    const demandNode = bridgeToDemandNode(contract, consumer, TICK);
-
-    expect(supplyNode).toBeDefined();
-    expect(supplyNode!.contractId).toBe(contract.id);
-    expect(supplyNode!.transferable).toBeLessThanOrEqual(cycleAmount);
-
-    expect(demandNode).toBeDefined();
-    expect(demandNode!.contractId).toBe(contract.id);
-    expect(demandNode!.requested).toBeGreaterThanOrEqual(cycleAmount);
-  });
-
   it("Contract 幂等：同一 (source, target, resource) 只有一个非终态 Contract", () => {
     const contract1 = createActiveSupplyContract("W1N1", "W2N1", "energy", 10, 5000, 2, TICK);
     const contracts = [contract1];
@@ -500,7 +439,7 @@ describe("A4.4-E2E-013: Multi-Resource 支持", () => {
       timestamp: TICK,
     };
 
-    // 矿物请求通过 Contract 驱动
+    // 矿物请求通过 Contract 驱动（合同派单必须对着当前供需节点）
     const mineralContract = createActiveSupplyContract(
       "W1N1",
       "W2N1",
@@ -510,11 +449,35 @@ describe("A4.4-E2E-013: Multi-Resource 支持", () => {
       2,
       TICK,
     );
+    const mineralSupply: SupplyNode = {
+      room: "W1N1",
+      resource: "U" as any,
+      available: 5000,
+      reserved: 0,
+      safety: 1000,
+      transferable: 4000,
+      priority: 2,
+      health: 0.8,
+      capacity: 100000,
+      timestamp: TICK,
+    };
+    const mineralDemand: DemandNode = {
+      room: "W2N1",
+      resource: "U" as any,
+      requested: 500,
+      priority: 2,
+      deadline: TICK + 2000,
+      criticality: "normal",
+      fulfilled: 0,
+      remaining: 500,
+      firstSeen: TICK,
+      timestamp: TICK,
+    };
 
     const input: PlannerInput = {
       contracts: [mineralContract],
-      deficits: [energyDeficit],
-      surpluses: [],
+      deficits: [energyDeficit, mineralDemand],
+      surpluses: [mineralSupply],
       capacity: { rooms: [], totalHaulerGap: 0, totalCarrierGap: 0 } as any,
       routeCache,
       threats: new Map(),
@@ -596,41 +559,6 @@ describe("A4.4 Convergence Score 验证", () => {
     expect(contract.status).toBe("active");
     expect(isContractActive(contract.status)).toBe(true);
     expect(effectiveRate(contract)).toBe(10);
-  });
-
-  it("Delivery Validation 验证实际收到量", () => {
-    // 创建一个模拟 assignment（用于 validateDelivery）
-    const assignment: TransportAssignment = {
-      assignmentId: "ta:r1:hauler1",
-      requestId: "r1",
-      creepName: "hauler1",
-      role: "hauler",
-      resource: "energy",
-      assignedAmount: 1000,
-      loadedAmount: 1000,
-      deliveredAmount: 0,
-      lostAmount: 0,
-      assignedAt: TICK,
-      updatedAt: TICK,
-      status: "in_transit",
-    };
-
-    // 完全交付
-    const fullResult = validateDelivery(assignment, 5000, 6000, 0);
-    expect(fullResult.verified).toBe(true);
-    expect(fullResult.actualReceived).toBe(1000);
-    expect(isFullyDelivered(fullResult)).toBe(true);
-
-    // 部分交付
-    const partialResult = validateDelivery(assignment, 5000, 5500, 0);
-    expect(partialResult.verified).toBe(false);
-    expect(partialResult.actualReceived).toBe(500);
-    expect(isPartialDelivery(partialResult)).toBe(true);
-
-    // 零交付
-    const zeroResult = validateDelivery(assignment, 5000, 5000, 0);
-    expect(zeroResult.verified).toBe(false);
-    expect(isZeroDelivery(zeroResult)).toBe(true);
   });
 
   it("Accounting 跨 tick 追踪完整性", () => {

@@ -720,6 +720,9 @@ function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 
  * @internal 导出仅供单元测试（tests/unit/spawn/try-spawn.test.ts）— 业务代码
  *           不得直接调用，唯一入口是 spawnManagerSystem.run。
  */
+/** 深贫困地板（能量）：低于此值连替换也停 — 维持成本会把 storage 继续往下拉。 */
+const DEEP_POVERTY_FLOOR = 4000;
+
 /** 远矿编制角色（补员可被贫困闸暂停；现有成员照常工作）。 */
 const REMOTE_LINE_ROLES: ReadonlySet<string> = new Set([
   "remoteHarvester",
@@ -744,9 +747,15 @@ export function remoteSpawnPovertyBlocked(
   key: string,
 ): boolean {
   if (survival || !REMOTE_LINE_ROLES.has(role)) return false;
+  // coreClearer 是「拆 Invader 次级核心解锁远矿房」的一次性军事投资，不是持续抽血的
+  // 经济编制。若按 expansionMinStorage(100K) 一刀切，Invader 豁免开出的 op 永远孵不出
+  // clearer → 1500 tick 空转废弃 → 豁免立即重开，形成无限「废弃→重开」循环
+  // （线上实证 W6N1→W7N3：4832735/4835825 连续两次 Stalled 后又重开）。
+  // 仅保留深贫困地板，极低储时不再支出。
+  if (role === "coreClearer") return storageEnergy < DEEP_POVERTY_FLOOR;
   // 深贫困（<4,000）：连替换也停 —— 2026-10-24 现场：2,886 storage 时替换仍在补员，
   // 维持成本把 storage 继续往下拉。
-  if (storageEnergy < 4000) return true;
+  if (storageEnergy < DEEP_POVERTY_FLOOR) return true;
   // 替换 = 保住现有线收入的最小支出，只受上面的深贫困地板约束。
   if (key.includes(":repl:")) return false;
   // Phase 2.5：低储回血期暂停远矿「首孵/扩编」—— 新编制是净支出，先让 home storage

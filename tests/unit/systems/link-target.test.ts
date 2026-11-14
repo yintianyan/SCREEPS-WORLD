@@ -17,14 +17,31 @@ afterEach(() => {
 });
 
 describe("computeControllerLinkTarget — RCL8 GCL 升级模式", () => {
-  it("GCL 开启 + storage ≥ sustained(10k) → 满功率供能（累计 GCL）", () => {
+  it("GCL 开启 + storage ≥ gclPushStart(50% 容量 = 500K) → 满功率供能（累计 GCL）", () => {
     setGclUpgrade(true);
-    expect(computeControllerLinkTarget(8, ctrl(20000), 60000, 800, false)).toBe(800);
+    expect(computeControllerLinkTarget(8, ctrl(20000), 600000, 800, false)).toBe(800);
   });
 
-  it("GCL 开启 + 低水位(6k) → 半供 40%", () => {
+  it("GCL 开启 + 富线以下(300K-500K) → 半供涓流（保级量级）", () => {
     setGclUpgrade(true);
-    expect(computeControllerLinkTarget(8, ctrl(20000), 6000, 800, false)).toBe(320);
+    expect(computeControllerLinkTarget(8, ctrl(20000), 400000, 800, false)).toBe(320);
+  });
+
+  it("GCL 开启 + 停冲线以下(300K 以下) → 保级最低水位", () => {
+    setGclUpgrade(true);
+    expect(computeControllerLinkTarget(8, ctrl(20000), 100000, 800, false)).toBe(
+      Math.round(800 * CONFIG.economy.link.maintainRatio),
+    );
+  });
+
+  it("GCL 开启 + 降级风险 → 保级水位豁免（旧绝对刻度不再适用）", () => {
+    setGclUpgrade(true);
+    expect(computeControllerLinkTarget(8, ctrl(20000), 100000, 800, true)).toBe(
+      Math.max(
+        Math.round(800 * CONFIG.economy.link.maintainRatio),
+        CONFIG.economy.link.maintainTarget,
+      ),
+    );
   });
 
   it("GCL 开启 + 枯竭(2k) → 保级 20%", () => {

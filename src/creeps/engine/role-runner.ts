@@ -9,6 +9,7 @@ import {
   shouldFleeForeignRoom,
   fleeToHome,
   shelterAtCore,
+  evadeNuke,
   updateMode,
   releaseAssignment,
 } from "../support";
@@ -75,6 +76,11 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         if (!snapshot) {
           // ensureHome 会用 creep.room.name 设置 home，下一 tick 正常工作。
         } else {
+          // Nuke 落点规避优先于敌情 flee：核弹不在 threatCreeps 里，必须单独判定。
+          // 含战斗角色——核弹伤害不分敌我，编队也不该站在落点上；仅在落地窗口内接管。
+          if (!inForeignRoom && snapshot.incomingNukes?.length) {
+            if (evadeNuke(creep, snapshot)) return;
+          }
           // M11 战时集结避险：小队威胁在场时非战斗角色全员撤入核心集结区。
           // 不限 fleeRange——小队会主动追猎，散布全房各自逃跑就是被逐个点名；撤入塔火力圈反杀。
           if (!policy.combat && !inForeignRoom && snapshot.squadThreat) {

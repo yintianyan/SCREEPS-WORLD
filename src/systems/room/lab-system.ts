@@ -12,7 +12,8 @@ import type {
 import { BOOST_EFFECTS, BOOST_EFFECT_PART } from "../../domain/industry/types";
 import {
   evaluateBoostRequests,
-  decideWarReactionTarget,
+  decideCombatReactionTarget,
+  decidePbReactionTarget,
   DEFAULT_BOOST_POLICY,
 } from "../../domain/industry/boost";
 import { computeBoostSurplus } from "../../domain/industry/boost-stockpile";
@@ -29,6 +30,7 @@ import {
   bumpEnergyCounter,
 } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
+import { log } from "../../kernel/log";
 import { collectFullInventory } from "../../domain/industry/inventory";
 import { expandReactionDemands } from "../../domain/industry/procurement";
 import {
@@ -310,6 +312,21 @@ export const labSystem: System = {
       const warActive =
         Memory.kernel?.strategy?.posture === "war" &&
         (!warPlan || warPlan.sponsor === snapshot.roomName);
+      // PB 野采前馈：本房 sponsor 的 PB 任务存在时，combat 化合物（XUH2O→XLHO2）
+      // 与 war 同链前馈 — PB 编队 killWindow 由寿命反推后以 boost 为前提，
+      // 孵化闸等料，前馈必须先行（decideCombatReactionTarget 与 war 共用）。
+      const pbSponsorActive = (Memory.kernel?.powerFarmMissions ?? []).some(
+        m => m.sponsor === snapshot.roomName,
+      );
+      const combatFeedActive = warActive || pbSponsorActive;
+      // PB hold：boost 口径 PB 任务存在 → 编队角色按 build 相位口径放宽报到窗口。
+      const pbBoostHold = (Memory.kernel?.powerFarmMissions ?? []).some(
+        m => m.boostPlanned === true && m.sponsor === snapshot.roomName,
+      );
+      // 任务档位化合物透传：PB creep 的 boost 请求按任务契约选化合物。
+      const pbBoostCompounds = (Memory.kernel?.powerFarmMissions ?? []).find(
+        m => m.boostPlanned === true && m.sponsor === snapshot.roomName,
+      )?.boostCompounds;
 
       // 原料断供休眠：单房间只产一种矿物，多矿种原料在市场/跨房补给接入前
       // 不会自行出现。此时每 tick「规划反应链 → 无可执行步骤 → 清除 → 再规划」
@@ -333,11 +350,12 @@ export const labSystem: System = {
               ticksToLive: r.ticksToLive ?? 0,
               boosted: (industryMem.boostedCreeps ?? []).includes(r.name),
               body: r.body,
+              mission: r.mission,
             })),
           snapshot.rcl,
           idleInventory,
           DEFAULT_BOOST_POLICY,
-          false,
+          warPlan?.phase === "build" || pbBoostHold,
         );
 
         if (idleBoostRequests.length > 0) {
@@ -465,6 +483,7 @@ export const labSystem: System = {
 
       // ── 1. Boost 决策 ──
       // 消费共享快照总线 — 不再独立遍历 Game.creeps。
+      // mission 透传：PB 编队 healer 需要 lab 分配优先于 attacker（孵化序同步）。
       const creepSummaries = (globalCache().creepRefs ?? [])
         .filter(r => r.home === snapshot.roomName)
         .map(r => ({
@@ -473,6 +492,15 @@ export const labSystem: System = {
           ticksToLive: r.ticksToLive ?? 0,
           boosted: (industryMem.boostedCreeps ?? []).includes(r.name),
           body: r.body,
+          mission: r.mission,
+          ...(pbBoostCompounds && r.mission === "powerBank"
+            ? {
+                missionBoost: {
+                  attack: pbBoostCompounds.attack as Compound,
+                  heal: pbBoostCompounds.heal as Compound,
+                },
+              }
+            : {}),
         }));
 
       const boostRequests = evaluateBoostRequests(
@@ -480,16 +508,69 @@ export const labSystem: System = {
         snapshot.rcl,
         inventory,
         DEFAULT_BOOST_POLICY,
-        warPlan?.phase === "build",
+        warPlan?.phase === "build" || pbBoostHold,
       );
 
       // ── 2. 反应规划（含自动目标选择） ──
-      // 优先级：war 前馈（库存缺口预产编队化合物）> G 威慑备弹（nuker 存在且
-      // G 合计低于备弹目标 — 常态威慑资产，先于经济 boost 投资）> boost 请求
-      // 化合物 > 默认 XGH2O。不抢占已设定的目标 — 反应批次很快完成，切目标浪费半成品。
-      // G 合计口径 = 反应链可见库存（storage+terminal+labs）+ nuker 已装填当量。
+      // PB combat 前馈目标（无条件先算）：任务档位（T3/T2）优先、demand 留痕
+      // 次之 — 产出必须与闸门/请求同一档位。需求 = 任务 boostNeed ∪ demand
+      // 留痕，各 +reserve。
+      const pbMission = (Memory.kernel?.powerFarmMissions ?? []).find(
+        m => m.boostPlanned === true && m.sponsor === snapshot.roomName && m.boostNeed,
+      );
+      const pbDemandEntry = Memory.kernel?.pbBoostDemand?.[snapshot.roomName];
+      const pbCompounds = pbMission?.boostCompounds
+        ? {
+            attack: pbMission.boostCompounds.attack as Compound,
+            heal: pbMission.boostCompounds.heal as Compound,
+          }
+        : pbDemandEntry && pbDemandEntry.until > ctx.tick
+          ? (pbDemandEntry.compounds as { attack: Compound; heal: Compound })
+          : undefined;
+      const pbNeedBase = pbMission?.boostNeed ?? { attackUnits: 0, healUnits: 0 };
+      const pbNeed = {
+        attack: pbNeedBase.attackUnits + CONFIG.boost.reserveAmount,
+        heal: pbNeedBase.healUnits + CONFIG.boost.reserveAmount,
+      };
+      if (pbDemandEntry && pbDemandEntry.until > ctx.tick) {
+        pbNeed.attack = Math.max(
+          pbNeed.attack,
+          pbDemandEntry.attackUnits + CONFIG.boost.reserveAmount,
+        );
+        pbNeed.heal = Math.max(pbNeed.heal, pbDemandEntry.healUnits + CONFIG.boost.reserveAmount);
+      }
+      const pbTarget =
+        pbCompounds && pbMission
+          ? decidePbReactionTarget(inventory, pbNeed.attack, pbNeed.heal, pbCompounds)
+          : undefined;
+
+      // PB combat 前馈抢占：被 latch 的经济链（XGH2O 等默认生产线）让位给
+      // combat 化合物 — 私服实证：XGH2O 链因催化剂 X 断供休眠 latch 数万
+      // tick，PB 前馈永远翻不进去。抢占代价有界（丢弃 ≤ 一个 300 批次半成品），
+      // 沿 G 备弹抢占先例（战时/威慑供给 > 经济 boost）。
+      const combatCompounds: ReadonlySet<string> = new Set(["XUH2O", "XLHO2", "UH2O", "LHO2"]);
+      if (
+        pbTarget &&
+        industryMem.reactionTarget &&
+        industryMem.reactionTarget !== pbTarget &&
+        !combatCompounds.has(industryMem.reactionTarget)
+      ) {
+        industryMem.reactionTarget = pbTarget;
+        industryMem.reactionAmount = 300;
+        delete industryMem.reactionPlan;
+        log.info(
+          "lab-system",
+          `lab: PB combat 前馈抢占 ${snapshot.roomName} 反应目标 → ${pbTarget}`,
+        );
+      }
+
       if (!industryMem.reactionTarget) {
-        const warTarget = decideWarReactionTarget(warActive, inventory, CONFIG.war.boostStockpile);
+        // 目标未 latch 时的优先级：PB combat 前馈（按任务档位逐化合物对齐）>
+        // war 前馈（库存缺口预产编队化合物）> G 威慑备弹 > boost 请求化合物 >
+        // 默认 XGH2O。
+        const warTarget =
+          pbTarget ??
+          decideCombatReactionTarget(combatFeedActive, inventory, CONFIG.war.boostStockpile);
         const gTotal =
           (inventory[RESOURCE_GHODIUM] ?? 0) + (snapshot.nuker?.store[RESOURCE_GHODIUM] ?? 0);
         const gShort = snapshot.nuker !== undefined && gTotal < CONFIG.nuker.ghodiumStockpile;
@@ -511,7 +592,7 @@ export const labSystem: System = {
           industryMem.reactionAmount = 300;
         }
       } else if (
-        !warActive &&
+        !combatFeedActive &&
         industryMem.reactionTarget !== "G" &&
         snapshot.nuker !== undefined &&
         (snapshot.nuker.store[RESOURCE_GHODIUM] ?? 0) + (inventory[RESOURCE_GHODIUM] ?? 0) <

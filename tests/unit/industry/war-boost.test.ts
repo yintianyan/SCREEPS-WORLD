@@ -4,8 +4,13 @@ import {
   BOOST_REPORT_TTL,
   DEFAULT_BOOST_POLICY,
   decideWarReactionTarget,
+  decideCombatReactionTarget,
+  decidePbReactionTarget,
   evaluateBoostRequests,
+  isPbBoostStockSufficient,
   isWithinBoostWindow,
+  pbSquadBoostNeed,
+  PB_SQUAD_COMPOUNDS,
 } from "../../../src/domain/industry/boost";
 import { labSystem } from "../../../src/systems/room/lab-system";
 import { CONFIG } from "../../../src/config";
@@ -326,6 +331,116 @@ describe("lab-system — war 前馈接线", () => {
     });
     labSystem.run(mockContext(snap));
     expect(g.Memory.rooms.W7N4.industry.idleUntil).toBe(1000 + 500);
+  });
+});
+
+// ─── 6. PB 编队强化（原子对）与 combat 前馈 ─────────────────
+
+describe("decidePbReactionTarget — 前馈目标按任务需求逐化合物对齐", () => {
+  it("XUH2O 缺口 → 前馈 XUH2O（先炮后奶）", () => {
+    expect(decidePbReactionTarget({ XLHO2: 3000 }, 1300, 2020)).toBe("XUH2O");
+  });
+
+  it("XUH2O 够、XLHO2 缺 → 前馈 XLHO2", () => {
+    expect(decidePbReactionTarget({ XUH2O: 1300, XLHO2: 500 }, 1300, 2020)).toBe("XLHO2");
+  });
+
+  it("双达标 → undefined（回退默认生产线）", () => {
+    expect(decidePbReactionTarget({ XUH2O: 1300, XLHO2: 2020 }, 1300, 2020)).toBeUndefined();
+  });
+
+  it("边界：库存恰等于需求 → 视为达标", () => {
+    expect(decidePbReactionTarget({ XUH2O: 1300, XLHO2: 2019 }, 1300, 2020)).toBe("XLHO2");
+    expect(decidePbReactionTarget({ XUH2O: 1300, XLHO2: 2020 }, 1300, 2020)).toBeUndefined();
+  });
+
+  it("闭环断裂回归：war 统一目标 600 < PB 需求 1300/2020 时，PB 目标必须覆盖需求", () => {
+    // 私服实证：前馈补到 war stockpile(600) 就停，闸门要 1300/2020 → 永久停滞。
+    expect(decidePbReactionTarget({ XUH2O: 600, XLHO2: 600 }, 1300, 2020)).toBe("XUH2O");
+  });
+});
+
+describe("decideCombatReactionTarget — PB/war 共用 combat 前馈", () => {
+  it("PB 任务激活 + 化合物缺口 → 与 war 同链前馈 XUH2O→XLHO2", () => {
+    expect(decideCombatReactionTarget(true, { XLHO2: 800 }, 600)).toBe("XUH2O");
+    expect(decideCombatReactionTarget(true, { XUH2O: 600, XLHO2: 100 }, 600)).toBe("XLHO2");
+  });
+
+  it("无激活任务 → 不前馈", () => {
+    expect(decideCombatReactionTarget(false, {}, 600)).toBeUndefined();
+  });
+
+  it("全达标 → undefined（回退默认生产线）", () => {
+    expect(decideCombatReactionTarget(true, { XUH2O: 600, XLHO2: 600 }, 600)).toBeUndefined();
+  });
+});
+
+describe("PB_SQUAD_COMPOUNDS / pbSquadBoostNeed — 备料需求", () => {
+  it("化合物对齐 DEFAULT_BOOST_POLICY 的 attacker/healer 线路", () => {
+    expect(PB_SQUAD_COMPOUNDS.attack).toBe("XUH2O");
+    expect(PB_SQUAD_COMPOUNDS.heal).toBe("XLHO2");
+  });
+
+  it("需求 = 规划人数 × 匹配部件数 × 30（引擎 boostCreep 消耗）", () => {
+    // RCL8 顶档 boosted 编队：2 attacker×20A + 8 healer×8H。
+    const need = pbSquadBoostNeed(2, 20, 8, 8);
+    expect(need.attackUnits).toBe(1200);
+    expect(need.healUnits).toBe(1920);
+  });
+});
+
+describe("isPbBoostStockSufficient — 原子判定（单边禁止）", () => {
+  const need = { attackUnits: 1200, healUnits: 1920 };
+  const RESERVE = 100;
+
+  it("两种化合物都够 reserve+需求 → true", () => {
+    expect(isPbBoostStockSufficient(need, { XUH2O: 1300, XLHO2: 2020 }, RESERVE)).toBe(true);
+  });
+
+  it("只够 attack（XUH2O）→ false：单边 boost 会让反弹/治疗失配", () => {
+    expect(isPbBoostStockSufficient(need, { XUH2O: 1300, XLHO2: 1900 }, RESERVE)).toBe(false);
+  });
+
+  it("只够 heal（XLHO2）→ false：killWindow 打不进，kill 超寿命", () => {
+    expect(isPbBoostStockSufficient(need, { XUH2O: 1200, XLHO2: 2020 }, RESERVE)).toBe(false);
+  });
+
+  it("reserve 保留量不参与供给（库存 = reserve 时视为缺料）", () => {
+    expect(isPbBoostStockSufficient(need, { XUH2O: 1300, XLHO2: 2020 }, 1920)).toBe(false);
+  });
+});
+
+describe("lab-system — PB 野采前馈接线", () => {
+  it("powerFarmMissions 含本房 sponsor + 化合物缺口 → 前馈 XUH2O（与 war 同链）", () => {
+    g.Game.rooms = { W7N4: {} };
+    g.Game.creeps = {};
+    g.Memory.rooms = { W7N4: {} };
+    g.Memory.kernel = {
+      powerFarmMissions: [{ targetRoom: "W2N1", sponsor: "W7N4", since: 900, spawned: 0 }],
+    };
+    const snap = mockSnapshot({
+      rcl: 6,
+      labs: [makeLab("L1", 25, 25), makeLab("L2", 26, 25), makeLab("L3", 25, 26)],
+      storage: { id: "stor1", store: { energy: 5000, ...ALL_BASE_MINERALS } } as any,
+    });
+    labSystem.run(mockContext(snap));
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XUH2O");
+  });
+
+  it("PB 任务 sponsor 为他房 → 本房不受影响（默认 XGH2O）", () => {
+    g.Game.rooms = { W7N4: {} };
+    g.Game.creeps = {};
+    g.Memory.rooms = { W7N4: {} };
+    g.Memory.kernel = {
+      powerFarmMissions: [{ targetRoom: "W2N1", sponsor: "W9N9", since: 900, spawned: 0 }],
+    };
+    const snap = mockSnapshot({
+      rcl: 6,
+      labs: [makeLab("L1", 25, 25), makeLab("L2", 26, 25), makeLab("L3", 25, 26)],
+      storage: { id: "stor1", store: { energy: 5000, ...ALL_BASE_MINERALS } } as any,
+    });
+    labSystem.run(mockContext(snap));
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XGH2O");
   });
 });
 

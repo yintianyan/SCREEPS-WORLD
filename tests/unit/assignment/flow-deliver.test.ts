@@ -32,8 +32,6 @@ const plan: RoomFlowPlan = {
       priority: 2,
     },
   ],
-  linkTransfers: [],
-  spawnNeeds: [],
   unmet: [],
   totalCreepRate: 9,
 };
@@ -111,8 +109,6 @@ describe("buildFlowDeliverTasks", () => {
         },
         ...plan.allocations,
       ],
-      linkTransfers: [],
-      spawnNeeds: [],
       unmet: [],
       totalCreepRate: 20,
     };

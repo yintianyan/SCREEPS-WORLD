@@ -64,4 +64,19 @@ describe("remoteSpawnPovertyBlocked", () => {
   it("survival 请求豁免（生存优先）", () => {
     expect(remoteSpawnPovertyBlocked("remoteHauler", 0, true, "remoteHauler:A:B:0")).toBe(false);
   });
+
+  it("coreClearer 只受深贫困地板约束 —— 低储期也必须能拆核", () => {
+    // 47K：普通远矿被 100K 闸挡住，但清核是一次性军事投资 → 放行。
+    // 回归锚：若把 coreClearer 重新并入扩张水位，Invader op 会陷入
+    // 「开点 → clearer 永远孵不出 → 1500t 空转废弃 → 豁免重开」死循环。
+    expect(remoteSpawnPovertyBlocked("coreClearer", 47_000, false, "coreClearer:A:B:0")).toBe(
+      false,
+    );
+    expect(
+      remoteSpawnPovertyBlocked("coreClearer", EXPANSION_FLOOR - 1, false, "coreClearer:A:B:0"),
+    ).toBe(false);
+    // 深贫困地板仍是硬约束。
+    expect(remoteSpawnPovertyBlocked("coreClearer", 3_999, false, "coreClearer:A:B:0")).toBe(true);
+    expect(remoteSpawnPovertyBlocked("coreClearer", 4_000, false, "coreClearer:A:B:0")).toBe(false);
+  });
 });

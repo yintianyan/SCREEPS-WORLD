@@ -29,6 +29,8 @@ interface RoomPoolState {
 const poolRooms = new Map<string, RoomPoolState>();
 
 const LATENCY_RING_CAP = 64;
+/** 全局延迟样本上限（比单房环大，供 planner 取跨房均值）。 */
+const GLOBAL_LATENCY_RING_CAP = 256;
 
 // ─── 帝国物流规划内部门控（原独立系统并入） ─────────────────
 // 原 logistics-planner 系统 interval=100；此处用绝对相位门保持原调度节律
@@ -206,6 +208,10 @@ export const logisticsSystem: System = {
             const lat = ctx.tick - e.firstSeen;
             if (st.latencyRing.length >= LATENCY_RING_CAP) st.latencyRing.shift();
             st.latencyRing.push(lat);
+            // 跨房汇总（planner 读取）：module-private ring 读不到，故同步落 heap。
+            const globalRing = (g.logisticsLatencyRing ??= []);
+            if (globalRing.length >= GLOBAL_LATENCY_RING_CAP) globalRing.shift();
+            globalRing.push(lat);
           }
         }
       }

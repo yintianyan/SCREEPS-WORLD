@@ -38,6 +38,19 @@ export interface LogisticsHealthResult {
 // ─── 核心算法 ──────────────────────────────────────────────
 
 /**
+ * 延迟样本均值（纯函数）。
+ *
+ * `latencyRing` 记录的是「请求从首次在册到被认领」的 tick 差；空环返回 0（无样本）。
+ * 四舍五入到整数 tick，与日志/判据（>500 判 congested）同量纲。
+ */
+export function averageLatency(samples: readonly number[]): number {
+  if (samples.length === 0) return 0;
+  let sum = 0;
+  for (const sample of samples) sum += Math.max(0, sample);
+  return Math.round(sum / samples.length);
+}
+
+/**
  * 计算 Logistics Health。
 
  * 与 network-health.ts 的区别：

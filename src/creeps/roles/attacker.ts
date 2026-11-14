@@ -8,6 +8,7 @@ import { getHostilesCached } from "../support/targeting";
 import { getHostileStructuresCached, getPowerBankCached } from "../support/room-scans";
 import { getObjectById } from "../support/obj-cache";
 import { globalCache } from "../../kernel/global-cache";
+import { PB_BOOST_HOLD_MIN_TTL } from "../../domain/industry/boost";
 import { CONFIG } from "../../config";
 
 /** A5.4.1 战术指令接口（与 domain/tactical/role-intent.ts RoleActionIntent 对齐）。 */
@@ -296,7 +297,10 @@ export function attackStructures(): ActionCandidate<AnyStructure> {
 
 /**
  * 战备集结（R4 hold 钩子，导出供单测直接调用）。决策矩阵：
- * PB 野采编队（mission="powerBank"）→ 不集结直接推进（无波次语义 —
+ * PB 野采编队（mission="powerBank"）→ boost 口径任务先驻留：未强化完不出征
+ *   （boost 后反弹 ×4，治疗不 ×4 就是失配送死）。寿命剩余 ≥ PB_BOOST_HOLD_MIN_TTL
+ *   期间在 home 停驻等强化（lab 报到拦截优先接管），超龄放行出征由任务
+ *   超时/战损止损兜底；非 boost 口径任务不集结直接推进（无波次语义 —
  *   PB 房无守军，添油无害且更快开打；healer 同用本钩子自动放行）；
  * 无 warPlan / 已 advance / 计划目标与己不一致 → 不接管（false，正常管线）；
  * build + 低血 → 标记回收接管（归航由 spawn-manager 处理）；
@@ -304,7 +308,23 @@ export function attackStructures(): ActionCandidate<AnyStructure> {
  * 返回 true 表示本 tick 已处理（role-runner 跳过导航与攻击候选）。
  */
 export function attackerHold(creep: Creep, ctx: TickContext): boolean {
-  if (creep.memory.mission === "powerBank") return false;
+  if (creep.memory.mission === "powerBank") {
+    const mission = (Memory.kernel?.powerFarmMissions ?? []).find(
+      m => m.targetRoom === creep.memory.remoteTarget,
+    );
+    const needsHold =
+      mission?.boostPlanned === true &&
+      !creep.body.some(p => p.boost !== undefined) &&
+      (creep.ticksToLive ?? 0) >= PB_BOOST_HOLD_MIN_TTL;
+    if (!needsHold) return false;
+    if (creep.room.name !== creep.memory.home) {
+      fleeToHome(creep);
+      return true;
+    }
+    const snapshot = creep.memory.home ? ctx.getSnapshot(creep.memory.home) : undefined;
+    if (snapshot) parkIdleCreep(creep, snapshot);
+    return true;
+  }
   const plan = Memory.kernel?.warPlan;
   if (!plan || plan.phase === "advance") return false;
   if (plan.targetRoom !== creep.memory.remoteTarget) return false;

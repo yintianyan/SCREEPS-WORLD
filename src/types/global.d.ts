@@ -35,6 +35,10 @@ declare global {
     urgentRoadId?: Id<_HasId>;
     /** harvester/miner 绑定的 source。 */
     sourceId?: Id<Source>;
+    /** depositHarvester 绑定的远矿 deposit（采空/消失后角色自回收）。 */
+    depositId?: Id<Deposit>;
+    /** depositHarvester 携带的资源类型（派工时从 deposit.depositType 快照，落仓时按此 transfer）。 */
+    depositType?: DepositConstant;
     /** remote-harvester 的远矿 source 槽位索引（0-based），spawn 时由 demand 预分配。 */
     sourceSlot?: number;
     /** remote-harvester 缓存的 source 旁 container ID（避免每 tick lookForAtArea）。 */
@@ -223,6 +227,12 @@ declare global {
        */
       ws?: number[];
     };
+    /**
+     * 资源流量状态（economy 每 50 拍窗口写，Phase A 观测 + 停止阀输入）：
+     * 契约表 §6 的状态机结果按资源投影。消费方经
+     * `domain/economy/resource-flow-status.readResourceFlowState` 读取（含新鲜度校验）。
+     */
+    resourceFlow?: import("../domain/economy/resource-flow-status").ResourceFlowMemory;
     /**
      * 经济压力梯度信号（0.0–1.0，从 drainScore 派生）：demand/construction/tower
      * 用它做梯度缩放，替代二值 crisis/normal 开关。
@@ -489,12 +499,67 @@ declare global {
     sponsor: string;
     /** 任务建立 tick（超时基准）。 */
     since: number;
-    /** 累计提交的战斗编队孵化请求数（止损账本）。 */
+    /** 实际观测到的战斗编队孵化数（按名册新增计数，仅事件统计/遥测）。 */
     spawned: number;
+    /**
+     * 非寿终战损累计（名册对账：上轮剩余寿命 > 阈值、本轮消失）。
+     * 止损判据读此值而非 spawned —— 请求 TTL 到期重发/自然换代不再虚增战损。
+     */
+    losses?: number;
+    /**
+     * 上一轮观测到的存活名册（成员名 → 剩余寿命），供下一轮对账。
+     * 只含未标记 recycle 的成员；规模 ≤ 编队人数，随任务删除。
+     */
+    roster?: Record<string, number>;
     /** PB 已击破，进入捡运阶段（collector 已派/待派）。 */
     phase: "strike" | "collect";
     /** collector 首次提交孵化请求的 tick（collect 宽限窗基准）。 */
     collectorSpawnedAt?: number;
+    /** 规划的攻击手数量（planPowerFarmSquad 输出；旧任务缺失时回退 CONFIG）。 */
+    attackers?: number;
+    /** 规划的治疗手数量（HEAL 覆盖 PB 反弹伤害）。 */
+    healers?: number;
+    /** 规划并预置的 collector 数量（PB 击破前到位，ruin 只活 10 tick）。 */
+    collectors?: number;
+    /** collector 请求的单调序号（防复用 index 导致 key 冲突）。 */
+    collectorSeq?: number;
+    /** 规划时的 PB 剩余 hits（可观测）。 */
+    powerBankHits?: number;
+    /** 规划时的 PB 预计消失 tick（可观测）。 */
+    powerBankUntil?: number;
+    /** 观测到的 PB 内含 power（collector 规模/价值门；可观测）。 */
+    powerBankPower?: number;
+    /** 编队规划成本（能量）— 用于多任务并行时的 storage 预算门。 */
+    energyCost?: number;
+    /**
+     * 任务是否按 boost 口径规划（X 系 T3 ×4）。true 时战斗编队孵化受化合物
+     * 原子闸门控：XUH2O/XLHO2 库存够 boostNeed 才放行（缺料则等 lab 前馈补产）。
+     * boost 后反弹/治疗同步 ×4，混口径编队会崩盘 — 单边禁止。
+     */
+    boostPlanned?: boolean;
+    /** boost 口径下全套编队的化合物需求（30/部件）；闸门与 lab 前馈共用此值。 */
+    boostNeed?: { attackUnits: number; healUnits: number };
+    /**
+     * 实际选用的 boost 档位（T3 XUH2O/XLHO2 或 T2 UH2O/LHO2 — PB 无塔，
+     * ×3 同样满足寿命反推的窗口；T3 需催化剂 X，缺 X 时 T2 兜底）。
+     * 闸门/前馈/boost 请求三方以此为准，防「请求 T3 而库存是 T2」的错位。
+     */
+    boostCompounds?: { attack: string; heal: string; attackFactor: number; healFactor: number };
+    /**
+     * 行军路线（home → target 全房序列，含端点）。开任务时按「规避已知威胁房」
+     * 的 findRoute 生成；strike 期每轮用最新威胁集复核，被切断即收摊止损。
+     * 多 sponsor 协同时是 sponsors[0] 的路线；全量看 marchPaths。
+     */
+    marchPath?: string[];
+    /** 多 sponsor 协同：sponsor → 各自行军路线（route 复核逐 sponsor 走这份）。 */
+    marchPaths?: Record<string, string[]>;
+    /** 行军规避房（已知威胁房全集，写入编队 creep memory.avoidRooms，兜底重路由）。 */
+    avoidRooms?: string[];
+    /**
+     * 出力联盟（多房协同）：sponsor 房名按路线距离升序；[0] 与旧字段 sponsor
+     * 同值。各 sponsor 孵化自己的份额（splitShare），孵化/能量/boost 分摊。
+     */
+    sponsors?: string[];
   }
 
   interface KernelMemory {
@@ -522,6 +587,9 @@ declare global {
      * tier 地板抬到 conserve，防看门狗把自愿放血误判为 CPU 失控进 recovery。
      */
     pixelAt?: number;
+    /** 最近一次 observer 请求的留痕（room-observer 写）：t=请求拍、r=目标房、c=引擎返回码。
+     *  stats.observe 只有分桶计数，无法回答“最近扫的是哪一间”。 */
+    observerLastRequest?: { t: number; r: string; c: number };
     /** 运行时摘要 — 每 10 tick 更新，供控制台快速诊断。 */
     stats?: {
       /** 上次采样 tick。 */
@@ -539,6 +607,12 @@ declare global {
        * global reset 后窗口需重建；未建立前该项被删除，消费侧退回 `cpuAvg10`。
        */
       cpuRate?: {
+        /**
+         * 采样拍（telemetry 每 10 拍推进窗口时写入）。
+         * Memory 跨部署存活 ⇒ 没有它，消费侧无法区分「本进程刚采的窗口」与
+         * 「上个进程留下的旧窗口」。capacity.pickCpuUsagePerTick 据此拒绝超龄读数。
+         */
+        at?: number;
         windowTicks: number;
         sampledTicks: number;
         unsampledTicks: number;
@@ -942,6 +1016,8 @@ declare global {
         /** 采信逐拍均量的两个条件（`windowTicks ≥ 100` 且 `unsampledTicks === 0`）；留它们是为了能复算"这趟用的哪把尺"。 */
         rateWindowTicks?: number;
         rateUnsampledTicks?: number;
+        /** `cpuRate.at`：这份读数的采样拍；与 `at` 相减即读数年龄。 */
+        rateAt?: number;
         limit: number;
         bucket: number;
         tightRatio: number;
@@ -1072,6 +1148,29 @@ declare global {
      * 向后兼容：单任务时数组长度=1。读取代码改为遍历数组。
      */
     powerFarmMissions?: PowerFarmMission[];
+
+    /**
+     * 行军威胁房记忆（房名 → 最近威胁观测 tick）：intel 的 room 域是 heap、
+     * global reset 即空，驻守房（NPC/玩家塔防）只有这一份跨重启记忆。
+     * PB/deposit 等跨房行军据此规避；由 threatMemoryTicks 自然洗白。
+     */
+    threatRooms?: Record<string, number>;
+
+    /**
+     * PB boost 需求留痕（sponsor → 需求 + deadline）：候选「数学可行但库存不足」
+     * 时任务不开立，但需求写给 lab 前馈补产 — 前馈只认已开立任务会造成
+     * 「闸门在开立前查库存」的鸡生蛋死锁，此留痕打破它。deadline 过期自然失效。
+     */
+    pbBoostDemand?: Record<
+      string,
+      {
+        attackUnits: number;
+        healUnits: number;
+        until: number;
+        /** 该 sponsor 应补产的档位化合物（T3 不可产时降 T2）。 */
+        compounds: { attack: string; heal: string };
+      }
+    >;
 
     /**
      * 环境画像（P1-3，empire-strategy 每 100 tick 采样写入）：市场活跃度 +
@@ -1443,6 +1542,16 @@ declare global {
      * （核心清除后 demand 立即恢复），只靠此标记驱动清核。
      */
     needCoreClear?: boolean;
+    /**
+     * 视野确认次级核心已被拆除的 tick（仅由 remote-mining-manager 写入）。
+     *
+     * 为什么需要：核心拆除后 Invader 预定会残留到 controller.reservation.endTime
+     * （私服 W7N3 实测核心消失后仍残留 ~4,900 tick）。贫困期的重开豁免若只看
+     * `intel.reservedBy=Invader`，会白孵一只 coreClearer 去空房，再走一轮
+     * 「1500t 零编队废弃 → 立即重开」。有此标记时豁免关闭，直到经济恢复或
+     * 再次确认核心存在（lesser/stronghold 观测会清除此标记）。
+     */
+    coreClearedAt?: number;
     /**
      * 普通威胁冷却截止 tick（RM-2，与 blockedUntil 同款双轨）：有视野见威胁写入/
      * 续期，确认清空立即清除，无视野时冷却期内维持威胁态 — 防「威胁→失明→恢复

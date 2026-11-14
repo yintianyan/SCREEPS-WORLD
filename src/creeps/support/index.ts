@@ -31,4 +31,5 @@ export {
   flee,
   fleeToHome,
   shelterAtCore,
+  evadeNuke,
 } from "../engine/lifecycle";

@@ -10,6 +10,7 @@ import {
 import { releaseFromTask } from "../support/assignment-adapter";
 import { getRoomThreatsCached } from "../support/targeting";
 import { isThreatWithin } from "../../domain/defense/threat";
+import { findNukeEvasionTarget } from "../../domain/defense/nuke-response";
 
 /** 根据背包存储更新 creep 模式。仅在阈值跨越时写入。 */
 export function updateMode(creep: Creep): void {
@@ -116,6 +117,26 @@ export function shelterAtCore(creep: Creep, snapshot: RoomSnapshot): void {
     return;
   }
   moveToTarget(creep, anchor, radius);
+}
+
+/**
+ * 核弹落点规避 — 非战斗角色在伤害半径内时撤到最近的半径外格。
+ *
+ * 与敌情 flee 分离：Nuke 不是 creep，`snapshot.threatCreeps` 里没有它，
+ * 所以必须单独读 `incomingNukes`。返回 true = 本 tick 已接管移动。
+ */
+export function evadeNuke(creep: Creep, snapshot: RoomSnapshot): boolean {
+  if (!snapshot.incomingNukes || snapshot.incomingNukes.length === 0) return false;
+  const target = findNukeEvasionTarget(creep.pos, snapshot.incomingNukes);
+  if (!target) return false;
+
+  if (creep.memory.assignment) {
+    releaseFromTask(creep);
+    creep.memory.assignment = undefined;
+  }
+  creep.memory.mode = "flee";
+  stepToward(creep, new RoomPosition(target.x, target.y, creep.room.name));
+  return true;
 }
 
 /**

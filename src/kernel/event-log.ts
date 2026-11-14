@@ -203,6 +203,7 @@ const ROLE_CODES: Record<string, number> = {
   pbCollector: 19,
   rangedAttacker: 20,
   labTender: 21,
+  depositHarvester: 22,
 };
 
 /** 角色名编码；未知角色返回 99。 */

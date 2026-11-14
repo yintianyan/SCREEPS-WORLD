@@ -35,6 +35,7 @@ beforeEach(() => {
   resetGlobals();
   vi.clearAllMocks();
   g().observeLedger = undefined; // heap 账本跨用例必须清，否则计数串味
+  g().observeBlacklist = undefined;
   g().__observePending = undefined;
   g().Memory.rooms["W7N4"] = {}; // run() 对无 Memory 的房直接 continue
 });
@@ -70,6 +71,8 @@ describe("observeCounters — room-observer 的每条分支都有写者（#100 �
     expect(c.staleSlot).toBe(0);
     // 仪器自己的谎警器：左端有写者、右端必须闭合。
     expect(c.ok).toBe(c.captured + c.lostVision + c.staleSlot);
+    // 视野没落下来的目标进冷却，避免观察窗口反复耗在同一间。
+    expect(Object.keys(g().observeBlacklist ?? {})).toHaveLength(1);
   });
 
   it("引擎回非 OK 码 → 按原始码建直方图、ok 不涨（ERR_RCL_NOT_ENOUGH 与 ERR_NOT_IN_RANGE 在这里可分）", () => {

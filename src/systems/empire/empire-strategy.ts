@@ -209,6 +209,9 @@ export const empireStrategySystem: System = {
       rateTotal: cpuRate?.total,
       rateWindowTicks: cpuRate?.windowTicks,
       rateUnsampledTicks: cpuRate?.unsampledTicks,
+      // 新鲜度：Memory 跨部署存活，没有 at/rateAt 配对就无法识别上个进程留下的旧窗口。
+      rateAt: cpuRate?.at,
+      tick: ctx.tick,
     };
     const cpuUsagePerTick = pickCpuUsagePerTick(cpuUsageMeasurement);
     const capacityLimit = Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20);
@@ -311,6 +314,8 @@ export const empireStrategySystem: System = {
         // 这两枚＝选择器判"逐拍均量可不可信"的两个条件；带它们，哪把尺被采信就是可复算的。
         rateWindowTicks: cpuUsageMeasurement.rateWindowTicks,
         rateUnsampledTicks: cpuUsageMeasurement.rateUnsampledTicks,
+        // 读数年龄：`at - rateAt` 就是这趟判定用的窗口落后多少拍（缺 rateAt = 旧版读数）。
+        rateAt: cpuUsageMeasurement.rateAt,
         limit: capacityLimit,
         bucket: Game.cpu.bucket ?? 10000,
         tightRatio: CONFIG.capacity.tightRatio,

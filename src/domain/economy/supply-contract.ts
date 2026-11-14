@@ -99,6 +99,12 @@ export interface SupplyContract {
   createdAt: number;
   /** 最近状态变更 tick。 */
   updatedAt: number;
+  /**
+   * 最近一次在 networkSnapshot 里仍能看到匹配的 supply+demand 对的 tick。
+   * 用于过期清理：supply/demand 消失后不立即撤单（快照可能短暂抖动），
+   * 连续超过 `SUPPLY_CONTRACT_STALE_TICKS` 没再匹配才判定失效。
+   */
+  lastMatchedAt?: number;
   /** 激活 tick（进入 ACTIVE 状态的 tick，用于稳定性统计）。 */
   activatedAt: number | undefined;
   /** 终态 tick（COMPLETED 或 CANCELLED 的 tick，用于归档清理）。 */
@@ -278,6 +284,30 @@ export function computeCycleAmount(contract: SupplyContract, intervalTicks: numb
   return Math.max(0, Math.floor(rate * intervalTicks));
 }
 
+/**
+ * 合同「供需对消失」的宽限窗口（tick）。
+ *
+ * networkSnapshot 每 100 拍重算一次；600 = 6 个快照周期。需求短暂跌破阈值或某轮快照
+ * 缺失都不该立即撤单（那会让 transport 线路抖动），但连续 6 轮都看不到匹配对，
+ * 说明这条线路已经不该继续抽源房。
+ */
+export const SUPPLY_CONTRACT_STALE_TICKS = 600;
+
+/**
+ * 合同是否已超过供需匹配宽限（纯函数）。
+ *
+ * `lastMatchedAt` 缺失时回退 createdAt：旧 Memory 里没有该列，首次部署按“从创建起算”，
+ * 与现有行为（合同永不过期）相比是收紧而不是放松。
+ */
+export function isContractStale(
+  contract: SupplyContract,
+  tick: number,
+  staleTicks: number = SUPPLY_CONTRACT_STALE_TICKS,
+): boolean {
+  const baseline = contract.lastMatchedAt ?? contract.createdAt;
+  return tick - baseline >= staleTicks;
+}
+
 // ─── 交付记录 ─────────────────────────────────────────────
 
 /**
@@ -423,6 +453,8 @@ export interface ContractMemorySnapshot {
   ca: number;
   /** updatedAt。 */
   ua: number;
+  /** lastMatchedAt（旧快照无此列）。 */
+  lm?: number;
   /** activatedAt。 */
   ac: number | undefined;
   /** terminatedAt。 */
@@ -480,6 +512,7 @@ export function serializeContract(c: SupplyContract): ContractMemorySnapshot {
     st: statusCode(c.status),
     ca: c.createdAt,
     ua: c.updatedAt,
+    ...(c.lastMatchedAt !== undefined ? { lm: c.lastMatchedAt } : {}),
     ac: c.activatedAt,
     tm: c.terminatedAt,
     td: Math.round(c.totalDelivered),
@@ -560,6 +593,7 @@ export function deserializeContract(s: ContractMemorySnapshot): SupplyContract {
     status: codeToStatus(s.st),
     createdAt: s.ca,
     updatedAt: s.ua,
+    lastMatchedAt: s.lm,
     activatedAt: s.ac,
     terminatedAt: s.tm,
     totalDelivered: s.td,

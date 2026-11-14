@@ -226,13 +226,7 @@ describe("planRoomFlows — W8N3 直接链路", () => {
     expect(upgrade.rate).toBe(20); // 需求 40 - source 直供 20
     expect(upgrade.carriersNeeded).toBe(1);
 
-    expect(plan.linkTransfers).toHaveLength(1);
-    expect(plan.linkTransfers[0]!.ratePerTick).toBe(21); // ceil(20/0.97)
     expect(plan.unmet).toEqual([]);
-    expect(plan.spawnNeeds).toEqual([
-      { role: "distributor", lane: "core", count: 2, carry: 300 },
-      { role: "distributor", lane: "upgrade", count: 1, carry: 300 },
-    ]);
     expect(plan.totalCreepRate).toBe(20);
   });
 

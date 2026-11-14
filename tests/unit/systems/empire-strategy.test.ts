@@ -74,7 +74,14 @@ describe("empire-strategy — 容量发布（R7a）", () => {
     (globalThis as any).Memory.kernel.stats = {
       cpuAvg10: 14, // 偏高读数 → tight
       cpuMax10: 15,
-      cpuRate: { windowTicks: 420, sampledTicks: 420, unsampledTicks: 0, total: 10.56 }, // 真值 → comfortable
+      cpuRate: {
+        windowTicks: 420,
+        sampledTicks: 420,
+        unsampledTicks: 0,
+        total: 10.56,
+        // 新鲜度：这份读数假定是「本拍刚采的」，缺 at 会被选择器当旧窗口拒绝。
+        at: (globalThis as any).Game.time,
+      }, // 真值 → comfortable
     };
     (globalThis as any).Game.cpu = {
       limit: 20,
@@ -323,7 +330,15 @@ describe("empire-strategy — #186 生效参数集落盘（params）", () => {
 describe("empire-strategy — #188 容量闸的输入落盘（capacity.inputs）", () => {
   function runWithStats(stats: Record<string, unknown>): any {
     (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 16, ...stats };
+    // #188 的用例都在测「窗长/漏采」这一维；新鲜度单独由 capacity 单测覆盖。
+    // 这里统一把 at 盖成当前拍，避免每份夹具都重复一行（显式 at 优先）。
+    const withFreshRate = stats.cpuRate
+      ? {
+          ...stats,
+          cpuRate: { at: (globalThis as any).Game.time, ...(stats.cpuRate as object) },
+        }
+      : stats;
+    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 16, ...withFreshRate };
     (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, getUsed: () => 0, bucket: 9000 };
     (globalThis as any).Game.gcl = { level: 5 };
     setupRoom({ hostileAgo: 99999 });

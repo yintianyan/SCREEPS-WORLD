@@ -157,3 +157,116 @@ export function evaluateResourceFlows(
 ): ResourceFlowEvaluation[] {
   return samples.map(evaluateResourceFlow);
 }
+
+// ─── Memory 投影（紧凑字段，供消费侧与遥测读取）──────────────
+
+/** 状态 → 稳定整数编码（Memory 里存短码，禁止重排）。 */
+export const RESOURCE_FLOW_STATE_CODES: Readonly<Record<ResourceFlowState, number>> = {
+  critical: 0,
+  deficit: 1,
+  healthy: 2,
+  surplus: 3,
+  stuck: 4,
+  unknown: 5,
+};
+
+/** 状态编码；未知字符串落到 unknown。 */
+export function encodeResourceFlowState(state: ResourceFlowState): number {
+  return RESOURCE_FLOW_STATE_CODES[state] ?? RESOURCE_FLOW_STATE_CODES.unknown;
+}
+
+/** 解码状态码；未知数字按 unknown 处理（旧 Memory/损坏数据不抛异常）。 */
+export function decodeResourceFlowState(code: number): ResourceFlowState {
+  for (const [state, value] of Object.entries(RESOURCE_FLOW_STATE_CODES)) {
+    if (value === code) return state as ResourceFlowState;
+  }
+  return "unknown";
+}
+
+/** 单资源在 Memory 里的紧凑投影。 */
+export interface ResourceFlowMemoryEntry {
+  /** 状态码（RESOURCE_FLOW_STATE_CODES）。 */
+  s: number;
+  /** 连续累积的 stuck 计数（>0 时写入；surplus 期的累积也要留，否则永远到不了阈值）。 */
+  k?: number;
+  /** 库存。 */
+  q: number;
+  /** 流入速率 ×100（整数化，单位/tick）。 */
+  i: number;
+  /** 流出速率 ×100。 */
+  o: number;
+}
+
+/** RoomMemory.resourceFlow 的完整形状。 */
+export interface ResourceFlowMemory {
+  /** 评估拍。 */
+  t: number;
+  /** 评估覆盖的拍数（窗口长度）。 */
+  w: number;
+  /** 截断前的资源数；`r` 超过上限被切时有它才能发现「榜是全集」不成立。 */
+  n?: number;
+  /** 资源 → 紧凑投影。 */
+  r: Record<string, ResourceFlowMemoryEntry>;
+}
+
+/** 每房保留的资源条目上限（Memory 体积护栏；资源种类实际远小于此）。 */
+const MAX_RESOURCE_FLOW_ENTRIES = 16;
+
+/**
+ * 把一次评估结果写成 Memory 投影。
+ *
+ * 只保留 enabled 且非 unknown 的资源：disabled（ops/pixel/credit）与 unknown
+ * 落盘只会白涨字节，消费侧读不到键时按「没有信号」处理。
+ * `samples` 与 `evaluations` 必须来自同一批资源（调用方一次构造、一次评估）。
+ */
+export function toResourceFlowMemory(
+  evaluations: readonly ResourceFlowEvaluation[],
+  samples: readonly ResourceFlowSample[],
+  tick: number,
+  windowTicks: number,
+): ResourceFlowMemory {
+  const byResource = new Map(samples.map(sample => [sample.resource, sample]));
+  const entries: [string, ResourceFlowMemoryEntry][] = [];
+  for (const evaluation of evaluations) {
+    if (evaluation.state === "unknown") continue;
+    const sample = byResource.get(evaluation.resource);
+    if (!sample) continue;
+    entries.push([
+      evaluation.resource,
+      {
+        s: encodeResourceFlowState(evaluation.state),
+        ...(evaluation.stuckTicks > 0 ? { k: Math.round(evaluation.stuckTicks) } : {}),
+        q: Math.round(sample.stock),
+        i: Math.round(Math.max(0, sample.inflowPerTick) * 100),
+        o: Math.round(Math.max(0, sample.outflowPerTick) * 100),
+      },
+    ]);
+  }
+  // 按资源名排序后截断：状态本身不参与排序，避免「贵的资源」把「有信号的资源」挤掉。
+  entries.sort((a, b) => a[0].localeCompare(b[0]));
+  const kept = entries.slice(0, MAX_RESOURCE_FLOW_ENTRIES);
+  const r: Record<string, ResourceFlowMemoryEntry> = Object.fromEntries(kept);
+  return {
+    t: tick,
+    w: Math.max(1, windowTicks),
+    ...(entries.length > kept.length ? { n: entries.length } : {}),
+    r,
+  };
+}
+
+/** 读数最大年龄（拍）：3 个 50 拍评估窗，超过视为「没有信号」。 */
+export const RESOURCE_FLOW_MAX_AGE_TICKS = 150;
+
+/** 读取某资源的状态；读数超龄/未覆盖该资源时返回 undefined。 */
+export function readResourceFlowState(
+  memory: ResourceFlowMemory | undefined,
+  resource: string,
+  tick: number,
+  maxAgeTicks = RESOURCE_FLOW_MAX_AGE_TICKS,
+): ResourceFlowState | undefined {
+  if (!memory) return undefined;
+  if (tick - memory.t > maxAgeTicks) return undefined;
+  const entry = memory.r[resource];
+  if (!entry) return undefined;
+  return decodeResourceFlowState(entry.s);
+}

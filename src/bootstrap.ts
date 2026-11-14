@@ -12,6 +12,7 @@ import { rangedAttackerRole } from "./creeps/roles/ranged-attacker";
 import { dismantlerRole } from "./creeps/roles/dismantler";
 import { healerRole } from "./creeps/roles/healer";
 import { pbCollectorRole } from "./creeps/roles/pb-collector";
+import { depositHarvesterRole } from "./creeps/roles/deposit-harvester";
 import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
 import { remoteHaulerRole } from "./creeps/roles/remote-hauler";
 import { remoteDefenderRole } from "./creeps/roles/remote-defender";
@@ -43,6 +44,7 @@ import { linkSystem } from "./systems/room/link-system";
 import { pixelSystem } from "./systems/empire/pixel-system";
 import { prospectManagerSystem } from "./systems/empire/prospect-manager";
 import { remoteMiningManagerSystem } from "./systems/remote/remote-mining-manager";
+import { depositManagerSystem } from "./systems/remote/deposit-manager";
 import { intelligenceSystem } from "./systems/intelligence";
 import { empireHealthSystem } from "./systems/empire/empire-health-system";
 import { recoveryExecutionSystem } from "./systems/room/recovery-execution-system";
@@ -143,6 +145,12 @@ export const registry = new Registry()
   .registerSystem(constructionManagerSystem)
   // P2：远矿管理（每 10 tick 评估目标）
   .registerSystem(remoteMiningManagerSystem)
+  // P2：远矿 deposit 派工（每 10 tick 重扫可见 deposit，存活/排队占用现读，防重复孵化）
+  .registerSystem(depositManagerSystem)
+  // P2：房间观察（observer 视野 + 邻房情报）—— 必须先于 intelligence 运行：
+  //   本系统把上一 tick 的 observer 视野投进 intelHandoff，intelligence 同 tick 采纳，
+  //   否则捕获要延迟一整拍。同为 P2，避免消费者先于生产者被调度。
+  .registerSystem(roomObserverSystem)
   // P2：情报（IntelState 唯一写者——legacy 输入桥采用 + 被动威胁信号采集 +
   //   低频老化批处理；玩家域威胁记忆 segment 冷存；消费方走只读查询 API）
   .registerSystem(intelligenceSystem)
@@ -171,8 +179,6 @@ export const registry = new Registry()
   .registerSystem(layoutPlannerSystem)
   // P3：防御规划（独立于核心布局）
   .registerSystem(defensePlannerSystem)
-  // P3：房间观察（低频）
-  .registerSystem(roomObserverSystem)
   // P3：pixel 生成（bucket 满载时）
   .registerSystem(pixelSystem)
   // P3：terminal 帝国能量网络（跨房互济 + 市场交易）
@@ -238,6 +244,8 @@ export const registry = new Registry()
   // P1：coreClearer（拆 level-0 reserve-only Invader Core 回收远矿 op 名额）
   .registerRole(coreClearerRole)
   // P1：carrier（A3.0 跨房调拨搬运工，由 agenda-manager 孵化）
-  .registerRole(carrierRole);
+  .registerRole(carrierRole)
+  // P2：depositHarvester（远矿 deposit 采集，由 deposit-manager 孵化）
+  .registerRole(depositHarvesterRole);
 
 export const kernel = new Kernel(registry);

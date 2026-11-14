@@ -66,26 +66,40 @@ export function removeRequestsByRole(queue: SpawnRequest[], role: string, home: 
  * 撤销带指定任务标记的全部待处理请求（返回移除数）。
  * PB 野采收摊用：attacker/healer 与 war 编队共用角色名，按 role 撤会误伤 —
  * memory.mission 标记是 PB 请求的专属指纹。同 removeRequestsByRole 契约。
+ *
+ * `target` 用于多任务并行：同一 sponsor 可能同时有多个 PB 任务，收摊一个任务时
+ * 不能把另一个任务的在途请求一起删掉（memory.remoteTarget 是任务目标指纹）。
  */
-export function removeRequestsByMission(queue: SpawnRequest[], mission: string): number {
+export function removeRequestsByMission(
+  queue: SpawnRequest[],
+  mission: string,
+  target?: string,
+): number {
   let removed = 0;
   for (let i = queue.length - 1; i >= 0; i--) {
     const req = queue[i];
-    if (req && req.memory?.mission === mission) {
-      queue.splice(i, 1);
-      removed++;
-    }
+    if (!req || req.memory?.mission !== mission) continue;
+    if (target !== undefined && req.memory?.remoteTarget !== target) continue;
+    queue.splice(i, 1);
+    removed++;
   }
   return removed;
 }
 
-/** 统计带指定任务标记的某角色待处理请求数（war/PB 编队共用角色名时的分流口径）。 */
+/** 统计带指定任务标记的某角色待处理请求数（war/PB 编队共用角色名时的分流口径）。
+ * `target` 与 removeRequestsByMission 同口径：多 PB 任务并行时按目标隔离。 */
 export function countPendingByMission(
   queue: readonly SpawnRequest[],
   role: string,
   mission: string,
+  target?: string,
 ): number {
-  return queue.filter(r => r.role === role && r.memory?.mission === mission).length;
+  return queue.filter(
+    r =>
+      r.role === role &&
+      r.memory?.mission === mission &&
+      (target === undefined || r.memory?.remoteTarget === target),
+  ).length;
 }
 
 /**
@@ -104,6 +118,30 @@ export function cancelRequestsByHome(queue: SpawnRequest[], home: string): numbe
       queue.splice(i, 1);
       removed++;
     }
+  }
+  return removed;
+}
+
+/**
+ * 撤销指向某远矿房的目标请求（返回移除数）。
+ *
+ * 与 `removeRequestsByRole` 互补：远矿 op 废弃时，同一目标可能同时有
+ * harvester/hauler/reserver/defender/clearer 多种角色；按目标一次清掉，
+ * 避免逐角色调用漏项，也避免把指向同一房的 depositHarvester 误删（用 roles 过滤）。
+ */
+export function removeRequestsByTarget(
+  queue: SpawnRequest[],
+  target: string,
+  roles?: ReadonlySet<string>,
+): number {
+  let removed = 0;
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const req = queue[i];
+    if (!req) continue;
+    if (req.memory?.remoteTarget !== target) continue;
+    if (roles && !roles.has(req.role)) continue;
+    queue.splice(i, 1);
+    removed++;
   }
   return removed;
 }

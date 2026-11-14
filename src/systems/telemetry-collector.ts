@@ -267,6 +267,39 @@ export function buildCpuRateWindow(
   };
 }
 
+/**
+ * 从 heap 累计账推进「最近 CPU_RATE_WINDOW_TICKS 拍」的读数，并落
+ * `Memory.kernel.stats.cpuRate`（含 `at` 采样拍）。
+ *
+ * 为什么必须每趟（10 拍）推进：旧实现把它埋在 `sampleMemorySize`（每 100 拍）里，
+ * 消费侧最多读到落后 100 拍的窗口 —— 而 100 拍恰好是 `MIN_RATE_WINDOW_TICKS` 的全部跨度，
+ * 于是「窗口够不够长」的判断可能和真实窗口不同版。`at` 是为了让消费侧能拒绝超龄读数：
+ * Memory 跨部署存活，没有采样时刻就分不清「本进程刚采的」与「上个进程留下的」。
+ */
+export function updateCpuRateWindow(tick: number): void {
+  if (!Memory.kernel) Memory.kernel = {};
+  const stats = Memory.kernel.stats;
+  // 首 tick 由 updateStatsSummary 初始化 stats；这里不凭空造对象，消费侧会退回 avg10。
+  if (!stats) return;
+
+  const g = globalCache();
+  const cum = g.cpuCumulative;
+  if (!cum) {
+    delete stats.cpuRate;
+    return;
+  }
+
+  const snapshots = (g.cpuRateSnapshots = appendCpuRateSnapshot(g.cpuRateSnapshots, cum, tick));
+  const window = buildCpuRateWindow(cum, snapshots, tick);
+  if (!window) {
+    // 窗未建立（global reset 后 <2 枚快照）：删旧读数，避免消费侧把部署前的生涯均值
+    // 当成当前窗口。
+    delete stats.cpuRate;
+    return;
+  }
+  stats.cpuRate = { ...computeCpuRate(window.cum, window.windowTicks), at: tick };
+}
+
 export const telemetryCollectorSystem: System = {
   name: "telemetry-collector",
   priority: 3 as Priority,
@@ -277,10 +310,14 @@ export const telemetryCollectorSystem: System = {
   // 归因（放进 main 段它们还是空 Map，采到的 top-role/每房 CPU 全是零，等于瞎采）。
   budgetExempt: true,
   run(ctx: TickContext): void {
+    const tick = ctx.tick;
+    // CPU 窗口先于所有分支推进：recovery/conserve 档同样需要新鲜读数 ——
+    // 恰是这两档最依赖容量闸（省 CPU/恢复），旧实现把它们一起跳过了。
+    updateCpuRateWindow(tick);
+
     // Recovery tier 低频 drain：仅 flush 事件缓冲区，跳过 CPU/经济采样。
     // 确保 recovery 期间关键事件不因 eventBuffer 截断而丢失。
     if (ctx.budget.tier === "recovery") {
-      const tick = ctx.tick;
       // 相位修正：kernel 把本系统错峰到 tick ≡ phase (mod cpuSampleInterval)，
       // 裸 `tick % N` 与运行 tick 没有交集 → recovery 档的事件 flush 一次也没执行过。
       const phase = systemPhase("telemetry-collector", CONFIG.telemetry.cpuSampleInterval);
@@ -292,7 +329,6 @@ export const telemetryCollectorSystem: System = {
     // P2-9 修复：conserve 档做轻量 stats 更新（只采样 CPU，跳过事件检测和输出）。
     // 确保前馈预测使用新鲜 stats，避免 conserve→healthy 升级后前馈以旧值误判。
     if (ctx.budget.tier === "conserve") {
-      const tick = ctx.tick;
       const tel = globalCache().telemetry;
       if (!tel || tel.tick !== tick) return;
       sampleCpuData(tick, ctx);
@@ -300,7 +336,6 @@ export const telemetryCollectorSystem: System = {
       return;
     }
 
-    const tick = ctx.tick;
     const tel = globalCache().telemetry;
     if (!tel || tel.tick !== tick) return; // telemetry 未初始化
 
@@ -641,34 +676,8 @@ function sampleMemorySize(_tick: number): void {
         );
       }
     }
-    {
-      const cum = g.cpuCumulative as
-        | {
-            total: number;
-            systems: Record<string, number>;
-            roles: Record<string, number>;
-            phases?: Record<string, number>;
-          }
-        | undefined;
-      if (cum) {
-        // `cpuCumulative` 是**自进程启动**的累计值，直接除以寿命会得到生涯均值：
-        // 旧样本永不退出，容量闸会长期读出一个不再成立的档位（线上扩张被 G6 锁死）。
-        // 用 heap 里的窗口快照做差，才是真正的「最近 N 拍」口径。
-        const snapshots = (g.cpuRateSnapshots = appendCpuRateSnapshot(
-          g.cpuRateSnapshots,
-          cum,
-          Game.time,
-        ));
-        const window = buildCpuRateWindow(cum, snapshots, Game.time);
-        if (window) {
-          (Memory.kernel.stats as any).cpuRate = computeCpuRate(window.cum, window.windowTicks);
-        } else {
-          // 窗未建立时清掉旧进程留下的读数：否则消费侧会继续把部署前的生涯均值
-          // 当成当前窗口（rateWindowTicks 仍是旧值），新口径要多等一整个窗口才生效。
-          delete (Memory.kernel.stats as any).cpuRate;
-        }
-      }
-    }
+    // CPU 窗口已迁到 run() 顶部（updateCpuRateWindow，每 10 拍推进）——
+    // 这里不再重复计算：100 拍一次的旧口径会让容量闸读到最多落后 100 拍的窗口。
     if (g.roadBuildLedger && Object.keys(g.roadBuildLedger).length > 0) {
       // 通勤建路账本快照（heap 累计值原样落一份，供体检脚本做差）：不参与任何决策。
       (Memory.kernel.stats as any).roadBuild = { ...g.roadBuildLedger };

@@ -3,8 +3,11 @@ import {
   cancelRequestsByHome,
   cleanQueue,
   countPending,
+  countPendingByMission,
   hasRequest,
   removeRequest,
+  removeRequestsByMission,
+  removeRequestsByTarget,
   sortQueue,
   spawnKey,
   submitRequest,
@@ -72,6 +75,85 @@ describe("SpawnQueue — removeRequest", () => {
     const queue: SpawnRequest[] = [makeRequest("a")];
     removeRequest(queue, "nonexistent");
     expect(queue).toHaveLength(1);
+  });
+});
+
+describe("SpawnQueue — removeRequestsByTarget", () => {
+  function remoteRequest(key: string, role: string, target: string): SpawnRequest {
+    const req = makeRequest(key);
+    req.role = role;
+    req.memory = { role, home: "W1N1", mode: "acquire", remoteTarget: target };
+    return req;
+  }
+
+  it("按目标清除远矿角色，保留同目标的 depositHarvester", () => {
+    const queue: SpawnRequest[] = [
+      remoteRequest("rh", "remoteHarvester", "W2N2"),
+      remoteRequest("rhaul", "remoteHauler", "W2N2"),
+      remoteRequest("dep", "depositHarvester", "W2N2"),
+      remoteRequest("other", "remoteHauler", "W3N3"),
+    ];
+    const removed = removeRequestsByTarget(
+      queue,
+      "W2N2",
+      new Set(["remoteHarvester", "remoteHauler"]),
+    );
+    expect(removed).toBe(2);
+    expect(queue.map(r => r.key)).toEqual(["dep", "other"]);
+  });
+
+  it("不传 roles 时清掉该目标的全部请求", () => {
+    const queue: SpawnRequest[] = [
+      remoteRequest("a", "reserver", "W2N2"),
+      remoteRequest("b", "depositHarvester", "W2N2"),
+    ];
+    expect(removeRequestsByTarget(queue, "W2N2")).toBe(2);
+    expect(queue).toHaveLength(0);
+  });
+});
+
+describe("SpawnQueue — mission 作用域（多 PB 任务并行）", () => {
+  function missionRequest(
+    key: string,
+    role: string,
+    mission: string,
+    target: string,
+  ): SpawnRequest {
+    const req = makeRequest(key);
+    req.role = role;
+    req.memory = { role, home: "W1N1", mode: "acquire", mission, remoteTarget: target } as never;
+    return req;
+  }
+
+  it("countPendingByMission 按 target 隔离：不把兄弟任务的请求算进来", () => {
+    const queue: SpawnRequest[] = [
+      missionRequest("a", "attacker", "powerBank", "W2N2"),
+      missionRequest("b", "attacker", "powerBank", "W3N3"),
+      missionRequest("c", "healer", "powerBank", "W2N2"),
+    ];
+    expect(countPendingByMission(queue, "attacker", "powerBank", "W2N2")).toBe(1);
+    expect(countPendingByMission(queue, "attacker", "powerBank")).toBe(2);
+  });
+
+  it("removeRequestsByMission 只清指定目标，保留并行任务请求", () => {
+    const queue: SpawnRequest[] = [
+      missionRequest("a", "attacker", "powerBank", "W2N2"),
+      missionRequest("b", "attacker", "powerBank", "W3N3"),
+      missionRequest("c", "pbCollector", "powerCollect", "W2N2"),
+      missionRequest("d", "pbCollector", "powerCollect", "W3N3"),
+    ];
+    expect(removeRequestsByMission(queue, "powerBank", "W2N2")).toBe(1);
+    expect(removeRequestsByMission(queue, "powerCollect", "W2N2")).toBe(1);
+    expect(queue.map(r => r.key)).toEqual(["b", "d"]);
+  });
+
+  it("removeRequestsByMission 不传 target 时保持旧语义（清该 mission 全部）", () => {
+    const queue: SpawnRequest[] = [
+      missionRequest("a", "attacker", "powerBank", "W2N2"),
+      missionRequest("b", "attacker", "powerBank", "W3N3"),
+    ];
+    expect(removeRequestsByMission(queue, "powerBank")).toBe(2);
+    expect(queue).toHaveLength(0);
   });
 });
 

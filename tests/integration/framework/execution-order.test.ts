@@ -32,6 +32,11 @@ describe("R3 — bootstrap 声明的运行顺序边", () => {
     ["room-state", "construction-manager", "发展门禁的 economyPressure 由 room-state 落盘"],
     ["room-state", "recovery-execution", "恢复执行按 colonyState 判驻留/放行"],
     ["logistics", "assignment-service", "物流请求池须先合并进任务槽，否则搬运需求整轮漏掉"],
+    [
+      "room-observer",
+      "intelligence",
+      "observer 视野先写 intelHandoff，intelligence 才能同 tick 采纳；反了要多等一拍",
+    ],
     ["empire-strategy", "empire-health", "姿态与专业化裁决是健康度维度的输入"],
     ["empire-health", "recovery-execution", "recovery 消费 empire-health 产出的 recoveryActions"],
     ["empire-strategy", "war-planner", "姿态先于战争裁决（war/fortify 决定打不打）"],

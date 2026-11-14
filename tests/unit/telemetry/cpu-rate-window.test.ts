@@ -5,13 +5,15 @@
  * 读出的永远是「生涯均值」。容量闸据此判档后，早期高开销会把均值长期钉在
  * constrained 以上 —— 线上扩张被 G6 锁死，而同一时刻的真实负载早已回落。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import {
   appendCpuRateSnapshot,
   buildCpuRateWindow,
   computeCpuRate,
+  updateCpuRateWindow,
   CPU_RATE_WINDOW_TICKS,
 } from "../../../src/systems/telemetry-collector";
+import { globalCache } from "../../../src/kernel/global-cache";
 
 function cum(
   total: number,
@@ -113,5 +115,82 @@ describe("CPU 速率滑动窗", () => {
     const current = cum(1200 * 10, 1200);
     const window = buildCpuRateWindow(current, snapshots, 1200)!;
     expect(computeCpuRate(window.cum, window.windowTicks).total).toBe(10);
+  });
+});
+
+/**
+ * 新鲜度：cpuRate 的推进从「每 100 拍的 Memory 体积采样」迁到「每趟遥测（10 拍）」，
+ * 并写入 `at` 采样拍，供 capacity 拒绝超龄读数。
+ */
+describe("updateCpuRateWindow — 每趟推进 + 采样时刻", () => {
+  const g = globalCache() as ReturnType<typeof globalCache> & {
+    cpuCumulative?: {
+      total: number;
+      ticks: number;
+      systems: Record<string, number>;
+      roles: Record<string, number>;
+    };
+    cpuRateSnapshots?: ReturnType<typeof appendCpuRateSnapshot>;
+  };
+
+  beforeEach(() => {
+    (globalThis as unknown as { Memory: unknown }).Memory = {
+      kernel: {
+        stats: {
+          lastSample: 0,
+          cpuAvg10: 0,
+          cpuMax10: 0,
+          bucketMin10: 0,
+          crisisCount: 0,
+          tierTransitions: 0,
+          errorHotspot: "",
+          skipHotspot: "",
+        },
+      },
+    };
+    delete g.cpuCumulative;
+    delete g.cpuRateSnapshots;
+  });
+
+  afterEach(() => {
+    delete g.cpuCumulative;
+    delete g.cpuRateSnapshots;
+  });
+
+  it("无累计账（kernel 尚未写入）时删除旧读数，避免消费侧读到上个进程的窗口", () => {
+    const stats = (Memory as unknown as { kernel: { stats: { cpuRate?: unknown } } }).kernel.stats;
+    stats.cpuRate = { windowTicks: 600, sampledTicks: 600, unsampledTicks: 0, total: 9 };
+    updateCpuRateWindow(100);
+    expect(stats.cpuRate).toBeUndefined();
+  });
+
+  it("首枚快照只建窗不产出读数；第二枚（10 拍后）产出带 at 的读数", () => {
+    g.cpuCumulative = { total: 0, ticks: 0, systems: {}, roles: {} };
+    updateCpuRateWindow(100);
+    const stats = (Memory as unknown as { kernel: { stats: { cpuRate?: Record<string, number> } } })
+      .kernel.stats;
+    expect(stats.cpuRate).toBeUndefined();
+
+    g.cpuCumulative = { total: 100, ticks: 10, systems: {}, roles: {} };
+    updateCpuRateWindow(110);
+    const rate = stats.cpuRate as unknown as {
+      at: number;
+      windowTicks: number;
+      total: number;
+      sampledTicks: number;
+    };
+    expect(rate.at).toBe(110);
+    expect(rate.windowTicks).toBe(10);
+    expect(rate.total).toBe(10);
+    expect(rate.sampledTicks).toBe(10);
+  });
+
+  it("同一拍重复调用幂等（快照覆盖、不重复追加）", () => {
+    g.cpuCumulative = { total: 0, ticks: 0, systems: {}, roles: {} };
+    updateCpuRateWindow(100);
+    g.cpuCumulative = { total: 100, ticks: 10, systems: {}, roles: {} };
+    updateCpuRateWindow(110);
+    updateCpuRateWindow(110);
+    expect(g.cpuRateSnapshots).toHaveLength(2);
   });
 });

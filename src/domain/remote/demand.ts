@@ -18,6 +18,11 @@ export interface RemoteCreepSummary {
 }
 
 export interface RemoteDemandInput {
+  /**
+   * 行军规避房（已知威胁房全集）：写入全部远矿派工请求的 creep memory.avoidRooms，
+   * moveTowardRoom 据此 findRoute 绕行驻守房 — 与 PB/deposit 同一威胁记忆口径。
+   */
+  avoidRooms?: ReadonlySet<string>;
   homeRoom: string;
   /** ColonyState（bootstrap 暂停、recovery 限补员，见 R3b 门禁）。 */
   colonyState: ColonyState;
@@ -78,11 +83,18 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     spawnQueue,
   } = input;
   const requests: SpawnRequest[] = [];
+  /** 规避房写进每条请求的 creep memory（单点后处理覆盖全部派工类型）。 */
+  const stampAvoidRooms = (list: SpawnRequest[]): SpawnRequest[] => {
+    if (!input.avoidRooms || input.avoidRooms.size === 0) return list;
+    const rooms = [...input.avoidRooms].slice(0, 40);
+    for (const req of list) (req.memory as unknown as Record<string, unknown>).avoidRooms = rooms;
+    return list;
+  };
 
   // 安全门禁（R3b）：bootstrap 暂停（保命孵化优先）；recovery 允许现役 op 补员
   // （远矿是唯一增量收入，冻结致贫困陷阱 — W7N3/W7N4 实证）。
   if (colonyState === "bootstrap") {
-    return { requests };
+    return { requests: stampAvoidRooms(requests) };
   }
 
   // CPU 预算保护由系统层把关（conserve 以下不孵化远矿）；本层只查 colonyState。
@@ -410,7 +422,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     //    威胁未清时经济孵化整体暂停，见循环顶部 hasThreats 分支）。
   }
 
-  return { requests };
+  return { requests: stampAvoidRooms(requests) };
 }
 
 // ── 辅助函数 ──

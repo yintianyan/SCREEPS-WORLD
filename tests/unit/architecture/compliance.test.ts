@@ -402,6 +402,9 @@ describe("R11 systems 间值导入审计", () => {
     "systems/empire/expansion/state-machine.ts:systems/empire/expansion/plan-adapter.ts",
     "systems/empire/expansion/state-machine.ts:systems/empire/expansion/uoem-events.ts",
     "systems/empire/expansion/plan-adapter.ts:systems/intelligence.ts",
+    // deposit-manager 消费 IntelQuery 的公开只读 API（queryRoomIntel），
+    // 与 plan-adapter 同形：观察值由 intelligence 唯一写入，消费方只读。
+    "systems/remote/deposit-manager.ts:systems/intelligence.ts",
     "systems/empire/expansion/plan-adapter.ts:systems/empire/expansion/uoem-events.ts",
     // remote-mining-manager 拆分出的子模块：manager 编排四块，
     // road-planner 复用账本结构成本（op-lifecycle）与 dismantle 回收（creep-recycle）

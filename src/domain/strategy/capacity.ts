@@ -25,7 +25,23 @@ export interface CpuUsageMeasurement {
   rateTotal?: number;
   rateWindowTicks?: number;
   rateUnsampledTicks?: number;
+  /**
+   * `stats.cpuRate.at`：这份读数的采样拍。
+   * 与 `tick` 配对使用 —— Memory 跨部署存活，旧窗口必须能被识别出来。
+   */
+  rateAt?: number;
+  /** 当前拍。提供时启用新鲜度校验；缺省保持旧行为（仅校验窗长/漏采）。 */
+  tick?: number;
 }
+
+/**
+ * 逐拍均量的最大可接受年龄（拍）。
+ *
+ * telemetry 每 10 拍推进一次窗口，50 = 5 个采样周期：足以容忍一次调度错峰/短时跳过，
+ * 又远小于容量闸的 300 拍升档窗口 —— 读到 50 拍前的窗口仍能代表当下，再旧就必须退回
+ * 偏高的 avg10（保守侧）。
+ */
+export const MAX_RATE_AGE_TICKS = 50;
 
 /**
  * 采信逐拍均量所需的最小窗长（拍）。
@@ -44,15 +60,22 @@ const MIN_RATE_WINDOW_TICKS = 100;
  * 于是有 47% 余量的帝国被判成 tight，升档滞回只能在边界上被重置回 0 ——
  * tier=tight 已持续约 9300 拍、upgradeTicks 读 0，而真实均值从未接近过门槛。
  *
- * 三种情况退回 avg10（偏高即保守）：窗还没建立（新 Memory／首次采样前）、窗长不足
- * MIN_RATE_WINDOW_TICKS（启动期单拍噪声），或窗内存在漏采的拍 —— 那种 total 少算了
- * 漏掉的消耗，偏低即不安全。
+ * 四种情况退回 avg10（偏高即保守）：
+ * - 窗还没建立（新 Memory／首次采样前）；
+ * - 窗长不足 MIN_RATE_WINDOW_TICKS（启动期单拍噪声）；
+ * - 窗内存在漏采的拍 —— 那种 total 少算了漏掉的消耗，偏低即不安全；
+ * - 调用方给了 `tick`，但读数缺失采样时刻或已超过 MAX_RATE_AGE_TICKS。
+ *   最后一条是「新鲜度」修复：旧实现把 cpuRate 埋在每 100 拍一次的 Memory 体积采样里，
+ *   消费侧可能拿着上个部署甚至上个窗口的读数做当前决策。
  */
 export function pickCpuUsagePerTick(m: CpuUsageMeasurement): number {
+  const isFresh =
+    m.tick === undefined || (m.rateAt !== undefined && m.tick - m.rateAt <= MAX_RATE_AGE_TICKS);
   const trustworthy =
     m.rateTotal !== undefined &&
     (m.rateWindowTicks ?? 0) >= MIN_RATE_WINDOW_TICKS &&
-    (m.rateUnsampledTicks ?? 0) === 0;
+    (m.rateUnsampledTicks ?? 0) === 0 &&
+    isFresh;
   return trustworthy ? (m.rateTotal as number) : m.avg10;
 }
 

@@ -375,11 +375,11 @@ describe("Bodies — RCL7/RCL8 高档模板补充", () => {
     expect(body.filter(p => p === "carry")).toHaveLength(8);
   });
 
-  it("pbCollector RCL7(5300) 选 [10C,10M] 大运力档", () => {
-    // 5300 < 1300(10C10M档的 minCapacity)，等等 5300 >= 1300 所以选到 10C10M
+  it("pbCollector RCL8(5300) 选 [20C,20M] 一次抢完档", () => {
+    // PB 摧毁后 power 在 ruin 里只活 10 tick，RCL8 用 1000 carry 档一次抢更多。
     const body = selectBody("pbCollector", 5300);
-    expect(body.filter(p => p === "carry")).toHaveLength(10);
-    expect(body.filter(p => p === "move")).toHaveLength(10);
+    expect(body.filter(p => p === "carry")).toHaveLength(20);
+    expect(body.filter(p => p === "move")).toHaveLength(20);
   });
 
   it("pbCollector RCL4(1300) 选 [10C,10M] 高档（minCapacity=1300）", () => {

@@ -254,4 +254,20 @@ describe("reevaluateActiveOps / censusStalledOps — 静态经济与安全网", 
     expect(yard()[0]!.d?.[0]).toBe(1); // 编队总数
     expect(yard()[0]!.d?.[1]).toBeGreaterThan(CONFIG.remote.stallAbandonTicks);
   });
+
+  it("已建立的 active op 长期 0 编队 → 宽限后计空转，持续超时 Stalled", () => {
+    const ops = { [T]: opOf({ createdAt: NOW - 20_000 }) };
+    seedHome(ops);
+    g().Game.creeps = {};
+    syncSquadIndex();
+
+    censusStalledOps(ops, HOME, NOW);
+    expect(ops[T].state).toBe("active");
+    expect(ops[T].stallSince).toBe(NOW);
+
+    censusStalledOps(ops, HOME, NOW + CONFIG.remote.stallAbandonTicks + 1);
+    expect(ops[T].state).toBe("abandoned");
+    expect(yard()[0]!.r).toBe(REMOTE_ABANDON.Stalled);
+    expect(yard()[0]!.d?.[0]).toBe(0); // 编队总数 0
+  });
 });

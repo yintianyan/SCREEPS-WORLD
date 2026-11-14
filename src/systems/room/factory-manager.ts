@@ -22,6 +22,7 @@ import { collectFullInventory } from "../../domain/industry/inventory";
 import { commodityBatchRoi } from "../../domain/industry/market-pricing";
 import { expandCommodityDemands } from "../../domain/industry/procurement";
 import { getResourceContract } from "../../domain/economy/resource-contract";
+import { readResourceFlowState } from "../../domain/economy/resource-flow-status";
 import { marketOutletState, type MarketOutletState } from "../../domain/industry/market-outlet";
 
 export const factoryManagerSystem: System = {
@@ -220,6 +221,15 @@ function commodityOutletState(roomName: string, resource: string): MarketOutletS
 function commodityCanProduce(snapshot: RoomSnapshot, resource: string): boolean {
   const contract = getResourceContract(resource);
   if (totalStoredResource(snapshot, resource) >= contract.highWater) return false;
+  // Phase A 接线：状态机判定「产物堆在高水位以上且连续无流出」→ 停止生产。
+  // 只认 stuck：critical/deficit 是「库存太少」，停止生产只会让它更少。
+  // 读数超龄（>150 拍）时 read 返回 undefined ⇒ 不拦（判不了 ≠ 该停）。
+  if (
+    readResourceFlowState(Memory.rooms[snapshot.roomName]?.resourceFlow, resource, Game.time) ===
+    "stuck"
+  ) {
+    return false;
+  }
   return commodityOutletState(snapshot.roomName, resource) !== "no";
 }
 
@@ -233,6 +243,17 @@ function batteryCompressionAllowed(snapshot: RoomSnapshot): boolean {
   const contract = getResourceContract(RESOURCE_BATTERY);
   const total = totalStoredResource(snapshot, RESOURCE_BATTERY);
   if (total >= contract.hardCap) return false;
+  // Phase A 接线：状态机的 stuck 是「高水位 + 连续 500 拍无流出」的累计证据，
+  // 比单窗水位更稳；只认 stuck，不动低库存侧（battery 少时压缩正是补库存）。
+  if (
+    readResourceFlowState(
+      Memory.rooms[snapshot.roomName]?.resourceFlow,
+      RESOURCE_BATTERY,
+      Game.time,
+    ) === "stuck"
+  ) {
+    return false;
+  }
   if (
     total >= contract.highWater &&
     commodityOutletState(snapshot.roomName, RESOURCE_BATTERY) === "no"

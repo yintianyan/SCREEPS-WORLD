@@ -94,21 +94,14 @@ export interface FlowAllocation {
   readonly priority: number;
 }
 
-export interface FlowLinkTransfer {
-  readonly fromId: string;
-  readonly toId: string;
-  /** 含源/中继/目标 id，长度 = hops+1。 */
-  readonly path: readonly string[];
-  /** 发送速率（源 link 每 tick 可发量，未扣损耗）。 */
-  readonly ratePerTick: number;
-  /** 单次可发送的 burst（受 link 容量限制）。 */
-  readonly burstAmount: number;
-  /** 路径跳数。 */
-  readonly hops: number;
-}
-
 export type FlowUnmetReason = "no-link" | "no-carrier" | "no-source" | "preempted";
 
+/**
+ * 未满足需求 — **诊断输出**。
+ *
+ * 补员的唯一 owner 是 `spawn-manager` 的 distributor/ccFill 反馈（见 demand.ts 的
+ * ccFill 分支）；FlowPlanner 不据此二次发孵化请求，避免两套编制信号互相放大。
+ */
 export interface FlowUnmet {
   readonly lane: FlowLane;
   readonly groupId: string;
@@ -116,18 +109,16 @@ export interface FlowUnmet {
   readonly reason: FlowUnmetReason;
 }
 
-export interface FlowSpawnNeed {
-  readonly role: "distributor" | "hauler";
-  readonly lane: FlowLane;
-  readonly count: number;
-  readonly carry: number;
-}
-
+/**
+ * 单房流量计划。
+ *
+ * 只输出 lane 分配与 unmet；**link 传输执行归 `link-system` 独占**（它只做单跳，
+ * 且有自己的 controller target 逻辑）。FlowPlanner 不再输出可执行的 linkTransfers，
+ * 也不输出 spawnNeeds —— 编制估算归 `spawn-manager` 的 estimateUpgradeFeed。
+ */
 export interface RoomFlowPlan {
   readonly tick: number;
   readonly allocations: readonly FlowAllocation[];
-  readonly linkTransfers: readonly FlowLinkTransfer[];
-  readonly spawnNeeds: readonly FlowSpawnNeed[];
   readonly unmet: readonly FlowUnmet[];
   /** 所有 creep 车道分配的到达速率合计。 */
   readonly totalCreepRate: number;

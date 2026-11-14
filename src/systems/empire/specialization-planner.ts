@@ -31,6 +31,7 @@ import {
 import {
   createActiveSupplyContract,
   hasActiveContract,
+  isContractStale,
   serializeContract,
   deserializeContract,
   type SupplyContract,
@@ -248,12 +249,40 @@ function maintainSupplyContracts(tick: number): void {
   // 读取现有 Contracts（从 Memory 反序列化）
   const existing = loadContractsFromMemory();
 
-  // 清理终态 Contract
-  const activeContracts = existing.filter(c => !isContractTerminalStatus(c.status));
-
   // 从 networkSnapshot 提取 surplus/deficit 对
   const supplyNodes = networkSnapshot.supplyNodes;
   const demandNodes = networkSnapshot.demandNodes;
+  const supplyKeys = new Set(supplyNodes.map(node => `${node.room}|${node.resource}`));
+  const demandKeys = new Set(demandNodes.map(node => `${node.room}|${node.resource}`));
+
+  // 存活合同：终态直接丢；供需任一消失的合同给宽限窗口，连续超时才清理。
+  // 旧实现只过滤终态，而产线没有任何终态转换 ⇒ 合同一旦签发就永久派单，
+  // 需求消失后仍持续抽源房（线上有过存活 16,300 拍的旧合同）。
+  const activeContracts: SupplyContract[] = [];
+  let expiredContracts = 0;
+  for (const contract of existing) {
+    if (isContractTerminalStatus(contract.status)) continue;
+    const matched =
+      supplyKeys.has(`${contract.sourceRoom}|${contract.resource}`) &&
+      demandKeys.has(`${contract.targetRoom}|${contract.resource}`);
+    if (matched) {
+      contract.lastMatchedAt = tick;
+      activeContracts.push(contract);
+      continue;
+    }
+    if (isContractStale(contract, tick)) {
+      expiredContracts++;
+      continue;
+    }
+    activeContracts.push(contract);
+  }
+  if (expiredContracts > 0) {
+    log.info(
+      "specialization-planner",
+      `specialization-planner: expired ${expiredContracts} stale supply contracts ` +
+        `(supply/demand pair absent > grace window)`,
+    );
+  }
 
   let newContractsCreated = 0;
 
@@ -286,6 +315,7 @@ function maintainSupplyContracts(tick: number): void {
         undefined, // targetRole
         `network-surplus-deficit-pair`,
       );
+      contract.lastMatchedAt = tick;
 
       activeContracts.push(contract);
       newContractsCreated++;

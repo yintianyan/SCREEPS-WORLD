@@ -21,6 +21,22 @@ export function isHostilePlayerReservation(
   return reservedBy !== myUsername;
 }
 
+/** 有视野时观测到的 deposit（远矿 Deposit 车道，highway 房是唯一产地）。 */
+export interface DepositIntel {
+  /** deposit 稳定 id。 */
+  id: string;
+  /** 资源类型（mist/biomass/metal/silicon）。 */
+  type: string;
+  /** 观测时的剩余存在 tick；消费方按 lastSeen 折算当前剩余。 */
+  decay?: number;
+  /**
+   * 观测时的疲劳值（引擎 lastCooldown = ceil(0.001×harvested^1.2)，跨采集者
+   * 累计、单调不减）。派工方据此过滤已进疲劳区的 deposit — 旧 intel 滞后
+   * 只会低估当前疲劳，属可接受乐观误差。
+   */
+  cooldown?: number;
+}
+
 /** 单个邻房的情报记录（存 RoomMemory.intel，短字段、有界）。 */
 export interface RoomIntel {
   kind: RoomKind;
@@ -49,6 +65,15 @@ export interface RoomIntel {
   /** 有视野时记录的 power bank 存在（PB 野采链，审计缺口 2）：中立结构，
    * 出现后约 5000 tick 自动消失 — 新鲜 intel 才值得派遣编队。 */
   powerBank?: boolean;
+  /** PB 剩余 hits（有视野时记录）— 野采编队的火力/时间可行性输入。 */
+  powerBankHits?: number;
+  /** PB 预计消失 tick（Game.time + ticksToDecay）— 时间可行性输入。 */
+  powerBankUntil?: number;
+  /** PB 内含 power 数量 — collector 规模与最低价值门的输入。 */
+  powerBankPower?: number;
+  /** 有视野时记录的 deposit 列表（deposit 采集车道的数据源）。
+   * 空数组 = 有视野且确认当前无 deposit（与 powerBank 同语义）。 */
+  deposits?: DepositIntel[];
   /** home 锚点到该房中心的 PathFinder 实测成本（swampCost:5 计入地形）；地形静态、
    * 算一次终身缓存，缺失时评选方回退线性距离估算。 */
   pathCost?: number;
@@ -148,6 +173,70 @@ export function classifyRoomByName(roomName: string): RoomKind {
   return "normal";
 }
 
+/** 房间内部坐标（W0 → -1、W1 → -2；E0 → 0、E1 → 1；N/S 同理）。 */
+export interface RoomCoords {
+  x: number;
+  y: number;
+}
+
+/** 房名 → 内部坐标；非法房名返回 undefined。 */
+export function parseRoomName(roomName: string): RoomCoords | undefined {
+  const match = roomName.match(/^([WE])(\d+)([NS])(\d+)$/);
+  if (!match) return undefined;
+  const x = match[1] === "W" ? -(Number(match[2]) + 1) : Number(match[2]);
+  const y = match[3] === "N" ? -(Number(match[4]) + 1) : Number(match[4]);
+  return { x, y };
+}
+
+/** 内部坐标 → 房名（parseRoomName 的逆运算）。 */
+export function roomNameFromCoords(x: number, y: number): string {
+  const horizontal = x < 0 ? `W${-x - 1}` : `E${x}`;
+  const vertical = y < 0 ? `N${-y - 1}` : `S${y}`;
+  return horizontal + vertical;
+}
+
+/**
+ * 两房之间的矩形房域（含起点与终点）。
+ *
+ * 用途：PB 野采的路线威胁检查。跨房编队实际走哪条出口由堆栈缓存决定，
+ * 只按「直线穿房」判会漏掉边界绕行（实测 W8N3→W9N10 的编队穿过 W9N9 的塔）；
+ * 用矩形房域把所有可能经过的房都纳入检查，宁可多跳过几个目标，也不把编队送进塔下。
+ */
+export function roomBoxRooms(from: string, to: string): string[] {
+  const a = parseRoomName(from);
+  const b = parseRoomName(to);
+  if (!a || !b) return [];
+  const names: string[] = [];
+  for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
+    for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) {
+      names.push(roomNameFromCoords(x, y));
+    }
+  }
+  return names;
+}
+
+/**
+ * 以 center 为圆心、线性距离 ≤ range 的 highway 房（不含 center 自身）。
+ *
+ * 用途：observer 的射程有 10 房，但旧调度只看 `describeExits` 的 4 个邻房，
+ * 而 Deposit / Power Bank 的产地都在 highway 房 —— 资源点常在射程内却永远不会被观察。
+ * 这里按内部坐标枚举候选，再用 `classifyRoomByName`（按房名编号取模）判定 highway，
+ * 避免内部坐标偏移与房名编号的差异产生错判。
+ */
+export function highwayRoomNamesInRange(center: string, range: number): string[] {
+  const origin = parseRoomName(center);
+  if (!origin || range <= 0) return [];
+  const names: string[] = [];
+  for (let dx = -range; dx <= range; dx++) {
+    for (let dy = -range; dy <= range; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const name = roomNameFromCoords(origin.x + dx, origin.y + dy);
+      if (classifyRoomByName(name) === "highway") names.push(name);
+    }
+  }
+  return names;
+}
+
 /** 扫描单个邻房的情报；visibleRoom 为 undefined 时只落房名分类与房态。
  * prev：既有条目 — 无视野时保留上次的 sources/mineral/owner/towers 与 pathCost；
  * 不传视为首次建档。P1-G 后 dangerUntil 已迁至 RemoteOp，intel 不再保留。 */
@@ -165,6 +254,11 @@ export function scanNeighborIntel(
     wallCount?: number;
     sealedExits?: number[];
     powerBank?: boolean;
+    powerBankHits?: number;
+    powerBankUntil?: number;
+    powerBankPower?: number;
+    /** 有视野时观测到的 deposit 列表（空数组 = 确认无 deposit）。 */
+    deposits?: DepositIntel[];
     // R651：侦察那趟顺带算的地形选点指标（有视野才算）。
     wallRatio?: number;
     swampRatio?: number;
@@ -196,6 +290,16 @@ export function scanNeighborIntel(
     intel.sealedExits = visibleRoom.sealedExits ?? [];
     // PB 存在性：有视野即覆写（false 也写 — PB 消失/被摧毁立即反映，野采链据此收摊）。
     intel.powerBank = visibleRoom.powerBank ?? false;
+    // PB 战斗参数：有视野即覆写；无 PB 时省略（不保留旧值，防用过期 hits/power 规划）。
+    if (intel.powerBank) {
+      if (visibleRoom.powerBankHits !== undefined) intel.powerBankHits = visibleRoom.powerBankHits;
+      if (visibleRoom.powerBankUntil !== undefined)
+        intel.powerBankUntil = visibleRoom.powerBankUntil;
+      if (visibleRoom.powerBankPower !== undefined)
+        intel.powerBankPower = visibleRoom.powerBankPower;
+    }
+    // Deposit 列表：有视野即覆写（空数组 = 确认当前无 deposit）；消费方按 lastSeen 判新鲜度。
+    intel.deposits = visibleRoom.deposits ?? [];
     // R651：地形选点指标（有视野才有；地形静态，数值终身有效）。
     if (visibleRoom.wallRatio !== undefined) intel.wallRatio = visibleRoom.wallRatio;
     if (visibleRoom.swampRatio !== undefined) intel.swampRatio = visibleRoom.swampRatio;
@@ -220,6 +324,10 @@ export function scanNeighborIntel(
     if (prev.wallCount !== undefined) intel.wallCount = prev.wallCount;
     if (prev.sealedExits !== undefined) intel.sealedExits = prev.sealedExits;
     if (prev.powerBank !== undefined) intel.powerBank = prev.powerBank;
+    if (prev.powerBankHits !== undefined) intel.powerBankHits = prev.powerBankHits;
+    if (prev.powerBankUntil !== undefined) intel.powerBankUntil = prev.powerBankUntil;
+    if (prev.powerBankPower !== undefined) intel.powerBankPower = prev.powerBankPower;
+    if (prev.deposits !== undefined) intel.deposits = prev.deposits;
     // R651：地形静态 ⇒ 无视野也沿用（与 pathCost 同待遇）。
     if (prev.wallRatio !== undefined) intel.wallRatio = prev.wallRatio;
     if (prev.swampRatio !== undefined) intel.swampRatio = prev.swampRatio;

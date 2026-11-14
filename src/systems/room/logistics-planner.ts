@@ -18,7 +18,7 @@ import {
 import type { SupplyNode } from "../../domain/operation/supply-node";
 import type { DemandNode } from "../../domain/operation/demand-node";
 import type { OperationPriority } from "../../domain/operation/agenda-item";
-import { computeLogisticsHealth } from "../../domain/logistics/logistics-health";
+import { averageLatency, computeLogisticsHealth } from "../../domain/logistics/logistics-health";
 import {
   createAccounting,
   recordDelivered,
@@ -555,11 +555,11 @@ function cleanupCompletedAccounting(_tick: number): void {
 }
 
 /**
- * 计算平均延迟（从 logistics 系统的延迟样本环）。
+ * 计算平均延迟（从 logistics 系统写入 heap 的跨房样本环）。
+ * 旧实现恒返回 0，导致 logisticsHealth 的 congested 分支永远不可达。
  */
 function computeAvgLatency(): number {
-  // 占位实现：恒返回 0 — 延迟样本环的接入尚未完成（Phase 8 集成）。
-  return 0;
+  return averageLatency(globalCache().logisticsLatencyRing ?? []);
 }
 
 /**

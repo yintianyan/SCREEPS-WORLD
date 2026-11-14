@@ -2,6 +2,10 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyRoomByName,
+  highwayRoomNamesInRange,
+  parseRoomName,
+  roomBoxRooms,
+  roomNameFromCoords,
   scanNeighborIntel,
   isHostilePlayerReservation,
   INVADER_USERNAME,
@@ -34,6 +38,33 @@ describe("intel — classifyRoomByName 房名分类", () => {
   it("畸形房名回退 normal，不抛错", () => {
     expect(classifyRoomByName("sim")).toBe("normal");
     expect(classifyRoomByName("")).toBe("normal");
+  });
+});
+
+describe("intel — 房名坐标与 highway 候选", () => {
+  it("parseRoomName / roomNameFromCoords 往返一致", () => {
+    expect(parseRoomName("W8N10")).toEqual({ x: -9, y: -11 });
+    expect(parseRoomName("E3S4")).toEqual({ x: 3, y: 4 });
+    expect(roomNameFromCoords(-9, -11)).toBe("W8N10");
+    expect(roomNameFromCoords(3, 4)).toBe("E3S4");
+    expect(parseRoomName("sim")).toBeUndefined();
+  });
+
+  it("射程内只返回 highway 房，且包含 7 格外的 W8N10", () => {
+    const names = highwayRoomNamesInRange("W8N3", 10);
+    expect(names).toContain("W8N10");
+    expect(names).toContain("W0N3");
+    expect(names).not.toContain("W8N3");
+    for (const name of names) expect(classifyRoomByName(name)).toBe("highway");
+  });
+
+  it("roomBoxRooms 覆盖矩形房域（含起终点，能捕获贴边绕行的威胁房）", () => {
+    const rooms = roomBoxRooms("W8N3", "W9N10");
+    expect(rooms).toContain("W8N3");
+    expect(rooms).toContain("W9N10");
+    // W9N9 是实测塔房：直线穿房不一定经过，但边界绕行会撞上，必须在框内。
+    expect(rooms).toContain("W9N9");
+    expect(rooms).toHaveLength(16); // 2 列 × 8 行
   });
 });
 
@@ -136,6 +167,33 @@ describe("intel — scanNeighborIntel 情报扫描", () => {
     expect(intel.enemySpawns).toBeUndefined();
     expect(intel.wallCount).toBeUndefined();
     expect(intel.sealedExits).toBeUndefined();
+  });
+
+  it("有视野时写 deposits；确认无 deposit 时写空数组覆盖旧值", () => {
+    const withDeposit = scanNeighborIntel("W8N10", "normal", 1000, {
+      sources: 0,
+      deposits: [{ id: "d1", type: "biomass", decay: 50000 }],
+    });
+    expect(withDeposit.deposits).toEqual([{ id: "d1", type: "biomass", decay: 50000 }]);
+
+    const afterDepleted = scanNeighborIntel(
+      "W8N10",
+      "normal",
+      2000,
+      { sources: 0, deposits: [] },
+      withDeposit,
+    );
+    expect(afterDepleted.deposits).toEqual([]);
+  });
+
+  it("无视野时沿用上次 deposits，lastSeen 不前移", () => {
+    const prev = scanNeighborIntel("W8N10", "normal", 1000, {
+      sources: 0,
+      deposits: [{ id: "d1", type: "metal", decay: 40000 }],
+    });
+    const next = scanNeighborIntel("W8N10", "normal", 2000, undefined, prev);
+    expect(next.deposits).toEqual([{ id: "d1", type: "metal", decay: 40000 }]);
+    expect(next.lastSeen).toBe(1000);
   });
 });
 

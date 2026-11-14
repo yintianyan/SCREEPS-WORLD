@@ -35,6 +35,25 @@ export type LinkRole = "source" | "controller" | "storage" | "hub";
  * 它原先在这里自判原始阈值，与 room-state 的迟滞带是两根钟 ⇒ 带内（10k~15k）会出现
  * "upgrader 在保级、link 却按无风险停供"的错位；判据统一到单一真相源模块。
  */
+/** storage 总容量（引擎 STORAGE_CAPACITY=1M；私服/测试缺常量时回退 1M）。 */
+export function gclPushCapacity(): number {
+  const cap = (globalThis as { STORAGE_CAPACITY?: number }).STORAGE_CAPACITY;
+  return typeof cap === "number" && cap > 0 ? cap : 1_000_000;
+}
+
+/**
+ * RCL8 冲 GCL 三档带 — 容量比例迟滞的单一展开点，link 供能与 upgrader 冲刺门共用。
+ * push = 富线（StartRatio）以上全速；trickle = 停冲线~富线回差带；maintain = 停冲线以下保级。
+ */
+export type GclPushBand = "push" | "trickle" | "maintain";
+
+export function gclPushBand(storageEnergy: number): GclPushBand {
+  const cap = gclPushCapacity();
+  if (storageEnergy >= Math.round(cap * CONFIG.economy.upgrade.gclPushStartRatio)) return "push";
+  if (storageEnergy >= Math.round(cap * CONFIG.economy.upgrade.gclPushStopRatio)) return "trickle";
+  return "maintain";
+}
+
 export function computeControllerLinkTarget(
   rcl: number,
   controller: { my: boolean; ticksToDowngrade: number } | undefined,
@@ -52,10 +71,14 @@ export function computeControllerLinkTarget(
     if (!upgradeCfg.gclUpgrade) {
       return downgradeRisk ? linkCfg.maintainTarget : 0;
     }
+    // RCL8 冲 GCL 走容量比例富线（gclPushStart/StopRatio，50%/30% of 1M）：
+    // 旧绝对刻度 10K/50K 只有总容量 1-5%，等于常年裸奔冲 GCL。三档取带收敛在
+    // gclPushBand（upgrader 冲刺门同一取带），富线以上满容量、回差带涓流、停冲线以下保级。
+    const band = gclPushBand(storageEnergy);
     const byStorage =
-      storageEnergy >= upgradeCfg.sustainedStorage
+      band === "push"
         ? linkCapacity
-        : storageEnergy >= linkCfg.lowSupplyStorage
+        : band === "trickle"
           ? Math.round(linkCapacity * linkCfg.lowSupplyRatio)
           : Math.round(linkCapacity * linkCfg.maintainRatio);
     return downgradeRisk ? Math.max(byStorage, linkCfg.maintainTarget) : byStorage;
