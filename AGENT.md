@@ -10,19 +10,32 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 本项目演进目标是**完全自治**：零人工干预为常态。房间规模、扩张、远矿、PvP 响应都由
 系统自身按运行时 CPU 预算裁决并自我调节——预算充足则扩张/扩建/备战，预算紧张则收缩/
 降级/保命。没有任何手动 flag / console 指令是运营的前提；人工只保留发布与灾难接管两条边界。
-破坏性人工动作（线上拆墙、核心建筑拆改）**仅限灾难接管状态**且必须审计。
+破坏性人工动作（线上拆墙、核心建筑拆改、Memory 清洗）须经人工批复，灾难接管状态下可
+免批复（见审批边界），且必须审计。
 
 **发布例外**：仓库内的定时 L2 自动化任务（Screeps 自主进化迭代）在质量门禁全绿时获准
 自主 commit → push → CI 部署，一轮最多一次正常部署。该例外不扩展到市场、战争、阈值、
 付费资源或破坏性操作；灾难接管仍属人。
+
+## 工作纪律（强制）
+
+1. **横向扫关联面**：发现问题先列同族影响清单再动手。单点修复留下同族漏洞——
+   intel 缺失不只影响 PB 路由，还影响 war 路线、remote 派工、deposit、prospect；
+   前馈断裂不只影响单一消费者。同族系统一次看全再修。
+2. **验证靠自然运行，不注入**：部署后的验收靠系统自然运行 + 长窗口纯观察，动手前
+   先写观察计划（看什么、多久、什么算通过）。禁止向线上注入化合物/PB/scout/威胁
+   记忆——注入出来的「成功」掩盖真实缺陷；报告必须披露任何注入产物。
+3. **自主推进**：以玩家判断自主定向，不等指令点醒——按 ROI 杠杆排序（不损失编队 >
+   boost 覆盖 > 多房分摊 > 采集吞吐），对「看起来在跑、实际在烧钱」的 churn 保持敏感，
+   定期输出自主判断与观察结论。
 
 ## 真相源规则（强制）
 
 架构文档已清理移除，**代码与测试是唯一真相源**：
 
 1. 理解现状以代码与内联注释为准；行为契约以测试为准。
-2. 已实现模块**不新增「记录已实现功能」的平行 doc**——实现说明写进内联注释与测试，
-   注释必须自足（`npm run check:docs` 门禁强制）。
+2. 已实现模块**不新增「记录已实现功能」的平行 doc**——实现说明写进内联注释与测试
+   （注释细则见下文注释规范）。
 3. 重大结构变更在 commit message 中说明动机与权衡，不另立文档。
 4. 仓库根目录只保留 README.md（仓库入口）与 AGENT.md（本章程）；运维工具、临时产物
    一律放 `tmp/`（gitignore），CI 流水线组件放 `.github/scripts/`。
@@ -61,10 +74,11 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 7. **测试标题**：describe/it 描述行为与判据（「核心接近满且 CC 低于半满 ⇒ CC 抬到 96」），
    不带编号前缀。
 
-### P0/P1/P2/P3 例外
+### P0–P4 例外
 
-`P0`–`P3` 作为优先级枚举值出现在代码和注释中是合法的（它们是类型定义的一部分，
-如 `Priority = 0 | 1 | 2 | 3 | 4`）。但注释中不应将 P0/P1/P2/P3 与任务编号并列引用。
+`P0`–`P4` 作为孵化排队优先级出现在代码和注释中是合法的（它是 `domain/spawn/demand.ts`
+的类型定义：`priority: 0 | 1 | 2 | 3 | 4`，P0 在前）。但注释中不应将 P0–P4 与任务
+编号并列引用。
 
 ## 数字与定义纪律（强制）
 
@@ -104,13 +118,49 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
    commit message 是唯一随代码永生的变更说明载体。
 3. 临时上调（如预算 CAP 临时放宽）必须在正文留痕并写明回调条件。
 
-## 质量门槛（合并前强制）
+## 验证与发布（强制）
 
-执行 `npm run typecheck`、`npm run check:docs`、`npm test`、`npm run build` 全绿。命令清单与
-package.json scripts 一致：typecheck / check:docs / test / test:unit / test:integration / test:e2e / test:e2e:smoke / test:all / build / watch。
-（e2e 冒烟 = `test:e2e:smoke`，为 CI 门禁成员；`test:e2e` 全套件与 `test:all` 为本地全量验收入口。）
+**验证梯度**——按改动面选最低充分组合，拿不准就升档：
+
+| 改动面 | 最低验证 |
+|---|---|
+| 仅注释 / AGENT.md | `npm run check:docs` |
+| src 逻辑（不动 schema/布局/事件） | typecheck + `test:unit` + `build` |
+| Memory schema / 迁移 | 上述 + `test:integration` |
+| 布局常量（room-blueprints、CONFIG.construction 配额） | typecheck + `test:unit` + `test:integration` + `test:e2e:smoke` 双绿 + `build` |
+| 事件 kind / payload | 上述 + 消费端测试 |
+| 发布（push dev） | 全量：typecheck / check:docs / test:unit / test:integration / build / test:e2e:smoke |
+
+- 命令以 package.json scripts 为准：typecheck / check:docs / test / test:unit /
+  test:integration / test:e2e / test:e2e:smoke / test:all / build / watch。
+- **push dev = 发布**：CI 门禁全绿后自动上传官服。push 不是同步动作，是部署动作；
+  非 CI 环境手动部署被部署脚本强制要求 `SCREEPS_DEPLOY_CONFIRM=1`。
+- e2e 冒烟（`test:e2e:smoke`）为 CI 门禁成员；`test:e2e` 全套件与 `test:all` 为本地
+  全量验收入口。
+
+## 审批边界（强制）
+
+自主权按**动作**分类，不按执行者分类（L2 定时任务的自主部署按信条中的发布例外执行）：
+
+**可自主**（按验证梯度全绿即落地）：重构、注释、测试补强、门禁内修复、无语义变化的
+性能优化；新增字段/事件/系统——只要走完对应纪律章（数字/事件/迁移）。
+
+**需人工批复**（先报动机与影响面，获批后执行）：
+
+- `CONFIG` 任何数值改动——阈值/水位/储备/CAP 是帝国的预算表。
+- 市场挂单策略、战争姿态推进、付费资源（pixel/GPU）消耗。
+- 破坏性操作：线上拆墙、核心建筑拆改、Memory 清洗、私服重置。
+- 发布动作：push dev，及任何绕过 CI 的手动上传。
+
+**灾难接管**：线上不可用、AI 行为失控、数据损毁时人全权接管；agent 只做只读侦察与
+事实汇报，不执行修复动作。
+
+**铁律：自动化轮次只读线上状态**——行为改变只经正规代码路径发布，禁止向线上
+Memory/console 注入一次性数据或热补丁（同工作纪律 2 的不注入原则）。
 
 ## 硬约束（不可妥协）
+
+以下不变量按域列出；节内出现的数值均为 `CONFIG` 当前快照，权威以 `CONFIG` 为准。
 
 ### 内核与调度（`src/kernel/`）
 
@@ -157,16 +207,16 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
   recovery 定义）；队列带黑名单冷却（按 TTL 窗口）、请求撤销通道（需求前提消失
   立即出队）与 `recycle` 回收通道。
 
-### 建造与布局（`src/systems/room/construction-manager.ts`、`src/systems/remote/remote-mining-manager.ts`、`src/domain/layout/`、`src/systems/room/layout-planner.ts`）
+### 建造与布局（`src/systems/room/construction-manager.ts`、`src/systems/remote/road-planner.ts`、`src/domain/layout/`、`src/systems/room/layout-planner.ts`）
 
 - site 创建仅两个写者：construction-manager（自有房）+ road-planner（远矿 road 与
   container）；角色层禁止调 `createConstructionSite`，远矿 container 需求只写
   `needContainer` 申请标记。
-- `CONFIG.construction.maxNormalLaneSites`（7）是 normal / development 车道的名额，
+- `CONFIG.construction.maxNormalLaneSites`（快照 7）是 normal / development 车道的名额，
   **不是帝国 site 总量**：critical / storage / container / road / wall / rampart 走每房
-  配额，emergency 重建道不查此值（理由见 config 注释）。每房最多 3 normal + 2 road +
-  1 critical；自有房 emergency site 优先于远矿 site。道路依据实测交通热度逐段添加，
-  绝不预铺全房。
+  配额（`maxNormalSitesPerRoom` / `maxRoadSitesPerRoom` / `maxCriticalSitesPerRoom`，
+  快照 3/2/1），emergency 重建道不查此值（理由见 config 注释）。自有房 emergency site
+  优先于远矿 site。道路依据实测交通热度逐段添加，绝不预铺全房。
 - 布局是版本化蓝图 + 低频局部适配 + 队列化执行；核心结构建成后冲突只标 `blocked`，
   不自动拆改。模板改动须递增 `templateId`/`layout.version` 并写迁移。
 
