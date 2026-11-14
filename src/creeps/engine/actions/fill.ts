@@ -215,7 +215,7 @@ export function returnEnergyToStorage(): ActionCandidate<StructureStorage> {
       if (carried <= 0) return undefined;
       if ((storage.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0) <= 0) return undefined;
       const storageEnergy = storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-      if (storageEnergy >= CONFIG.economy.upgrade.richStorageResume) return undefined;
+      if (storageEnergy >= CONFIG.economy.waterlines.richStorageResume) return undefined;
       // 还有未填满的 sink 时让 distributorFillTarget 处理，本动作只兜「真的无处可送」。
       if (ac.snapshot.fillTargets.length > 0) return undefined;
       return storage;

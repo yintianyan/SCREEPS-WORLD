@@ -255,7 +255,7 @@ export const towerDefenseSystem: System = {
         snapshot.storage === undefined
           ? true
           : fortifyLatch === undefined
-            ? storageEnergy >= CONFIG.economy.upgrade.sprintStorage
+            ? storageEnergy >= CONFIG.economy.waterlines.sprintStorage
             : fortifyLatch === true;
       const wallMaintenanceAllowed = colonyState === "normal" && fortifyGateOpen;
 

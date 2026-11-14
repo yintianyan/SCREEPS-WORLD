@@ -9,9 +9,10 @@ const DEFAULT_SAFETY_RESERVE_RATIO = 0.2;
 const MIN_SAFETY_RESERVE = 5000;
 
 /**
- * 计算安全储备（不可被调拨的最低保留量）。
- * = max(storageCapacity × ratio, MIN_SAFETY_RESERVE)
- * 无 storage 时为 0。
+ * 计算安全储备（不可被调拨的最低保留量）—— 全仓唯一实现。
+ * = max(baseCapacity × ratio, MIN_SAFETY_RESERVE)
+ * baseCapacity=0 时返回 0（无 storage 即无保留基数）。
+ * 基数通常传 storage 容量；按「存量比例」取数的场景是另一族公式，不走此处。
  */
 export function computeSafetyReserve(
   storageCapacity: number,

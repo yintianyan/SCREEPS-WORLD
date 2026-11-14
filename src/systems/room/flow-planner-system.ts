@@ -195,7 +195,7 @@ export const flowPlannerSystem: System = {
           roundTripTicks: coreRoundTrip,
         },
         policy: {
-          storageFloor: CONFIG.economy.upgradeEnergyFloorStorage,
+          storageFloor: CONFIG.economy.waterlines.upgradeEnergyFloorStorage,
           linkCapacity: 800,
           linkLossRatio: 0.03,
         },

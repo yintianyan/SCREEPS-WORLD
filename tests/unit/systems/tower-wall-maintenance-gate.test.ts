@@ -183,7 +183,7 @@ describe("tower-defense — Phase D 修墙闸", () => {
 describe("Phase D：塔闸与 creep 闸共用同一组阈值", () => {
   it("停线 = sprintStorage，恢复线 = fortifyResumeStorage，受袭线 = sustainedStorage", () => {
     expect(CONFIG.defense.fortifyResumeStorage).toBe(300000);
-    expect(CONFIG.economy.upgrade.sprintStorage).toBe(50000);
-    expect(CONFIG.economy.upgrade.sustainedStorage).toBe(10000);
+    expect(CONFIG.economy.waterlines.sprintStorage).toBe(50000);
+    expect(CONFIG.economy.waterlines.sustainedStorage).toBe(10000);
   });
 });

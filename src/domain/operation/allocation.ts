@@ -1,6 +1,7 @@
 /** Allocation Policy */
 
 import type { RoomRegistryEntry } from "../strategy/room-registry";
+import { computeSafetyReserve } from "../economy/ownership";
 import type { OperationPriority } from "./agenda-item";
 
 /** 单条分配计划。 */
@@ -98,7 +99,7 @@ export function allocateMultiRoom(
  */
 function estimateDeficitAmount(deficit: RoomRegistryEntry, inTransit: number): number {
   if (deficit.hasStorage && deficit.storageCapacity > 0) {
-    const safetyTarget = deficit.storageCapacity * 0.3;
+    const safetyTarget = computeSafetyReserve(deficit.storageCapacity);
     const need = Math.max(0, safetyTarget - deficit.storageEnergy - inTransit);
     return Math.floor(need);
   }

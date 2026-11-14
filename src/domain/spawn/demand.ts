@@ -1009,7 +1009,8 @@ export function evaluateDemand(
   // Phase D：升级读专用闸 upgradeActive（恢复线 60K），与 lab/修墙解耦。
   const rawRichStorage =
     snapshot.storage !== undefined &&
-    snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) >= CONFIG.economy.upgrade.sprintStorage;
+    snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) >=
+      CONFIG.economy.waterlines.sprintStorage;
   const richStorageForUpgrade =
     roomCtx.upgradeActive === undefined
       ? roomCtx.richStorageActive === undefined
@@ -1073,7 +1074,9 @@ export function evaluateDemand(
     // R6a：议程 rcl-push 时冲刺门槛放宽一档（sustained 水位即可冲刺、压力容忍至 0.4）—
     // 议程是帝国主动目标，允许比被动水位反应更进取；门禁仍由既有 pressure/水位逻辑兜底。
     const agendaPush = roomCtx.agendaInitiative === "rcl-push";
-    const sprintStorageGate = agendaPush ? upgradeCfg.sustainedStorage : upgradeCfg.sprintStorage;
+    const sprintStorageGate = agendaPush
+      ? CONFIG.economy.waterlines.sustainedStorage
+      : CONFIG.economy.waterlines.sprintStorage;
     const sprintPressureGate = agendaPush ? 0.4 : 0.3;
 
     // Body 分阶：upgrader body 不是越大越好 — 升级阶段决定 body 大小。
@@ -1086,7 +1089,8 @@ export function evaluateDemand(
     const isSprintPhase =
       (hasStorage && storageEnergy >= sprintStorageGate && pressure <= sprintPressureGate) ||
       !hasStorage;
-    const isSustainedPhase = hasStorage && storageEnergy >= upgradeCfg.sustainedStorage;
+    const isSustainedPhase =
+      hasStorage && storageEnergy >= CONFIG.economy.waterlines.sustainedStorage;
     // 档位常量必须被本房的物理容量封顶：1650 这档模板自己的注释是「RCL5(1800) 起可孵」，
     // 而 RCL4 幼房 cap=1300（extension 还没建起来）——按 1650 出 body 就是造一把孵不出来的钥匙：
     // 线上实测队列里 `upgrader:W38S56:0` 18 件/cost 1650 恒 `budget` 拒（1022 拍 +441），
@@ -1118,7 +1122,7 @@ export function evaluateDemand(
         : Math.min(upgraderConfig.maxCount, 3);
       // ⚠️这一行就是 #85 的现场病灶：非满仓时需求封顶在 3，`maxCount` 里超出 3 的那部分是惰性的。
       upgraderClamp = storageNearFull ? undefined : 3;
-    } else if (hasStorage && storageEnergy >= upgradeCfg.sustainedStorage) {
+    } else if (hasStorage && storageEnergy >= CONFIG.economy.waterlines.sustainedStorage) {
       // 维持：1 个大 body 站桩 ≈ 15/tick，盈余全喂 controller。
       upgraderTarget = 1;
       upgraderClamp = 1;
@@ -1289,7 +1293,7 @@ export function evaluateDemand(
       : undefined;
     if (
       builderStorageNow !== undefined &&
-      builderStorageNow < CONFIG.economy.upgrade.sustainedStorage * 2
+      builderStorageNow < CONFIG.economy.waterlines.sustainedStorage * 2
     ) {
       dynamicBuilderTarget = Math.min(dynamicBuilderTarget, Math.max(builderConfig.minCount, 1));
     }

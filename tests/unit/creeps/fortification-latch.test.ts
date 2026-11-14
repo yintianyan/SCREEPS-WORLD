@@ -243,16 +243,16 @@ describe("Phase D 后：基础防护档（填补 1,500–10,000 死区）", () =
 
 describe("Phase D：分级恢复线的不变量", () => {
   it("停线统一 50K；lab 恢复线最低（成本仅 1–3 e/t），升级 60K，修墙 300K", () => {
-    const stop = CONFIG.economy.upgrade.sprintStorage;
+    const stop = CONFIG.economy.waterlines.sprintStorage;
     // lab 反应约 1 e/t/trio，比单只升级（15 e/t）低一个量级 ⇒ 应早于升级开闸。
-    expect(CONFIG.economy.upgrade.labResumeStorage).toBeGreaterThan(stop);
-    expect(CONFIG.economy.upgrade.labResumeStorage).toBeLessThan(
-      CONFIG.economy.upgrade.gclResumeStorage,
+    expect(CONFIG.economy.waterlines.labResumeStorage).toBeGreaterThan(stop);
+    expect(CONFIG.economy.waterlines.labResumeStorage).toBeLessThan(
+      CONFIG.economy.waterlines.gclResumeStorage,
     );
-    expect(CONFIG.economy.upgrade.gclResumeStorage).toBeGreaterThan(stop);
+    expect(CONFIG.economy.waterlines.gclResumeStorage).toBeGreaterThan(stop);
     // 修墙是纯消耗、无直接收益，必须远高于两者。
     expect(CONFIG.defense.fortifyResumeStorage).toBeGreaterThan(
-      CONFIG.economy.upgrade.gclResumeStorage,
+      CONFIG.economy.waterlines.gclResumeStorage,
     );
   });
 });

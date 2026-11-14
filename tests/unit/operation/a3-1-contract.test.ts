@@ -226,7 +226,7 @@ describe("A3.1-007: Demand Node — criticality levels", () => {
     const entry = makeEntry({
       needsAid: true,
       riskBuffer: 1500,
-      storageEnergy: 80000,
+      storageEnergy: 40000,
       storageCapacity: 300000,
     });
     const node = buildDemandNode(entry, 0, TICK);
@@ -294,7 +294,7 @@ describe("A3.1-010: Demand Node — batch build sorted by criticality", () => {
         roomName: "Low",
         needsAid: true,
         riskBuffer: 1500,
-        storageEnergy: 80000,
+        storageEnergy: 40000,
         storageCapacity: 300000,
       }),
       makeEntry({

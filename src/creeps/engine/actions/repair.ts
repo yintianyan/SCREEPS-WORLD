@@ -195,12 +195,12 @@ export function repairFortifications(): ActionCandidate<Fortification> {
         // 「记住挨过打」不等于「正在挨打」—— 正在被拆的应急维修由 `repairCritical`
         // 与塔的威胁路径承担（都不受本闸约束）。因此全目标档只看 fortifyActive。
         const storageEnergy = storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-        if (storageEnergy < CONFIG.economy.upgrade.sustainedStorage) return undefined;
+        if (storageEnergy < CONFIG.economy.waterlines.sustainedStorage) return undefined;
         const roomMem = Memory.rooms[ac.snapshot.roomName];
         const richActive = roomMem?.fortifyActive ?? roomMem?.storageRichActive;
         const richGateOpen =
           richActive === undefined
-            ? storageEnergy >= CONFIG.economy.upgrade.sprintStorage
+            ? storageEnergy >= CONFIG.economy.waterlines.sprintStorage
             : richActive === true;
         capHits = richGateOpen
           ? Infinity
@@ -399,7 +399,7 @@ function roadRepairAction(
       const lowStorage =
         ac.snapshot.storage !== undefined &&
         (ac.snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) <
-          CONFIG.economy.upgrade.sprintStorage;
+          CONFIG.economy.waterlines.sprintStorage;
       const entryThreshold =
         !urgent && lowStorage ? CONFIG.construction.lowStorageRoadHits : threshold;
 

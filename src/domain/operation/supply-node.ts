@@ -1,6 +1,7 @@
 /** Supply Node */
 
 import type { RoomRegistryEntry } from "../strategy/room-registry";
+import { computeSafetyReserve } from "../economy/ownership";
 import type { OperationPriority, ResourceType } from "./agenda-item";
 
 /**
@@ -46,7 +47,7 @@ export function buildSupplyNode(
   if (!entry.canExport || entry.transferable <= 0) return undefined;
 
   const health = computeRoomHealth(entry);
-  const safety = Math.max(entry.storageCapacity * 0.2, 5000);
+  const safety = computeSafetyReserve(entry.storageCapacity);
 
   return {
     room: entry.roomName,

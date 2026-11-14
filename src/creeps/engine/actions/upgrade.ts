@@ -141,7 +141,8 @@ export function upgradeControllerGated(): ActionCandidate<StructureController> {
     resolve: ac => {
       const ctrl = ac.snapshot.controller;
       if (!ctrl || !ctrl.my) return undefined;
-      if (ac.snapshot.energyAvailable < CONFIG.economy.upgradeEnergyFloor) return undefined;
+      if (ac.snapshot.energyAvailable < CONFIG.economy.waterlines.upgradeEnergyFloor)
+        return undefined;
       return ctrl;
     },
     execute: (ac, ctrl) => upgradeOrApproach(ac.creep, ctrl),

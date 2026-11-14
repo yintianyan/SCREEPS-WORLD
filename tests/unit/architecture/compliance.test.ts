@@ -441,6 +441,50 @@ describe("R11 systems 间值导入审计", () => {
   });
 });
 
+describe("R13 同名导出唯一（定义权守卫）", () => {
+  // 现存同名导出豁免台账——概念收编进统一 schema 后必须从表中移除，台账只许缩不许涨。
+  // 语义分叉组（同名不同物）收编时必须改名或合并；同名同形组收编时保留一份。
+  const EXEMPT = new Set([
+    "AutonomyLevel",
+    "ExecutionGateInput",
+    "GateResult",
+    "IntelConfidence",
+    "IntelSource",
+    "OperationPriority",
+    "OperationStatus",
+    "OperationType",
+    "PlayerIntelRecord",
+    "RiskLevel",
+    "RiskResult",
+    "TargetCandidate",
+    "ThreatLevel",
+    "WarOutcome",
+  ]);
+
+  it("export 的 type/interface/enum/class/const 名全仓唯一（豁免台账外）", () => {
+    const defs = new Map<string, Set<string>>();
+    for (const f of ALL_FILES) {
+      const rel = relative(SRC, f);
+      const text = readFileSync(f, "utf8");
+      for (const m of text.matchAll(
+        /^export\s+(?:type|interface|enum|class|const)\s+([A-Za-z_$][\w$]*)/gm,
+      )) {
+        const name = m[1]!;
+        if (!defs.has(name)) defs.set(name, new Set());
+        defs.get(name)!.add(rel);
+      }
+    }
+    const dupes = [...defs.entries()].filter(([, files]) => files.size > 1);
+    const bad = dupes.filter(([n]) => !EXEMPT.has(n));
+    const stale = [...EXEMPT].filter(n => !defs.has(n) || defs.get(n)!.size <= 1);
+    expect(
+      bad.map(([n, files]) => `${n}: ${[...files].join(", ")}`),
+      `同名导出未登记豁免——先收编概念，再考虑登记: ${bad.map(([n]) => n).join(", ")}`,
+    ).toHaveLength(0);
+    expect(stale, `豁免台账失效（同名已消除，请从台账移除）: ${stale.join(", ")}`).toHaveLength(0);
+  });
+});
+
 // R12 production bundle parity 已收敛至 tests/integration/framework/bundle-parity.test.ts
 //（FREEZE R20③：dist 仅在 build 后存在，守卫必须在 build 之后运行——unit 层在
 // CI 中先于 build，恒走 skip 分支形同虚设；「已删模块不回流」检查一并迁移）。

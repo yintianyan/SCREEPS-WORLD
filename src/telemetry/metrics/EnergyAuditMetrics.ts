@@ -4,6 +4,7 @@ import { registerMetricGauge } from "../Telemetry";
 import { setGauge } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
 import { globalCache } from "../../kernel/global-cache";
+import type { LedgerField } from "../../domain/economy/accounting";
 
 /** 与能量守恒闭式对应的账本列（市场买入/卖出、工业消耗、退款都在内）。 */
 const AUDIT_FIELDS = [
@@ -22,7 +23,7 @@ const AUDIT_FIELDS = [
   "tradeFee",
   "industrialSpend",
   "nukeSpend",
-] as const;
+] as const satisfies readonly LedgerField[];
 
 const POOL_GENERAL = "screeps_economy_audit_pool_general";
 const POOL_INDUSTRIAL = "screeps_economy_audit_pool_industrial";

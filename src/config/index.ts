@@ -492,10 +492,6 @@ export const CONFIG = {
      * 与 distributor 的 fillTarget 折算均按此标定；实际运力更大时头数折减、更小时
      * 扩编 — 消除「body 随容量长大而配额公式不变」的头数浪费。 */
     referenceCarryCapacity: 300,
-    /** upgrader 允许工作前的最低 extension 能量（RCL1-3）。 */
-    upgradeEnergyFloor: 300,
-    /** upgrader 允许工作前的最低 storage 能量（RCL4+，约束 G-EN-03/U-02）。 */
-    upgradeEnergyFloorStorage: 1000,
     /** builder 允许工作前的最低能量盈余。 */
     buildEnergySurplus: 200,
     /** 触发紧急升级的控制器 ticksToDowngrade 阈值（迟滞进入阈值）。 */
@@ -521,7 +517,41 @@ export const CONFIG = {
      */
     claimSecureExitTtd: 20000,
     /** 升级功率控制（A2：storage 水位驱动 + WORK 部件限速）。 */
+    /** 升级功率控制（A2：storage 水位驱动 + WORK 部件限速）。 */
     upgrade: {
+      /**
+       * RCL8 是否继续升级以累计 GCL。
+       *
+       * Screeps 中 RCL8 房间的 controller 仍接受 upgrade，能量按 1:1 计入 GCL 进度，
+       * 是扩大房间上限的唯一增长通道。旧实现按「RCL8 满级后升级零收益」直接停供
+       * （demand 停孵 + upgrader gate 停烧 + controller link 目标 0），把这条通道关死。
+       *
+       * 开启后：RCL8 与 RCL<8 共用 storage 水位分级供能；引擎 15 energy/tick 上限
+       * 由 maxWorkParts 折算成 upgrader 编制上限（15W body → 1 只），不会过量占人。
+       * 关闭后回到旧行为（仅降级风险时保级小水位）。
+       */
+      gclUpgrade: true,
+      /** RCL8 时引擎硬限制（15 energy/tick），RCL<8 时无引擎上限。
+       * 此值仅在 RCL8 时生效，用于匹配引擎硬限制；RCL<8 时不限速——
+       * upgrader 数量由 storage 水位 + economyPressure 驱动的 demand 逻辑自然调节。
+       * 参见 demand.ts 中的 maxCountByWork 逻辑（RCL<8 时不禁用）。 */
+      maxWorkParts: 15,
+      /** @deprecated 使用 maxWorkParts 代替（保留向后兼容）。 */
+      rcl8MaxWorkParts: 15,
+      /** upgrader 单次从 storage 取能上限（防止 storage 突降触发 economyPressure）。 */
+      perTickWithdrawLimit: 500,
+      /** P0-4：storage 净流失率上限（E/tick，正值=流失）：跨 tick prev-cur > 此值
+       * 且低水位（< sustainedStorage*2）时 upgrader 停止从 storage 取能，让 storage
+       * 回血；降级风险时豁免（保级优先）。 */
+      drainRateLimit: 5,
+    },
+
+    /**
+     * storage 能量水位表 — 全帝国 storage 消费点（升级/工业/lab/修墙/塔/危机相位）
+     * 取水位的唯一取数家。绝对刻度阈值不随容量缩放，同一数值在不同规模房间
+     * 语义会漂移（distributorTiers 与 GCL 门禁都踩过）；比例刻度以引擎总容量为归一基准。
+     */
+    waterlines: {
       /** storage 能量 ≥ 此值且 pressure ≤ 0.3 时进入升级冲刺（燃烧库存换 RCL 复利）。 */
       sprintStorage: 50000,
       /** Phase 2.5：richStorage 闩锁的恢复水位。低于 sprintStorage 停升级/工业，
@@ -555,18 +585,6 @@ export const CONFIG = {
       /** storage 能量 ≥ 此值时维持大 body 满功率升级（≈ 盈余全喂 controller）。 */
       sustainedStorage: 10000,
       /**
-       * RCL8 是否继续升级以累计 GCL。
-       *
-       * Screeps 中 RCL8 房间的 controller 仍接受 upgrade，能量按 1:1 计入 GCL 进度，
-       * 是扩大房间上限的唯一增长通道。旧实现按「RCL8 满级后升级零收益」直接停供
-       * （demand 停孵 + upgrader gate 停烧 + controller link 目标 0），把这条通道关死。
-       *
-       * 开启后：RCL8 与 RCL<8 共用 storage 水位分级供能；引擎 15 energy/tick 上限
-       * 由 maxWorkParts 折算成 upgrader 编制上限（15W body → 1 只），不会过量占人。
-       * 关闭后回到旧行为（仅降级风险时保级小水位）。
-       */
-      gclUpgrade: true,
-      /**
        * RCL8 冲 GCL 的容量比例富线（占总容量比）：**RCL8 专属** — RCL<8 的
        * upgrade 是房间刚需（升 RCL 本身），沿用绝对刻度低线；RCL8 的 upgrade
        * 只产出账号级 GCL，是奢侈品，必须等 storage 真正富余：
@@ -578,19 +596,10 @@ export const CONFIG = {
       gclPushStartRatio: 0.5,
       /** RCL8 冲 GCL 的停冲水位（占比）— 与起始线构成 20% 容量回差防振荡。 */
       gclPushStopRatio: 0.3,
-      /** RCL8 时引擎硬限制（15 energy/tick），RCL<8 时无引擎上限。
-       * 此值仅在 RCL8 时生效，用于匹配引擎硬限制；RCL<8 时不限速——
-       * upgrader 数量由 storage 水位 + economyPressure 驱动的 demand 逻辑自然调节。
-       * 参见 demand.ts 中的 maxCountByWork 逻辑（RCL<8 时不禁用）。 */
-      maxWorkParts: 15,
-      /** @deprecated 使用 maxWorkParts 代替（保留向后兼容）。 */
-      rcl8MaxWorkParts: 15,
-      /** upgrader 单次从 storage 取能上限（防止 storage 突降触发 economyPressure）。 */
-      perTickWithdrawLimit: 500,
-      /** P0-4：storage 净流失率上限（E/tick，正值=流失）：跨 tick prev-cur > 此值
-       * 且低水位（< sustainedStorage*2）时 upgrader 停止从 storage 取能，让 storage
-       * 回血；降级风险时豁免（保级优先）。 */
-      drainRateLimit: 5,
+      /** upgrader 允许工作前的最低 extension 能量（RCL1-3）。 */
+      upgradeEnergyFloor: 300,
+      /** upgrader 允许工作前的最低 storage 能量（RCL4+）。 */
+      upgradeEnergyFloorStorage: 1000,
     },
     /** 能量危机检测与响应参数。 */
     crisis: {
@@ -711,7 +720,7 @@ export const CONFIG = {
      * Distributor 水位分级的绝对能量阈值（storage 库存）。必须用绝对值而非容量比例：
      * storage 总容量 1,000,000（STORAGE_CAPACITY），按比例分级时 10% 档 = 10 万 —
      * 发展期房间（库存常年数百到数万）永久卡在最低档，extension 断供。
-     * 与 upgrade.sprintStorage(50000)/sustainedStorage(10000) 同一参照系。
+     * 与 waterlines.sprintStorage(50000)/sustainedStorage(10000) 同一参照系。
 
      * ── 水位权限表（Batch 2 统一刻度 — 全部 storage 消费者按此表取能）──
      * | storage 水位      | distributor      | upgrader        | builder   | lab  | terminal |
@@ -1080,7 +1089,7 @@ export const CONFIG = {
     roomMinRcl: 5,
     roomMinStorage: 8000,
     /** Phase 2.5：低储期暂停远矿「首孵/扩编」的水位线（替换请求不受此限）。
-     * 与 upgrade.richStorageResume 同一刻度：storage 跌破 50K 后，先回血到 100K
+     * 与 waterlines.richStorageResume 同一刻度：storage 跌破 50K 后，先回血到 100K
      * 再投资新远矿点位，避免新增编制把刚恢复的库存再次抽干（W8N3/W7N2 审计：
      * 47–49K 时 storage 持续净失血）。现役编队照常工作，收入不断。 */
     expansionMinStorage: 100000,

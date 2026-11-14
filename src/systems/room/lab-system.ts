@@ -837,7 +837,7 @@ export const labSystem: System = {
           reactionEnergyOk =
             snapshot.storage !== undefined &&
             snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) >=
-              CONFIG.economy.upgrade.sprintStorage;
+              CONFIG.economy.waterlines.sprintStorage;
         } catch {
           reactionEnergyOk = true;
         }

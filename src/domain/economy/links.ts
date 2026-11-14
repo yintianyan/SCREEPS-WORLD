@@ -49,8 +49,9 @@ export type GclPushBand = "push" | "trickle" | "maintain";
 
 export function gclPushBand(storageEnergy: number): GclPushBand {
   const cap = gclPushCapacity();
-  if (storageEnergy >= Math.round(cap * CONFIG.economy.upgrade.gclPushStartRatio)) return "push";
-  if (storageEnergy >= Math.round(cap * CONFIG.economy.upgrade.gclPushStopRatio)) return "trickle";
+  if (storageEnergy >= Math.round(cap * CONFIG.economy.waterlines.gclPushStartRatio)) return "push";
+  if (storageEnergy >= Math.round(cap * CONFIG.economy.waterlines.gclPushStopRatio))
+    return "trickle";
   return "maintain";
 }
 
@@ -84,7 +85,7 @@ export function computeControllerLinkTarget(
     return downgradeRisk ? Math.max(byStorage, linkCfg.maintainTarget) : byStorage;
   }
   // RCL<8：按 storage 水位分级（满功率冲刺 / 半供慢升 / 枯竭保级）。
-  if (storageEnergy >= upgradeCfg.sustainedStorage) return linkCapacity;
+  if (storageEnergy >= CONFIG.economy.waterlines.sustainedStorage) return linkCapacity;
   if (storageEnergy >= linkCfg.lowSupplyStorage) {
     return Math.round(linkCapacity * linkCfg.lowSupplyRatio);
   }

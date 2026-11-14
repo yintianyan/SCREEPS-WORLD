@@ -185,7 +185,7 @@ function upgraderGate(ac: ActionContext): boolean {
   const richStorage =
     ac.snapshot.storage !== undefined &&
     (storageLatch === undefined
-      ? storageEnergy >= CONFIG.economy.upgrade.sprintStorage
+      ? storageEnergy >= CONFIG.economy.waterlines.sprintStorage
       : storageLatch || ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
   if (
     !earlyRoom &&
@@ -248,10 +248,10 @@ function upgraderGate(ac: ActionContext): boolean {
       ? // 复用上面 try 读取的 storageEnergy：store 读取异常时按 0 处理（降级到地板以下），
         // 不让 gate 抛异常。原实现在这里直接读 store，richStorage 豁免把执行路径带到这里后
         // 会把 P0-4 的「store read throws」降级用例打成未捕获异常。
-        storageEnergy < CONFIG.economy.upgradeEnergyFloorStorage
+        storageEnergy < CONFIG.economy.waterlines.upgradeEnergyFloorStorage
       : ac.snapshot.energyAvailable <
         Math.min(
-          CONFIG.economy.upgradeEnergyFloor,
+          CONFIG.economy.waterlines.upgradeEnergyFloor,
           Math.floor(ac.snapshot.energyCapacityAvailable * 0.4),
         );
 
@@ -301,7 +301,7 @@ function dynamicStorageLimit(ac: ActionContext): number {
     return 0;
   }
 
-  if (energy < cfg.upgradeEnergyFloorStorage) return 0;
+  if (energy < cfg.waterlines.upgradeEnergyFloorStorage) return 0;
 
   // P0-4 异常豁免：降级风险时保级优先，跳过流失率门禁。
   // 判据与 upgraderGate 同一个函数 —— 两处若各用一把尺，会出现
@@ -325,15 +325,16 @@ function dynamicStorageLimit(ac: ActionContext): number {
 
     // 双门槛：低水位（< sustainedStorage*2）+ 流失（> drainRateLimit，严格大于）。
     // 边界语义：drainRate===drainRateLimit 不触发（> 才触发）；energy===sustainedStorage*2 不触发（< 才触发）。
-    const lowWater = energy < cfg.upgrade.sustainedStorage * 2;
+    const lowWater = energy < cfg.waterlines.sustainedStorage * 2;
     const draining = drainRate > cfg.upgrade.drainRateLimit;
     if (lowWater && draining) {
       return 0; // 停止取能，让 storage 回血
     }
   }
 
-  if (energy >= cfg.upgrade.sprintStorage) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-  if (energy >= cfg.upgrade.sustainedStorage) return cfg.upgrade.perTickWithdrawLimit;
+  if (energy >= cfg.waterlines.sprintStorage)
+    return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+  if (energy >= cfg.waterlines.sustainedStorage) return cfg.upgrade.perTickWithdrawLimit;
   return 200;
 }
 

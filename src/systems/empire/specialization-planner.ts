@@ -2,6 +2,7 @@
 
 import type { TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
+import { computeSafetyReserve } from "../../domain/economy/ownership";
 import { getRoomIntel } from "../intelligence";
 import {
   filterWaitingExecution,
@@ -300,7 +301,7 @@ function maintainSupplyContracts(tick: number): void {
 
       // 推导 Contract 参数
       const targetRate = Math.max(1, Math.ceil(demand.remaining / 100));
-      const minimumReserve = Math.max(5000, Math.floor(supply.capacity * 0.2));
+      const minimumReserve = Math.floor(computeSafetyReserve(supply.capacity));
       const priority = criticalityToPriority(demand.criticality);
 
       const contract = createActiveSupplyContract(

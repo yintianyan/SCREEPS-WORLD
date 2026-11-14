@@ -253,8 +253,8 @@ export const spawnManagerSystem: System = {
           : nextStorageRichActive(
               roomMem.storageRichActive,
               storageEnergyNow,
-              CONFIG.economy.upgrade.sprintStorage,
-              CONFIG.economy.upgrade.richStorageResume,
+              CONFIG.economy.waterlines.sprintStorage,
+              CONFIG.economy.waterlines.richStorageResume,
             );
       if (storageRichActive === undefined) {
         if (roomMem.storageRichActive !== undefined) delete roomMem.storageRichActive;
@@ -274,19 +274,19 @@ export const spawnManagerSystem: System = {
           roomMem.upgradeActive,
           snapshot.rcl,
           storageEnergyNow,
-          CONFIG.economy.upgrade.sprintStorage,
-          CONFIG.economy.upgrade.gclResumeStorage,
+          CONFIG.economy.waterlines.sprintStorage,
+          CONFIG.economy.waterlines.gclResumeStorage,
         );
         labActive = nextStorageRichActive(
           roomMem.labActive,
           storageEnergyNow,
-          CONFIG.economy.upgrade.sprintStorage,
-          CONFIG.economy.upgrade.labResumeStorage,
+          CONFIG.economy.waterlines.sprintStorage,
+          CONFIG.economy.waterlines.labResumeStorage,
         );
         fortifyActive = nextStorageRichActive(
           roomMem.fortifyActive,
           storageEnergyNow,
-          CONFIG.economy.upgrade.sprintStorage,
+          CONFIG.economy.waterlines.sprintStorage,
           CONFIG.defense.fortifyResumeStorage,
         );
       }

@@ -215,7 +215,7 @@ export interface PhaseOptions {
    * 用**绝对储备**而不是比例：RCL6 storage 容量 1,000,000，46k 只有 4.6%，永远够不着
    * 0.8 的满仓豁免 —— 比例刻度把发展期房一律判成最低档，是本项目已踩过两次的同型错误
    * （`distributorTiers` 当年由比例制改绝对制、builder 的 B-1 修复同理）。参照系沿用
-   * `CONFIG.economy.upgrade.sprintStorage`（"冲刺级盈余"，与项目同一绝对刻度参照系）。
+   * `CONFIG.economy.waterlines.sprintStorage`（"冲刺级盈余"，与项目同一绝对刻度参照系）。
    *
    * 真塌方不靠这条通道兜：采集者死绝由 `understaffed → bootstrap` 抓、采集塌方由
    * `srcRatio + storageDrainAccum` 的 forceCrisis 抓、物流死锁由 liquidityScore 抓 ——
@@ -248,7 +248,7 @@ export interface PhaseOptions {
    * （`sustainedStorage` / `sprintStorage`）一直就是 **storage 水位**口径（见 upgrader 取能档），
    * 这里沿用同一口径，不新造尺度。
    *
-   * 参照系取 `CONFIG.economy.upgrade.sustainedStorage`(10k) —— "可持续水位"，
+   * 参照系取 `CONFIG.economy.waterlines.sustainedStorage`(10k) —— "可持续水位"，
    * 与上面那道 50k 豁免线（sprintStorage）同一套刻度、区间不重叠：
    * ≥50k 消费不计赤字；10k~50k 交给分数体系；<10k 无条件进带。
    */
@@ -333,9 +333,9 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   // 绝对可支付豁免线：沿用项目既有的绝对能量参照系（= upgrade.sprintStorage，冲刺级盈余）。
   // 详见 PhaseOptions 注释：spendableRatio 那道豁免会被大额孵化本身打掉，比例制水位又永远
   // 够不着发展期房 —— 两条都不足以把"选择花钱"与"生产崩溃"分开。
-  investmentReserveFloor: CONFIG.economy.upgrade.sprintStorage,
+  investmentReserveFloor: CONFIG.economy.waterlines.sprintStorage,
   // 破产兜底线：同一套绝对刻度的下一档（"可持续水位"）。仅在房里有 storage 时生效。
-  bankruptReserveFloor: CONFIG.economy.upgrade.sustainedStorage,
+  bankruptReserveFloor: CONFIG.economy.waterlines.sustainedStorage,
   bankruptExitMargin: 1.5,
   // 最短驻留 100 次评估（room-state 每 tick 评估 → 100 tick）：
   // 覆盖一轮 creep 孵化 + 通勤周期，让 recovery 期真正攒出缓冲，而非形式性过场。

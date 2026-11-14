@@ -4,7 +4,7 @@ import { rcl8GclPushAllowed } from "../../../src/creeps/roles/upgrader";
 import { gclPushCapacity } from "../../../src/domain/economy/links";
 import { CONFIG } from "../../../src/config";
 
-const START = Math.round(gclPushCapacity() * CONFIG.economy.upgrade.gclPushStartRatio);
+const START = Math.round(gclPushCapacity() * CONFIG.economy.waterlines.gclPushStartRatio);
 
 describe("rcl8GclPushAllowed — RCL8 GCL 容量比例富线", () => {
   it("storage < 50% 容量 → 不冲（旧 50K 刻度只有容量 2%，20 倍差）", () => {
