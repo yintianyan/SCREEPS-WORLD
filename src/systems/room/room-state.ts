@@ -12,6 +12,13 @@ import {
   type PhaseState,
 } from "../../domain/economy/phase";
 import { computeEnergyPrice } from "../../domain/economy/energy-price";
+import { nextStorageRichActive, nextUpgradeActive } from "../../domain/economy/storage-latch";
+import {
+  HOME_MINERAL_STOP_STOCK,
+  hasHomeMineralDemand,
+  nextHomeMineralMiningActive,
+} from "../../domain/economy/home-mining";
+import { collectRoomResourceStocks } from "../../domain/economy/resource-stock";
 import { scaledControllerRiskBand } from "../../domain/economy/downgrade-risk";
 import { hasSurvivalRequest } from "../../domain/spawn/queue";
 import { EventKind } from "../../kernel/event-log";
@@ -42,6 +49,93 @@ export const roomStateSystem: System = {
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
+
+      // 0. 分级消费闩锁（唯一写者 —— 自 spawn-manager 迁入，决策字段统一由 room-state 落盘）。
+      //    cadence 由 5t 变 1t：阈值与纯函数不变，只提前响应（快了不慢了）。
+      //    storage 富余闩锁（50K 停 / 100K 复），upgrade/lab/节流共用。
+      //    无 storage 的早期房不适用（否则 0 能量会让闩锁恒关，误伤 RCL1-3 的发展）。
+      let storageEnergyNow = 0;
+      try {
+        storageEnergyNow = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      } catch {
+        storageEnergyNow = 0;
+      }
+      const storageRichActive: boolean | undefined =
+        snapshot.storage === undefined
+          ? undefined
+          : nextStorageRichActive(
+              roomMem.storageRichActive,
+              storageEnergyNow,
+              CONFIG.economy.waterlines.sprintStorage,
+              CONFIG.economy.waterlines.richStorageResume,
+            );
+      if (storageRichActive === undefined) {
+        if (roomMem.storageRichActive !== undefined) delete roomMem.storageRichActive;
+      } else if (roomMem.storageRichActive !== storageRichActive) {
+        roomMem.storageRichActive = storageRichActive;
+      }
+
+      // 分级消费闸 —— 停线统一 50K，恢复线按「收益/紧迫度」分开：
+      // upgrade 60K（长期复利，最优先）< lab 55K（有资产收益）< 修墙 300K（纯消耗）。
+      let upgradeActive: boolean | undefined;
+      let labActive: boolean | undefined;
+      let fortifyActive: boolean | undefined;
+      if (snapshot.storage !== undefined) {
+        // RCL8 用 60K 回差（GCL 复利可选）；RCL<8 用 50K 单门槛（升 RCL 是刚需，
+        // 回差会在 50–60K 制造死区 → 房永远卡在当前 RCL）。见 nextUpgradeActive。
+        upgradeActive = nextUpgradeActive(
+          roomMem.upgradeActive,
+          snapshot.rcl,
+          storageEnergyNow,
+          CONFIG.economy.waterlines.sprintStorage,
+          CONFIG.economy.waterlines.gclResumeStorage,
+        );
+        labActive = nextStorageRichActive(
+          roomMem.labActive,
+          storageEnergyNow,
+          CONFIG.economy.waterlines.sprintStorage,
+          CONFIG.economy.waterlines.labResumeStorage,
+        );
+        fortifyActive = nextStorageRichActive(
+          roomMem.fortifyActive,
+          storageEnergyNow,
+          CONFIG.economy.waterlines.sprintStorage,
+          CONFIG.defense.fortifyResumeStorage,
+        );
+      }
+      for (const [key, value] of [
+        ["upgradeActive", upgradeActive],
+        ["labActive", labActive],
+        ["fortifyActive", fortifyActive],
+      ] as const) {
+        if (value === undefined) {
+          if (roomMem[key] !== undefined) delete roomMem[key];
+        } else if (roomMem[key] !== value) {
+          roomMem[key] = value;
+        }
+      }
+
+      // home mineral 停采闩锁（10K 停 / 5K 复）。无矿物的房不启用。
+      const homeMineral = snapshot.minerals[0]?.mineralType;
+      let homeMiningActive: boolean | undefined;
+      if (homeMineral !== undefined) {
+        const homeStock = collectRoomResourceStocks(snapshot)[homeMineral] ?? 0;
+        // ticket 只在停采线以下才考虑：库存已 ≥10K 时，现有库存本身就覆盖了
+        // lab/factory/援助需求，再拿 ticket 顶开闸只会让 81K 的 H 继续涨。
+        const hasDemand =
+          homeStock < HOME_MINERAL_STOP_STOCK &&
+          hasHomeMineralDemand(snapshot, roomMem, homeMineral, ctx.tick);
+        homeMiningActive = nextHomeMineralMiningActive(
+          roomMem.homeMiningActive,
+          homeStock,
+          hasDemand,
+        );
+        if (roomMem.homeMiningActive !== homeMiningActive) {
+          roomMem.homeMiningActive = homeMiningActive;
+        }
+      } else if (roomMem.homeMiningActive !== undefined) {
+        delete roomMem.homeMiningActive;
+      }
 
       // 1. 总储备 = energyAvailable + containers + storage + terminal + 在途 creep 携带能量。
       // 计入 creep 身上能量：hauler 取/送不再改变 reserve，避免物流搬运制造假危机信号。

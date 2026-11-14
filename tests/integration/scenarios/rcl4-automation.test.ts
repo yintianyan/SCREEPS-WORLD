@@ -128,7 +128,9 @@ function addRcl4Population(world: TestWorld): void {
     { mode: "acquire" },
   );
 
-  // 2 upgrader（站桩升级）
+  // 2 upgrader（站桩升级）。初始背包已满载：storage<50K 时升级闩锁关闭，
+  // 空载个体按设计直接 idle 归站（不再取能），已载能量按「先烧完再停」豁免交付——
+  // 种子态取中周期现实形态（运行中的帝国里 upgrader 背上都有货）。
   world.addCreep(
     "u1",
     "upgrader",
@@ -136,6 +138,7 @@ function addRcl4Population(world: TestWorld): void {
     38,
     [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
     { mode: "acquire" },
+    { energy: 50 },
   );
   world.addCreep(
     "u2",
@@ -144,6 +147,7 @@ function addRcl4Population(world: TestWorld): void {
     37,
     [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
     { mode: "acquire" },
+    { energy: 50 },
   );
 
   // 1 builder

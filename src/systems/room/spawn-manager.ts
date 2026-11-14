@@ -23,13 +23,6 @@ import {
   resolveLinkRoleRanges,
 } from "../../domain/economy/links";
 import { energyReserveFor } from "../../domain/spawn/reserve";
-import { nextStorageRichActive, nextUpgradeActive } from "../../domain/economy/storage-latch";
-import {
-  HOME_MINERAL_STOP_STOCK,
-  nextHomeMineralMiningActive,
-} from "../../domain/economy/home-mining";
-import { collectRoomResourceStocks } from "../../domain/economy/resource-stock";
-import { marketOutletState } from "../../domain/industry/market-outlet";
 import {
   cleanQueue,
   hasSurvivalRequest,
@@ -60,66 +53,6 @@ function hasLabSupplyDemand(roomMem: unknown, roomName: string): boolean {
   }
   const table = globalCache().labDemands?.byRoom[roomName];
   return (table?.loads.length ?? 0) > 0 || (table?.unloads.length ?? 0) > 0;
-}
-
-/**
- * Phase C：lab 侧是否真的需要该 home mineral。
- * 只看本矿的装料需求与反应计划步骤，避免「lab 要 O」把 H 的停采闸一直顶开。
- */
-function labNeedsHomeMineral(roomMem: unknown, roomName: string, mineral: string): boolean {
-  const table = globalCache().labDemands?.byRoom[roomName];
-  if (table?.loads.some(load => load.resource === mineral)) return true;
-
-  const plan = (
-    roomMem as
-      | {
-          industry?: {
-            reactionPlan?: {
-              steps?: readonly { input1?: string; input2?: string }[];
-            };
-          };
-        }
-      | undefined
-  )?.industry?.reactionPlan;
-  return (plan?.steps ?? []).some(step => step.input1 === mineral || step.input2 === mineral);
-}
-
-/**
- * Phase C：home mineral 是否存在真实 ticket。
- *
- * ticket 来源按「谁会把矿消耗/搬走」枚举：
- * lab 供料表、市场采购需求、跨房援助/计划出口票、真实买盘、factory 当前配方组件。
- * 任一存在即允许采矿 —— 库存闸只拦「没有任何下游去向」的堆积。
- */
-function hasHomeMineralDemand(
-  snapshot: RoomSnapshot,
-  roomMem: unknown,
-  mineral: string,
-  tick: number,
-): boolean {
-  if (labNeedsHomeMineral(roomMem, snapshot.roomName, mineral)) return true;
-
-  const procurement = globalCache().procurementDemands?.byRoom[snapshot.roomName] ?? [];
-  if (procurement.some(d => d.resource === mineral && d.deadline > tick)) return true;
-
-  const exports = globalCache().exportNeeds?.byRoom[snapshot.roomName] ?? [];
-  if (exports.some(n => n.resource === mineral && n.deadline > tick)) return true;
-
-  const cache = globalCache().marketOrderCache;
-  if (marketOutletState(mineral, cache, tick, CONFIG.market.interval + 50) === "yes") return true;
-
-  const target = globalCache().factoryTargets?.[snapshot.roomName];
-  if (target !== undefined) {
-    const table = (
-      globalThis as {
-        COMMODITIES?: Record<string, { components?: Record<string, number> }>;
-      }
-    ).COMMODITIES;
-    const components = table?.[target]?.components;
-    if (components !== undefined && (components[mineral] ?? 0) > 0) return true;
-  }
-
-  return false;
 }
 
 const CHEB = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
@@ -240,90 +173,7 @@ export const spawnManagerSystem: System = {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
 
-      // storage 富余闩锁（50K 停 / 100K 复），upgrade/lab/节流共用。
-      // 无 storage 的早期房不适用（否则 0 能量会让闩锁恒关，误伤 RCL1-3 的发展）。
-      let storageEnergyNow = 0;
-      try {
-        storageEnergyNow = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-      } catch {
-        storageEnergyNow = 0;
-      }
-      const storageRichActive: boolean | undefined =
-        snapshot.storage === undefined
-          ? undefined
-          : nextStorageRichActive(
-              roomMem.storageRichActive,
-              storageEnergyNow,
-              CONFIG.economy.waterlines.sprintStorage,
-              CONFIG.economy.waterlines.richStorageResume,
-            );
-      if (storageRichActive === undefined) {
-        if (roomMem.storageRichActive !== undefined) delete roomMem.storageRichActive;
-      } else if (roomMem.storageRichActive !== storageRichActive) {
-        roomMem.storageRichActive = storageRichActive;
-      }
-
-      // Phase D：分级消费闸 —— 停线统一 50K，恢复线按「收益/紧迫度」分开。
-      // upgrade 60K（长期复利，最优先）< lab 120K（有资产收益）< 修墙 300K（纯消耗）。
-      let upgradeActive: boolean | undefined;
-      let labActive: boolean | undefined;
-      let fortifyActive: boolean | undefined;
-      if (snapshot.storage !== undefined) {
-        // RCL8 用 60K 回差（GCL 复利可选）；RCL<8 用 50K 单门槛（升 RCL 是刚需，
-        // 回差会在 50–60K 制造死区 → 房永远卡在当前 RCL）。见 nextUpgradeActive。
-        upgradeActive = nextUpgradeActive(
-          roomMem.upgradeActive,
-          snapshot.rcl,
-          storageEnergyNow,
-          CONFIG.economy.waterlines.sprintStorage,
-          CONFIG.economy.waterlines.gclResumeStorage,
-        );
-        labActive = nextStorageRichActive(
-          roomMem.labActive,
-          storageEnergyNow,
-          CONFIG.economy.waterlines.sprintStorage,
-          CONFIG.economy.waterlines.labResumeStorage,
-        );
-        fortifyActive = nextStorageRichActive(
-          roomMem.fortifyActive,
-          storageEnergyNow,
-          CONFIG.economy.waterlines.sprintStorage,
-          CONFIG.defense.fortifyResumeStorage,
-        );
-      }
-      for (const [key, value] of [
-        ["upgradeActive", upgradeActive],
-        ["labActive", labActive],
-        ["fortifyActive", fortifyActive],
-      ] as const) {
-        if (value === undefined) {
-          if (roomMem[key] !== undefined) delete roomMem[key];
-        } else if (roomMem[key] !== value) {
-          roomMem[key] = value;
-        }
-      }
-
-      // Phase C：home mineral 停采闩锁（10K 停 / 5K 复）。无矿物的房不启用。
-      const homeMineral = snapshot.minerals[0]?.mineralType;
-      let homeMiningActive: boolean | undefined;
-      if (homeMineral !== undefined) {
-        const homeStock = collectRoomResourceStocks(snapshot)[homeMineral] ?? 0;
-        // ticket 只在停采线以下才考虑：库存已 ≥10K 时，现有库存本身就覆盖了
-        // lab/factory/援助需求，再拿 ticket 顶开闸只会让 81K 的 H 继续涨。
-        const hasDemand =
-          homeStock < HOME_MINERAL_STOP_STOCK &&
-          hasHomeMineralDemand(snapshot, roomMem, homeMineral, ctx.tick);
-        homeMiningActive = nextHomeMineralMiningActive(
-          roomMem.homeMiningActive,
-          homeStock,
-          hasDemand,
-        );
-        if (roomMem.homeMiningActive !== homeMiningActive) {
-          roomMem.homeMiningActive = homeMiningActive;
-        }
-      } else if (roomMem.homeMiningActive !== undefined) {
-        delete roomMem.homeMiningActive;
-      }
+      // 分级消费闩锁（storageRich/upgrade/lab/fortify/homeMining）由 room-state 唯一写。
 
       const queue = roomMem.spawnQueue ?? [];
 
@@ -385,18 +235,18 @@ export const spawnManagerSystem: System = {
       //     对称撤销残留请求，避免 recovery 期间孵出发展角色加剧赤字。
       //     Phase D：改读升级专用闸（恢复线 60K），不再被 lab/修墙的 100K/300K 拖住。
       if (
-        (colonyState !== "normal" || upgradeActive === false) &&
+        (colonyState !== "normal" || roomMem.upgradeActive === false) &&
         roomMem.controllerDowngradeRisk !== true
       ) {
         removeRequestsByRole(queue, "upgrader", snapshot.roomName);
       }
       // Phase D：lab 工业孵化跟随 labActive（恢复线 120K），与升级闸解耦。
-      if (labActive === false && roomMem.controllerDowngradeRisk !== true) {
+      if (roomMem.labActive === false && roomMem.controllerDowngradeRisk !== true) {
         removeRequestsByRole(queue, "mineralMiner", snapshot.roomName);
         removeRequestsByRole(queue, "labTender", snapshot.roomName);
       }
       // Phase C：home mineral 已到停采线 → 撤销在途矿工请求（存量继续工作，不强制回收）。
-      if (homeMiningActive === false) {
+      if (roomMem.homeMiningActive === false) {
         removeRequestsByRole(queue, "mineralMiner", snapshot.roomName);
       }
       //     distributor：填充需求已清零且存活编制达 minCount 地板时撤销扩编请求。
@@ -456,13 +306,13 @@ export const spawnManagerSystem: System = {
         // Phase 2：upgrade 可持续供给，供 demand 按 feed 封顶 upgrader 编制。
         upgradeFeedCap: computeUpgradeFeedCap(snapshot, creepsByRoom.get(snapshot.roomName) ?? []),
         // 富 storage 闩锁（50K 停 / 100K 复）。
-        richStorageActive: storageRichActive,
+        richStorageActive: roomMem?.storageRichActive,
         // Phase D：升级专用闸（50K 停 / 60K 复）—— 与 lab/修墙解耦。
-        upgradeActive,
+        upgradeActive: roomMem?.upgradeActive,
         // Phase D：lab 专用闸（50K 停 / 120K 复）—— 覆盖 labTender 与 mineralMiner。
-        labActive,
+        labActive: roomMem?.labActive,
         // Phase C：home mineral 停采闩锁（10K 停 / 5K 复）。
-        homeMiningActive,
+        homeMiningActive: roomMem?.homeMiningActive,
         // 【G-J 合规】churn 冻结表注入（写者=本系统 cleanQueue；domain 不触 Memory）。
         churnFreezeUntil: roomMem?.churnFreezeUntil as Record<string, number> | undefined,
         // 帝国合计储量注入（数据源=各房 economy.cr＝storage+terminal+link 水位；domain 不触 Memory）。

@@ -47,10 +47,9 @@ export function evaluateAgenda(
 ): AgendaResult {
   const { tick, rooms, prev } = input;
 
-  const anyCrisis = rooms.some(
-    r =>
-      r.colonyState === "bootstrap" || r.colonyState === "recovery" || r.colonyState === "crisis",
-  );
+  // ColonyState 无 "crisis" 值：phase=crisis 在 phaseToColonyState 映射为 recovery，
+  // 危机房已被下面的 recovery 分支覆盖（此前的 "crisis" 分支按构造不可达，已删）。
+  const anyCrisis = rooms.some(r => r.colonyState === "bootstrap" || r.colonyState === "recovery");
   const threatRecent = rooms.some(
     r => r.lastHostileAt !== undefined && tick - r.lastHostileAt < options.threatWindow,
   );

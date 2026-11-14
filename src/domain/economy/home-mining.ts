@@ -1,3 +1,8 @@
+import { globalCache } from "../../kernel/global-cache";
+import { CONFIG } from "../../config";
+import { marketOutletState } from "../industry/market-outlet";
+import type { RoomSnapshot } from "../../kernel/contracts";
+
 /**
  * home mineral 停采闩锁（Phase C）。
  *
@@ -30,4 +35,58 @@ export function nextHomeMineralMiningActive(
   if (hasDemand) return true;
   if (previous === true) return stock < stopStock;
   return stock < resumeStock;
+}
+
+/** Phase C：lab 侧是否真的需要该 home mineral。
+ * 只看本矿的装料需求与反应计划步骤，避免「lab 要 O」把 H 的停采闸一直顶开。 */
+function labNeedsHomeMineral(roomMem: unknown, roomName: string, mineral: string): boolean {
+  const table = globalCache().labDemands?.byRoom[roomName];
+  if (table?.loads.some(load => load.resource === mineral)) return true;
+
+  const plan = (
+    roomMem as
+      | {
+          industry?: {
+            reactionPlan?: {
+              steps?: readonly { input1?: string; input2?: string }[];
+            };
+          };
+        }
+      | undefined
+  )?.industry?.reactionPlan;
+  return (plan?.steps ?? []).some(step => step.input1 === mineral || step.input2 === mineral);
+}
+
+/** Phase C：home mineral 是否存在真实 ticket。
+ * ticket 来源按「谁会把矿消耗/搬走」枚举：lab 供料表、市场采购需求、跨房援助/计划出口票、
+ * 真实买盘、factory 当前配方组件。任一存在即允许采矿 —— 库存闸只拦「没有任何下游去向」的堆积。 */
+export function hasHomeMineralDemand(
+  snapshot: RoomSnapshot,
+  roomMem: unknown,
+  mineral: string,
+  tick: number,
+): boolean {
+  if (labNeedsHomeMineral(roomMem, snapshot.roomName, mineral)) return true;
+
+  const procurement = globalCache().procurementDemands?.byRoom[snapshot.roomName] ?? [];
+  if (procurement.some(d => d.resource === mineral && d.deadline > tick)) return true;
+
+  const exports = globalCache().exportNeeds?.byRoom[snapshot.roomName] ?? [];
+  if (exports.some(n => n.resource === mineral && n.deadline > tick)) return true;
+
+  const cache = globalCache().marketOrderCache;
+  if (marketOutletState(mineral, cache, tick, CONFIG.market.interval + 50) === "yes") return true;
+
+  const target = globalCache().factoryTargets?.[snapshot.roomName];
+  if (target !== undefined) {
+    const table = (
+      globalThis as {
+        COMMODITIES?: Record<string, { components?: Record<string, number> }>;
+      }
+    ).COMMODITIES;
+    const components = table?.[target]?.components;
+    if (components !== undefined && (components[mineral] ?? 0) > 0) return true;
+  }
+
+  return false;
 }

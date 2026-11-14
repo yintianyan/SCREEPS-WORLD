@@ -28,8 +28,10 @@ function input(overrides: Partial<AgendaInput> = {}): AgendaInput {
 }
 
 describe("agenda — 目标选择优先级", () => {
-  it("任一房危机 → recovery（最高优先级）", () => {
-    const r = evaluateAgenda(input({ rooms: [room({ colonyState: "crisis" })] }));
+  // crisis 相位在 phaseToColonyState 映射为 recovery（ColonyState 无 "crisis" 值）——
+  // 用合法态验证同一意图：任一房处于危机映射态 → recovery 议程最高优先。
+  it("任一房危机映射态（recovery）→ recovery（最高优先级）", () => {
+    const r = evaluateAgenda(input({ rooms: [room({ colonyState: "recovery" })] }));
     expect(r.initiative).toBe("recovery");
   });
 
