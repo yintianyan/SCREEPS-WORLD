@@ -654,3 +654,75 @@ describe("telemetry-collector — #189 物流健康度整列镜像", () => {
     expect((globalThis as any).Memory.kernel.stats.logisticsHealth).toBeUndefined();
   });
 });
+
+// ── 镜像清单 + empire-health 出口（#57 收口）────────────────
+
+describe("telemetry-collector — 镜像清单与 empire-health 出口", () => {
+  beforeEach(() => {
+    capturedEvents.length = 0;
+    for (const k of Object.keys(mockGlobalCache)) delete mockGlobalCache[k];
+    mockRawMemory = "x".repeat(100_000);
+    (globalThis as Record<string, unknown>).Game = {
+      time: 105,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: {},
+      kernel: { stats: { memorySize: 1234 } },
+    };
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+  });
+
+  function runAndStats(): { kernel: { stats: Record<string, unknown> } } {
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+    return (globalThis as Record<string, unknown>).Memory as {
+      kernel: { stats: Record<string, unknown> };
+    };
+  }
+
+  it("纯拷贝镜像清单：非空账本落同名键，空账本不落", () => {
+    mockGlobalCache.tradeLedger = { feeTotal: 794, deals: 2 };
+    mockGlobalCache.observeLedger = { requested: 5 };
+    mockGlobalCache.safeModeLedger = {};
+    const { kernel } = runAndStats();
+    expect(kernel.stats.trade).toEqual({ feeTotal: 794, deals: 2 });
+    expect(kernel.stats.observe).toEqual({ requested: 5 });
+    // 空对象不落（键缺席 = 无记录，不是零记录）
+    expect(kernel.stats.safeMode).toBeUndefined();
+  });
+
+  it("empireHealth/autonomyStatus 全量拷贝带 tick（#57 判效通道）", () => {
+    mockGlobalCache.empireHealth = {
+      level: "healthy",
+      score: 0.86,
+      dimensions: [],
+      worstDimension: "none",
+    };
+    mockGlobalCache.autonomyStatus = { autonomous: true, score: { score: 92, level: "full" } };
+    const { kernel } = runAndStats();
+    expect(kernel.stats.empireHealth).toEqual({
+      level: "healthy",
+      score: 0.86,
+      dimensions: [],
+      worstDimension: "none",
+      tick: 105,
+    });
+    expect(kernel.stats.autonomyStatus).toEqual({
+      autonomous: true,
+      score: { score: 92, level: "full" },
+      tick: 105,
+    });
+  });
+
+  it("recoveryActions 截断 top10 + 留痕列；failureGraph 只落规模摘要", () => {
+    const actions = Array.from({ length: 13 }, (_, i) => ({ id: `act-${i}`, urgent: i === 0 }));
+    mockGlobalCache.recoveryActions = actions;
+    mockGlobalCache.failureGraph = { nodes: [1, 2, 3], edges: [1, 2] };
+    const { kernel } = runAndStats();
+    expect(kernel.stats.recoveryActionsCount).toBe(13);
+    expect(kernel.stats.recoveryActions).toEqual(actions.slice(0, 10));
+    expect(kernel.stats.failureGraphSummary).toEqual({ nodeCount: 3, edgeCount: 2, tick: 105 });
+  });
+});

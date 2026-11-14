@@ -679,30 +679,57 @@ function sampleMemorySize(_tick: number): void {
     }
     // CPU 窗口已迁到 run() 顶部（updateCpuRateWindow，每 10 拍推进）——
     // 这里不再重复计算：100 拍一次的旧口径会让容量闸读到最多落后 100 拍的窗口。
-    if (g.roadBuildLedger && Object.keys(g.roadBuildLedger).length > 0) {
-      // 通勤建路账本快照（heap 累计值原样落一份，供体检脚本做差）：不参与任何决策。
-      (Memory.kernel.stats as any).roadBuild = { ...g.roadBuildLedger };
+    // 纯拷贝镜像清单（heap 累计账本 → Memory.kernel.stats 同名键，非空才落一份）。
+    // 带排序/截断/留痕列/恒写语义的镜像（cpuBySystem 族、tailDrop、logisticsHealth）
+    // 不进清单，留在各自位置——它们的形状本身就是判读口径。
+    const plainMirrors: readonly { heap: string; memory: string; why: string }[] = [
+      { heap: "roadBuildLedger", memory: "roadBuild", why: "通勤建路账本快照，供体检脚本做差" },
+      {
+        heap: "observeLedger",
+        memory: "observe",
+        why: "#100 Observer 请求账本：判楼不存在/选不出目标/报错/视野没落",
+      },
+      {
+        heap: "safeModeLedger",
+        memory: "safeMode",
+        why: "#119 safe mode 出口账本：guardMiss>0 而 tried=0 是唯一正面读数",
+      },
+      { heap: "remainsLootLedger", memory: "remainsLoot", why: "#131 C1 遗留物回收漏斗分桶" },
+      {
+        heap: "remainsBlindLedger",
+        memory: "remainsBlind",
+        why: "#131 C2 零容量遗留盲点（blindFiltered/snapshotTicks 为率）",
+      },
+      { heap: "tradeLedger", memory: "trade", why: "贸易决策现场快照：判被闸挡还是跑了不交易" },
+    ];
+    for (const m of plainMirrors) {
+      const v = g[m.heap] as Record<string, unknown> | undefined;
+      if (v && Object.keys(v).length > 0) {
+        (Memory.kernel.stats as any)[m.memory] = { ...v };
+      }
     }
-    if (g.observeLedger && Object.keys(g.observeLedger).length > 0) {
-      // Observer 请求账本（#100 的仪器）：判「楼不存在 / 选不出目标 / 引擎报错 / 视野没落下来」。
-      // 与 roadBuild 同一条 flush 路，heap 累计值原样落一份，不参与任何决策。
-      (Memory.kernel.stats as any).observe = { ...g.observeLedger };
+    // #57 收口：empire-health 四键原为 heap-only（换码即失，判效只能靠日志行+人工探针）。
+    // empireHealth/autonomyStatus 是小结形状全量拷贝；recoveryActions 截断 top10 + 留痕列
+    // （同 cpuBySystem 的「榜 vs 全集」纪律）；failureGraph 只落规模摘要
+    // （整图体积与判效价值不成比例，事后要的是根因规模不是图）。
+    if (g.empireHealth) {
+      (Memory.kernel.stats as any).empireHealth = { ...g.empireHealth, tick: Game.time };
     }
-    if (g.safeModeLedger && Object.keys(g.safeModeLedger).length > 0) {
-      // Safe mode 出口账本（#119）：判「该响没响」——`guardMiss>0 而 tried=0` 是唯一的正面读数。
-      (Memory.kernel.stats as any).safeMode = { ...g.safeModeLedger };
+    if (g.autonomyStatus) {
+      (Memory.kernel.stats as any).autonomyStatus = { ...g.autonomyStatus, tick: Game.time };
     }
-    if (g.remainsLootLedger && Object.keys(g.remainsLootLedger).length > 0) {
-      // 遗留物回收漏斗（#131 C1）：分桶才能回答"零头那一支到底跑没跑"。
-      (Memory.kernel.stats as any).remainsLoot = { ...g.remainsLootLedger };
+    const recoveryActions = g.recoveryActions as unknown[] | undefined;
+    if (recoveryActions && recoveryActions.length > 0) {
+      (Memory.kernel.stats as any).recoveryActionsCount = recoveryActions.length;
+      (Memory.kernel.stats as any).recoveryActions = recoveryActions.slice(0, 10);
     }
-    if (g.remainsBlindLedger && Object.keys(g.remainsBlindLedger).length > 0) {
-      // 零容量遗留的盲点体量（#131 C2）：`blindFiltered / snapshotTicks` 才是它的率。
-      (Memory.kernel.stats as any).remainsBlind = { ...g.remainsBlindLedger };
-    }
-    if (g.tradeLedger) {
-      // 贸易决策现场快照（heap 原样落一份）：判"被闸挡掉"还是"跑了但决定不交易"。
-      (Memory.kernel.stats as any).trade = { ...g.tradeLedger };
+    const failureGraph = g.failureGraph as { nodes?: unknown[]; edges?: unknown[] } | undefined;
+    if (failureGraph) {
+      (Memory.kernel.stats as any).failureGraphSummary = {
+        nodeCount: failureGraph.nodes?.length ?? 0,
+        edgeCount: failureGraph.edges?.length ?? 0,
+        tick: Game.time,
+      };
     }
     if (size > MEMORY_SIZE_ALERT) {
       log.warn(
