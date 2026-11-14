@@ -1,5 +1,6 @@
 /** Resource Ledger */
 
+import { emaSample } from "../../core/scale";
 import type { ResourceType } from "../operation/agenda-item";
 
 // ─── 资源五态 ──────────────────────────────────────────────
@@ -269,8 +270,7 @@ export function updateProductionRateEma(
   windowPerTick: number,
   alpha: number,
 ): number {
-  if (prev === undefined || !Number.isFinite(prev)) return windowPerTick;
-  return prev + alpha * (windowPerTick - prev);
+  return emaSample(prev, windowPerTick, alpha);
 }
 
 /**
@@ -281,8 +281,7 @@ export function updateConsumptionRateEma(
   windowPerTick: number,
   alpha: number,
 ): number {
-  if (prev === undefined || !Number.isFinite(prev)) return windowPerTick;
-  return prev + alpha * (windowPerTick - prev);
+  return emaSample(prev, windowPerTick, alpha);
 }
 
 // ─── 多资源账本 ─────────────────────────────────────────────

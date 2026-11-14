@@ -4,14 +4,22 @@
  * 单阈值 50K 会让 upgrade/lab 在 49K↔51K 之间每 tick 开合；
  * 用回差：低于 enter(50K) 关，涨到 resume(100K) 才重新开。
  */
+import { flipLatch } from "../../core/scale";
+
 export function nextStorageRichActive(
   previous: boolean | undefined,
   storageEnergy: number,
   enterThreshold: number,
   resumeThreshold: number,
 ): boolean {
-  if (previous === true) return storageEnergy >= enterThreshold;
-  return storageEnergy >= resumeThreshold;
+  return flipLatch(
+    previous === true,
+    storageEnergy >= resumeThreshold,
+    storageEnergy < enterThreshold,
+    0,
+    0,
+    0,
+  );
 }
 
 /**

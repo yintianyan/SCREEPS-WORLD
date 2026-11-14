@@ -1,3 +1,4 @@
+import { flipLatch } from "../../core/scale";
 import { INVADER_USERNAME } from "../../domain/intel";
 import { CONFIG } from "../../config";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
@@ -348,13 +349,15 @@ export const roomStateSystem: System = {
           CONFIG.economy.controllerDowngradeThreshold,
           CONFIG.economy.controllerDowngradeExitThreshold,
         );
-        if (roomMem.controllerDowngradeRisk) {
-          // 已在风险状态：需回升到退出阈值以上才解除
-          roomMem.controllerDowngradeRisk = ttd < band.exit;
-        } else {
-          // 不在风险状态：低于进入阈值才触发
-          roomMem.controllerDowngradeRisk = ttd < band.enter;
-        }
+        // 双阈折带后的翻转收敛到 flipLatch：进入 ttd<enter、退出 ttd>=exit、带内维持原态
+        roomMem.controllerDowngradeRisk = flipLatch(
+          roomMem.controllerDowngradeRisk === true,
+          ttd < band.enter,
+          ttd >= band.exit,
+          0,
+          0,
+          0,
+        );
       } else {
         roomMem.controllerDowngradeRisk = false;
       }

@@ -1,3 +1,4 @@
+import { flipLatch } from "../../core/scale";
 import { CONFIG } from "../../config";
 import { degradeBody, minimalBodyFor, RECOVERY_BODY, selectBody } from "../../config/bodies";
 import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
@@ -1301,12 +1302,15 @@ export function evaluateDemand(
     // 带内保持状态，消除阈值附近的目标跳变振荡。P1-J：prev→next 显式传递，
     // domain 不直读写 Memory。
     const builderPressure = roomCtx.economyPressure;
-    let state = roomCtx.prevHysteresis?.builderPressureState ?? "full";
-    if (state === "full" && builderPressure > 0.35) {
-      state = "shrinking";
-    } else if (state === "shrinking" && builderPressure <= 0.25) {
-      state = "full";
-    }
+    const shrinking = flipLatch(
+      roomCtx.prevHysteresis?.builderPressureState === "shrinking",
+      builderPressure > 0.35,
+      builderPressure <= 0.25,
+      0,
+      0,
+      0,
+    );
+    const state: "full" | "shrinking" = shrinking ? "shrinking" : "full";
     nextHysteresis.builderPressureState = state;
     let builderTarget: number;
     if (state === "full") {

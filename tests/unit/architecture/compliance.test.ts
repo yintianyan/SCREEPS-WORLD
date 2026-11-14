@@ -485,6 +485,22 @@ describe("R13 同名导出唯一（定义权守卫）", () => {
   });
 });
 
+describe("core 层纯度（定义权原语零依赖）", () => {
+  it("core/ 内文件不 import 其他层", () => {
+    const bad: string[] = [];
+    for (const f of ALL_FILES) {
+      const rel = relative(SRC, f);
+      if (!rel.startsWith("core/")) continue;
+      for (const imp of importsOf(f)) {
+        if (!imp.resolved.startsWith(SRC)) continue;
+        const targetRel = relative(SRC, imp.resolved);
+        if (!targetRel.startsWith("core/")) bad.push(`${rel} -> ${targetRel}`);
+      }
+    }
+    expect(bad, `core 层出现对外依赖: ${bad.join(", ")}`).toHaveLength(0);
+  });
+});
+
 // R12 production bundle parity 已收敛至 tests/integration/framework/bundle-parity.test.ts
 //（FREEZE R20③：dist 仅在 build 后存在，守卫必须在 build 之后运行——unit 层在
 // CI 中先于 build，恒走 skip 分支形同虚设；「已删模块不回流」检查一并迁移）。

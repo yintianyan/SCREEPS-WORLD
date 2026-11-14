@@ -1,3 +1,4 @@
+import { flipLatch } from "../../core/scale";
 import type { ColonyState } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { downgradeRiskBand } from "./downgrade-risk";
@@ -611,6 +612,5 @@ export function computeClaimSecure(
     CONFIG.economy.claimSecureEnterTtd,
     CONFIG.economy.claimSecureExitTtd,
   );
-  if (prev) return ticksToDowngrade < band.exit;
-  return ticksToDowngrade < band.enter;
+  return flipLatch(prev, ticksToDowngrade < band.enter, ticksToDowngrade >= band.exit, 0, 0, 0);
 }

@@ -1,5 +1,6 @@
 /** 能量核算纯函数层（· ENERGY_ACCOUNTING_MODEL）。 */
 
+import { emaSample, flipLatch } from "../../core/scale";
 import { isExpansionPushPlan, type PlanStatus } from "../expansion/plan";
 
 // ─── L1 计数器 ──────────────────────────────────────────────
@@ -336,8 +337,7 @@ export function updateNetFlowEma(
   windowPerTick: number,
   alpha: number,
 ): number {
-  if (prev === undefined || !Number.isFinite(prev)) return windowPerTick;
-  return prev + alpha * (windowPerTick - prev);
+  return emaSample(prev, windowPerTick, alpha);
 }
 
 /**
@@ -391,12 +391,15 @@ export function nextUpgradeBrake(
   minOpenTicks: number,
 ): UpgradeBrakeState {
   if (!prev) return { closed: sumGate < 0, since: tick };
-  if (prev.closed) {
-    const released = sumGate >= 0 && tick - prev.since >= minClosedTicks;
-    return released ? { closed: false, since: tick } : prev;
-  }
-  const tripped = sumGate < 0 && tick - prev.since >= minOpenTicks;
-  return tripped ? { closed: true, since: tick } : prev;
+  const closed = flipLatch(
+    prev.closed,
+    sumGate < 0,
+    sumGate >= 0,
+    tick - prev.since,
+    minOpenTicks,
+    minClosedTicks,
+  );
+  return closed === prev.closed ? prev : { closed, since: tick };
 }
 
 /**

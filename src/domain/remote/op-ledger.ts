@@ -11,6 +11,8 @@
  * 3. defender 带 remoteTarget，其 body 成本已进 spawnCost；**不单列 riskCost**，
  *    否则同一笔孵化被记两次支出。
  */
+import { emaSample } from "../../core/scale";
+
 export interface RemoteOpLedger {
   /** 拉回主房 sink 的能量。 */
   delivered: number;
@@ -91,13 +93,8 @@ export function opProfitable(l: RemoteOpLedger): boolean {
  */
 export function recordOpCpu(l: RemoteOpLedger, cpuUsed: number): void {
   if (!Number.isFinite(cpuUsed) || cpuUsed < 0) return;
-  const alpha = 0.1;
-  if (l.cpuPerTick <= 0) {
-    // 首样本：直接置位，避免 EMA 从 0 缓慢爬升
-    l.cpuPerTick = cpuUsed;
-  } else {
-    l.cpuPerTick = l.cpuPerTick * (1 - alpha) + cpuUsed * alpha;
-  }
+  // 首样本（≤0 视为无历史）：直接置位，避免 EMA 从 0 缓慢爬升
+  l.cpuPerTick = emaSample(l.cpuPerTick > 0 ? l.cpuPerTick : undefined, cpuUsed, 0.1);
 }
 
 // ─── Memory 持久化（跨 global reset）─────────────────────
