@@ -14,7 +14,7 @@ import { log } from "./log";
 
 // ─── Segment ID 常量 ────────────────────────────────────────
 
-// 【F1/G-D】segment id 真相源 = CONFIG.memory.segments 配额表（FREEZE §9）；
+// segment id 真相源 = CONFIG.memory.segments 配额表；
 // 此处仅保留兼容别名。新增段必须先在配额表登记（≤10 active）。
 const SEG_IDS = CONFIG.memory.segments as Record<string, { id: number } | number>;
 function segId(name: string, fallback: number): number {
@@ -127,7 +127,7 @@ function activationObserved(): boolean {
 }
 
 /**
- * P1-2 可用性守卫：本 tick 该段的内容是否「未知」。
+ * 可用性守卫：本 tick 该段的内容是否「未知」。
  *
  * 未知时既不能缓存空结构、也不能 flush — 否则会把尚未送达的历史 segment
  * 整体覆盖（时序清零、layout 冷数据丢失）。三态判定：

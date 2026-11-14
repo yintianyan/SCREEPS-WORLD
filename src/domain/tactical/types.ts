@@ -1,4 +1,4 @@
-/** A5.4.0 Tactical Combat — Domain Type Definitions. */
+/** Tactical Combat — Domain Type Definitions. */
 
 import type { CombatCapability, AggregateCapability } from "../combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../defense/terrain-context";
@@ -7,7 +7,7 @@ import type { PlayerIntelRecord } from "../defense/player-intel";
 import type { AbortCondition } from "../military/operation";
 
 // ═══════════════════════════════════════════════════════════
-// §1. TacticalObjective — Operational Objective 的 Tactical 投影
+// TacticalObjective — Operational Objective 的 Tactical 投影
 // ═══════════════════════════════════════════════════════════
 
 /** Tactical 目标类型 — Operational Objective 在战术层的投影。 */
@@ -68,7 +68,7 @@ export interface TacticalObjective {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. TacticalAuthorization — 授权验证
+// TacticalAuthorization — 授权验证
 // ═══════════════════════════════════════════════════════════
 
 /** 授权状态。 */
@@ -98,7 +98,7 @@ export interface TacticalAuthorization {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. TacticalConstraints
+// TacticalConstraints
 // ═══════════════════════════════════════════════════════════
 
 /** Tactical 约束 — 来自 Operational 层，Tactical 不可自行放宽。 */
@@ -120,7 +120,7 @@ export interface TacticalConstraints {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. TacticalState — 战术状态机
+// TacticalState — 战术状态机
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -148,7 +148,7 @@ export type TacticalState =
   | "ABORTED"; // 目标中止
 
 // ═══════════════════════════════════════════════════════════
-// §5. SquadPlan — 编队计划
+// SquadPlan — 编队计划
 // ═══════════════════════════════════════════════════════════
 
 /** Squad 成员快照 — 不持有 Runtime 对象。 */
@@ -256,7 +256,7 @@ export interface SquadPlan {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. TacticalSnapshot — 纯函数输入
+// TacticalSnapshot — 纯函数输入
 // ═══════════════════════════════════════════════════════════
 
 /** 敌方单位快照。 */
@@ -321,7 +321,7 @@ export interface TacticalSnapshot {
   readonly playerIntel?: PlayerIntelRecord;
   /** 我方编队聚合能力。 */
   readonly ourCapability: AggregateCapability;
-  /** 我方编队 CombatPower（复用 A5.1）。 */
+  /** 我方编队 CombatPower（复用 CombatCapability）。 */
   readonly ourPower: {
     readonly burstDamage: number;
     readonly effectiveHP: number;
@@ -331,7 +331,7 @@ export interface TacticalSnapshot {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §7. TacticalDecision — 纯函数输出
+// TacticalDecision — 纯函数输出
 // ═══════════════════════════════════════════════════════════
 
 /** 移动意图 — Domain 层只决定 Intent，不执行 Path。 */
@@ -381,7 +381,7 @@ export interface RejectedTacticalAlternative {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §8. TacticalAbortSignal — 止损信号
+// TacticalAbortSignal — 止损信号
 // ═══════════════════════════════════════════════════════════
 
 /** TacticalAbortReason — Tactical 层发现不可继续的原因。 */
@@ -395,7 +395,7 @@ export type TacticalAbortReason =
   | "OBJECTIVE_UNACHIEVABLE" // 目标不可达
   | "AUTHORIZATION_REVOKED"; // 授权撤销
 
-/** TacticalAbortSignal — 交给 Operational / A4.6 处理。 */
+/** TacticalAbortSignal — 交给 Operational / recovery-lifecycle 处理。 */
 export interface TacticalAbortSignal {
   /** 信号 ID。 */
   readonly signalId: string;
@@ -416,7 +416,7 @@ export interface TacticalAbortSignal {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §9. ForceShortage / ReinforcementDemand — Spawn 边界
+// ForceShortage / ReinforcementDemand — Spawn 边界
 // ═══════════════════════════════════════════════════════════
 
 /** ForceShortage — 编队缺人信号。 */
@@ -452,7 +452,7 @@ export interface ReinforcementDemand {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §10. SupplyDemand — Logistics 边界
+// SupplyDemand — Logistics 边界
 // ═══════════════════════════════════════════════════════════
 
 /** SupplyDemand — 提交给 Unified Logistics 的补给需求。 */
@@ -476,10 +476,10 @@ export interface SupplyDemand {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §11. TacticalDecisionTrace — A4.7 集成
+// TacticalDecisionTrace — DecisionTrace 集成
 // ═══════════════════════════════════════════════════════════
 
-/** Tactical 决策事件类型 — 复用 A4.7 DecisionTrace。 */
+/** Tactical 决策事件类型 — 复用 DecisionTrace。 */
 export type TacticalDecisionEvent =
   | "TACTICAL_OBJECTIVE_ACCEPTED"
   | "TACTICAL_STATE_CHANGED"

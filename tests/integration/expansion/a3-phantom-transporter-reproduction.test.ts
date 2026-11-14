@@ -1,4 +1,4 @@
-/** A3 Phantom Transporter Bug — 最小复现测试 */
+/** Phantom Transporter Bug — 最小复现测试 */
 
 import { describe, it, expect } from "vitest";
 import { CONFIG } from "../../../src/config";
@@ -10,7 +10,7 @@ import {
 
 // ─── 验证 "transporter" 角色不存在于系统 ───────────────────
 
-describe("A3 Phantom Transporter Bug — 角色存在性验证", () => {
+describe("Phantom Transporter Bug — 角色存在性验证", () => {
   it("CONFIG.roles 不包含 'transporter'", () => {
     expect(CONFIG.roles).not.toHaveProperty("transporter");
   });
@@ -26,7 +26,7 @@ describe("A3 Phantom Transporter Bug — 角色存在性验证", () => {
 
 // ─── CP3 永远不可通过（Phantom Transporter）──────────────
 
-describe("A3 Phantom Transporter Bug — CP3 永远不可通过", () => {
+describe("Phantom Transporter Bug — CP3 永远不可通过", () => {
   const baseInput: CheckpointInput = {
     checkpointId: "CP3_ENERGY_LOOP",
     controllerClaimed: true,
@@ -74,7 +74,7 @@ describe("A3 Phantom Transporter Bug — CP3 永远不可通过", () => {
 
 // ─── Economic Activation 永远不通过（Phantom Transporter）──────────────
 
-describe("A3 Phantom Transporter Bug — Economic Activation 永远不通过", () => {
+describe("Phantom Transporter Bug — Economic Activation 永远不通过", () => {
   const baseInput: EconomicActivationInput = {
     energyProduction: 20,
     energyConsumption: 10,
@@ -118,7 +118,7 @@ describe("A3 Phantom Transporter Bug — Economic Activation 永远不通过", (
 
 // ─── 扩张超时链路验证 ──────────────────────────
 
-describe("A3 Phantom Transporter Bug — 扩张必然超时", () => {
+describe("Phantom Transporter Bug — 扩张必然超时", () => {
   it("模拟 economic_startup 阶段 1000 tick 后仍不可通过（transporter 永远不存在）", () => {
     // 模拟 1000 tick 的 economic_startup 阶段
     let consecutivePositive = 0;
@@ -189,7 +189,7 @@ describe("A3 Phantom Transporter Bug — 扩张必然超时", () => {
 
 // ─── 修复后验证：使用 hauler 替代 transporter ────────────────
 
-describe("A3 Phantom Transporter Bug — 修复后验证（使用 hauler+有物流信号）", () => {
+describe("Phantom Transporter Bug — 修复后验证（使用 hauler+有物流信号）", () => {
   // 修复方案：将 transporterActive 重命名为 logisticsActive，
   // 检查 hauler 或 distributor 存在
   it("CP3 应在 hauler 存在时通过（修复后）", () => {

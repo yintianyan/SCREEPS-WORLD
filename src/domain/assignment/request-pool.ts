@@ -1,16 +1,16 @@
-/** 物流请求池纯函数层（· REQUEST_POOL_DESIGN §2–§5）。 */
+/** 物流请求池纯函数层。 */
 
 /**
- * 请求归属域（A2 后半·步 11：Request Scope Model）。
+ * 请求归属域（Request Scope Model）。
 
  * - room：房内请求（现有行为——由本房 logistics 系统生成并满足）
  * - empire：帝国级请求（跨房调拨候选——由 Empire Resource Imbalance 检测产出，
- *   A2 后半只生成候选不执行运输；A3 阶段由 logistics 系统消费）
+ *   只生成候选不执行运输；由 logistics 系统消费）
  * - operation：操作级请求（未来扩展——远矿/军事行动的物流需求）
  */
 export type RequestScope = "room" | "empire" | "operation";
 
-/** 搬运请求五字段合同化（LOGISTICS §2.1-2：资源/数量/位置/优先级/TTL）。 */
+/** 搬运请求五字段合同化（资源/数量/位置/优先级/TTL）。 */
 export interface TransportRequest {
   /** 确定性身份："collect:<room>:<containerId>"——重建幂等即 dedup。 */
   key: string;
@@ -20,7 +20,7 @@ export interface TransportRequest {
   sourceId?: string;
   pos?: { x: number; y: number };
   priority: 0 | 1 | 2 | 3;
-  /** 请求归属域（A2 后半扩展）。缺省 = "room"，不破坏现有 key 语义。 */
+  /** 请求归属域。缺省 = "room"，不破坏现有 key 语义。 */
   scope?: RequestScope;
   /** 帝国级请求的目标房（scope="empire" 时由 Imbalance 检测填充）。 */
   targetRoom?: string;
@@ -180,7 +180,7 @@ export function reconcileRegistry(
 }
 
 /**
- * L2 池收缩（LOGISTICS §3）：风险缓冲低于地板时只保留 P0/P1 请求——
+ * L2 池收缩：风险缓冲低于地板时只保留 P0/P1 请求——
  * 低优先级搬运需求让位给生存链。当前单房需求集多为 P0/P1，本过滤为
  * 合同完整性守卫；P2/P3 运输需求入池后即成为有效降级通道。
  */
@@ -189,7 +189,7 @@ export function applyShrink(reqs: TransportRequest[], shrink: boolean): Transpor
   return reqs.filter(r => r.priority <= 1);
 }
 /**
- * 饥饿老化（LOGISTICS §5）：age > promoteAfter 且 priority ≥ 2 → 提一级（一次性）。
+ * 饥饿老化：age > promoteAfter 且 priority ≥ 2 → 提一级（一次性）。
  * 仅 P2/P3 适用；Recovery 档不生效（调用方在降档时不调用本函数）。
  */
 export function promoteAged(

@@ -11,7 +11,7 @@ export type CandidateStatus =
   | "REJECTED" // 评分 < 阈值 或 硬否决
   | "BLACKLISTED"; // 失败冷却中
 
-/** 四类扩张动机（EXPANSION_ARCHITECTURE §1.1）。 */
+/** 四类扩张动机。 */
 export type ExpansionReason =
   | "resource" // 资源产能
   | "gcl" // GCL 复利
@@ -26,19 +26,19 @@ export interface TerrainSummary {
   sealedExitCount: number;
   /** 人工墙数（0 = 无前任工事）。 */
   wallCount: number;
-  /** R651：自然墙占比（0..1，undefined = 未侦察）。 */
+  /** 自然墙占比（0..1，undefined = 未侦察）。 */
   wallRatio?: number;
-  /** R651：沼泽占比（0..1）。 */
+  /** 沼泽占比（0..1）。 */
   swampRatio?: number;
-  /** R651：最佳锚点评分（与 claim 后同一套 selectAnchors）。 */
+  /** 最佳锚点评分（与 claim 后同一套 selectAnchors）。 */
   bestAnchorScore?: number;
-  /** R651：最佳锚点到 controller 的曼哈顿距离。 */
+  /** 最佳锚点到 controller 的曼哈顿距离。 */
   anchorToController?: number;
-  /** R651：最佳锚点到最近 source 的曼哈顿距离。 */
+  /** 最佳锚点到最近 source 的曼哈顿距离。 */
   anchorToSources?: number;
-  /** R651b：最佳锚点到遗留 spawn 的曼哈顿距离（回 claim 房布局校验）。 */
+  /** 最佳锚点到遗留 spawn 的曼哈顿距离（回 claim 房布局校验）。 */
   leftoverSpawnToAnchor?: number;
-  /** R662：锚点上 v3 模板格的地形可放率（0..1）。 */
+  /** 锚点上 v3 模板格的地形可放率（0..1）。 */
   anchorPlaceableRatio?: number;
 }
 
@@ -107,7 +107,7 @@ export interface CandidateScoreBreakdown {
   rivalProximity: number;
   defensibility: number;
   layoutFitness: number;
-  /** R651：地形适配（wallRatio + 锚点几何，0..1）。 */
+  /** 地形适配（wallRatio + 锚点几何，0..1）。 */
   terrainFit?: number;
   /** 加权总分。 */
   total: number;
@@ -174,7 +174,7 @@ export function buildCandidate(
   else if ((intel.enemySpawns ?? 0) > 0) vetoReason = `enemySpawns=${intel.enemySpawns}`;
   else if (owned.has(roomName)) vetoReason = "already-owned";
   else if (released.has(roomName)) vetoReason = "recently-released";
-  // R651 选点前置：地形/布局在 claim **之前** 就用同一套锚点尺否决。
+  // 选点前置：地形/布局在 claim **之前** 就用同一套锚点尺否决。
   // W38S58 实测反例：wallRatio 0.50、anchorToController 28 ⇒ 必须在立项前被拒。
   // 2026-11-08 放宽 0.3→0.5：私服 W8N3 周边 10 个候选的墙比集中在 0.32–0.49，
   // 0.3 会把 U/L/H/O 矿房全部挡死（原料扩张长期为 0）；0.5 仍拒绝 0.62 的 Z 房，
@@ -185,11 +185,11 @@ export function buildCandidate(
     vetoReason = `anchor-far-ctrl=${intel.anchorToController}`;
   else if (intel.bestAnchorScore !== undefined && intel.bestAnchorScore < 0)
     vetoReason = `anchor-score=${intel.bestAnchorScore.toFixed(1)}`;
-  // R651b：回 claim 房若遗留 spawn 离最佳锚点过远（>12），说明布局已被旧资产锚死，
+  // 回 claim 房若遗留 spawn 离最佳锚点过远（>12），说明布局已被旧资产锚死，
   // 新房会继承一条长通勤骨架（W38S58：spawn 28,28 vs controller 15,13 的教训）。
   else if (intel.leftoverSpawnToAnchor !== undefined && intel.leftoverSpawnToAnchor > 12)
     vetoReason = `leftover-spawn-far=${intel.leftoverSpawnToAnchor}`;
-  // R662：锚点周围模板格可放率 <85% ⇒ 布局必然残缺（30% 墙的模拟缺口 ≤20%）。
+  // 锚点周围模板格可放率 <85% ⇒ 布局必然残缺（30% 墙的模拟缺口 ≤20%）。
   else if (intel.anchorPlaceableRatio !== undefined && intel.anchorPlaceableRatio < 0.85)
     vetoReason = `anchor-fit=${intel.anchorPlaceableRatio.toFixed(2)}`;
 
@@ -310,7 +310,7 @@ export function dropOwnedRooms<T extends { roomName: string }>(
 }
 
 /**
- * R7b：按「扩张节奏自适应」算出的最低 source 数筛掉候选。
+ * 按「扩张节奏自适应」算出的最低 source 数筛掉候选。
  *
  * 为什么需要这个函数：`evaluateExpansionRhythm` 的三个输出里，`blacklistMultiplier` 被
  * `blacklistTarget` 消费、`expansionPausedUntil` 被 expansion-manager 消费，而 `minSources`

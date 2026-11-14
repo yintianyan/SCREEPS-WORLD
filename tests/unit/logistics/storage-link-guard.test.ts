@@ -1,7 +1,7 @@
 /**
  * withdrawStorageLink 回归测试。
  *
- * 守卫已移除（根因分析详见 AUDIT-ISSUES.md ISSUE-LINK-CHAIN）：
+ * 守卫已移除（根因如下）：
  * - link-system (P1 系统) 先于 hauler (P1 角色) 执行，已将 storage→controller 传输完毕
  * - hauler 排空的是 link-system 传输后的剩余能量，不影响 controller link 供能
  * - 守卫导致 storage link 锁在 799/800（free=1-3），source→storage 传输量 1-3，

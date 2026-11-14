@@ -87,7 +87,7 @@ export const EARLY_MIGRATIONS: MigrationStep[] = [
     from: 4,
     to: 5,
     run: () => {
-      // v5：建档 CreepMemory.recycle? 与 RoomMemory.intel?（B1 回收通道 / C2 邻居情报）。
+      // v5：建档 CreepMemory.recycle? 与 RoomMemory.intel?（回收通道 / 邻居情报）。
       // 两者均为可选字段，无需回填；此处仅做畸形数据自愈（幂等）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName];
@@ -295,7 +295,7 @@ export const EARLY_MIGRATIONS: MigrationStep[] = [
     from: 14,
     to: 15,
     run: () => {
-      // v15：P0-A 远矿 site 收编 — RemoteOp 新增 siteCount（可选，惰性写入）；
+      // v15：远矿 site 收编 — RemoteOp 新增 siteCount（可选，惰性写入）；
       // 实际值由 remote-mining-manager 每 managerInterval 实测校正，无需回填。
       // 此处仅畸形自愈。
       for (const roomName in Memory.rooms) {
@@ -313,7 +313,7 @@ export const EARLY_MIGRATIONS: MigrationStep[] = [
     from: 15,
     to: 16,
     run: () => {
-      // v16：P1-G dangerUntil 搬家 — intel[room].dangerUntil → remoteOps[room].dangerUntil
+      // v16：dangerUntil 搬家 — intel[room].dangerUntil → remoteOps[room].dangerUntil
       // （remote-mining-manager 成为唯一写者）。对应条目存在且无 dangerUntil 时搬运，
       // 否则仅删 intel 旧字段；remoteOps 条目已清除时也仅删旧字段 —
       // dangerCooldown(2000) << cleanupThreshold(30000)，冷却早已过期。

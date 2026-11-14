@@ -120,7 +120,7 @@ function attemptConsume(ctx: TickContext, waiting: ExpansionPlanMemory): boolean
 
   // 初始化扩张状态
   if (!Memory.kernel) Memory.kernel = {};
-  // UOEM：铸造 operationId（consume 时一次性，跨 reset 稳定）
+  // 铸造 operationId（consume 时一次性，跨 reset 稳定）
   const operationId = makeOperationId(plan.roomName, ctx.tick);
   Memory.kernel.expansion = {
     state: "preparing",
@@ -132,7 +132,7 @@ function attemptConsume(ctx: TickContext, waiting: ExpansionPlanMemory): boolean
     reservedEnergy: 0,
     consecutivePositiveTicks: 0,
     operationId,
-    openedAt: ctx.tick, // UOEM：immutable lifecycle anchor
+    openedAt: ctx.tick, // immutable lifecycle anchor
     forcedAdvance: false,
   };
 
@@ -160,7 +160,7 @@ function isCandidateStillValid(roomName: string, tick: number): boolean {
   }
   // pruneBlacklist 已在本函数前跑过：还在表里就说明冷却未过。
   if (Memory.kernel?.expansionBlacklist?.[roomName] !== undefined) return false;
-  // R651/R652 选点前置复核：老计划立项时没有地形指标，侦察补上后用**同一把尺**在执行前再判一次
+  // 选点前置复核：老计划立项时没有地形指标，侦察补上后用**同一把尺**在执行前再判一次
   // （锚点到 controller>25 / 锚点评分<0 / 遗留 spawn 距锚点>12 / 非 normal 直接判无效 ⇒ 计划 CANCELLED）。
   // 2026-11-08：wallRatio 门槛与 buildCandidate 同步 0.3→0.5 —— 两处不同源会让
   // "候选通过、计划一立就被这道复核取消"，等于新阈值白改。
@@ -191,7 +191,7 @@ function isIntelStale(roomName: string, tick: number): boolean {
 
 /** 检查目标房是否可 claim。 */
 /**
- * #102 —— 把 `GATE_THREAT_UNCHANGED` 接上真数据。
+ * 把 `GATE_THREAT_UNCHANGED` 接上真数据。
  *
  * 原先这里写死 `false`（连同 `hasConcurrentOp`），于是十一道执行闸里"威胁未升级"这道
  * **按构造永真通过**：帝国可以开进一间正被打的房。domain 的 `evaluateThreatEscalation()`

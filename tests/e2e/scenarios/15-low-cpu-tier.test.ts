@@ -1,5 +1,5 @@
 /**
- * E2E-015 低 CPU 私服 soak — CpuTier 降级链实测（CANARY §5.3）。
+ * E2E-015 低 CPU 私服 soak — CpuTier 降级链实测。
  *
  * mockup driver 按每 tick 记账（cpuAvailable += cpu − used），cpu≈实际用量时
  * bucket 净收支归零 —— 据此做确定性档位注入：cpu=2 使 bucket 稳在注入值，
@@ -96,7 +96,7 @@ describe("E2E-015 低 CPU soak — CpuTier 降级链", () => {
     await injectCpu(runner, { cpu: 100, cpuAvailable: 6000 });
     await runStage(1200);
 
-    // ── 证据登记（CANARY §4.2 绑定模板要素，供文档归档）──
+    // ── 证据登记（绑定模板要素，供文档归档）──
     const tiers = probes.map(p => p.tier);
     const distinctTiers = [...new Set(tiers)];
     console.log(
@@ -105,7 +105,7 @@ describe("E2E-015 低 CPU soak — CpuTier 降级链", () => {
         `distinctTiers=${distinctTiers.join("/")} jsErrors=${errorsSeen}`,
     );
 
-    // 四档全链发生（CANARY §5.3：tier 切换验证四档降级）。
+    // 四档全链发生（tier 切换验证四档降级）。
     for (const tier of ["healthy", "guarded", "conserve", "recovery"]) {
       expect(
         distinctTiers,

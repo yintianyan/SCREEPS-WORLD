@@ -1,5 +1,5 @@
 /**
- * #105 — 恢复动作被拒的持久留痕。
+ * 恢复动作被拒的持久留痕。
  *
  * 立案依据（读码，非事故）：`recoveryActionTable` 与 `attempts/maxAttempts` 都住 heap
  * ⇒ 每次部署归零，所以"某类动作一直被判拒"这种结构性失效在本仓读数里从不显形。
@@ -34,7 +34,7 @@ beforeEach(() => {
   G().Memory.kernel = { stats: {} };
 });
 
-describe("#105 写入路径", () => {
+describe("写入路径", () => {
   it("首次被拒建表并计 1，带上 tick 与 reason", () => {
     recordRecoveryRejection(TYPE, "non_retryable", "room memory not found: global", TICK);
 
@@ -81,7 +81,7 @@ describe("#105 写入路径", () => {
   });
 });
 
-describe("#105 已有形状与缺失守卫（键迁移那一族的两个坑）", () => {
+describe("已有形状与缺失守卫（键迁移那一族的两个坑）", () => {
   it("表已存在时不吞旧条目：异键并存、同键 +1", () => {
     G().Memory.kernel.stats.recoveryRejections = {
       "SPAWN_RECOVERY:non_retryable": { count: 7, lastAt: 1, lastReason: "历史拒因" },
@@ -124,7 +124,7 @@ describe("#105 已有形状与缺失守卫（键迁移那一族的两个坑）",
  * 的坦白），所以对"调用点在拒绝分支里"这件事，源码形状是能拿到的最强证据；
  * 语义层面的最终复核留给线上读数（见文件头的覆盖边界）。
  */
-describe("#105 接线（源码形状）", () => {
+describe("接线（源码形状）", () => {
   const source = readFileSync("src/systems/room/recovery-execution-system.ts", "utf8");
 
   it("拒绝分支里调用记录器，且整个文件除定义外只有这一个调用点", () => {
@@ -134,7 +134,7 @@ describe("#105 接线（源码形状）", () => {
     const rejectBranch = source.slice(
       source.indexOf("} else {\n        // 提交失败"),
       source.indexOf(
-        "(g.recoveryActionTable as RecoveryActionTable).set(recoveryIdempotencyKey(action), record);\n        // #105",
+        "(g.recoveryActionTable as RecoveryActionTable).set(recoveryIdempotencyKey(action), record);\n        // 拒因累计落 Memory",
       ),
     );
     expect(rejectBranch).toContain("classifyFailure");

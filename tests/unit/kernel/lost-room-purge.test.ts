@@ -1,5 +1,5 @@
 /**
- * B4-⑲ — 失守房账本清盘的可归因性。
+ * 失守房账本清盘的可归因性。
  *
  * `maintainMemory` 的 LOST_ROOM_GRACE 届满时会连着删掉 `Memory.rooms[r]` 与
  * `Memory.kernel.tuning.rooms[r]` / `lastEval[r]`。删本身是对的（宽限期 20000t 大于
@@ -67,7 +67,7 @@ beforeEach(() => {
   resetGlobals();
 });
 
-describe("B4-⑲ 失守房清盘必须留账", () => {
+describe("失守房清盘必须留账", () => {
   it("宽限期届满且有调参账 → 删账之前记一条 LostRoomPurge，带被抹掉的数量", () => {
     setup({ lostFor: GRACE + 1, withTuning: true });
 

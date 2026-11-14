@@ -24,7 +24,7 @@ export interface RecoveryActionRecord {
   actionId: string;
   /** 关联的 FailureNode.id。 */
   failureId: string;
-  /** Correlation ID（供 A4.7 Decision Trace 使用）。 */
+  /** Correlation ID（供 Decision Trace 使用）。 */
   correlationId: string;
   /** Action 类型。 */
   type: RecoveryActionType;
@@ -913,7 +913,7 @@ export interface EscalationUpsertResult {
    * **本次被 upsert 那一条**的 repeats（不是 `list[0]` 的）。
    * 为什么由函数给而不是调用方自己查：清单的身份判据是 `(room, domain, actionType)`，
    * 而新条目 `unshift`、旧条目原地更新不移位 ⇒ `list[0]` 只代表"最近新建的那条"，
-   * 更新非队首条目时它属于**另一个房/另一个域**（#139 的错因就在调用方读了 `list[0].repeats`）。
+   * 更新非队首条目时它属于**另一个房/另一个域**（错因就在调用方读了 `list[0].repeats`）。
    */
   repeats: number;
 }

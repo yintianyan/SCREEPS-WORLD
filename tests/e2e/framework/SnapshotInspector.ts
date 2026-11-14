@@ -176,10 +176,10 @@ export class SnapshotInspector {
   }
 
   // getStorageEnergy / getControllerLevel / hasRole / hasErrorLogs /
-  // hasRuntimeError / findLogs 已删除（R20⑤：审计确认场景零调用；
+  // hasRuntimeError / findLogs 已删除（审计确认场景零调用；
   // 结构/进度真值查询见下方 structureCensus / controllerProgress）。
 
-  // ── 引擎真值查询（world.roomObjects，FREEZE R20①/T3）──────────────
+  // ── 引擎真值查询（world.roomObjects）──────────────
   // 以下方法替代场景内联的 CENSUS console 探针：结构计数/role body 直方图/
   // controller 进度从 driver DB 读取，不再需要 bot 侧 console 字符串拼装与解析。
 
@@ -237,7 +237,7 @@ export class SnapshotInspector {
     return out;
   }
 
-  /** 工地普查（structureType → 数量）——constructionSite 对象真值（R20/T6）。 */
+  /** 工地普查（structureType → 数量）——constructionSite 对象真值。 */
   async siteCensus(roomName?: string): Promise<Record<string, number>> {
     const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
     const census: Record<string, number> = {};
@@ -248,7 +248,7 @@ export class SnapshotInspector {
     return census;
   }
 
-  /** 指定名称 creep 的血量真值；不存在（死亡/未生成）时 undefined（R20/T6）。 */
+  /** 指定名称 creep 的血量真值；不存在（死亡/未生成）时 undefined。 */
   async creepHitPoints(
     roomName: string | undefined,
     name: string,

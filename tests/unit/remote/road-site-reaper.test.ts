@@ -287,11 +287,11 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
 
     expect(room.createConstructionSite).not.toHaveBeenCalled();
     expect(sites[0]!.remove).toHaveBeenCalledTimes(1);
-    // #187：闸关着时留痕列必须如实落 0，而不是留着上一趟铺路的数（它是每 pass 值）。
+    // 闸关着时留痕列必须如实落 0，而不是留着上一趟铺路的数（它是每 pass 值）。
     expect(ops[T].roadLaid).toBe(0);
   });
 
-  it("#187 反向实验：上一趟铺了 2，被跨主房帽挡住这一趟读回 0 而不是 2", () => {
+  it("反向实验：上一趟铺了 2，被跨主房帽挡住这一趟读回 0 而不是 2", () => {
     // 闩锁形状的可分判别＝同一 op、同一负载，唯一差别是本趟有没有被 roadSitesPerOpTotal 挡住。
     const sites = [roadSite(20, 40), roadSite(20, 21)];
     const op = activeOp({ roadSiteCount: 2, roadLaid: 2, ...frozen(0, 5014) });
@@ -420,14 +420,14 @@ describe("mergeWalkHeat（纯函数）", () => {
 });
 
 /**
- * #149：`roadSitesPerRun` 是**每轮新建**的限速，不该顺手关掉后面车道的清扫。
+ * `roadSitesPerRun` 是**每轮新建**的限速，不该顺手关掉后面车道的清扫。
  *
- * 线上形状（R421 体检）：W36S58 四格 road site 冻了 66,249 拍、`workers=4`、`无WORK=0`，
+ * 线上形状（体检）：W36S58 四格 road site 冻了 66,249 拍、`workers=4`、`无WORK=0`，
  * 而 `roadsBuilt=0`。这条用例量的是同一族里的另一扇门：规划器在循环头 `return`，于是
  * 本轮只要前一条车道铺满了 3 格，**后面所有车道连"残骸回收"和账本校正都不会执行**。
  * 而紧挨着它下面那行注释自己写着「车道已满不是跳过本房的理由 —— 越满越要先扫」。
  */
-describe("planRemotePathRoads — 每轮新建上限不得吞掉后续车道的清扫（#149）", () => {
+describe("planRemotePathRoads — 每轮新建上限不得吞掉后续车道的清扫", () => {
   const T2 = "W8N5";
 
   it("第一条车道铺满 roadSitesPerRun 后，第二条车道的冻死残骸本轮仍要被收", () => {
@@ -469,7 +469,7 @@ describe("planRemotePathRoads — 每轮新建上限不得吞掉后续车道的�
   });
 });
 
-describe("远矿车道留痕 stats.remoteRoadLane（#139 配额侧）", () => {
+describe("远矿车道留痕 stats.remoteRoadLane（配额侧留痕）", () => {
   function laneFixture() {
     const sites = [roadSite(20, 40, 100)];
     const op = activeOp(frozen(50, 9000));

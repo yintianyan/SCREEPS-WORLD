@@ -36,7 +36,7 @@ describe("E2E-003 Storage 建造（RCL4）", () => {
     ).toBeGreaterThanOrEqual(1);
   }, 300000);
 
-  it("storage site 被创建（RCL4 建造链路真值，R20/T6）", async () => {
+  it("storage site 被创建（RCL4 建造链路真值）", async () => {
     // 轮询 5×300t：storage site 出现即止（layout 规划 + builder 落位真值，
     // world.roomObjects 直读，替代只看角色出现的弱断言）。
     let seen = 0;

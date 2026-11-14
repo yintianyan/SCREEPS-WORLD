@@ -94,7 +94,7 @@ export interface EconomySample {
  * 人口普查快照（全局，仅保留最新一份）。
  */
 /**
- * 把「角色 → 存活数」汇总成普查用的两列（#141 的纯函数部分）。
+ * 把「角色 → 存活数」汇总成普查用的两列（纯函数部分）。
  *
  * 存在的理由只有一个：让"总人数"这件事**可被单测钉住**。
  * `samplePopulationData` 本身要动 `RawMemory` 段与 `Game.creeps`，
@@ -122,12 +122,12 @@ export interface PopulationSnapshot {
   /** 采样 tick。 */
   t: number;
   /**
-   * 全体存活 creep 数（#141）。
+   * 全体存活 creep 数。
    * 下面五列只是五个角色的子集——线上实测某刻 `hv+ha+up+bd+wk = 11` 而真实人口 42，
    * 因此**任何"人均"（每只 CPU、闲置率等）必须除以 `n`，不是五列之和**。
    */
   n?: number;
-  /** 角色 → 存活数，按数量降序截前 10（段体积有界；#141 的覆盖面补齐）。 */
+  /** 角色 → 存活数，按数量降序截前 10（段体积有界）。 */
   rl?: Record<string, number>;
   // 各角色存活数量
   hv: number; // harvester
@@ -159,7 +159,7 @@ export interface CpuSegmentData {
   cpu: RingBuffer<CpuSample>;
   /** 最新人口普查快照（仅保留最后一份）。 */
   population?: PopulationSnapshot;
-  /** 最新 heap 使用快照（C2-FINDING-01: heap 监控）。 */
+  /** 最新 heap 使用快照（heap 监控）。 */
   heap?: HeapSample;
 }
 

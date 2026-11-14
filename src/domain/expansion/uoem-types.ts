@@ -53,7 +53,7 @@ export const TERMINAL_RESULTS: ReadonlySet<string> = new Set<ExpansionResult>([
   "ABANDONED",
 ]);
 
-/** 配对观测 — 强制双端点（A6-R/A6-SL 修复）。 */
+/** 配对观测 — 强制双端点。 */
 export interface PairedObservation {
   /** 决策时刻冻结的 before 值。 */
   readonly before: number;
@@ -61,7 +61,7 @@ export interface PairedObservation {
   readonly after: number;
 }
 
-/** 增量观测 — 取代终身累计值（A6-R 修复）。 */
+/** 增量观测 — 取代终身累计值。 */
 export interface DeltaObservation {
   /** 自 open 以来的成功增量。 */
   readonly succeededSinceOpen: number;

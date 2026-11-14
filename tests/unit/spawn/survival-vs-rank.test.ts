@@ -1,7 +1,7 @@
 /**
- * B5-⑳ `SpawnRequest.priority` 的语义拆分：排队权重 ≠ 本房生存需求。
+ * `SpawnRequest.priority` 的语义拆分：排队权重 ≠ 本房生存需求。
  *
- * 一个字段两种语义的原事故（A14）：捐出方房看见自己队列里有 `priority 0` 就停建、
+ * 一个字段两种语义的原事故：捐出方房看见自己队列里有 `priority 0` 就停建、
  * 停孵本房其他请求 —— 而那个 0 可能只是 agenda-manager 替**别的房**求援运能
  * （`op.priority` 经 `allocation.ts` 的 `riskBuffer ?? 0` 判成 critical 而来）。
  * "被别的房求援"因此变成对自家基建与自家编制的否决权。

@@ -1,11 +1,11 @@
 /**
- * B4-⑰ — war-planning-system 的兼容投影（warPlan.sponsor / 换目标收摊）。
+ * war-planning-system 的兼容投影（warPlan.sponsor / 换目标收摊）。
  *
  * 钉的是两个写者之间的契约，而不是任何一方的内部算术：
  * 1. sponsor = 「谁来出这支兵」，只能由世界态解析（domain 的 spawnRequirement[].home
  *    填的是目标房）。写错的下场不是数值偏差，是 war-planner 在
  *    `Memory.rooms[sponsor].spawnQueue` 上读到 undefined 后整链静默停摆。
- * 2. A5 改判换目标必须先走 demobilize（唯一实现了收摊义务的地方）：旧编队标 recycle、
+ * 2. 改判换目标必须先走 demobilize（唯一实现了收摊义务的地方）：旧编队标 recycle、
  *    旧 sponsor 的在队请求撤回、止损信号上报 —— 且不判负、不拉黑（主动撤换 ≠ 战败）。
  *
  * 本文件此前不存在：warPlanningSystem.run() 在单测里从未被真实调用过（只有
@@ -94,7 +94,7 @@ function threat(intent: string, level = "HIGH"): ThreatAssessment {
   } as unknown as ThreatAssessment;
 }
 
-/** 受威胁房集合 —— A5 的输入主体（空 Map 即"无威胁"，A5 不出计划）。 */
+/** 受威胁房集合 —— war-planning-system 的输入主体（空 Map 即"无威胁"，不出计划）。 */
 function seedThreats(entries: ReadonlyArray<[string, ThreatAssessment]>): void {
   globalCache().threatAssessments = new Map(entries);
 }
@@ -144,7 +144,7 @@ function setup(opts: { remoteOp?: boolean } = {}): void {
   syncSquadIndex();
 }
 
-/** 让 A5 + war-planner 对远矿建起一支编队，返回当时的 warPlan。 */
+/** 让 war-planner 对远矿建起一支编队，返回当时的 warPlan。 */
 function squadAtRemote(): any {
   setup({ remoteOp: true });
   seedIntel(REMOTE);
@@ -159,7 +159,7 @@ beforeEach(() => {
   setup();
 });
 
-describe("B4-⑰ sponsor 解析：谁出这支兵", () => {
+describe("sponsor 解析：谁出这支兵", () => {
   it("远矿房受威胁 → warPlan.sponsor 是运营它的自有房，不是目标房", () => {
     setup({ remoteOp: true });
     seedIntel(REMOTE);
@@ -220,8 +220,8 @@ describe("B4-⑰ sponsor 解析：谁出这支兵", () => {
   });
 });
 
-describe("B4-⑰ 换目标必须收摊", () => {
-  it("A5 改判到另一间房 → 旧编队标 recycle、旧请求撤回", () => {
+describe("换目标必须收摊", () => {
+  it("改判到另一间房 → 旧编队标 recycle、旧请求撤回", () => {
     squadAtRemote();
     // 在役编队（squadIndex 按 home + remoteTarget 键住它们）。
     G().Game.creeps = {
@@ -300,7 +300,7 @@ describe("B4-⑰ 换目标必须收摊", () => {
   });
 });
 
-describe("B4-⑰ TARGET_SWITCH 的恢复语义", () => {
+describe("TARGET_SWITCH 的恢复语义", () => {
   it("TARGET_SWITCH 映射到 auto_resolve：新计划自己声明补员需求，不抢恢复预算", () => {
     const action = mapAbortToRecoveryAction({
       tick: TICK,

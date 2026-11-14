@@ -6,7 +6,7 @@ export const LATE_MIGRATIONS: MigrationStep[] = [
     from: 31,
     to: 32,
     run: () => {
-      // v32：R7c 无害侦察观测 — 新增 RoomMemory.lastObserverAt /
+      // v32：无害侦察观测 — 新增 RoomMemory.lastObserverAt /
       // observerSightings（room-state 唯一写者）。建档 + 畸形自愈：
       // 非数字 → 删除（缺失视为无目击）。
       for (const roomName in Memory.rooms) {
@@ -138,27 +138,27 @@ export const LATE_MIGRATIONS: MigrationStep[] = [
     run: () => {
       // v37：P3 能量核算 — 新增 RoomMemory.rooms[r].economy 瘦快照（economy 系统
       // 唯一写者）。字段全部可选、惰性初始化，无存量数据需变换 —— 幂等 no-op，
-      // 仅升版本登记结构变更（STATE_OWNERSHIP §4 迁移三件套之迁移步骤）。
+      // 仅升版本登记结构变更（迁移三件套之迁移步骤）。
     },
   },
   {
     from: 37,
     to: 38,
     run: () => {
-      // v38：A3.0 多房帝国执行 — 新增 KernelMemory.agendas（agenda-manager 唯一
+      // v38：多房帝国执行 — 新增 KernelMemory.agendas（agenda-manager 唯一
       // 写者，跨房调拨 Operation 生命周期）+ KernelMemory.reservations（资源预留
       // 表）。字段全部可选、惰性初始化，无存量数据需变换 —— 幂等 no-op，
-      // 仅升版本登记结构变更（STATE_OWNERSHIP §4 迁移三件套之迁移步骤）。
+      // 仅升版本登记结构变更（迁移三件套之迁移步骤）。
     },
   },
   {
     from: 38,
     to: 39,
     run: () => {
-      // v39：A4.2 多资源帝国经济 — 扩展 KernelMemory.empireEconomy 瘦快照新增
+      // v39：多资源帝国经济 — 扩展 KernelMemory.empireEconomy 瘦快照新增
       // 4 个字段（mh/md/bn/wmh：多资源健康度/矿物缺口/瓶颈资源/最差矿物健康度）。
       // 字段全部可选、惰性初始化（empire-economy 系统 100t 后首次写入即填充）——
-      // 幂等 no-op，仅升版本登记结构变更（STATE_OWNERSHIP §4 迁移三件套之迁移步骤）。
+      // 幂等 no-op，仅升版本登记结构变更（迁移三件套之迁移步骤）。
       // 存量快照无新字段 → 读取方用 ?? 默认值兜底，不影响正确性。
     },
   },
@@ -166,7 +166,7 @@ export const LATE_MIGRATIONS: MigrationStep[] = [
     from: 39,
     to: 40,
     run: () => {
-      // v40：Phase 6 UOEM — 新增 KernelMemory.outcomeEvents（OutcomeChannel Memory
+      // v40：OutcomeChannel — 新增 KernelMemory.outcomeEvents（Memory
       // 持久化，cap=16，压缩字段名，≤3.2KB）+ KernelMemory.expansion 新增 operationId/openedAt/
       // forcedAdvance 三个可选字段。存量 expansion 无新字段 → 下次 consume 时铸造
       // operationId，当前用 ?? 默认值兜底。outcomeEvents 惰性初始化（getOutcomeChannel
@@ -181,7 +181,7 @@ export const LATE_MIGRATIONS: MigrationStep[] = [
       // (queue/seen/duplicateRejected/overflowEvicted) 正式迁移到压缩字段名
       // (q/s/dr/oe)。
       //
-      // MEMORY_ARCHITECTURE §3 幂等迁移五步合同：
+      // 幂等迁移五步合同：
       //   1. 先写新字段（如果旧字段存在且新字段不存在）
       //   2. 验证新字段有效（类型检查）
       //   3. 验证成功后删除旧字段
@@ -241,7 +241,7 @@ export const LATE_MIGRATIONS: MigrationStep[] = [
     from: 41,
     to: 42,
     run: () => {
-      // v42：R2 队列治理 — BuildTask 新增可选 queuedAt（入队 tick）。存量任务
+      // v42：队列治理 — BuildTask 新增可选 queuedAt（入队 tick）。存量任务
       // 无该字段 → 回填为当前 tick（年龄从迁移时刻起算，避免「缺省=0」被误判
       // 为超龄遭清除）。幂等：仅当 undefined 时写入；重复执行无副作用。
       const now = Game.time;

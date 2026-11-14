@@ -165,7 +165,7 @@ export function developedRoom(roomName: string, rcl: number): RoomSetup {
  * 可支付豁免线 50k（`upgrade.sprintStorage`）、破产兜底线 10k（`upgrade.sustainedStorage`）。
  *
  * 本该从**收入侧**补（真实房间 4~6 个 source），实测踩过一次后判定为暂不可行，账记在
- * task #10：给到 5 个 source 时 `CONFIG.roles.harvester.maxCount=4` 与相位机的
+ * 给到 5 个 source 时 `CONFIG.roles.harvester.maxCount=4` 与相位机的
  * `understaffed = harvesterCount < sourceCount` **互斥** —— 顶格编制仍算欠员，房间永久
  * 停在生存带（9000 tick 里 8730 tick 在带内），war 场景因此不可判定；那条通道
  * （srcRatio 取"最满 source"）还会把欠员伪装成采集塌方，把真相盖掉。

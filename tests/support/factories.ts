@@ -1,5 +1,5 @@
 /**
- * unit 工具层 — 共享 mock 工厂（FREEZE R20① / T4）。
+ * unit 工具层 — 共享 mock 工厂。
  *
  * 原 tests/role-helpers.ts 已删除，本文件是 unit 层 fixture 工厂的唯一实现。
  * 审计确认的重复工厂（makeSnapshot×16 / makeContext×10 / makeCreep×6 /
@@ -72,7 +72,7 @@ export function resetGlobals(): void {
   // 观察交接缓冲（room-observer → intelligence）— 漏清会让情报观测跨用例泄漏。
   delete g.intelHandoff;
   delete g.__observePending;
-  // per-tick 缓存（movement 重构 + P2-6 对象缓存）— Game.time 固定为 1000，
+  // per-tick 缓存（movement 重构 + 对象缓存）— Game.time 固定为 1000，
   // 不清理会导致上一测试缓存的对象/路径污染下一测试。
   delete g.__objCache;
   delete g.__objCacheTick;
@@ -109,31 +109,31 @@ export function resetGlobals(): void {
   // action profiling 缓存
   delete g.actionCpu;
   delete g.actionCpuTick;
-  // P0-A：site 配额共享账本（construction-manager × remote-mining-manager）
+  // site 配额共享账本（construction-manager × remote-mining-manager）
   delete g.sitesCreatedThisTick;
   delete g.remoteSiteTotal;
   // 远矿 op 账本（heap 累加器）— 漏清会让净营收断言跨用例污染。
   delete g.remoteOpLedgers;
   // L1 能量计数器（bumpEnergyCounter 写入）— 漏清会让 exported/imported 这类断言跨用例污染。
   delete g.energyLedger;
-  // P1-E：每房每 tick 寻路预算计数器
+  // 每房每 tick 寻路预算计数器
   delete g.__pathSearchBudget;
-  // P1-F：layout 4-stage 分片跨 tick 中间产物
+  // layout 4-stage 分片跨 tick 中间产物
   delete g.__planStageData;
-  // P1-1：死资产 link 计时器（link-system 维护）
+  // 死资产 link 计时器（link-system 维护）
   delete g.deadAssetSince;
-  // P1-3：link 几何受限标记 + P1-4 拆改计划与冷却账本
+  // link 几何受限标记 + 拆改计划与冷却账本
   delete g.linkConstrained;
   delete g.dismantlePlans;
   delete g.lastDismantleTick;
-  // P1-4：拆改累计计数 + 走廊路路径缓存（同 heap 生命周期；漏清会让
-  // corridor-cache-invalidation / layout-restart-stability 跨用例污染，见体检报告 §3.1）
+  // 拆改累计计数 + 走廊路路径缓存（同 heap 生命周期；漏清会让
+  // corridor-cache-invalidation / layout-restart-stability 跨用例污染）
   delete g.dismantleCount;
   delete g.corridorPathCache;
-  // R3：war-planner / attacker 的敌结构共享缓存（同 heap 生命周期 — 漏清会让
+  // war-planner / attacker 的敌结构共享缓存（同 heap 生命周期 — 漏清会让
   // attacker 测试跨用例复用上一用例缓存的敌结构，Game.time 固定 1000 无法自然过期）。
   delete g.__warStructures;
-  // P0-1：全局编队索引（kernel.buildSnapshots 预构建，测试中需手动同步）。
+  // 全局编队索引（kernel.buildSnapshots 预构建，测试中需手动同步）。
   delete g.squadIndex;
   // kernel.buildSnapshots 预构建的远矿目标集合（economy sampleRoomFlows 消费）。
   delete g.remoteTargetRooms;
@@ -145,12 +145,12 @@ export function resetGlobals(): void {
   delete g.warAbortSignals;
   delete g.warPlanCache;
   delete g.warLogisticsDemand;
-  // #99 漏斗 scratch — 漏清会让"本 pass 候选为 0"的断言读到上一条用例的残影。
+  // 漏斗 scratch — 漏清会让"本 pass 候选为 0"的断言读到上一条用例的残影。
   delete g.warFunnelScratch;
 }
 
 /**
- * P0-1：从当前 Game.creeps 构建 squadIndex（测试 helper）。
+ * 从当前 Game.creeps 构建 squadIndex（测试 helper）。
  * 生产环境由 kernel.buildSnapshots 预构建；测试 mock 直接设 Game.creeps 时
  * 需调用此函数同步索引，否则 querySquad 返回空。
  */
@@ -244,7 +244,7 @@ export function mockStore(used: number, capacity: number) {
 }
 
 /**
- * 容量型纯对象 store mock（room-state 系测试归并，R20①/T4 批①）。
+ * 容量型纯对象 store mock（room-state 系测试归并）。
  * 与 mockStore（vi.fn 版）的区别：纯对象零开销、仅 energy 资源语义。
  */
 export function mockCapacityStore(

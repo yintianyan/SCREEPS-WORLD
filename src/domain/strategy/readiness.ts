@@ -69,7 +69,7 @@ export interface ReadinessOptions {
   blockOnLiveThreat: boolean;
   /** 是否有困难房时禁止扩张。 */
   blockOnStruggling: boolean;
-  // ── A3.2 扩展 Gate ──
+  // ── 扩展 Gate ──
   /** G12: 候选评分最低阈值。 */
   minCandidateScore: number;
   /** G14: 风险分数最高阈值（超过则 NOT_READY）。 */
@@ -91,7 +91,7 @@ export const DEFAULT_READINESS_OPTIONS: ReadinessOptions = {
   minExpansionBudget: 2000,
   blockOnLiveThreat: true,
   blockOnStruggling: true,
-  // A3.2 扩展 Gate 默认值
+  // 扩展 Gate 默认值
   // 2026-11-08：0.5 → 0.45。私服 W8N3 唯一的 U 矿房 W7N6 得分 0.49，被 0.5 差一点挡死；
   // 0.45 仍拒绝低分房，只放开这一档边缘候选。
   minCandidateScore: 0.45,
@@ -322,10 +322,10 @@ export function evaluateExpansionReadiness(
   };
 }
 
-// ─── A3.2 扩展 Gate (G12–G15) ─────────────────────────────
+// ─── 扩展 Gate (G12–G15) ─────────────────────────────
 
 /**
- * A3.2 扩展就绪度评估：在基础 G0–G11 通过后，追加 G12–G15 候选/成本/风险/保护层门控。
+ * 扩展就绪度评估：在基础 G0–G11 通过后，追加 G12–G15 候选/成本/风险/保护层门控。
 
  * G12: 有评分合格候选（candidateScore ≥ minCandidateScore）
  * G13: Available Budget ≥ Estimated Cost

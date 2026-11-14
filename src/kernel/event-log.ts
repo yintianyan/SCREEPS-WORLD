@@ -52,43 +52,43 @@ export enum EventKind {
   /** 塔齐射（战斗黑匣子）。d = [firedCount, targetX, targetY, targetHealParts, floor(targetHits/100)]。
    * 每 tick 每房至多一条（全塔集火同一目标），战斗期形成连续弹道记录。 */
   TowerVolley = 18,
-  /** 改进 A：tuning 参数调整。d = [paramCode, oldValue, newValue, adjustDirectionCode(0=up/1=down)]。
-   * 由 tuning-engine 在 applyAdjustment 时记录，提供附录 C.1 缺失的 adjustHistory 审计源。 */
+  /** tuning 参数调整。d = [paramCode, oldValue, newValue, adjustDirectionCode(0=up/1=down)]。
+   * 由 tuning-engine 在 applyAdjustment 时记录，提供此前缺失的 adjustHistory 审计源。 */
   TuningAdjust = 19,
-  /** 改进 A：tuning 参数回滚（验证失败）。d = [paramCode, rolledBackValue, preAdjustValue, roleCountAtVerify]。
-   * 验证 pass 发现调整未改善信号时触发回滚。第 4 元素（#83）是验证那一拍的在场角色数，-1 = 未知；
-   * 它把"人口合同那条路"与"效果判据/#79 上行护栏那条路"分开 —— 两者都落在这个 kind 上，
+  /** tuning 参数回滚（验证失败）。d = [paramCode, rolledBackValue, preAdjustValue, roleCountAtVerify]。
+   * 验证 pass 发现调整未改善信号时触发回滚。第 4 元素是验证那一拍的在场角色数，-1 = 未知；
+   * 它把"人口合同那条路"与"效果判据/上行护栏那条路"分开 —— 两者都落在这个 kind 上，
    * 光看 kind 与 reason 分不出来。
    * ⚠️别把"环寿命"当常数（旧注释写过"~755 拍"，那是单发读数）：环按**事件数**封顶
    * = `EVENT_RING_CAPACITY` 500 条（segment-store.ts:42），所以时间跨度 = 500 ÷ 事件密度。
    * 实测两发：755 拍与 1,123 拍。⇒ 只有密度低于 ~0.33 条/拍时，才够从环里回看一整个 verifyDelay(1,500)；
    * 事后取证能不能拿到，取决于**当时有多少别的事件在写**，不是取决于常数。 */
   TuningRollback = 20,
-  /** 改进 A：tuning 参数冻结（连续回滚达阈值）。d = [paramCode, rollbackCount, frozenUntilDelta]。
-   * 冻结时参数复位到 CONFIG 基线（附录 D.5），console.log 降级为运维提醒。 */
+  /** tuning 参数冻结（连续回滚达阈值）。d = [paramCode, rollbackCount, frozenUntilDelta]。
+   * 冻结时参数复位到 CONFIG 基线，console.log 降级为运维提醒。 */
   TuningFreeze = 21,
-  /** P1 修复（附录 E.2）：tuning 人口合同 blocked 超时回滚。
+  /** P1 修复：tuning 人口合同 blocked 超时回滚。
    * d = [paramCode, preAdjustValue, blockedDurationTicks]；roleCount 持续未达新边界
    * 超过 2 个 verifyDelay 窗口 → 回滚。与 TuningRollback（效果验证失败）区分。 */
   TuningBlocked = 22,
-  /** R4 战争收摊核验（战后验收闭环）：一次战争计划收摊时的战果结论。
+  /** 战争收摊核验（战后验收闭环）：一次战争计划收摊时的战果结论。
    * d = [outcomeCode(0=success/1=failure/2=unknown), spawned, reasonCode(0=姿态退出/1=战损止损/2=无合格目标/3=计划超期换目标)]。
    * 供战斗黑匣子复盘：投入多少孵化请求、因何收摊、核验结论如何。 */
   WarOutcome = 23,
-  /** R5 跨房能量互济：一笔 terminal.send 救助成交。d = [amount]；r = 受助房名。
+  /** 跨房能量互济：一笔 terminal.send 救助成交。d = [amount]；r = 受助房名。
    * 捐赠房名见 console.log 明细（事件体积优先，r 保留「谁被救」这一复盘焦点）。 */
   EnergyTransfer = 24,
-  /** R6a 帝国议程切换：短期目标变更。d = [initiativeCode(0=recovery/1=defense-readiness/2=rcl-push/3=develop)]；
+  /** 帝国议程切换：短期目标变更。d = [initiativeCode(0=recovery/1=defense-readiness/2=rcl-push/3=develop)]；
    * r = ""（帝国级事件）。观测「帝国当前在主动做什么」与目标切换节奏。 */
   AgendaChange = 25,
-  /** R6b 侦察任务收摊：一次主动情报任务的结论。d = [outcomeCode(0=success/1=timeout/2=death/3=aborted), spawned]；
+  /** 侦察任务收摊：一次主动情报任务的结论。d = [outcomeCode(0=success/1=timeout/2=death/3=aborted), spawned]；
    * r = 目标房。复盘侦察成功率与「谁值得再侦察」。 */
   ProspectOutcome = 26,
-  /** R7a 扩张任务归因：claim 或 pioneering 阶段的收摊结论。
+  /** 扩张任务归因：claim 或 pioneering 阶段的收摊结论。
    * d = [phaseCode(0=claim/1=pioneer), outcomeCode(0=success/1=stolen/2=timeout/3=lostOrHostile/4=aborted), durationTicks]；
-   * r = 目标房。供扩张节奏自适应（R7b）归因「什么条件下扩张会失败」。 */
+   * r = 目标房。供扩张节奏自适应归因「什么条件下扩张会失败」。 */
   ExpansionOutcome = 28,
-  /** R7a 议程窗口归因：退出某议程时记录窗口收益。
+  /** 议程窗口归因：退出某议程时记录窗口收益。
    * d = [initiativeCode, progressGained, durationTicks]；r = ""。rcl-push 窗口的
    * controller 进度增量 → 升级速率证据（评估冲级议程是否值得）。 */
   AgendaOutcome = 29,
@@ -124,7 +124,7 @@ export enum EventKind {
   AccountingDrift = 39,
   /** P3 物流请求 TTL 过期出池（不静默丢单回执）。r = 房间，d = [key]。 */
   RequestExpired = 40,
-  /** A5.3 军事行动计划创建：war-planning-system 产出一个新 WarPlan。
+  /** 军事行动计划创建：war-planning-system 产出一个新 WarPlan。
    * d = [statusCode(0=PLANNED~9=EXPIRED), priorityScore]；r = 目标房名。
    * 供战斗黑匣子复盘：计划创建时的初始状态与优先级。 */
   WarPlanCreated = 41,
@@ -603,13 +603,13 @@ export interface EventLogSegmentData {
 
 /** 记录一个离散事件：写入 globalCache().eventBuffer（heap），telemetry-collector 低频 flush 到 segment。
  * 可从任意系统安全调用 — 不访问 Memory/segment，CPU 开销极低（数组 push）。
- * E-FINDING-10: soft cap 200 条 — 防止单 tick 突发事件压垮 eventBuffer。
+ * soft cap 200 条 — 防止单 tick 突发事件压垮 eventBuffer。
  * 超限时丢弃最老的事件（FIFO），保留最新事件。 */
 export function recordEvent(kind: EventKind, roomName: string, data: number[]): void {
   const g = globalCache();
   if (!g.eventBuffer) g.eventBuffer = { events: [] };
   const events = g.eventBuffer.events;
-  // E-FINDING-10: soft cap — 超过 200 条时丢弃最老的事件
+  // soft cap — 超过 200 条时丢弃最老的事件
   if (events.length >= 200) {
     events.shift();
   }
@@ -637,16 +637,16 @@ export function recordCreepDeath(name: string): void {
   const lifespan = role === "reserver" || role === "claimer" ? 600 : 1500;
   const natural = age >= lifespan - 60 ? 1 : 0;
   // P1 补位时延起点锚（同角色下次孵化成功时结算 EMA）。
-  // E-FINDING-09: 移除 (Memory as any) 类型绕过，使用类型安全访问。
+  // 移除 (Memory as any) 类型绕过，使用类型安全访问。
   const stats = Memory.kernel?.stats;
   if (stats) {
     if (!stats.deathAnchor) stats.deathAnchor = {};
     stats.deathAnchor[role] = Game.time;
-    // #96：跨部署存活的战损累计线。事件环只回溯 ~846 拍、M11 保险丝只 400 拍且住 heap（换码清零），
-    // 于是 #90 判据里「持续战损」那半边按现有仪器根本不可测。只增不减，不参与任何判定。
+    // 跨部署存活的战损累计线。事件环只回溯 ~846 拍、M11 保险丝只 400 拍且住 heap（换码清零），
+    // 于是「持续战损」那半边判据按现有仪器根本不可测。只增不减，不参与任何判定。
     // ⚠️`natural` 的判据是"没活到寿终"，而**早逝不等于战死**：spawn-manager 的 recyclePass 会把
     // `memory.recycle=true` 的 creep 走向 spawn 消融（`creep-recycle.ts:74` 连随身货物一起销毁），
-    // 那种死亡同样落进"非寿终"。把它算进 combat，#90 的"持续战损"就会凭空多出受害者
+    // 那种死亡同样落进"非寿终"。把它算进 combat，"持续战损"判据就会凭空多出受害者
     // ⇒ 单列 `recycled`，combat 只收"早逝且未被标记回收"。
     // 三键都按 `?? 0` 增量：加键到已存在的持久对象时旧形状缺键 ⇒ 直接 `+=` 会写成 NaN。
     if (!stats.deathByCause) stats.deathByCause = { natural: 0, combat: 0, recycled: 0 };

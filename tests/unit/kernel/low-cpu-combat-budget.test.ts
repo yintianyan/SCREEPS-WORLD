@@ -1,5 +1,5 @@
 /**
- * D-FINDING-05: 低 CPU 下 combat 角色与经济角色竞争预算测试。
+ * 低 CPU 下 combat 角色与经济角色竞争预算测试。
  *
  * 场景矩阵 S7+S8 组合：低 CPU（conserve/recovery tier）+ 威胁在场。
  * 验证：
@@ -14,7 +14,7 @@ import { CpuBudget } from "../../../src/kernel/scheduler";
 import type { Budget, CreepRole, Priority } from "../../../src/kernel/contracts";
 import { isThreat } from "../../../src/domain/defense/threat";
 
-describe("D-FINDING-05: 低 CPU + 威胁竞争预算", () => {
+describe("低 CPU + 威胁竞争预算", () => {
   beforeEach(() => {
     resetGlobals();
   });

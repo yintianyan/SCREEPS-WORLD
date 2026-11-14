@@ -1,4 +1,4 @@
-/** 远矿锁死自愈集成场景（R12，线上 W36S58/W37S57 产能损失复现）。 */
+/** 远矿锁死自愈集成场景（线上 W36S58/W37S57 产能损失复现）。 */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 import { CONFIG } from "../../../src/config";

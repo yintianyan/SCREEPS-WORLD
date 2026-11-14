@@ -33,7 +33,7 @@ export interface CreepSummary {
   bodyLength: number;
   sourceId?: Id<Source>;
   spawnIndex?: number;
-  /** B1：是否已标记为待回收（上一 tick 或更早被 recyclePass 标记）。 */
+  /** 是否已标记为待回收（上一 tick 或更早被 recyclePass 标记）。 */
   recycle?: boolean;
 }
 
@@ -59,7 +59,7 @@ export interface RoomDemandContext {
    */
   upgradeFeedCap?: number;
   /**
-   * Phase 2.5：富 storage 闩锁（50K 停 / 100K 复）。
+   * 富 storage 闩锁（50K 停 / 100K 复）。
    * true = 允许升级/工业消费；false = 低储回血期，暂停非关键孵化；
    * undefined = 调用方未注入（单测/无 storage 房）→ 回退原始水位判定。
    */
@@ -110,7 +110,7 @@ export interface RoomDemandContext {
    */
   factoryReclaimBacklog?: number;
   /**
-   * P1-J：上一 tick 迟滞状态（适配层从 RoomMemory 读出注入）：distScaleUpSince
+   * 上一 tick 迟滞状态（适配层从 RoomMemory 读出注入）：distScaleUpSince
    * （distributor 扩编确认计时器）与 builderPressureState（压力迟滞带）。
    * undefined = 首次运行 → 按首现处理；domain 不访问 Memory。
    */
@@ -118,21 +118,21 @@ export interface RoomDemandContext {
     distScaleUpSince?: number;
     builderPressureState?: "full" | "shrinking";
   };
-  /** P2-2：tuning pending（hauler min/maxCount pendingValidation）期间主动收敛到合同目标，
-   *  配合 P1-1 isContractMet 让调参合同能真正满足；undefined = 无 pending，按常规计算。 */
+  /** tuning pending（hauler min/maxCount pendingValidation）期间主动收敛到合同目标，
+   *  配合 isContractMet 让调参合同能真正满足；undefined = 无 pending，按常规计算。 */
   haulerPendingTarget?: number;
-  /** R6a：帝国议程 initiative（empire-strategy 发布，spawn-manager 适配层注入）。
+  /** 帝国议程 initiative（empire-strategy 发布，spawn-manager 适配层注入）。
    *  "rcl-push" 时 upgrader 冲刺门槛放宽一档 — 目标驱动主动冲级，而非等水位自然触发。 */
   agendaInitiative?: string;
   /**
-   * P0-A：工业供料链是否有活可干（反应计划在账 / labDemands 有装载或回收需求）。
+   * 工业供料链是否有活可干（反应计划在账 / labDemands 有装载或回收需求）。
    * 由 spawn-manager 从 Memory.industry / globalCache.labDemands 现读后注入；
    * domain 不访问 Memory。用途＝替代 labTender 的旧门禁「≥2 lab 已有矿物」——
    * 后者在实验室初始全空时恒假，而把矿搬进 lab 的正是 labTender ⇒ 自锁。
    */
   labSupplyNeeded?: boolean;
   /**
-   * #156（人已授权）：帝国各房已储藏能量合计（适配层注入；domain 纯函数不触 Memory）。
+   * 人已授权：帝国各房已储藏能量合计（适配层注入；domain 纯函数不触 Memory）。
    *
    * 用途＝别房闲置大量能量时，不再用「本房净流」派生的价格信号缩 builder 编制。
    * 原语：energyPrice 的分子是本房 netFlow，而幼房唯一的出口正是"建自己"，
@@ -143,11 +143,11 @@ export interface RoomDemandContext {
   empireStoredEnergy?: number;
 }
 
-/** #156：认定"帝国有闲置储量可供弱房发展"的门槛（能量）。线上实证量级＝强房单房 868K。 */
+/** 认定"帝国有闲置储量可供弱房发展"的门槛（能量）。线上实证量级＝强房单房 868K。 */
 export const EMPIRE_DEVELOPMENT_SURPLUS = 400_000;
 
 /**
- * #156：builder 价格弹性的"帝国盈余"豁免判据（纯函数，便于单测与反向实验）。
+ * builder 价格弹性的"帝国盈余"豁免判据（纯函数，便于单测与反向实验）。
  *
  * 只在同时满足时豁免收缩：①帝国合计储量 ≥ 门槛；②本房确有待建 backlog（>0）。
  * 刻意**不**抬配额、不动 minCount/maxCount、不动 starvationDegradeFloor 与孵化侧
@@ -161,7 +161,7 @@ export function isBuilderElasticityExempt(
 }
 
 /**
- * 评估产出的下一 tick 迟滞状态（P1-J）。
+ * 评估产出的下一 tick 迟滞状态。
 
  * 由适配层写回 RoomMemory。与 prevHysteresis 同构 — demand 是状态机：
  * 输入上一状态 → 输出下一状态。原本由 demand 直读写 Memory，
@@ -174,9 +174,9 @@ export interface HysteresisState {
 
 interface DemandResult {
   requests: SpawnRequest[];
-  /** P1-J：本 tick 评估产出的迟滞状态，适配层负责写回 RoomMemory。 */
+  /** 本 tick 评估产出的迟滞状态，适配层负责写回 RoomMemory。 */
   nextHysteresis: HysteresisState;
-  /** 本 tick hauler 编制目标（B3，2026-08-01）— 供回收通道判定「富余 hauler」：
+  /** 本 tick hauler 编制目标 — 供回收通道判定「富余 hauler」：
    *  link 化后编制收缩不能只靠死亡不补（1500 tick/代）；无物流基建或 P0 短路时为 undefined。 */
   haulerTarget?: number;
   /**
@@ -186,7 +186,7 @@ interface DemandResult {
    */
   sourceBacklog?: boolean;
   /**
-   * #85：本 tick 需求阶梯对 upgrader 生效的**结构钳位**（undefined = 该分支直接用 `maxCount`）。
+   * 本 tick 需求阶梯对 upgrader 生效的**结构钳位**（undefined = 该分支直接用 `maxCount`）。
    * 只报事实，不做判断；消费者是调优器的 ↑ 提案门槛（见 `domain/tuning/evaluator.ts`）。
    * ⚠️不含价格弹性的缩放 —— 弹性是逐拍浮动的，把"能不能扩容"挂在浮动值上会让提案振荡。
    */
@@ -348,11 +348,11 @@ export function evaluateDemand(
   tick: number,
   /** 全帝国 gateNetFlow 之和（system 层现读后传入；domain 保持纯函数）。 */
   empireGateSum = 0,
-  /** R617：本房是否处于“扩张推进态”（RCL≥7 且存在 EVALUATED/… 计划）。
+  /** 本房是否处于“扩张推进态”（RCL≥7 且存在 EVALUATED/… 计划）。
    * 为 true 时升级补孵的净流门槛抬到 `upgradeReserveNetFlow`；缺省 false 保持原语义。
    * 由 spawn-manager 现读 Memory 后注入，domain 保持纯函数。 */
   expansionPush = false,
-  /** R632：扩张推进态下 CPU 是否有余量（tier ≤ comfortable）。false 时连净流够也停升级。 */
+  /** 扩张推进态下 CPU 是否有余量（tier ≤ comfortable）。false 时连净流够也停升级。 */
   cpuAllowsUpgrade = true,
   /**
    * 失血闸闩锁（回差＋最短保持期）。由 spawn-manager 现读 Memory 注入，domain 保持纯函数。
@@ -365,13 +365,13 @@ export function evaluateDemand(
   const requests: SpawnRequest[] = [];
   const home = snapshot.roomName;
   const energyCapacity = snapshot.energyCapacityAvailable;
-  /** B3：hauler 编制目标（供回收通道判定富余）。 */
+  /** hauler 编制目标（供回收通道判定富余）。 */
   let haulerTarget: number | undefined;
   // 统一经济状态：recovery 涵盖 crisis + recovery 相位，收缩非关键消耗。
   const inCrisis = colonyState === "recovery";
   // Storage 满仓信号 — 限采 + 加速消费。
   const storageNearFull = roomCtx.storageNearFull === true;
-  // Phase 2.5：低储回血期（闩锁显式关闭）。undefined 视为未注入，不节流。
+  // 低储回血期（闩锁显式关闭）。undefined 视为未注入，不节流。
   // Phase D：分级 —— 升级看 upgradeActive(60K)，工业看 labActive(55K)。
   // 未注入时统一回退 richStorageActive(100K)。
   const upgradeLatchClosed = (roomCtx.upgradeActive ?? roomCtx.richStorageActive) === false;
@@ -382,13 +382,13 @@ export function evaluateDemand(
   const demandFactor = inCrisis ? 0.0 : demandElasticity(energyPrice);
   const logisticsFactor = inCrisis ? 1.0 : logisticsElasticity(energyPrice);
 
-  // P1-J：迟滞输出缓冲 — 从 prevHysteresis 复制（未变更字段透传），各评估块写入后返回。
+  // 迟滞输出缓冲 — 从 prevHysteresis 复制（未变更字段透传），各评估块写入后返回。
   const nextHysteresis: HysteresisState = {
     distScaleUpSince: roomCtx.prevHysteresis?.distScaleUpSince,
     builderPressureState: roomCtx.prevHysteresis?.builderPressureState,
   };
 
-  // P0-3：读取 churnFreezeUntil 构造冻结角色集（spawn-manager 在 cleanQueue 后写入）—
+  // 读取 churnFreezeUntil 构造冻结角色集（spawn-manager 在 cleanQueue 后写入）—
   // 熔断期间跳过对应角色评估。P0 worker 恢复路径（livingHarvesters===0）绝对不冻结 —
   // rcl1-survival 生命线（见下方 P0 块早期 return）。
   const frozenRoles = new Set<string>();
@@ -511,12 +511,12 @@ export function evaluateDemand(
   }
 
   // P1：Harvester — 按实际占用分配到最少拥挤的 source；本地占用副本让同轮多次孵化
-  // 看到前序分配。P0-3：churn 熔断跳过评估；P0 worker 已早期 return，不受影响（生命线不冻结）。
+  // 看到前序分配。churn 熔断跳过评估；P0 worker 已早期 return，不受影响（生命线不冻结）。
   const harvesterConfig = getRoleBounds("harvester", home);
   const harvesterLiving = counts.harvester ?? 0;
   const harvesterTotal = harvesterLiving + pending.harvester;
 
-  // P0-1：storage 满仓时限采 — 目标降为 source 数（每 source 保底 1），不再补 minCount；
+  // storage 满仓时限采 — 目标降为 source 数（每 source 保底 1），不再补 minCount；
   // 满仓产出被 drop 浪费，省下能量给 upgrader/builder 消化库存。
   // Body 感知饱和封顶：source 再生 10/tick、5 个 WORK 即采空 → 每 source 矿工数 =
   // ceil(5/单体 WORK 数)，受 maxMinersPerSource 封顶。超出饱和线的头数无产出可采，
@@ -591,7 +591,7 @@ export function evaluateDemand(
     // sink 开口后 fillTargets 重现，backlog 信号自动恢复 — 安全、自愈。
     const canDeliver = snapshot.storage !== undefined || snapshot.fillTargets.length > 0;
     // 1. Source container 积压信号（RCL1-4 主物流路径；仅可投放时才算运力不足）。
-    //    B1（2026-08-01）：剔除有 source link 的 container — link 化后容器满是背压症状
+    //    剔除有 source link 的 container — link 化后容器满是背压症状
     //    （link 满倒不进 / storage link 未排空），不是「需更多 hauler」；真需求由下方
     //    storage link 信号处理。不剔除会致编制不降反升（W7N3/W7N4：满 2000 计 +2/+2
     //    而 4 只 hauler 已有空载在晃）。
@@ -622,7 +622,7 @@ export function evaluateDemand(
      * 源侧积压**事实**（与「加人」信号同阈值 0.4，但不受 canDeliver 影响）。
      *
      * 它唯一的用途是**否决销毁性的 hauler 回收**（spawn-manager 的 recyclePass 规则 3）。
-     * 立案依据（线上实测 2026-09-30 巡检 #47，W38S56 RCL3 无 storage）：`canDeliver` 会因为
+     * 立案依据（线上实测 2026-09-30，W38S56 RCL3 无 storage）：`canDeliver` 会因为
      * 「核心池刚好满 (ea 550/550) 且没有 fillTargets」而关闭 ⇒ 目标塌回 minCount ⇒ keep 变小 ⇒
      * recyclePass 按 ttl 升序把**最年轻**的 hauler 回收掉。sink 一开又得重孵。
      * 实测代价：事件环 1225 拍内 25 次 `CreepDeath(hauler, natural=0)`，age 中位 202，
@@ -658,7 +658,7 @@ export function evaluateDemand(
         const ctrlLink = ctrl
           ? snapshot.links.find(l => l.id !== storageLink.id && l.pos.getRangeTo(ctrl) <= 2)
           : undefined;
-        // P0-C：只有 controller 真缺能（free ≥ 400）时才抑制 hauler 扩编；
+        // 只有 controller 真缺能（free ≥ 400）时才抑制 hauler 扩编；
         // 缺口 <400 属于正常补给窗口，storage link 的积压应计入运力需求。
         const feedingController =
           ctrlLink !== undefined &&
@@ -717,7 +717,7 @@ export function evaluateDemand(
     inCrisis && !liquidityDriven
       ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
       : dynamicHaulerTarget;
-  // P2-2：tuning pending 期间收敛到合同目标（上调扩编/下调缩编），让 isContractMet 可满足；
+  // tuning pending 期间收敛到合同目标（上调扩编/下调缩编），让 isContractMet 可满足；
   // 危机收缩优先级更高 — 危机时只留 minCount，合同延后到危机解除后验证。
   if (!(inCrisis && !liquidityDriven) && roomCtx.haulerPendingTarget !== undefined) {
     haulerTarget = roomCtx.haulerPendingTarget;
@@ -848,7 +848,7 @@ export function evaluateDemand(
     // 而非缺员（在途编制一两趟即补满）。扩编（超现有编制且超 minCount 地板）须等需求
     // 持续 distributorScaleUpDelay tick 才放行；补 minCount 与缩编即时生效。
     // 不确认的后果：50 tick 尖峰换来活 1500 tick 的常驻编制（与 builderPressureState
-    // 同为 Memory 短 key 迟滞先例）。P1-J：prev→next 显式传递，domain 不直读写 Memory。
+    // 同为 Memory 短 key 迟滞先例）。prev→next 显式传递，domain 不直读写 Memory。
     let nextDistScaleUpSince = roomCtx.prevHysteresis?.distScaleUpSince;
     if (distTarget > distTotal && distTarget > distConfig.minCount) {
       const since = nextDistScaleUpSince;
@@ -892,7 +892,7 @@ export function evaluateDemand(
 
   // P2：Mineral Miner — RCL6+ 且 extractor 就位、mineral 未采空、有 terminal/storage 容纳
   // 时孵 1 个专职矿工（工业链第一环 extractor→container→hauler）。采空后不再孵
-  // （minCount=0，存量老死不补，替换门禁 3 天然阻止）。R3a：normal 全量 / recovery 保底
+  // （minCount=0，存量老死不补，替换门禁 3 天然阻止）。normal 全量 / recovery 保底
   // （矿物收入不耗能量，是脱困路径）；bootstrap 不开（保命孵化优先）。
   const mineral = snapshot.minerals[0];
   if (
@@ -937,12 +937,12 @@ export function evaluateDemand(
   // 门禁：RCL6+（有 lab 才有意义）且 lab ≥ 3（能组成三元组）且有 terminal（买入化合物落点）；
   // maxCount=1，无料可搬时它 park，成本是一个 4C4M 身子 + <0.1 CPU/tick。
   // bootstrap 与 recovery 不开：保命孵化优先，工业是投资不是救生索。
-  // R595：无“可反应”条件时（<2 个带矿物 lab）不补孵 labTender —— 现场 2 只全 idle，
+  // 无“可反应”条件时（<2 个带矿物 lab）不补孵 labTender —— 现场 2 只全 idle，
   // 4C4M 身子 + 维持纯属浪费；实验室能工作时再放开。
-  // P0-A 修正：旧判据在「实验室初始全空」时恒假，而把矿搬进 lab 的正是 labTender
+  // 修正：旧判据在「实验室初始全空」时恒假，而把矿搬进 lab 的正是 labTender
   // ⇒ 结构性自锁（W8N3 实测：6 座 lab 连续数小时全空、terminal 里 O/X/H 一直躺着）。
   // 现改为「有反应计划或有搬运需求表」即放行 —— 空 lab 也能孵出第一个搬运工；
-  // 无任何工业需求时仍不补孵，保留 R595 的成本约束。
+  // 无任何工业需求时仍不补孵，保留上述成本约束。
   const labWorkPossible =
     roomCtx.labSupplyNeeded === true || snapshot.labs.filter(l => l.mineralAmount > 0).length >= 2;
   if (
@@ -994,19 +994,19 @@ export function evaluateDemand(
   // 真正的缺能保护不在这儿：下面的 `!hasStorage` 压力阶梯（pressure>0.7 ⇒ target 0）与
   // spawn 侧 body 降级才是连续的、按实际能量说话的那把闸。
   const earlyRoom = snapshot.storage === undefined;
-  // R595：帝国失血期（gateNetFlow 和为负）不补孵 upgrader —— 角色闸会把它 idle，
+  // 帝国失血期（gateNetFlow 和为负）不补孵 upgrader —— 角色闸会把它 idle，
   // 补出来只会白付孵化与维持；降级风险/无 storage 早房仍豁免。RCL8 另由 rcl8NoUpgrade 关。
-  // R684：cpuAllowsUpgrade 是 R632 的“扩张推进态才停升级”信号，不能外溢到非扩张房。
+  // cpuAllowsUpgrade 是“扩张推进态才停升级”信号，不能外溢到非扩张房。
   // 线上 W39S55：storage 建成后 earlyRoom=false，CPU tight 让 allowUpgrader 恒假，
   // 房间 258K storage、0 upgrader、controller 冻结。非 expansionPush 房继续按水位升级。
-  // R688：满仓时 CPU 门必须让位——storage 已无处可放，停升级只会把盈余白扔掉；
+  // 满仓时 CPU 门必须让位——storage 已无处可放，停升级只会把盈余白扔掉；
   // 升级器本来就已经存活（CPU 花在角色上），让它们工作只增加动作开销。
   const cpuAllowsThisRoomUpgrade =
     !expansionPush || cpuAllowsUpgrade || roomCtx.storageNearFull === true;
   // Phase 1：与 `upgrader.ts` 的 richStorage 同一把尺。
   // 帝国净流闸在 storage 富余房会结构性关死升级（W8N3 878K、W7N2 999K 都曾 0 upgrader）；
   // storage ≥ sprintStorage 时升级是把库存换 RCL 复利，不应被帝国净流和挡住。
-  // Phase 2.5：优先用闩锁；未注入时回退原始水位（单测/无 storage 房）。
+  // 优先用闩锁；未注入时回退原始水位（单测/无 storage 房）。
   // Phase D：升级读专用闸 upgradeActive（恢复线 60K），与 lab/修墙解耦。
   const rawRichStorage =
     snapshot.storage !== undefined &&
@@ -1033,11 +1033,11 @@ export function evaluateDemand(
           upgradeBrake,
         )));
 
-  // #85：本 tick 需求阶梯对 upgrader **实际生效的结构钳位**（undefined = 该分支直接用 maxCount）。
+  // 本 tick 需求阶梯对 upgrader **实际生效的结构钳位**（undefined = 该分支直接用 maxCount）。
   // 存在的理由：调优器只看"在场数 ≥ 当前上限"就提 upgrader.maxCount ↑，而很多分支根本不用 maxCount
   // （冲刺非满仓只到 2、维持与低水位只到 1、无站桩 container 只到 minCount）⇒ 那些 ↑ 按构造落不了地，
-  // 验证时 D.3 的 `roleCount >= pre+1` 必假 ⇒ 每 ~3×verifyDelay 被撤一次。
-  // 报"事实"而不是让调优器复算这套分支，是为了不让同一个谓词活两处（#68 那类折叠错误的教训）。
+  // 验证时人口合同的 `roleCount >= pre+1` 必假 ⇒ 每 ~3×verifyDelay 被撤一次。
+  // 报"事实"而不是让调优器复算这套分支，是为了不让同一个谓词活两处（折叠错误的教训）。
   // ⚠️RCL8 满级不在这张表里：那时 `rcl8NoUpgrade` 把整条阶梯关掉（target 恒 0）、钳位留空 ⇒ 读作"放行"，
   // 但那时也不会有 upgrader 在场，提案侧的"编制已满"条件自己就把它拦下了 —— 两道条件叠出来的覆盖面，
   // 别误以为钳位是唯一那道闸。
@@ -1045,7 +1045,7 @@ export function evaluateDemand(
 
   if (allowUpgrader && !frozenRoles.has("upgrader")) {
     const upgraderConfig = getRoleBounds("upgrader", home);
-    // P1-C：平滑补员 — 只把「健康窗口内」的 upgrader 计入编制。临死者（ttl <
+    // 平滑补员 — 只把「健康窗口内」的 upgrader 计入编制。临死者（ttl <
     // upgraderReplaceHorizon）提前计为缺口，新替补在旧个体死亡前孵化/通勤到位，
     // 避免同批死亡后 129 拍孵化 + 30 格通勤造成的升级断档（线上实测 0→45→0 波动）。
     const upgraderHealthy =
@@ -1057,7 +1057,7 @@ export function evaluateDemand(
       ).length + spawning.filter(s => s.role === "upgrader" && s.home === home).length;
     const upgraderTotal = upgraderHealthy + pending.upgrader;
 
-    // A2：升级功率由「storage 水位 + 大 body WORK 数」驱动，替代固定小 body 数量梯度 —
+    // 升级功率由「storage 水位 + 大 body WORK 数」驱动，替代固定小 body 数量梯度 —
     // 盈余能量优先灌 controller（RCL 是复利）；15W 大 body 站桩 1 只即跑满 ≈15/tick，
     // creep 数更少、CPU 更省。
     const stationUpgradeOnline = snapshot.controllerContainer !== undefined;
@@ -1072,7 +1072,7 @@ export function evaluateDemand(
     const hasStorage = snapshot.storage !== undefined;
     const storageEnergy = hasStorage ? snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) : 0;
 
-    // R6a：议程 rcl-push 时冲刺门槛放宽一档（sustained 水位即可冲刺、压力容忍至 0.4）—
+    // 议程 rcl-push 时冲刺门槛放宽一档（sustained 水位即可冲刺、压力容忍至 0.4）—
     // 议程是帝国主动目标，允许比被动水位反应更进取；门禁仍由既有 pressure/水位逻辑兜底。
     const agendaPush = roomCtx.agendaInitiative === "rcl-push";
     const sprintStorageGate = agendaPush
@@ -1115,13 +1115,13 @@ export function evaluateDemand(
       upgraderClamp = upgraderConfig.minCount;
     } else if (hasStorage && storageEnergy >= sprintStorageGate && pressure <= sprintPressureGate) {
       // 冲刺：库存充足且经济健康，烧库存换 RCL 复利（3 个满 body 站桩）；
-      // P0-1：storage 满仓时拉满 maxCount — 盈余必须被消化，否则在源头被浪费。
-      // P1-A：非满仓封顶 2 → 3。W8N3 实测 CPU 9.8/100、storage 819k，2×40W 的
+      // storage 满仓时拉满 maxCount — 盈余必须被消化，否则在源头被浪费。
+      // 非满仓封顶 2 → 3。W8N3 实测 CPU 9.8/100、storage 819k，2×40W 的
       // 实际吞吐仅 ~45 progress/tick（理论 80），加一只可再提 ~50%，且 CPU 仍有余量。
       upgraderTarget = storageNearFull
         ? upgraderConfig.maxCount
         : Math.min(upgraderConfig.maxCount, 3);
-      // ⚠️这一行就是 #85 的现场病灶：非满仓时需求封顶在 3，`maxCount` 里超出 3 的那部分是惰性的。
+      // ⚠️这一行就是现场病灶：非满仓时需求封顶在 3，`maxCount` 里超出 3 的那部分是惰性的。
       upgraderClamp = storageNearFull ? undefined : 3;
     } else if (hasStorage && storageEnergy >= CONFIG.economy.waterlines.sustainedStorage) {
       // 维持：1 个大 body 站桩 ≈ 15/tick，盈余全喂 controller。
@@ -1194,7 +1194,7 @@ export function evaluateDemand(
       const maxWorkParts = upgradeCfg.maxWorkParts ?? upgradeCfg.rcl8MaxWorkParts;
       const maxCountByWork = Math.max(1, Math.floor(maxWorkParts / workPerBody));
       upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
-      // #85：WORK 限速也是真实生效的结构钳位，必须写进 clamp ——
+      // WORK 限速也是真实生效的结构钳位，必须写进 clamp ——
       // 否则调优器会把 target 压在 1 误读成「阶梯封顶 3」，抬 maxCount 永远落不了地。
       upgraderClamp = Math.min(upgraderClamp ?? maxCountByWork, maxCountByWork);
     }
@@ -1238,7 +1238,7 @@ export function evaluateDemand(
     r => r.hits < r.hitsMax * CONFIG.construction.roadRepairThreshold,
   ).length;
   const roadRepairDemand = roadsNeedingRepair >= CONFIG.construction.roadRepairBuilderFloor;
-  // P1-1：纳入 buildQueue backlog（保守权重 0.5）— site 数受配额限制（默认 3）看不到
+  // 纳入 buildQueue backlog（保守权重 0.5）— site 数受配额限制（默认 3）看不到
   // backlog，backlogWeighted 补盲；roomMem 由 construction-manager 每 tick 维护。
   const queuedBacklog = roomCtx.buildQueueBacklog ?? 0;
   const backlogWeighted = Math.floor(queuedBacklog * 0.5);
@@ -1283,7 +1283,7 @@ export function evaluateDemand(
         dynamicBuilderTarget = Math.min(dynamicBuilderTarget, Math.max(builderConfig.minCount, 1));
       }
     }
-    // Phase 2.5：低储回血期 builder 缩到 1 个 —— 工地是长期投资，孵化与运力先让给
+    // 低储回血期 builder 缩到 1 个 —— 工地是长期投资，孵化与运力先让给
     // core/spawn 补能与 hauler 回库；存量 builder 继续干，不撤单。
     // Phase D 修正：缩编线从 richStorageActive(100K) 改为 sustainedStorage×2(20K)。
     // 100K 恢复线在修复升级/lab 闸后几乎永远是 false（storage 稳定在 40–60K），
@@ -1299,7 +1299,7 @@ export function evaluateDemand(
       dynamicBuilderTarget = Math.min(dynamicBuilderTarget, Math.max(builderConfig.minCount, 1));
     }
     // TD-016：economyPressure 迟滞带替代单阈值开关 — 进入收缩 >0.35、退出 <=0.25，
-    // 带内保持状态，消除阈值附近的目标跳变振荡。P1-J：prev→next 显式传递，
+    // 带内保持状态，消除阈值附近的目标跳变振荡。prev→next 显式传递，
     // domain 不直读写 Memory。
     const builderPressure = roomCtx.economyPressure;
     const shrinking = flipLatch(
@@ -1329,9 +1329,9 @@ export function evaluateDemand(
     //   出口正是"建自己" ⇒ 缩 builder 会压低消耗、进而压低净流读数，形成
     //   「建房显得穷 ⇒ 少建房 ⇒ 一直穷」的自锁。线上实证：幼房容器与 spawn 池全满
     //   （ea=ec=650）、6 个工地待建，price=0.2256 ⇒ elasticity=0.314 ⇒ 编制从 3 被砍到 1。
-    //   而且 #41 之后盈余已不会被倒在地上，这把闸原本要防的浪费不存在了。
+    //   而且盈余已不会被倒在地上，这把闸原本要防的浪费不存在了。
     //   仍留三重兜底不会超编：economyCap（harvester+1）、B-5 水位权限表、builderPressure 迟滞带。
-    // #156：兄弟房闲置大量能量且本房确有工地待建时，跳过这把"按本房净流收缩"的闸。
+    // 兄弟房闲置大量能量且本房确有工地待建时，跳过这把"按本房净流收缩"的闸。
     const elasticityExempt = isBuilderElasticityExempt(
       roomCtx.empireStoredEnergy ?? 0,
       roomCtx.buildQueueBacklog ?? 0,
@@ -1372,7 +1372,7 @@ export function evaluateDemand(
 
   for (const creep of creeps) {
     if (creep.home !== home) continue;
-    // A4：harvester 的替换阈值计入 spawn→source 通勤路程，
+    // harvester 的替换阈值计入 spawn→source 通勤路程，
     // 防止替补还没走到矿位老矿工已死、采集断档。
     const travelTicks =
       creep.role === "harvester" ? estimateTravelTicks(snapshot, creep.sourceId) : 0;
@@ -1381,7 +1381,7 @@ export function evaluateDemand(
     const config = roleConfigs[role];
     if (!config) continue;
 
-    // P0-3：churn 熔断期间不替换 frozen 角色 — 替换会立即重建请求，与熔断「暂停该 role
+    // churn 熔断期间不替换 frozen 角色 — 替换会立即重建请求，与熔断「暂停该 role
     // 孵化」语义冲突；worker 不冻结（P0 生命线）。
     if (frozenRoles.has(role)) continue;
 

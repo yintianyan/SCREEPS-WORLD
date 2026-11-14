@@ -47,7 +47,7 @@ describe("E2E-013 损坏 Memory 恢复", () => {
     const last = snapshots.at(-1)!;
 
     // 验证系统恢复——至少有 creep 在运行
-    // Phase 6: 有信息量断言——损坏 Memory 恢复后必须有 creep 在运行
+    // 有信息量断言——损坏 Memory 恢复后必须有 creep 在运行
     expect(
       last.totalCreeps,
       `损坏 Memory 恢复后应有至少 1 个 creep 运转。\n${debugSnapshot(last)}`,

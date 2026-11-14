@@ -47,7 +47,7 @@ export interface ResourceImbalanceResult {
 /**
  * 计算房间的可调拨余量（surplus）。
 
- * 门控前置（ECONOMY §1.2）：
+ * 门控前置：
  *   - canExportEnergy=true 才有 surplus
  *   - surplus = storageEnergy × exportRatio（保守估值，不抽干）
 
@@ -61,7 +61,7 @@ export function computeSurplus(profile: RoomEconomicProfile, exportRatio = 0.3):
 /**
  * 计算房间的缺口量（deficit）。
 
- * 门控前置（ECONOMY §1.2）：
+ * 门控前置：
  *   - needsEnergyAid=true 才有 deficit
  *   - deficit = 保守估计的援助量（riskBuffer × p0p1Consumption 近似，上限 5000）
 
@@ -163,8 +163,8 @@ export function detectImbalance(
 /**
  * 将调拨候选转换为帝国级 TransportRequest 候选（步 11 Request Scope 联动）。
 
- * A2 后半只生成候选请求——不执行运输。
- * A3 阶段的 logistics 系统消费这些候选请求（scope="empire"）。
+ * 只生成候选请求——不执行运输。
+ * logistics 系统消费这些候选请求（scope="empire"）。
 
  * 纯函数 — 不写状态、不触 Game/Memory。
  */

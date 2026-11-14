@@ -77,7 +77,7 @@ function withdrawRichestCapped(): ActionCandidate {
   });
 }
 
-// ─── onFlee：防御圈内安全充能（P0-2 从 lifecycle.ts 迁移）─────────
+// ─── onFlee：防御圈内安全充能（从 lifecycle.ts 迁移）─────────
 
 /**
  * Hauler flee 状态下的"防御圈内安全充能"。触发（全部满足）：已在 spawn 安全区内
@@ -170,11 +170,11 @@ const policy: RolePolicy = {
   isHauler: true,
   isLifeLine: true,
   executionOrder: 2,
-  // R675：work 模式走房间任务账本 + 效用仲裁。acquire 保持链式（取能安全次序）。
+  // work 模式走房间任务账本 + 效用仲裁。acquire 保持链式（取能安全次序）。
   // 账本给出「核心/storage/CC/施工/lab/矿物」的基础价值；老化由 arbiter 统一叠加，
   // 因此 storage 不再因为「永远有空位」把 lab 供料/矿物补仓永久饿死。
   arbitration: "utility",
-  // R676：物流任务稳定，10 拍决策一次（其余拍只复核当前任务）——把全量评分开销减半。
+  // 物流任务稳定，10 拍决策一次（其余拍只复核当前任务）——把全量评分开销减半。
   decisionInterval: 10,
   gate: haulerGate,
   onFlee: haulerOnFlee,
@@ -190,7 +190,7 @@ const policy: RolePolicy = {
     //    阈值（lootThreshold）挡住零头，只有值得专程的大额遗留才插队；捡满卸货后下一趟回任务 container。
     lootRemains(CONFIG.economy.lootThreshold),
     pickupDroppedEnergy(CONFIG.economy.lootThreshold),
-    // 1.5 W7 止血（评审修正 P2-1）：无市场时 terminal 死能量回流 storage。必须排在衰减资源之后
+    // 1.5 W7 止血：无市场时 terminal 死能量回流 storage。必须排在衰减资源之后
     //    （terminal 能量不衰减，不抢坟墓/掉落堆的抢救窗口）；排在 assignment 之前（否则任务源
     //    命中后本动作永不触发）。有市场时完全惰性 — terminal 能量是交易运费储备，不得挪用。
     withdrawTerminalEnergy(),
@@ -218,9 +218,9 @@ const policy: RolePolicy = {
     // 倒已携带矿物（高价值资源不滞留）；仅 deposit 相——取矿补仓见下方 haulMineralTopUp。
     scored(haulMineralsToStorage(), () => 140),
     // RCL4+: 优先填充 storage（distributor 从 storage 分发）；RCL1-3 无 storage → fallthrough。
-    // R675：值来自任务账本（95，低水位 100）——它不再因为「永远有空位」压死 lab/矿物。
+    // 值来自任务账本（95，低水位 100）——它不再因为「永远有空位」压死 lab/矿物。
     scored(fillStorage(), ac => ledgerValue(getRoomTaskLedger(ac.snapshot), "store-energy", 95)),
-    // R672b：核心接近满时先供建造；R675 由账本给出 feed 价值，老化保证 CC/矿物轮转。
+    // 核心接近满时先供建造；由账本给出 feed 价值，老化保证 CC/矿物轮转。
     scored(transferToLowBuilder(), ac =>
       ledgerValue(getRoomTaskLedger(ac.snapshot), "feed-construction", 75),
     ),
@@ -235,7 +235,7 @@ const policy: RolePolicy = {
     scored(haulMineralTopUp(), ac =>
       ledgerValue(getRoomTaskLedger(ac.snapshot), "haul-minerals", 65),
     ),
-    // 化合物/能量供料到 lab。R675：账本按 lab 搬运条目数提权，lab 供料不再被
+    // 化合物/能量供料到 lab。账本按 lab 搬运条目数提权，lab 供料不再被
     // fillStorage 永久遮蔽；同时修了 lab 需求表只在发布拍可读的 1/10 断供。
     scored(supplyLabs(), ac => ledgerValue(getRoomTaskLedger(ac.snapshot), "supply-labs", 90)),
     // 所有 sink 均满 — 原地待命。hauler 无 WORK 部件不能升级（upgradeController 会

@@ -115,9 +115,9 @@ export function rcl8GclPushAllowed(
  * 不应被 energyAvailable 地板阻止。
  */
 /**
- * R688：扩张推进房的 CPU 升级闸。满仓时强制放行 —— storage 已无处可放，
+ * 扩张推进房的 CPU 升级闸。满仓时强制放行 —— storage 已无处可放，
  * 停升级只会把盈余白扔；升级器本来已存活，工作只增加动作开销。
- * 未满仓时维持 R632 原语义：tier 差于 comfortable（tight/constrained）就停。
+ * 未满仓时维持原语义：tier 差于 comfortable（tight/constrained）就停。
  */
 export function cpuGateAllowsUpgrade(tier: string | undefined, storageNearFull: boolean): boolean {
   if (storageNearFull) return true;
@@ -137,7 +137,7 @@ function upgraderGate(ac: ActionContext): boolean {
   const claimSecure = Memory.rooms[ac.snapshot.roomName]?.claimSecure ?? false;
   if (claimSecure) return true;
 
-  // Phase 2.5：低储回血期暂停升级（闩锁 false = storage 曾跌破 50K 且未回到恢复线）。
+  // 低储回血期暂停升级（闩锁 false = storage 曾跌破 50K 且未回到恢复线）。
   // Phase D：改读升级专用闸（恢复线 60K），不再被 lab/修墙的更高门槛拖住。
   // 已背着能量的个体先烧完再停 —— 能量已从 storage 取出，不升级只会随死亡掉落；
   // 空仓者直接 idle 归站，不再从 storage/container/link 取新能量。
@@ -149,7 +149,7 @@ function upgraderGate(ac: ActionContext): boolean {
     return false;
   }
 
-  // R594 帝国失血闸 → R617 限定版扩张预留 → 本轮（剔资本支出）：
+  // 帝国失血闸 → 限定版扩张预留 → 本轮（剔资本支出）：
   // 全帝国 `brakeNetFlow` 之和为负时暂停升级。它与 `gateNetFlow` 只差一项 ——
   // 建造（`economy.cx`）不再记成失血，因为本闸唯一能掐的执行器是升级，
   // 把计划性投资算进"失血"只会让刹车对真 driver 无能为力
@@ -168,7 +168,7 @@ function upgraderGate(ac: ActionContext): boolean {
   // 关闭后净流回升又打开 —— 极限环把 progress 切成 0.2–8/tick 的碎拍（W8N3 实测：
   // 两只满能量 upgrader 停在 controller link 旁，160 tick progress 0）。
   // storage 90 万时停升级只是把能量留在仓库，不产生任何复利。
-  // store 读取在 mock/边缘状态下可能抛异常（P0-4 有专门的降级用例）：
+  // store 读取在 mock/边缘状态下可能抛异常（有专门的降级用例）：
   // 读不到就按「非富余」处理，回落到原净流闸，不把异常冒泡成整只 creep 崩溃。
   let storageEnergy = 0;
   try {
@@ -176,7 +176,7 @@ function upgraderGate(ac: ActionContext): boolean {
   } catch {
     storageEnergy = 0;
   }
-  // Phase 2.5：与 demand 同一把闩锁；背着能量的个体在闩锁关闭时仍按「富余」放行，
+  // 与 demand 同一把闩锁；背着能量的个体在闩锁关闭时仍按「富余」放行，
   // 让它把已取出的能量烧完（否则会 idle 抱能，死亡时整包掉落）。
   // Phase D：优先读升级专用闸 upgradeActive。
   const storageLatch =
@@ -194,9 +194,9 @@ function upgraderGate(ac: ActionContext): boolean {
   ) {
     return false;
   }
-  // R632：扩张推进态且 CPU 无余量（tier 差于 comfortable）时，连“净流够”的升级也停。
-  // 升级是可选的 CPU 消费者，而 G6 正是扩张门；花 CPU 升级会把门自己顶死（与 R626 同构）。
-  // R688：满仓时例外——storage 已无处可放，停升级只会把盈余白扔；升级器本来已存活，
+  // 扩张推进态且 CPU 无余量（tier 差于 comfortable）时，连“净流够”的升级也停。
+  // 升级是可选的 CPU 消费者，而 G6 正是扩张门；花 CPU 升级会把门自己顶死。
+  // 满仓时例外——storage 已无处可放，停升级只会把盈余白扔；升级器本来已存活，
   // 让它们工作只增加动作开销，不会让 G6 从“有解”变成“无解”。
   if (expansionPush) {
     const storageNearFull = Memory.rooms[ac.snapshot.roomName]?.storageNearFull === true;
@@ -230,7 +230,7 @@ function upgraderGate(ac: ActionContext): boolean {
   if (ac.creep.memory.mode !== "acquire") return true;
 
   // 如果有替代能量源（非 source container / link 有能量），upgrader 不与 spawn 竞争，放行。
-  // P0-3：仅检查非 source container — upgrader 不再从 source container 取能，
+  // 仅检查非 source container — upgrader 不再从 source container 取能，
   // 若只有 source container 有能量，upgrader 会落到 harvestSource 与 spawn 竞争。
   // 注意：storage 不在此列 — storage 低于 floor 时正是要保护它不被 upgrader 抽干。
   const hasNonSourceContainerEnergy = ac.snapshot.containers.some(
@@ -247,7 +247,7 @@ function upgraderGate(ac: ActionContext): boolean {
     ac.snapshot.rcl >= 4 && hasStorage
       ? // 复用上面 try 读取的 storageEnergy：store 读取异常时按 0 处理（降级到地板以下），
         // 不让 gate 抛异常。原实现在这里直接读 store，richStorage 豁免把执行路径带到这里后
-        // 会把 P0-4 的「store read throws」降级用例打成未捕获异常。
+        // 会把「store read throws」降级用例打成未捕获异常。
         storageEnergy < CONFIG.economy.waterlines.upgradeEnergyFloorStorage
       : ac.snapshot.energyAvailable <
         Math.min(
@@ -266,7 +266,7 @@ function upgraderGate(ac: ActionContext): boolean {
 }
 
 /**
- * 动态计算 storage 取能上限 — 水位权限表（绝对能量刻度）+ P0-4 净流出率门禁。
+ * 动态计算 storage 取能上限 — 水位权限表（绝对能量刻度）+ 净流出率门禁。
 
  * U-2 修复：原比例制三档（>50%/>15% 折合 50 万/15 万能量）在发展期房间
  * 永远落在最低档 — 与 distributorTiers 的历史教训同型（比例刻度系统性错误）。
@@ -278,9 +278,9 @@ function upgraderGate(ac: ActionContext): boolean {
  *      withdrawStorageCapped 的 resolve 对 limit≤0 返回 undefined（D-0 同手法），
  *      彻底封死「gate 因 container 有能量放行 → storage 被抽穿地板」的旁路。
 
- * P0-4 修复（病灶 4）：srcRatio=1.0 期 storage 从 374K→0 持续流失 12 E/tick，
+ * 修复：srcRatio=1.0 期 storage 从 374K→0 持续流失 12 E/tick，
  * 旧逻辑只看绝对水位 → upgrader 抽到归零。新增跨 tick 净流出率门禁：
- *   - 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。
+ *   - 复用 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。
  *   - 双门槛：低水位（< sustainedStorage*2）+ 流失（> drainRateLimit）→ 返回 0 停止取能。
  *     高水位期允许流失（盈余消化），低水位期流失即停抽让 storage 回血。
  *   - 降级风险豁免：`downgradeRisk()`（room-state 迟滞带）为真时跳过门禁（保级优先于止血）。
@@ -303,11 +303,11 @@ function dynamicStorageLimit(ac: ActionContext): number {
 
   if (energy < cfg.waterlines.upgradeEnergyFloorStorage) return 0;
 
-  // P0-4 异常豁免：降级风险时保级优先，跳过流失率门禁。
+  // 异常豁免：降级风险时保级优先，跳过流失率门禁。
   // 判据与 upgraderGate 同一个函数 —— 两处若各用一把尺，会出现
   // "gate 放行取能、水位却按无风险节流"的带内自相矛盾。
   const hasDowngradeRisk = downgradeRisk(ac);
-  // Phase 2.5：低储回血期不再从 storage 抽能（保级风险豁免）。
+  // 低储回血期不再从 storage 抽能（保级风险豁免）。
   // Phase D：跟随升级专用闸 upgradeActive。
   const withdrawLatch =
     Memory.rooms[ac.snapshot.roomName]?.upgradeActive ??
@@ -316,8 +316,8 @@ function dynamicStorageLimit(ac: ActionContext): number {
     return 0;
   }
   if (!hasDowngradeRisk) {
-    // P0-4：storage 净流出率检查 — 跨 tick 跟踪
-    // 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。
+    // storage 净流出率检查 — 跨 tick 跟踪
+    // 复用 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。
     // 首次运行（prev 缺失）→ ?? energy 兜底 → drainRate=0，避免假流失。
     const roomMem = Memory.rooms[ac.snapshot.roomName];
     const prevEnergy = roomMem?.phase?.storageEnergyPrev ?? energy;
@@ -358,7 +358,7 @@ function upgradeAnchored(): ActionCandidate<StructureController> {
 
 const policy: RolePolicy = {
   gate: upgraderGate,
-  // R649：年轻房（RCL<4）recovery/bootstrap 下仍升级 —— 这是脱离危机的唯一路径。
+  // 年轻房（RCL<4）recovery/bootstrap 下仍升级 —— 这是脱离危机的唯一路径。
   recoveryEligibleYoungRoom: true,
   executionOrder: 3,
 
@@ -374,11 +374,11 @@ const policy: RolePolicy = {
     // 3. controller 旁 container（0 通勤）。
     withdrawControllerContainer(),
     // 4. storage（动态限量取能 — 按 storage 水位缩放，防止突降触发 economyPressure 连锁降级）。
-    // P1-1: 高水位(>50%)时放开到 carry 满载；低水位(<15%)时收紧到 200，中间用固定值。
+    // 高水位(>50%)时放开到 carry 满载；低水位(<15%)时收紧到 200，中间用固定值。
     withdrawStorageCapped(dynamicStorageLimit),
     // 5. 最满非物流 container（不抢 hauler 的物流源）。
     withdrawRichestNonSourceContainer(),
-    // 5b. R647：RCL<4 且无 controller 容器/link/storage 可用时，允许从 source container 取能。
+    // 5b. RCL<4 且无 controller 容器/link/storage 可用时，允许从 source container 取能。
     //     成熟房返回 undefined，不改变物流分工。
     withdrawRichestContainerEarly(),
     // 6. 兜底：所有 container 无能量时直接采集。

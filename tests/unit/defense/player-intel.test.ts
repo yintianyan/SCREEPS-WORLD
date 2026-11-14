@@ -1,4 +1,4 @@
-/** A5.2 G5 — PlayerIntel Confidence 纯函数测试。 */
+/** G5 — PlayerIntel Confidence 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   buildPlayerIntelRecord,

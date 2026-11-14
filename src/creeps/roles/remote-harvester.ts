@@ -63,7 +63,7 @@ export function getRemoteSource(creep: Creep): Source | undefined {
  * 统计兄弟 remoteHarvester（同房同 target）对各 source 的占用数。
  * 已绑 sourceId 计绑定；未绑定的按物理站位计（range<=1 即实际站桩占用）—
  * 兜底同 tick 首绑竞态（两只同时入房、都还没写缓存时，站桩者已可见）。
- * P2-O：occupancy 统计仅在 sourceId 未缓存（首次/失效/改绑）时执行，
+ * occupancy 统计仅在 sourceId 未缓存（首次/失效/改绑）时执行，
  * 通过 findRemoteHarvestersByTarget 跨房扫描含通勤路上的兄弟。
  */
 function countSiblingOccupancy(creep: Creep, sources: readonly Source[]): Map<Id<Source>, number> {
@@ -259,7 +259,7 @@ function remoteStationaryMine(): ActionCandidate<Source> {
       // harvest 返 ERR_FULL、dropEnergy 永远轮不到 → 满载永久停摆、零产出
       // （集成场景 400 tick 实证 + 线上 W36S58 满载空转同机制）。有 container 时
       // 仍走本候选（同 tick 倒能，吞吐最高）；有 site 时 buildSourceContainer
-      // 排在前面先行匹配，本门禁不影响 RM-1 自建路径。
+      // 排在前面先行匹配，本门禁不影响自建路径。
       if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
         if (!findSourceContainer(ac.creep, source)) return undefined;
       }
@@ -400,12 +400,12 @@ function dropEnergy(): ActionCandidate<DropEnergyTarget> {
  *
  * 施工者选 remoteHarvester 而不新孵 builder：带 WORK 的人已经在房里（就是 E7 数到的那三枚），
  * 而门禁沿用 dropEnergy 同一把尺——**满载且 container 装不下**才投入，即只花那条本来必定落到
- * 地上的能量。地上的能量虽可被 hauler 捡回（#40 记过它被净流重复计收的账），换成通勤线上的永久
- * 路面还另外回收一次通行成本，故判为更优；这条判断可被"远矿 ROI"（#167）直接否证——若建成后
+ * 地上的能量。地上的能量虽可被 hauler 捡回（此前记过它被净流重复计收的账），换成通勤线上的永久
+ * 路面还另外回收一次通行成本，故判为更优；这条判断可被"远矿 ROI"直接否证——若建成后
  * haul 吞吐没涨，本候选该关掉。
  *
  * 明确**不做**维修：远矿 road 衰减 100 hits/1,000 拍·根，修它要抽的是在途收入而不是溢出能量，
- * 那属 #150 那条仍未拍的属人项，本候选不越界。
+ * 那属另一条仍未拍的属人项，本候选不越界。
  */
 function buildRemoteRoad(): ActionCandidate<ConstructionSite> {
   return {
@@ -438,7 +438,7 @@ function buildRemoteRoad(): ActionCandidate<ConstructionSite> {
     execute: (ac, site) => {
       const code = ac.creep.build(site);
       // 归因分列：hauler 脚下腿独占 `built`（remote-hauler.ts:113-115），这条免费腿记
-      // `builtRemoteLeg`——共列时"哪条腿在出力"永远判不出（R466 现读 W38S55 built=11 的教训）。
+      // `builtRemoteLeg`——共列时"哪条腿在出力"永远判不出（现读 W38S55 built=11 的教训）。
       if (code === OK) roadBuildCounters(ac.creep.room.name).builtRemoteLeg++;
       // 停在射程内即可（moveRange=3），不为贴脸多走两格。
       if (code === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, site, ROAD_BUILD_RANGE);
@@ -450,10 +450,10 @@ function buildRemoteRoad(): ActionCandidate<ConstructionSite> {
 type ContainerBuildTarget = { kind: "build"; site: ConstructionSite } | { kind: "request" };
 
 /**
- * RM-1：满载时自建 source container — 终结 drop-mining 衰减税。
+ * 满载时自建 source container — 终结 drop-mining 衰减税。
  * 线上实测（W37S57）：无 container 的 active 远矿房地面堆积 3300+ 能量，稳态衰减 ~4/tick
  * ≈ 单源产出的 40% — 远超「补建造链」决策阈值（5%）。
- * P0-A 收编后行为（site 创建权从角色层收归 remote-mining-manager）：有 site → build（5
+ * 收编后行为（site 创建权从角色层收归 remote-mining-manager）：有 site → build（5
  * energy/WORK/tick 转进度，零衰减）；无 site → 写 needContainer=true 申请标记，由 manager 每
  * managerInterval tick 消费（创建 site / 失败写冷却）；申请期间走 dropEnergy 释放产能（最多等
  * 10 tick），避免满载停摆。建成后 findSourceContainer 缓存接手，hauler 倒能链自然激活。
@@ -507,7 +507,7 @@ function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
 /**
  * RM-2：维修衰减中的 source container — 远矿房无 builder/tower 兜底，
  * 采集者是 container 唯一的维护者（hauler/reserver 均无 WORK 部件）。
- * container 摧毁 = 远矿产能归零直到 P0-A 全链重启（申请→建站→建造），
+ * container 摧毁 = 远矿产能归零直到全链重启（申请→建站→建造），
  * 而维修税极低：衰减 1 hit/tick，1 energy 修 100 hits/WORK — 5 WORK body
  * 每 ~37500 tick 仅需 75 tick 维修期，约占产能 0.1%。
  * 与本地 harvester 的「倒能后余量才修」原则不同：本地有 builder+tower 兜底
@@ -554,7 +554,7 @@ const policy: RolePolicy = {
     remoteHarvestSource(),
   ],
   work: [
-    // RM-1：满载且无 container → 自建（必须在 stationaryMine 之前 —
+    // 满载且无 container → 自建（必须在 stationaryMine 之前 —
     // stationaryMine 的 resolve 只查在位与否，满载时会继续采集溢出）。
     buildSourceContainer(),
     // RM-2：维修衰减中的 source container（远矿无 builder/tower 兜底，

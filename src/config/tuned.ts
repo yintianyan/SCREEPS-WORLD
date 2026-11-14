@@ -7,7 +7,7 @@ import { clampParam } from "../domain/tuning/bounds";
  * 可调优角色全集 — 与 CONFIG.roles 的 key 集合对齐（role-config-parity 测试
  * 已断言 CONFIG.roles 与 bootstrap 注册表双向一致）。单一来源：ROLE_PARAM_MAP
  * 与 tuning-engine 的 bounds 快照循环都从本数组派生，避免双源漂移
- * （P1-I 评审修正：原稿 7 角色 map 与 4 角色快照双漂移）。
+ * （评审修正：原稿 7 角色 map 与 4 角色快照双漂移）。
  * TUNING_BOUNDS（domain/tuning/bounds.ts）目前只为前 4 角色
  * （hauler/harvester/upgrader/builder）配置 floor/ceiling，其余角色的
  * clampParam 是 no-op — 补全集是防未来 tuning 接管新角色时漏配钳制规则

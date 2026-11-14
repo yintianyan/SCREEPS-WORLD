@@ -4,7 +4,7 @@
  * 立案理由：线上 `dr` 依次 −6 / +221 / −196 / −1378 / −2126 / +1712 / −2695，
  * 单看每一窗 |dr|≈200~2700 都"很大"，但**来回摆**（窗边界结算 artifact，账可用）
  * 与**单向漏记**（G4/净流不可信，必须先修账）在一窗读数控件上长得一模一样 ——
- * 于是 #17 卡在这里查不动。累计之后 Σdrift 一个数就能分开。
+ * 于是单窗之下查不动。累计之后 Σdrift 一个数就能分开。
  *
  * 断言只引用窗对象自己算出的 `w.drift` / `w.income…`，不照抄恒等式公式
  * （见 pending-observability-debts 里"恒等式类断言不得照抄实现"那条纪律）。
@@ -88,7 +88,7 @@ describe("ws 视界累计", () => {
     const l1 = win(0, 50, { storage: 5000 }, { storage: 4800 });
     const l2 = win(50, 100, { storage: 4800 }, { storage: 4600 });
 
-    // ① 单窗层面确实分不开——这正是 #17 卡住的原因。
+    // ① 单窗层面确实分不开——这正是此前卡住的原因。
     expect(Math.abs(o1.drift)).toBe(Math.abs(l1.drift));
     // ② 累计层面一眼可分。
     const osc = accumulateWs(accumulateWs(undefined, o1), o2);

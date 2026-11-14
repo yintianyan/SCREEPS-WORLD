@@ -11,7 +11,7 @@ export interface FlowDeliverContext {
   readonly roomName: string;
   readonly lane: FlowLane;
   readonly priority: number;
-  /** 只处理该 groupId 的分配；缺省 = 全部（Phase 0 测试兼容）。 */
+  /** 只处理该 groupId 的分配；缺省 = 全部（测试兼容）。 */
   readonly groupId?: string;
   /** link 中转：承运人从哪取（storage）与灌到哪（storage link）。 */
   readonly linkFeederSourceId?: string;

@@ -1,4 +1,4 @@
-/** A3-006: Operation Lifecycle 状态转换 */
+/** Operation Lifecycle 状态转换 */
 import { describe, expect, it } from "vitest";
 import { createOperation, type OperationContext } from "../../../src/domain/operation/agenda-item";
 import {
@@ -16,7 +16,7 @@ import {
 
 const TICK = 1000;
 
-describe("A3-006: Lifecycle 状态转换", () => {
+describe("Lifecycle 状态转换", () => {
   it("planned → ready → running → verifying → completed", () => {
     let op = createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK);
 
@@ -60,7 +60,7 @@ describe("A3-006: Lifecycle 状态转换", () => {
   });
 });
 
-describe("A3-009: Partial Fulfillment", () => {
+describe("Partial Fulfillment", () => {
   it("部分送达后 deliveredAmount 更新", () => {
     let op = createOperation("W1N1", "W2N1", "energy", 2000, 1, TICK + 2000, TICK);
     op = reportDelivery(op, 800, TICK + 50);
@@ -87,7 +87,7 @@ describe("A3-009: Partial Fulfillment", () => {
   });
 });
 
-describe("A3-013: Operation Retry", () => {
+describe("Operation Retry", () => {
   it("blocked → retry → ready，retries 递增", () => {
     let op = createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK);
     op = markBlocked(op, TICK, "test").op;
@@ -126,7 +126,7 @@ describe("A3-013: Operation Retry", () => {
   });
 });
 
-describe("A3-014: 超时 → expired", () => {
+describe("超时 → expired", () => {
   it("checkExpiry 超时自动转 expired", () => {
     const op = createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 100, TICK);
     const result = checkExpiry(op, TICK + 200);
@@ -149,7 +149,7 @@ describe("A3-014: 超时 → expired", () => {
   });
 });
 
-describe("A3-012: 取消路径", () => {
+describe("取消路径", () => {
   it("markCancelled 从 running → cancelled", () => {
     let op = createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK);
     op = markReady(op, TICK).op;

@@ -1,4 +1,4 @@
-/** P0-A 单测 — remote-mining-manager.fulfillContainerRequests。 */
+/** 单测 — remote-mining-manager.fulfillContainerRequests。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fulfillContainerRequests } from "../../../src/systems/remote/remote-mining-manager";
 import { getTickSiteCounters } from "../../../src/systems/site-quota";
@@ -63,8 +63,8 @@ function mockRemoteRoom(opts: {
   createResult?: number;
 }): any {
   const { name = "W8N4", existingSites = [], sources = [], createResult = 0 } = opts;
-  // R2：被测代码同时 find(FIND_CONSTRUCTION_SITES) 与 find(FIND_SOURCES)。
-  //   旧 mock 对所有 flag 返回同一数组，R2 后 site.pos.getRangeTo(src) 炸裂（site 无 pos）。
+  // 被测代码同时 find(FIND_CONSTRUCTION_SITES) 与 find(FIND_SOURCES)。
+  //   旧 mock 对所有 flag 返回同一数组，site.pos.getRangeTo(src) 炸裂（site 无 pos）。
   //   现按 flag 分发：sites 走 existingSites（补 pos stub，默认邻接=1），
   //   sources 走 sources 参数。不传 sources 时 find(FIND_SOURCES) 返回 []，
   //   sourcesWithSite 为空 — 不影响"无 site"或"仅校正 siteCount"的测试。
@@ -131,7 +131,7 @@ describe("fulfillContainerRequests — 正常路径", () => {
 describe("fulfillContainerRequests — 幂等", () => {
   it("已有 site → 清除申请标记，不创建", () => {
     const creep = requestingCreep({});
-    // R2：sourcesWithSite 由 site.pos.getRangeTo(source) <= 1 计算。
+    // sourcesWithSite 由 site.pos.getRangeTo(source) <= 1 计算。
     //   传 sources=[{id:sourceId}]，site 默认邻接（pos stub getRangeTo=1），
     //   sourcesWithSite 含 sourceId → 该组申请标记被清，走 continue 不创建。
     const room = mockRemoteRoom({
@@ -278,11 +278,11 @@ describe("fulfillContainerRequests — siteCount 实测校正", () => {
   });
 });
 
-// R2：多源远矿房的核心价值测试 — A 源建成不得阻塞 B 源申请。
+// 多源远矿房的核心价值测试 — A 源建成不得阻塞 B 源申请。
 //   旧实现 actualSites > 0 即清所有 source 组申请标记，B 源 creep 被一并清掉
 //   （needContainer=false），B 源 site 永远建不出。新实现 sourcesWithSite
 //   仅含 A 源，B 源组保留走创建路径。
-describe("fulfillContainerRequests — R2 多源房隔离", () => {
+describe("fulfillContainerRequests — 多源房隔离", () => {
   it("A 源已有 site，B 源申请不被阻塞 → 为 B 源创建 site", () => {
     // src_A 已有 container site（site 邻接 src_A），src_B 无 site 有申请 creep。
     // site.pos.getRangeTo 仅对 src_A 返回 1（邻接），对 src_B 返回 99（非邻接）。

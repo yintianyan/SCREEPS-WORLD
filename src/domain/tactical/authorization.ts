@@ -4,7 +4,7 @@ import type { TacticalAuthorization, AuthorizationState, TacticalObjective } fro
 import type { MilitaryOperation } from "../military/operation";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 授权验证
+// 授权验证
 // ═══════════════════════════════════════════════════════════
 
 /** 授权验证结果。 */
@@ -139,7 +139,7 @@ export function isOffensiveOperation(type: string): boolean {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. Target Scope 验证
+// Target Scope 验证
 // ═══════════════════════════════════════════════════════════
 
 /** Target Scope 验证结果。 */

@@ -1,4 +1,4 @@
-/** v24 → v25 迁移独立测试（P1-3 defense 误触发修复 / prevThreatCount 字段建档）。 */
+/** v24 → v25 迁移独立测试（defense 误触发修复 / prevThreatCount 字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

@@ -81,7 +81,7 @@ function mineralDefinition(resource: MineralConstant, displayName: string): Reso
 /**
  * 全量资源定义注册表。
 
- * 后续阶段（A4.4+）在此扩展化合物 / 商品定义。
+ * 后续阶段在此扩展化合物 / 商品定义。
  */
 export const RESOURCE_DEFINITIONS: Readonly<Record<string, ResourceDefinition>> = {
   // Energy

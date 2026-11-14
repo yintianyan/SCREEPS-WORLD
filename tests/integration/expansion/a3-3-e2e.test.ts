@@ -1,4 +1,4 @@
-/** A3.3 E2E Tests — Expansion Execution 全链路端到端测试。 */
+/** E2E Tests — Expansion Execution 全链路端到端测试。 */
 
 import { describe, it, expect } from "vitest";
 import {
@@ -206,7 +206,7 @@ function simulateExecutionPath(
 // E2E Success Path: Full Chain VALIDATING → COMPLETED
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 E2E — Success Path", () => {
+describe("E2E — Success Path", () => {
   it("full chain: VALIDATING → PREPARING → CLAIMING → CLAIMED → BOOTSTRAPPING → ECONOMIC_STARTUP → INTEGRATING → COMPLETED", () => {
     simulateExecutionPath("VALIDATING", 1000, [
       { gatePassed: true }, // → PREPARING
@@ -415,7 +415,7 @@ describe("A3.3 E2E — Success Path", () => {
 // E2E Failure Paths
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 E2E — Failure Paths", () => {
+describe("E2E — Failure Paths", () => {
   it("Gate failure: VALIDATING → FAILED → REPLANNING", () => {
     const r = transitionExecutionState({
       currentState: "VALIDATING",
@@ -628,7 +628,7 @@ describe("A3.3 E2E — Failure Paths", () => {
 // E2E Dashboard Integration
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 E2E — Dashboard Integration", () => {
+describe("E2E — Dashboard Integration", () => {
   it("dashboard tracks progress through execution states", () => {
     const states: ExecutionState[] = [
       "VALIDATING",
@@ -654,7 +654,7 @@ describe("A3.3 E2E — Dashboard Integration", () => {
 // E2E Multi-tick Simulation
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 E2E — Multi-tick Simulation", () => {
+describe("E2E — Multi-tick Simulation", () => {
   it("simulates 500-tick economic activation journey", () => {
     // Start with no self-sustaining, external support needed
     let consecutivePositive = 0;

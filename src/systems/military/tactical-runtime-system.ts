@@ -39,7 +39,7 @@ import { log } from "../../kernel/log";
 import { commitSquadState, pruneSquadStates, readSquadState, squadStateKey } from "./squad-state";
 
 // ═══════════════════════════════════════════════════════════
-// §1. GlobalCache 扩展 — Tactical Runtime 状态
+// 1. GlobalCache 扩展 — Tactical Runtime 状态
 // ═══════════════════════════════════════════════════════════
 
 /** Tactical Runtime 在 globalCache 上的扩展字段。 */
@@ -61,7 +61,7 @@ interface TacticalRuntimeCache {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. 系统定义
+// 2. 系统定义
 // ═══════════════════════════════════════════════════════════
 
 export const tacticalRuntimeSystem: System = {
@@ -161,7 +161,7 @@ export const tacticalRuntimeSystem: System = {
     g.tacticalDecisions!.push(decision);
 
     // ── 6b. 回写 Squad 级战术状态 ──
-    //     A9 的原缺陷就在这儿：注释说要"存储 decision 的 newState 供下轮评估"，但从来没存。
+    //     原缺陷就在这儿：注释说要"存储 decision 的 newState 供下轮评估"，但从来没存。
     //     状态无处落脚时，三个 stage runtime 各自从 warPlan.phase 现推，currentState 恒为
     //     FORMING/MOVING，四道安全闸在转换表上永远判非法。
     commitSquadState(squadStateKey(plan), squad.state, decision.newState, tick);
@@ -180,7 +180,7 @@ export const tacticalRuntimeSystem: System = {
       if (abortSignal) {
         g.tacticalAbortSignals!.push(abortSignal);
         // tacticalAbortSignals 供 recovery-execution-system 消费
-        // 不直接写 warAbortSignals（A5.3.1 架构守卫：只有 recovery-execution-system / war-planner 可写）
+        // 不直接写 warAbortSignals（架构守卫：只有 recovery-execution-system / war-planner 可写）
         // recovery-execution-system 会读取 tacticalAbortSignals 并自行转换
       }
     }
@@ -212,7 +212,7 @@ export const tacticalRuntimeSystem: System = {
 };
 
 // ═══════════════════════════════════════════════════════════
-// §3. TacticalObjective 构建
+// 3. TacticalObjective 构建
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -263,7 +263,7 @@ function buildTacticalObjective(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. SquadPlan 构建
+// 4. SquadPlan 构建
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -375,7 +375,7 @@ function buildSquadPlan(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. TacticalSnapshot 构建
+// 5. TacticalSnapshot 构建
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -477,7 +477,7 @@ function buildTacticalSnapshot(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. 辅助：Creep 能力构建
+// 6. 辅助：Creep 能力构建
 // ═══════════════════════════════════════════════════════════
 
 /** 从 Creep body 构建战斗能力快照。 */
@@ -546,7 +546,7 @@ function buildCreepCapability(creep: Creep): CombatCapability {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §7. 辅助：敌方单位/建筑采集
+// 7. 辅助：敌方单位/建筑采集
 // ═══════════════════════════════════════════════════════════
 
 /** 从目标房视野采集敌方 Creep 快照。 */
@@ -601,7 +601,7 @@ function structureValueTier(t: StructureConstant): number {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §8. 生命周期辅助
+// 8. 生命周期辅助
 // ═══════════════════════════════════════════════════════════
 
 /** 查找活跃（非终态）的 TacticalObjective。 */
@@ -692,7 +692,7 @@ function cleanupTerminalObjectives(g: GlobalCache & TacticalRuntimeCache, tick: 
 }
 
 // ═══════════════════════════════════════════════════════════
-// §9. 止损信号提取
+// 9. 止损信号提取
 // ═══════════════════════════════════════════════════════════
 
 /** 从决策结果提取止损信号。 */
@@ -725,7 +725,7 @@ function extractAbortSignal(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §10. 增援需求提交
+// 10. 增援需求提交
 // ═══════════════════════════════════════════════════════════
 
 /** 检测编队缺人并提交增援请求到 spawn queue。 */
@@ -791,7 +791,7 @@ function submitReinforcementDemand(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §10b. 补给需求检测（SupplyDemand → Logistics）
+// 10b. 补给需求检测（SupplyDemand → Logistics）
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -832,7 +832,7 @@ function detectSupplyDemand(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §11. DecisionTrace 记录
+// 11. DecisionTrace 记录
 // ═══════════════════════════════════════════════════════════
 
 /** 记录战术决策事件到 event-log。 */

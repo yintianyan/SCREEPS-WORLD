@@ -18,7 +18,7 @@ import { globalCache, bumpEnergyCounter, safeModeCounters } from "../../kernel/g
 /** P3 L1 核算：塔动作耗能按 intent 计（attack/heal/repair 每次 TOWER_ENERGY_COST）。
  * 不可用库存差值实测 — 引擎资源结算在 tick 末，同 tick 差值恒 0（官服实证）。 */
 /**
- * #80 用途分桶（纯观测，**不进** CONSUMPTION_FIELDS ⇒ 净流/风险缓冲口径不变）：
+ * 用途分桶（纯观测，**不进** CONSUMPTION_FIELDS ⇒ 净流/风险缓冲口径不变）：
  * 原先 attack 与「补被拆的墙」与「和平期把 rampart 维护到 RCL 分级血量」全挤在 `towerSpent`
  * 一格，而 `ledgerP0P1Consumption` 把整格当**常供侧**消费 —— 于是"防线外壳吃掉多少收入"
  * 这个发展期决策无法从账上读出（只能靠"此刻没有敌人"去推断）。
@@ -26,7 +26,7 @@ import { globalCache, bumpEnergyCounter, safeModeCounters } from "../../kernel/g
  * 实测 `ei=19.4/t` 已贴顶，而 `towerSpent≈10/t` ＝ **一半上限花在墙/盾上**；
  * 同窗 `nf=-5.31/t`、storage 70K→54.9K 在掉、`upgraded≈8/t` 爬 405k 要 ~33 小时。
  * 三桶是 `towerSpent` 的**精确划分**（每桶恰好一个调用点集合，和恒等于合计）。
- * ⚠️"该不该为发展让路"是防御取向，属人工排产（§3.5）——本改动只把账做清楚，不动任何门。
+ * ⚠️"该不该为发展让路"是防御取向，属人工排产——本改动只把账做清楚，不动任何门。
  */
 type TowerSpendBucket = "combat" | "structures" | "walls";
 
@@ -104,7 +104,7 @@ export const towerDefenseSystem: System = {
               totalHealParts,
               breachingCore,
             });
-            // A5.1：威胁意图集成 — SIEGE intent 意味着敌方有足够治疗扛塔伤，
+            // 威胁意图集成 — SIEGE intent 意味着敌方有足够治疗扛塔伤，
             // 且未突入核心区。此时开火 = 白耗能量（每发都被 HEAL 奶回）。
             // 塔应停火蓄能，等敌方近身或撤退。这是对 assessEngagement 的
             // intent 维度增强，不替换其净伤判定——两者互补：
@@ -209,7 +209,7 @@ export const towerDefenseSystem: System = {
       }
 
       // 无敌人 — 维修逻辑。
-      // A3/B3：维修权移交 creep —— 塔修 1 次 10 能量且有距离衰减，creep 修是
+      // 维修权移交 creep —— 塔修 1 次 10 能量且有距离衰减，creep 修是
       // 1 energy/100 hits/WORK。本房存在 builder/worker 时塔只保留开火职责，
       // 省下的能量是真实的防御弹药；无维修 creep 时保留塔修作为灾后安全网。
       if (hasRepairCreep(snapshot.roomName)) {
@@ -217,7 +217,7 @@ export const towerDefenseSystem: System = {
       }
 
       // G-DF-08：wall/rampart 目标血量按角色分层 + RCL 分级；受袭姿态升档。
-      // R3：帝国 war 姿态 → 全局备战（与 repair.ts 同口径，见 fortification.resolveUnderSiege）。
+      // 帝国 war 姿态 → 全局备战（与 repair.ts 同口径，见 fortification.resolveUnderSiege）。
       const roomMemForSiege = Memory.rooms[snapshot.roomName];
       const underSiege = resolveUnderSiege(
         Memory.kernel?.strategy?.posture,
@@ -296,8 +296,8 @@ export const towerDefenseSystem: System = {
 
 /**
  * 本房是否存在可承担维修的 creep（builder 或 worker）。
- * A3：存在时塔让出全部非战斗维修，只保留开火职责。
- * P1-3：从 Kernel.buildSnapshots 预构建的 globalCache.repairRooms 读取，
+ * 存在时塔让出全部非战斗维修，只保留开火职责。
+ * 从 Kernel.buildSnapshots 预构建的 globalCache.repairRooms 读取，
  * 不再独立全量扫描 Game.creeps。
  */
 function hasRepairCreep(roomName: string): boolean {
@@ -305,7 +305,7 @@ function hasRepairCreep(roomName: string): boolean {
 }
 
 /**
- * 为全塔集火选择目标（P1-3）。
+ * 为全塔集火选择目标。
  * 用纯函数 selectTowerTarget 按「奶妈优先 / 最脆优先 / 近距优先」排序；
  * 异常或选不出时回退到 findClosestByRange，保证防御不因选择逻辑失效而停火。
  */
@@ -397,7 +397,7 @@ function reportThreatUnhandled(snapshot: RoomSnapshot): void {
  * ③ 舰队伤亡熔断。safe mode 是最后防线 — 校验 controller 归属 / 未激活 /
  * 无冷却 / 有可用次数。
  *
- * ⚠️ #119：这道判据原先**丢弃返回码、且前置不齐时静默跳过**，于是"核心被拆而什么都没发生"
+ * ⚠️ 这道判据原先**丢弃返回码、且前置不齐时静默跳过**，于是"核心被拆而什么都没发生"
  * 这一现象不可归因（没次数？在冷却？引擎拒绝？三种要的动作互相矛盾）。现在两路都记：
  * `tried` + `codes[String(原始返回码)]` / `guardMiss`。**判据是 `guardMiss>0 而 tried=0`
  * 才叫"该响没响"** —— 和平期三列都该是初始值，那不是仪器坏了。

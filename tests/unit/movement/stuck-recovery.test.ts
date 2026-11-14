@@ -1,4 +1,4 @@
-/** 卡位检测测试 — updateStuckTicks 的疲劳豁免（MV-1 / G-MV-06 / G-MEM-07）。 */
+/** 卡位检测测试 — updateStuckTicks 的疲劳豁免。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { updateStuckTicks } from "../../../src/creeps/movement";
 import { resetGlobals } from "../../support/factories";
@@ -17,7 +17,7 @@ beforeEach(() => {
   resetGlobals();
 });
 
-describe("updateStuckTicks — 疲劳豁免（G-MV-06/G-MEM-07）", () => {
+describe("updateStuckTicks — 疲劳豁免", () => {
   it("疲劳期位置不变：stuckTicks 不递增（不是卡位）", () => {
     const memory = { lastPos: 25 * 50 + 25, stuckTicks: 1 };
     const creep = makeCreep(25, 25, 4, memory);

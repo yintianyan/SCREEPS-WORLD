@@ -32,7 +32,7 @@ export function getIntentLedger(): IntentLedger {
 /**
  * 按 creep 当前 FSM 模式推导移动优先级。
  * flee 逃命 > work 携能交付 > acquire 取能 > 其余（通勤/未知模式）。
- * v33-R12 卡位升级：连续 stuck（≥ stuckThreshold）时优先级临时抬到
+ * 卡位升级：连续 stuck（≥ stuckThreshold）时优先级临时抬到
  * stuckEscalation — 高于 anchorStation（60）低于 anchorMiner（90）：
  * 锁死移动方有权把占住目标格的站桩 creep 推到相邻格（线上实证 W36S58 —
  * 采集者目标格被锚定 reserver 占据、同档不推 → 意图逐 tick 被拒永久锁死）；

@@ -1,5 +1,5 @@
 /**
- * 远矿机会管线的"无人接线"契约（B2-10 裁决的落点）。
+ * 远矿机会管线的"无人接线"契约。
  *
  * 背景：specialization-planner 的 opportunity → execution-gate → operation 这条链
  * 在 src 内没有生产者 —— `createOpportunity` 零调用，`__remoteOpportunities` 唯一的
@@ -10,7 +10,7 @@
  *   有人接线 ⟺ 三扇纸面门还在
  * 谁先单独动另一半，这里就红：
  *   - 只写生产者、留着 true 输入 → 闸门数字说谎（"10 项检查"里 3 项恒过）；
- *   - 只删 true 输入、仍然没有生产者 → 该删的是整条管线（B7 的六步复验），不是留个
+ *   - 只删 true 输入、仍然没有生产者 → 该删的是整条管线（六步复验的结论），不是留个
  *     永远不执行的空壳。
  */
 import { describe, expect, it } from "vitest";
@@ -105,7 +105,7 @@ describe("远矿机会管线：接线状态与纸面门必须同步", () => {
       wired,
       wired
         ? "管线已接线但三扇门仍写死 true：checkExecutionGate 的通过数在说谎。"
-        : "纸面门被删了却仍无生产者：该整体处置这条管线（B7 六步复验），不是留个永不执行的空壳。",
+        : "纸面门被删了却仍无生产者：该整体处置这条管线（六步复验），不是留个永不执行的空壳。",
     ).not.toBe(paper);
   });
 });

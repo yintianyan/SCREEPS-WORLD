@@ -1,4 +1,4 @@
-/** commodityBatchRoi —— factory 采购需求的正 ROI 闸（#51 后半支）。 */
+/** commodityBatchRoi —— factory 采购需求的正 ROI 闸。 */
 import { describe, expect, it } from "vitest";
 import { commodityBatchRoi } from "../../../src/domain/industry/market-pricing";
 

@@ -26,7 +26,7 @@ const RUN_TICKS = 5200;
 
 const isDevSiteType = (t: string): boolean => t === "extension" || t === "container";
 
-describe("Phase R2 — RCL2 私服 canary（隔离世界，严格 rcl===2 窗口）", () => {
+describe("RCL2 私服 canary（隔离世界，严格 rcl===2 窗口）", () => {
   const runner = new ScenarioRunner();
   const rows: Row[] = [];
 

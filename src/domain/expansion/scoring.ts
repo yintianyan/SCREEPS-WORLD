@@ -11,9 +11,9 @@ export interface ScoringOptions {
   w5: number; // rivalProximity 权重（减项）
   w6: number; // defensibility 权重
   w7: number; // layoutFitness 权重
-  /** R651：地形适配权重（wallRatio + 锚点到 controller 距离）。 */
+  /** 地形适配权重（wallRatio + 锚点到 controller 距离）。 */
   w8: number;
-  /** R651：center 房加成（4 源且必有 controller）。 */
+  /** center 房加成（4 源且必有 controller）。 */
   centerBonus: number;
   /** 合格阈值（≥ 此值 → QUALIFIED）。 */
   qualificationThreshold: number;
@@ -33,7 +33,7 @@ export interface ScoringOptions {
 
 export const DEFAULT_SCORING_OPTIONS: ScoringOptions = {
   w1: 0.25,
-  // R651：mineral 与 layoutFitness（恒 0.5 的常数项）各让 0.05 给 terrainFit。
+  // mineral 与 layoutFitness（恒 0.5 的常数项）各让 0.05 给 terrainFit。
   w2: 0.05,
   w3: 0.15,
   w4: 0.15,
@@ -151,7 +151,7 @@ export function scoreCandidate(
   // 模板适配校验结果（未检为 undefined → 取保守 0.5）
   const layoutFitness = layoutFitnessScore ?? 0.5;
 
-  // ── 8. terrainFit（R651）──
+  // ── 8. terrainFit ──
   // 未侦察到地形指标时取 0.5（与 layoutFitness 同待遇），不制造假优势。
   const wallRatio = candidate.terrain.wallRatio;
   const anchorCtrl = candidate.terrain.anchorToController;

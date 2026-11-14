@@ -44,7 +44,7 @@ function resolveMyUsername(): string | undefined {
  * Expansion Planner 系统 — Intelligence 层薄壳。
 
  * 不执行任何 Expansion Action。只做评估、排序、Plan 生命周期管理。
- * A3.3 Phase 0 修复：推进 Plan 到 WAITING_EXECUTION 供 expansion-manager 消费。
+ * 修复：推进 Plan 到 WAITING_EXECUTION 供 expansion-manager 消费。
  */
 export const expansionPlannerSystem: System = {
   name: "expansion-planner",
@@ -140,12 +140,12 @@ export const expansionPlannerSystem: System = {
       myUsername: resolveMyUsername(),
       existingCandidates,
     });
-    // R7b 节奏自适应的第三路输出（minSources）此前无人消费：它唯一的旧调用方
+    // 节奏自适应的第三路输出（minSources）此前无人消费：它唯一的旧调用方
     // domain/expansion/evaluator.ts 在生产里零引用（只有自己的测试在读）⇒「连续被抢之后
     // 只挑 ≥2 source 的目标」从未生效过一次。接在候选池上（与 releasedRooms 同一层），
     // 值为默认 1 时原样返回 ⇒ 接线不改变今天的行为，只是让那条安全收紧真的存在。
     const candidatePool = dropInsufficientSources(
-      // 自有房复检（#86）：占领成功不会让那条候选失效（候选只在 Intel 刷新时重建），
+      // 自有房复检：占领成功不会让那条候选失效（候选只在 Intel 刷新时重建），
       // 于是它会顶着旧的 QUALIFIED 状态白占一格并把 candidateCount 读高。
       // 线上实证 t=83386099：`W38S56 st=QUALIFIED` 而 W38S56 就是我自己的幼房。
       dropOwnedRooms(dropReleasedRooms(discoveryResult.candidates, releasedRooms), ownedRoomNames),
@@ -303,8 +303,7 @@ export const expansionPlannerSystem: System = {
       readinessTick: queryEmpirePlannerInputTick(),
       summary: dashboard.summary,
       // 截断要留痕：`expansionCandidates` 只落盘前 CANDIDATE_PERSIST_CAP 条，读数人拿它的
-      // length 当池规模就会把前缀当全集（同族先例＝`stats.cpuBySystem` 的 top-10 榜，
-      // 立案过程见 roadmap 补208）。
+      // length 当池规模就会把前缀当全集（同族先例＝`stats.cpuBySystem` 的 top-10 榜）。
       // 早退分支不写这两列 —— 那一趟跳过了全量管线，条数不是"算出来少了"而是"没算"。
       poolTotal: allCandidates.length,
       poolCut: allCandidates.length - persistedCandidates.length,

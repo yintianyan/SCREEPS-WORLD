@@ -1,4 +1,4 @@
-/** A1 门槛证据 — 自举链路收口：RCL2→RCL3 爬升后 tower site 由 AI 自然创建。 */
+/** 自举链路收口：RCL2→RCL3 爬升后 tower site 由 AI 自然创建（门槛证据）。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 
@@ -9,7 +9,7 @@ beforeAll(async () => {
   loop = main.loop;
 });
 
-describe("A1 自举链路 — RCL2→RCL3 爬升与 tower 自然开建", () => {
+describe("自举链路 — RCL2→RCL3 爬升与 tower 自然开建", () => {
   it("RCL3 到达后 construction-manager 自然创建 tower site，builder 自然补位", () => {
     // RCL2 进度 44,900/45,000：upgrader（5W）约 20 tick 内推满 → RCL3。
     // 无 tower、无任何预设 site——tower 必须由布局/施工系统自己排队。
@@ -117,8 +117,8 @@ describe("A1 自举链路 — RCL2→RCL3 爬升与 tower 自然开建", () => {
     const result = runner.run(world, 6000, { stopWhen: towerBuilt });
     const assertions = new Assertions(world, result.records);
 
-    assertions.assertNoRuntimeError("A1 tower bootstrap");
-    assertions.assertEmpireAlive("A1 tower bootstrap");
+    assertions.assertNoRuntimeError("tower bootstrap");
+    assertions.assertEmpireAlive("tower bootstrap");
 
     // 断言 2：RCL3 自然到达（tickLog 记录 rcl_up 事件）。
     const rclUp = world._stats.tickLog.find(e => e.event.startsWith("rcl_up:3"));

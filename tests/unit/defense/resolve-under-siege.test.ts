@@ -1,4 +1,4 @@
-/** resolveUnderSiege — 受袭姿态判定测试（R3 战时闭环 / 帝国姿态 → 防御投资升档）。 */
+/** resolveUnderSiege — 受袭姿态判定测试（战时闭环 / 帝国姿态 → 防御投资升档）。 */
 import { describe, expect, it } from "vitest";
 import { resolveUnderSiege } from "../../../src/domain/defense/fortification";
 

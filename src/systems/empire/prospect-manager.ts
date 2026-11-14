@@ -38,8 +38,8 @@ export const prospectManagerSystem: System = {
     const mission = Memory.kernel.prospect;
 
     if (!mission) {
-      // R653：选点侦察补位 —— 有推进态计划但 intel 缺地形指标时，允许一次定向侦察。
-      // 不做这一步，计划会在「无地形数据」的 intel 上被 claim（R651 的门全部失效）。
+      // 选点侦察补位 —— 有推进态计划但 intel 缺地形指标时，允许一次定向侦察。
+      // 不做这一步，计划会在「无地形数据」的 intel 上被 claim（选点前置复核的门全部失效）。
       if (Memory.kernel.strategy?.expansionAllowed !== true) {
         const vet = planNeedingTerrainVetting();
         if (!vet) return;
@@ -62,8 +62,8 @@ export const prospectManagerSystem: System = {
       if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
       if ((Game.cpu.bucket ?? 0) < CONFIG.prospect.minBucket) return;
       if (Memory.kernel.expansion) return; // claimer/拓荒已在路上，侦察让位。
-      // R641：侦察也是「新投资」—— 扩张推进态下 CPU 差于 comfortable 时不再开新任务。
-      // 线上实证（R640）：ea 转真后连续开侦察，最多 6 只 scout 在世（5 只 recycle 回程），
+      // 侦察也是「新投资」—— 扩张推进态下 CPU 差于 comfortable 时不再开新任务。
+      // 线上实证：ea 转真后连续开侦察，最多 6 只 scout 在世（5 只 recycle 回程），
       // 编制 31→41、usage 11.75→12.13，把 G6 顶在 12.0 刀口上 ⇒ 扩张门自锁。
       // 只拦「开新任务」；在途任务的存续/收摊不受此门影响。
       const expansionPush = (Memory.kernel.expansionPlans ?? []).some(p =>
@@ -100,7 +100,7 @@ export const prospectManagerSystem: System = {
     }
     if (Memory.kernel.strategy?.expansionAllowed !== true && mission.vetting !== true) {
       // 瞬时翻转脱敏：累计非 expand 持续 tick，超过 grace 才中止。
-      // R653：选点侦察任务不受 ea 计时中止（它的目的就是在 ea=false 期间补地形情报）。
+      // 选点侦察任务不受 ea 计时中止（它的目的就是在 ea=false 期间补地形情报）。
       if (mission.postureExitSince === undefined) mission.postureExitSince = ctx.tick;
       if (ctx.tick - mission.postureExitSince >= CONFIG.prospect.postureGraceTicks) {
         completeMission(ctx.tick, OUTCOME_ABORTED, 0);
@@ -133,7 +133,7 @@ export const prospectManagerSystem: System = {
     }
 
     // 侦察兵全灭判定：live + pending 均为 0 且已孵化过 → 死光了。
-    // P0-1：从全局编队索引取 scout 存活数，替代独立全量遍历 Game.creeps。
+    // 从全局编队索引取 scout 存活数，替代独立全量遍历 Game.creeps。
     let live = 0;
     const scouts = querySquad({
       role: "scout",
@@ -205,7 +205,7 @@ function completeMission(tick: number, outcome: number, cooldownTicks: number): 
     Memory.kernel!.prospectCooldown[mission.target] = tick + cooldownTicks;
   }
 
-  // P0-1：从全局编队索引取 scout，按 name 精确定位 Creep 对象标记 recycle。
+  // 从全局编队索引取 scout，按 name 精确定位 Creep 对象标记 recycle。
   const scouts = querySquad({ role: "scout", remoteTarget: mission.target });
   for (const e of scouts) {
     const creep = Game.creeps[e.name];
@@ -361,7 +361,7 @@ function buildCandidates(tick: number): ProspectCandidate[] {
   return candidates;
 }
 
-/** R653：找出「推进态计划 + intel 条目存在但缺 wallRatio」的目标（一次一个，幂等）。 */
+/** 找出「推进态计划 + intel 条目存在但缺 wallRatio」的目标（一次一个，幂等）。 */
 function planNeedingTerrainVetting(): { room: string; sponsor?: string } | undefined {
   for (const p of Memory.kernel?.expansionPlans ?? []) {
     if (

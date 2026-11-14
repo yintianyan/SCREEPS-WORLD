@@ -47,7 +47,7 @@ describe("upgrader — work 模式", () => {
     expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 
-  it("帝国净流之和为负 → 成熟房暂停升级（R594 失血闸）", () => {
+  it("帝国净流之和为负 → 成熟房暂停升级（失血闸）", () => {
     (globalThis as any).Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
     const controller = mockController();
     const storage = mockStructure("storage", { id: "st1", energy: 5000, capacity: 100000 });
@@ -773,8 +773,8 @@ describe("upgrader — claim-secure 护栏（脆弱新房放宽取能地板）",
   });
 });
 
-// R617：限定版扩张预留——只有“本房 RCL≥7 且有扩张推进态计划”才把刹车抬到 5。
-describe("upgrader — 扩张推进态的升级预留（R617 限定版）", () => {
+// 限定版扩张预留——只有“本房 RCL≥7 且有扩张推进态计划”才把刹车抬到 5。
+describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
   it("有计划(EVALUATED) 且 RCL7、净流 1<2 ⇒ 暂停升级（2026-11-08 门槛 5→2）", () => {
     (globalThis as any).Memory.kernel = {
       gateNetFlow: { A: 1, B: 0 },
@@ -809,8 +809,8 @@ describe("upgrader — 扩张推进态的升级预留（R617 限定版）", () =
   });
 });
 
-// R632：扩张推进态 + CPU 无余量时，连“净流够”的升级也停。
-describe("upgrader — 扩张推进态的 CPU 余量闸（R632）", () => {
+// 扩张推进态 + CPU 无余量时，连“净流够”的升级也停。
+describe("upgrader — 扩张推进态的 CPU 余量闸", () => {
   it("有计划且 tier=tight ⇒ 即使净流 6≥2 也暂停升级", () => {
     (globalThis as any).Memory.kernel = {
       gateNetFlow: { A: 3, B: 3 },

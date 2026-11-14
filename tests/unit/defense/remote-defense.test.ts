@@ -1,4 +1,4 @@
-/** A5.1 G4 — Remote Defense Decision 纯函数测试。 */
+/** G4 — Remote Defense Decision 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   decideRemoteDefenseAction,
@@ -112,10 +112,10 @@ function makeInput(opts: Partial<RemoteDefenseInput> = {}): RemoteDefenseInput {
   };
 }
 
-// ─── R01: 威胁 NONE → CONTINUE ──────────────────────────────
+// ─── 威胁 NONE → CONTINUE ──────────────────────────────
 
 describe("G4 — decideRemoteDefenseAction", () => {
-  it("R01: 威胁 NONE → CONTINUE", () => {
+  it("威胁 NONE → CONTINUE", () => {
     const decision = decideRemoteDefenseAction(
       makeInput({
         threat: makeThreat("NONE", "UNKNOWN"),
@@ -125,7 +125,7 @@ describe("G4 — decideRemoteDefenseAction", () => {
     expect(decision.reason).toContain("NONE");
   });
 
-  it("R02: 威胁 LOW + 风险低 → CONTINUE", () => {
+  it("威胁 LOW + 风险低 → CONTINUE", () => {
     const decision = decideRemoteDefenseAction(
       makeInput({
         threat: makeThreat("LOW", "HARASSMENT"),
@@ -135,7 +135,7 @@ describe("G4 — decideRemoteDefenseAction", () => {
     expect(decision.action).toBe("CONTINUE");
   });
 
-  it("R03: 威胁 MEDIUM + 风险高 → PAUSE", () => {
+  it("威胁 MEDIUM + 风险高 → PAUSE", () => {
     const decision = decideRemoteDefenseAction(
       makeInput({
         threat: makeThreat("MEDIUM", "HARASSMENT"),
@@ -146,7 +146,7 @@ describe("G4 — decideRemoteDefenseAction", () => {
     expect(decision.reason).toContain("暂停");
   });
 
-  it("R04: 威胁 HIGH + 护航后净价值正 → ESCORT", () => {
+  it("威胁 HIGH + 护航后净价值正 → ESCORT", () => {
     // HIGH → risk = 0.6
     // operationValue = 2 sources × 10 = 20/tick
     // expectedDuration = 200 (HARASSMENT)
@@ -165,7 +165,7 @@ describe("G4 — decideRemoteDefenseAction", () => {
     expect(decision.escortDemand?.count).toBe(2); // HIGH → 2 defender
   });
 
-  it("R05: 威胁 HIGH + 净价值负 → RETREAT", () => {
+  it("威胁 HIGH + 净价值负 → RETREAT", () => {
     // 让净价值为负：creepInvestment 高 + risk 高
     // expectedLoss = creepInvestment × risk × min(duration/500, 1)
     // = 50000 × 0.6 × 0.4 = 12000
@@ -182,7 +182,7 @@ describe("G4 — decideRemoteDefenseAction", () => {
     expect(decision.reason).toContain("撤退");
   });
 
-  it("R06: 威胁 CRITICAL + 净价值负 + 替换成本占比 > 0.2 → ABORT", () => {
+  it("威胁 CRITICAL + 净价值负 + 替换成本占比 > 0.2 → ABORT", () => {
     // CRITICAL → risk = 0.9
     // creepInvestment = 50000, empireEnergyReserve = 100000
     // replacementCostRatio = 50000/100000 = 0.5 > 0.2 → ABORT
@@ -197,7 +197,7 @@ describe("G4 — decideRemoteDefenseAction", () => {
     expect(decision.reason).toContain("长期不可维持");
   });
 
-  it("R07: war 姿态 + 威胁 HIGH → RETREAT（不护航）", () => {
+  it("war 姿态 + 威胁 HIGH → RETREAT（不护航）", () => {
     const decision = decideRemoteDefenseAction(
       makeInput({
         threat: makeThreat("HIGH", "HARASSMENT"),
@@ -208,7 +208,7 @@ describe("G4 — decideRemoteDefenseAction", () => {
     expect(decision.reason).toContain("war姿态");
   });
 
-  it("R07b: RETREAT + pathCost > 3 → ABORT（无法安全撤退）", () => {
+  it("RETREAT + pathCost > 3 → ABORT（无法安全撤退）", () => {
     const decision = decideRemoteDefenseAction(
       makeInput({
         threat: makeThreat("CRITICAL", "FULL_ASSAULT"),

@@ -1,4 +1,4 @@
-/** P1-1：builder 编制纳入 buildQueue backlog 测试。 */
+/** builder 编制纳入 buildQueue backlog 测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";
 import { mockSnapshot, resetGlobals } from "../../support/factories";
@@ -55,7 +55,7 @@ const normalCtx = (pressure = 0, buildQueueBacklog?: number) => ({
   buildQueueBacklog,
 });
 
-describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
+describe("builder 编制纳入 buildQueue backlog", () => {
   it("site + backlog 同时存在 → backlog*0.5 大于 site 数时按 backlog 加码 builder", () => {
     // 4 harvester → economyCap = 5；1 site + 6 queued → backlogWeighted = 3
     // dynamicBuilderTarget = min(maxCount=4, economyCap=5, max(minCount=1, site=1, backlog=3, road=0)) = 3
@@ -187,7 +187,7 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
   });
 });
 
-describe("早期房不套 builder 价格弹性闸（#46）", () => {
+describe("早期房不套 builder 价格弹性闸", () => {
   // 线上实证：幼房 energyPrice=0.2256 ⇒ demandElasticity=(0.2256−0.1)/0.4=0.314，
   // dynamicBuilderTarget = min(maxCount=4, economyCap=2+0+1=3, max(minCount=1, site=3)) = 3
   // ⇒ 旧口径 round(3×0.314)=1 只 builder（6 个工地、容器与 spawn 池全满时被砍到 1）。
@@ -235,8 +235,8 @@ describe("早期房不套 builder 价格弹性闸（#46）", () => {
   });
 });
 
-describe("早期房 upgrader 不套价格弹性闸（#47）", () => {
-  // 与 #46 同一条自锁，只是落在升级道上（G0 的实际度量）。
+describe("早期房 upgrader 不套价格弹性闸", () => {
+  // 与 builder 侧的同一条自锁，只是落在升级道上（G0 的实际度量）。
   // 旧实现：压力阶梯给出 3 → 无条件 × elasticity(0.2256)=0.314 → round=1 → 再被 `!hasStorage`
   // 兜到 minCount=1 —— 那段注释写的本意是"早期房不因 economyPressure 失去整条升级道"，实现却把道收到只剩 1。
   it("无 storage 且有站桩 container：price=0.2256 仍给满 3 只 upgrader", () => {
@@ -264,7 +264,7 @@ describe("早期房 upgrader 不套价格弹性闸（#47）", () => {
   });
 });
 
-describe("补员方向：在编已有 builder/upgrader 时，低价格下早期房仍补回满目标（#46/#47 的决定性签名）", () => {
+describe("补员方向：在编已有 builder/upgrader 时，低价格下早期房仍补回满目标（决定性签名）", () => {
   // 为什么必须测"补员"而不是"目标算得对不对"：线上那把闸**从不裁编**，只决定"死一只后补不补"
   // ⇒ 存活编制数在新旧两种代码下完全一样（goal 会话 22:30Z 的实测就是这个形状）。
   // 唯一有鉴别力的读数 = 已有 living 时队列里会不会再出现替换请求。
@@ -353,7 +353,7 @@ describe("补员方向：在编已有 builder/upgrader 时，低价格下早期�
     expect(reqsFor(snap, living("upgrader", 1)).filter(r => r.role === "upgrader")).toHaveLength(0);
   });
 
-  // #55：recovery 掐掉的正是早期房唯一的消费出口。`allowUpgrader` 原先只看
+  // recovery 掐掉的正是早期房唯一的消费出口。`allowUpgrader` 原先只看
   // `colonyState === "normal"`，而早期房（无 storage）没有库存可保 —— 它的 reserve 负值
   // 就是"正在建设自己"。相位机在 minBandTicks(=100) 带上每次抖动都会把这条道整段掐掉，
   // 并阻止满寿 upgrader 的替换（线上实证：幼房 ColonyStateChange 以 normal↔recovery 横跳）。

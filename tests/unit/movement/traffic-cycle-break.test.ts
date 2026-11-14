@@ -1,5 +1,5 @@
 /**
- * 环向死锁（#38 的另一半）：A 踩 B 的格、B 踩 C 的格、C 踩 A 的格。
+ * 环向死锁：A 踩 B 的格、B 踩 C 的格、C 踩 A 的格。
  * 线上实测形状：W37S58 里 (26,24)→(27,23)→(26,22)… 与 (25,23)→(26,24) 互相钉住，
  * 三只 creep（两只 remoteHauler + 一只 reserver）stuckTicks 涨到 380+、ttl 一路耗干 ——
  * 远矿收入因此停工，而旧版解算器对这种环**每轮零批准**（占用者有意图就一律"等下一轮"，
@@ -40,7 +40,7 @@ function ring(cycleFree: boolean) {
   };
 }
 
-describe("traffic-resolver 环向死锁破环（#38）", () => {
+describe("traffic-resolver 环向死锁破环", () => {
   it("有合法落格时，环不再零批准 —— 至少一只本轮获批移动", () => {
     const out = resolveTraffic(ring(true));
     expect(

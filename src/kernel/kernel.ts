@@ -50,7 +50,7 @@ import {
 } from "../telemetry";
 import { type Registry } from "./registry";
 // buildRoomSnapshot 通过 Registry.registerWorldModelBuilder 注入，避免 kernel 直接 import systems 层。
-// ：kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反 §2.1「内核不感知业务」。
+// kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反「内核不感知业务」。
 // 权衡接受现状：pruneDeadCreepCache 本质是 global 状态卫生（清理死 creep 缓存残留），非经济策略/角色行为；
 //   100 tick 低频触发，无每 tick 耦合。为 1 个钩子引入 registry 维护钩子机制（接口+注册+遍历）属过度工程。
 // 演化条件：当出现 3+ 个周期性维护钩子时，提取为 registry 维护钩子机制（kernel 只遍历注册表）。
@@ -132,7 +132,7 @@ export class Kernel {
   private readonly postSystems: readonly System[];
   /** 观测层系统（`System.budgetExempt`）—— 不经预算闸，见 runObservabilitySystems。 */
   private readonly observabilitySystems: readonly System[];
-  /** 【F1/G-A】cadence 治理表：系统名 → 生效间隔（覆盖层优先）。 */
+  /** cadence 治理表：系统名 → 生效间隔（覆盖层优先）。 */
   private readonly cadenceTable: CadenceTable;
 
   constructor(private readonly registry: Registry) {
@@ -151,7 +151,7 @@ export class Kernel {
   }
 
   run(): void {
-    // #173 取表点＝本函数的**第一条语句**：它之前（模块级 loop 包装）不在这一笔账里，
+    // 取表点＝本函数的**第一条语句**：它之前（模块级 loop 包装）不在这一笔账里，
     // 之后的（预算与上下文构造）在 `phase/early` 那笔补记里。取早一步就把闸外的段量进来。
     const tickStart = Game.cpu.getUsed();
     // 预算：根据 bucket 带滞回地确定 CPU 档位。
@@ -174,7 +174,7 @@ export class Kernel {
       safeRun("memory-migrate", () => runMigrations(), true);
       safeRun("memory", () => maintainMemory(), true);
 
-      // P2-L：每 100 tick 清理 __creepPathCache 中死 creep 残留 — global 状态无析构，
+      // 每 100 tick 清理 __creepPathCache 中死 creep 残留 — global 状态无析构，
       // 残留条目累积内存；低频触发（非每 tick）— 清理是兜底卫生，不值得常态 CPU。
       if (Game.time % 100 === 0) {
         safeRun("prune-path-cache", () => pruneDeadCreepCache());
@@ -186,11 +186,11 @@ export class Kernel {
 
     const ctx = new Context(budget);
 
-    // #173：这一段（预算判定 + 上下文构造）此前**结构上量不到** —— `recordCpu` 的时标闸要到
+    // 这一段（预算判定 + 上下文构造）此前**结构上量不到** —— `recordCpu` 的时标闸要到
     // phase/pre 内部才打开，拿 `measuredRun` 包它会记成 0（不是"不花钱"）。这里在闸已打开的位置，
     // 用「从拍首到现在的总跨度 − 已入账的 phase/pre」补记，桶与命名与 measuredRun 完全同构 ⇒
     // `unphased = total − Σphases` 那条恒等式的语义一字未动。
-    // 实测（roadmap 补245）：补记前 `unphased ≈ 0.87/拍`，而 `phase/summary` 只有 0.03/拍。
+    // 实测：补记前 `unphased ≈ 0.87/拍`，而 `phase/summary` 只有 0.03/拍。
     recordPhaseSpan("early", Game.cpu.getUsed() - tickStart - preCost);
 
     // 房间快照（P0 — 必须在任何读取快照的系统之前运行）。
@@ -322,9 +322,9 @@ export class Kernel {
     // 仅统计实际采矿角色（harvester/worker）— 其他角色的 sourceId 仅用于 acquire 寻路，不占采矿位。
     const globalSourceOccupancy = new Map<string, number>();
     // 同时汇总每房 creep 身上携带的能量（按 memory.home 归属），
-    // 供 room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动（P1-5 ①）。
+    // 供 room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动。
     const globalCreepEnergy = new Map<string, number>();
-    // P1-3：预构建拥有维修 creep（builder/worker）的房间集合，
+    // 预构建拥有维修 creep（builder/worker）的房间集合，
     // 供 tower-defense 消费，避免塔防系统独立全量扫描 Game.creeps。
     const globalRepairRooms = new Set<string>();
     // 预构建拥有存活 distributor 的房间集合，供 hauler 的 fillStorage 消费：
@@ -335,7 +335,7 @@ export class Kernel {
     // 拓荒爬坡期无 hauler，container 无物流消费者，builder/upgrader 应可直取
     // （withdraw.ts 的 isLogisticsContainer 消费）。
     const globalHaulerRooms = new Set<string>();
-    // P0-1：预构建每房「待计入」harvester/worker 数量。
+    // 预构建每房「待计入」harvester/worker 数量。
     // 包括已存活但尚未分配 sourceId 的 + 正在孵化中的，避免替换期间的假 bootstrap。
     const globalPendingHarvesters = new Map<string, number>();
     // 战斗黑匣子（M9）：记录每个 creep 的当前位置与携带能量，供下 tick 死亡事件取
@@ -344,7 +344,7 @@ export class Kernel {
       string,
       { r: string; x: number; y: number; e: number; h: string }
     >();
-    // P0-1：全局编队索引 — 在已有的 Game.creeps 遍历中顺便按编队维度归组，
+    // 全局编队索引 — 在已有的 Game.creeps 遍历中顺便按编队维度归组，
     // 供 war-planner / power-farm-manager / prospect-manager / expansion-manager
     // 复用，消除各系统独立全量遍历的 O(4N) → O(N)。
     // 只收录有 remoteTarget 或 mission 标记的 creep（编队判定域）— 纯本地角色
@@ -387,7 +387,7 @@ export class Kernel {
           const haulHome = home ?? creep.room.name;
           if (haulHome) globalHaulerRooms.add(haulHome);
         }
-        // P0-1：编队索引收录 — 有 remoteTarget 或 mission 标记的 creep 才入索引。
+        // 编队索引收录 — 有 remoteTarget 或 mission 标记的 creep 才入索引。
         if (creep.memory.remoteTarget || creep.memory.mission) {
           squadIndex.push({
             name: creep.name,
@@ -470,7 +470,7 @@ export class Kernel {
     globalCache().haulerRooms = globalHaulerRooms;
     // creepLastSeen 供下 tick 的死亡事件（战斗黑匣子）取生前最后位置。
     globalCache().creepLastSeen = creepLastSeen;
-    // P0-1：编队索引供 war-planner / power-farm-manager / prospect-manager /
+    // 编队索引供 war-planner / power-farm-manager / prospect-manager /
     // expansion-manager 复用，消除各自独立全量遍历 Game.creeps。
     globalCache().squadIndex = squadIndex;
     // C1-F09: 预构建总人口供 empire-health 消费，消除 Object.keys(Game.creeps).length。
@@ -525,7 +525,7 @@ export class Kernel {
         recordSkip(`system/${system.name}/budget`);
         continue;
       }
-      // 【F1/G-B】budgetCap 局部截断：EMA 超上限让位（缺省未启用=零行为变更）。
+      // budgetCap 局部截断：EMA 超上限让位（缺省未启用=零行为变更）。
       const sysCap = system.budgetCap;
       const sysEma = globalCache().systemBudgetEma?.get(system.name);
       if (sysCap !== undefined && sysEma !== undefined && sysEma > sysCap) {
@@ -537,7 +537,7 @@ export class Kernel {
           `system/${system.name}`,
           () => system.run(ctx),
           // P0 系统永不冷却；recoveryEligible 系统在关键基建缺口时同样豁免冷却
-          // （P2-6 修复：construction-manager 连续 3 次失败 → 冷却 50-200 tick →
+          // （construction-manager 连续 3 次失败 → 冷却 50-200 tick →
           // 关键基建无法创建 → 死锁。recoveryEligible 钩子已验证缺口存在才 true）。
           system.priority === 0 || isRecoveryExempt,
         ),
@@ -546,7 +546,7 @@ export class Kernel {
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) {
-        // 【#179 修法 A】这条出口故意不写 skipReason（逐系统记会淹没 skipHotspot，见上面
+        // 这条出口故意不写 skipReason（逐系统记会淹没 skipHotspot，见上面
         // K-6 注释），但「整批饿死」是这台机器唯一不可数的失败面 ⇒ 只记聚合标量。
         // 口径＝本拍到期而未跑（过 interval 闸，纯函数），是上界不是「一定跑得成」。
         recordTailDrop(
@@ -656,7 +656,7 @@ export class Kernel {
       if (res.p3Starved) {
         kernelMem.p3StarveBypassUntil = ctx.tick + P3_BYPASS_WINDOW_TICKS;
         const bucket = Game.cpu.bucket ?? 0;
-        // 方向 3 E-FINDING-04: 长期冻结跟踪（纯函数，可测试）
+        // 长期冻结跟踪（纯函数，可测试）
         trackP3Frozen(ctx.tick, bucket, kernelMem);
         log.info(
           "kernel",
@@ -669,14 +669,14 @@ export class Kernel {
       kernelMem.expectations = {
         tick: ctx.tick,
         // 留痕列**两支都要写**，否则「这列不在」同时兼容"没违例"与"产物没这列"两种解释
-        // ——而自检面的读数恰恰要区分这两者（同形先例：#179 `tailDrop` 恒定写、#187 `roadLaid`
+        // ——而自检面的读数恰恰要区分这两者（同形先例：`tailDrop` 恒定写、`roadLaid`
         // 每 pass 写；线上实证：部署后 `expectations.tick` 新鲜、`violations=[]`、`violationsTotal`
         // 缺席，判效器据此误报 NOT_DEPLOYED）。
         violationsTotal: 0,
         violations: [],
         // ⚠️这一行是修 bug，不是可选装饰：违例是**间歇状态**（工地被回收、饥饿一拍缓解都会让
         // violations 变空），若这里不带走 `recent`，整块对象就被干净的一拍覆写掉，
-        // #113 的"事后归因"随之失效。线上实证（sha 649eb94b9784，boot 后 ~15k 拍）：
+        // 事后归因随之失效。线上实证（sha 649eb94b9784，boot 后 ~15k 拍）：
         // `kernel.expectations={tick,violations:[],e3:{}}` —— `recent` 键整个不见。
         recent: kernelMem.expectations?.recent,
         e3: e3Prev as Record<string, unknown>,
@@ -691,7 +691,7 @@ export class Kernel {
   private collectRCLSnapshots(ctx: Context): RCLSnapshot[] {
     const result: RCLSnapshot[] = [];
     // upgrader 普查：消费共享快照总线（creepRefs），不再独立遍历 Game.creeps。
-    // FINDING-01 修复：与 collectBuildQueueSnapshots 同口径。
+    // 修复：与 collectBuildQueueSnapshots 同口径。
     const upgradersByHome = new Map<string, number>();
     const refs = globalCache().creepRefs ?? [];
     for (const c of refs) {
@@ -895,7 +895,7 @@ export class Kernel {
         recordSkip(`system/${system.name}/budget`);
         continue;
       }
-      // 【F1/G-B】post 系统同样受 budgetCap 局部截断。
+      // post 系统同样受 budgetCap 局部截断。
       const postCap = system.budgetCap;
       const postEma = globalCache().systemBudgetEma?.get(system.name);
       if (postCap !== undefined && postEma !== undefined && postEma > postCap) {
@@ -913,7 +913,7 @@ export class Kernel {
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) {
-        // 【#179 修法 A】post 环同口径：整批饿死只记聚合标量，不逐系统写 skipReason。
+        // post 环同口径：整批饿死只记聚合标量，不逐系统写 skipReason。
         recordTailDrop(
           gRun,
           "post",
@@ -1016,13 +1016,13 @@ export class Kernel {
     // 战争/在房威胁紧急旁路：combat 角色在 war 姿态或本房有真实在房威胁时不被
     // recovery 冻结（帝国不能冻自己的军队；真被入侵时更要让作战单位跑起来）。
     const posture = Memory.kernel?.strategy?.posture;
-    // P0-3：自有房威胁集合（snapshot.threatCreeps）。
+    // 自有房威胁集合（snapshot.threatCreeps）。
     const liveThreatRooms = new Set(
       Array.from(ctx.snapshots())
         .filter(s => (s.threatCreeps?.length ?? 0) > 0)
         .map(s => s.roomName),
     );
-    // P0-3：远矿房威胁集合 — combat 角色可能正在远矿房/扩张目标房作战，
+    // 远矿房威胁集合 — combat 角色可能正在远矿房/扩张目标房作战，
     // 这些房不在 ctx.snapshots()（只含 controller.my 的房）中。
     // 遍历 Game.rooms 中非自有房的房，检测有 hostile creep 的房名 —
     // combat 角色当前所在房有威胁时同样需要旁路。
@@ -1059,17 +1059,17 @@ export class Kernel {
         continue;
       }
       // 每房殖民地状态门禁：recovery/bootstrap 时允许 P0/P1（能量链），跳过 P2+。
-      // 例外（R3a）：recovery/bootstrap 时允许角色自报的生存豁免（recoveryEligible）—
+      // 例外：recovery/bootstrap 时允许角色自报的生存豁免（recoveryEligible）—
       // kernel 只读钩子，不再硬编码角色名（与 System recoveryEligible 同一模式）。
       // 例外（战争紧急旁路）：combat 角色在 war 姿态或本房有活敌时继续运行（见
       // colonyStateFreezesRole）。状态由 room-state 每 tick 写入 RoomMemory.colonyState。
-      // P1-2（CPU 死亡螺旋修复）：colony-state 门禁在 budget 检查之前执行 —
+      // CPU 死亡螺旋修复：colony-state 门禁在 budget 检查之前执行 —
       // 原先 budget.canStart 先挡住 P2 builder，使豁免形同虚设。
       const home = creep.memory.home;
       const roomState = home ? (Memory.rooms[home]?.colonyState ?? "normal") : "normal";
       const isRecoveryExempt =
         (roomState === "recovery" || roomState === "bootstrap") && role.recoveryEligible === true;
-      // P0-3：combat 角色可能在远矿房作战 — 威胁检查同时看 home 和当前所在房。
+      // combat 角色可能在远矿房作战 — 威胁检查同时看 home 和当前所在房。
       const inThreatRoom =
         liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
       const homePhaseRcl = home ? (Memory.rooms[home]?.phase?.rcl ?? 0) : 0;
@@ -1131,7 +1131,7 @@ export class Kernel {
       if (ctx.budget.isExhausted()) {
         // 把「整拍饿掉」变成读数：这是 break 不是 continue —— roster 后缀上的 creep 本拍连评估都没有，
         // 原先不留任何 skipReason，于是 `skippedPerTick` 少算，而「tight 档把谁整拍饿住」在线上是隐形的
-        // （实证：债单 #38 那只跨房 creep 的 stuck 冻结 63 拍期间既无 budget 计数也无移动意图）。
+        // （实证：一只跨房 creep 的 stuck 冻结 63 拍期间既无 budget 计数也无移动意图）。
         // 按只计数：skipBuffer 是 heap 自增，无 Memory 写放大。
         for (let starved = creepEntries.length - seen; starved > 0; starved--) {
           recordSkip("creep/budget-starved");
@@ -1180,7 +1180,7 @@ export function colonyStateFreezesRole(
   if (roomState !== "recovery" && roomState !== "bootstrap") return false;
   if (role.priority <= 1) return false; // P0/P1（能量链/防御）永远放行
   if (role.recoveryEligible === true) return false; // 生存/脱困角色豁免（builder 重建基建、mineralMiner 不耗能收入）
-  // R649：年轻房（RCL<4）的 upgrader —— 升级是它脱离危机的唯一路径（RCL3 落 tower）。
+  // 年轻房（RCL<4）的 upgrader —— 升级是它脱离危机的唯一路径（RCL3 落 tower）。
   // 只在年轻房豁免；成熟房恢复态仍冻结以保能量链。
   if (role.recoveryEligibleYoungRoom === true && youngRoom) return false;
   // 紧急旁路：战争或真实入侵时，作战单位必须照常运行（帝国存续所系）。
@@ -1188,7 +1188,7 @@ export function colonyStateFreezesRole(
   return true;
 }
 
-// P1-F：hasCriticalStructureGap 已搬到 src/domain/construction/queue.ts
+// hasCriticalStructureGap 已搬到 src/domain/construction/queue.ts
 // （construction-manager 的 recoveryEligible 钩子）；kernel 经
 // system.recoveryEligible 钩子间接消费，不再直接持有。
 
@@ -1201,7 +1201,7 @@ const BASELINE_SAMPLE_INTERVAL = 10;
  * 不依赖 telemetry-collector（P3）运行——recovery tier 下 collector 只做低频 drain。
  * 采样内容：bucket/tier/creep count/room count —— 诊断恢复进度的最小数据集。
  *
- * 为什么需要这层：recovery tier 下 telemetry-collector 被完全禁用（E-FINDING-02），
+ * 为什么需要这层：recovery tier 下 telemetry-collector 被完全禁用，
  * 如果没有保底采样，灾后恢复期间将完全没有可观测数据——"最需要诊断时最没诊断"。
  * 这个函数由 kernel 在 safeRun(critical=true) 中直接调用，不经过 scheduler。 */
 /**

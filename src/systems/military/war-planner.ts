@@ -41,9 +41,9 @@ const REASON_NO_TARGET = 2;
 const REASON_PLAN_TIMEOUT = 3;
 /** 情报断供超容忍：承诺不得长期越过证据（见 run() 内的存续期复核）。 */
 const REASON_INTEL_STALE = 4;
-/** A5 换了目标（由 war-planning-system 在覆写兼容计划前调用）。
+/** 换目标（由 war-planning-system 在覆写兼容计划前调用）。
  * 与断供撤军同类：**主动撤换**，不是战败 —— 不收战果、不拉黑旧目标。
- * 导出是因为「换目标」这个决策有两个产地（legacy 超期重选 / A5 改判），
+ * 导出是因为「换目标」这个决策有两个产地（legacy 超期重选 / war-planning-system 改判），
  * 而收摊义务只有 demobilize 一份实现。 */
 export const REASON_TARGET_SWITCH = 5;
 
@@ -54,7 +54,7 @@ export const warPlannerSystem: System = {
   name: "war-planner",
   priority: 2 as Priority,
   interval: CONFIG.war.interval,
-  // FINDING-08 修复：war 姿态下必须运行——编队补位/止损/核验不能因 Recovery tier 被跳过。
+  // 修复：war 姿态下必须运行——编队补位/止损/核验不能因 Recovery tier 被跳过。
   recoveryEligible: () => Memory.kernel?.strategy?.posture === "war",
   run(ctx: TickContext): void {
     pruneWarBlacklist(ctx.tick);
@@ -67,15 +67,15 @@ export const warPlannerSystem: System = {
       return;
     }
 
-    // R4 休战期：战损止损后整军休战 — 黑名单只挡单目标，
+    // 休战期：战损止损后整军休战 — 黑名单只挡单目标，
     // 休战闸挡「A 止损 → 立刻打 B → 再止损 → 打 C」的跨目标添油循环。
     if ((Memory.kernel?.warStandDownUntil ?? 0) > ctx.tick) return;
     // 1. 维护战争计划：无计划 / 计划超期 → 重新选目标。
-    //    FINDING-08 修复：war-planning-system 现已声明 recoveryEligible（war 姿态下 Recovery tier
+    //    修复：war-planning-system 现已声明 recoveryEligible（war 姿态下 Recovery tier
     //    仍运行），会通过 writeCompatibleWarPlan 写入 Memory.kernel.warPlan + a5ForceReq。
     //    以下 LEGACY_COMPATIBILITY_ONLY fallback 路径（selectWarTarget/decideSquadSize）
     //    只在 war-planning-system 因异常/safeRun 报错跳过时作为最终安全网——
-    //    不再产生编制震荡（A5.3 下次运行会覆盖）。
+    //    不再产生编制震荡（war-planning-system 下次运行会覆盖）。
     //    退役条件：war-planning-system 稳定运行 + recoveryEligible 生效后，此块可安全删除。
     const existing = Memory.kernel?.warPlan;
     const needSelect = !existing || ctx.tick - existing.since > CONFIG.war.planTimeout;
@@ -83,12 +83,12 @@ export const warPlannerSystem: System = {
       // 检查 war-planning-system 是否已在本 tick 产出了新鲜 WarPlan
       const warPlanCache = globalCache().warPlanCache;
       if (warPlanCache && warPlanCache.tick === ctx.tick && warPlanCache.plan) {
-        // A5.3 已产出 WarPlan 并通过 writeCompatibleWarPlan 写入 Memory.kernel.warPlan。
+        // war-planning-system 已产出 WarPlan 并通过 writeCompatibleWarPlan 写入 Memory.kernel.warPlan。
         // 重新读取——existing 可能已被更新。
         // 不走 Legacy fallback，直接进入编队维持逻辑。
       } else {
         // LEGACY_COMPATIBILITY_ONLY fallback：war-planning-system 未运行或未产出 WarPlan。
-        // 此路径产出的 squadSize 会被 A5.3 的 a5ForceReq 在运行时覆盖。
+        // 此路径产出的 squadSize 会被 war-planning-system 的 a5ForceReq 在运行时覆盖。
         const next = selectWarTarget(buildTargetInput(ctx.tick));
         if (!next) {
           demobilize(ctx.tick, REASON_NO_TARGET);
@@ -152,10 +152,10 @@ export const warPlannerSystem: System = {
     //    编制合计口径：满编/止损基数 = squadSize + healerCount（缺谁都不成编队）。
     //    boost 完成度自下而上派生（body 任一部件带 boost 即计）— 不入 Memory，
     //    与 healerCount 同理；编队成员由 lab-system 在 build 相位经 boost 链强化。
-    //    P0-1：从全局编队索引取子集，替代独立全量遍历 Game.creeps。
+    //    从全局编队索引取子集，替代独立全量遍历 Game.creeps。
     //
-    //    A5.3 集成：当 a5ForceReq 存在时（war-planning-system 写入），
-    //    使用 A5.3 能力推导的编队需求替代旧 decideSquadSize/decideHealerCount。
+    //    集成：当 a5ForceReq 存在时（war-planning-system 写入），
+    //    使用能力推导的编队需求替代旧 decideSquadSize/decideHealerCount。
     //    LEGACY_COMPATIBILITY_ONLY：当 a5ForceReq 不存在时（war-planning-system 未运行），
     //    fallback 到 decideHealerCount(plan.squadSize)。
     //    不产生新决策——plan.squadSize 已在 needSelect 块中由 Legacy 路径决定。
@@ -184,7 +184,7 @@ export const warPlannerSystem: System = {
 
     // live+pending < 编制时每轮至多补 1 个新 key — 队列被能量门禁卡住时
     // pending 封顶编制，spawned 不会因空转膨胀。
-    // A5.3：attackerTarget 来自 a5ForceReq（attacker+ranged 合并编制）。
+    // attackerTarget 来自 a5ForceReq（attacker+ranged 合并编制）。
     // evidenceFresh：断供期间停补员（在编的照打），这是"承诺不越过证据"的即时那一半。
     if (evidenceFresh && attackerLive + pendingAttackers < attackerTarget) {
       submitSquadRequest(
@@ -213,7 +213,7 @@ export const warPlannerSystem: System = {
     //    被打残才回落 build 重组。门禁降级（无 lab / 宽限期过）→ undefined 豁免：
     //    sponsor 缺基础矿时反应链产不出 T3，永久等待等于不打，裸攻由止损链兜底。
     const liveTotal = attackerLive + healerLive;
-    // A5.3：满编阈值使用 attackerTarget + healerCount（与 a5ForceReq 一致）
+    // 满编阈值使用 attackerTarget + healerCount（与 a5ForceReq 一致）
     const fullSquadSize = attackerTarget + healerCount;
     const boostGate = evaluateBoostGate(
       boostedLive,
@@ -235,7 +235,7 @@ export const warPlannerSystem: System = {
     //     在途判定走台账（引擎无全局核弹查询 API，FIND_NUKES 需目标房视野 —
     //     自发核弹只能自查）；发射成功后台账 push + cooldown 5000 双保险，
     //     同目标在途期间不重复发射（重叠只是把当量堆在同一片废墟上）。
-    //     FINDING-14 修复：核弹 50k tick 不可取消。除当前扩张目标外，
+    //     修复：核弹 50k tick 不可取消。除当前扩张目标外，
     //     还检查扩张候选计划列表（expansionPlans）——防止对即将扩张的房发射核弹。
     pruneNukeLedger(ctx.tick);
     const nuker = sponsorSnapshot?.nuker;
@@ -278,7 +278,7 @@ export const warPlannerSystem: System = {
     }
 
     // 4. 战损止损（合计基数）：投入超过编制 × 倍数仍未见效 → 判消耗战失败收摊。
-    //    A5.3：止损基数使用 fullSquadSize（attackerTarget + healerCount）。
+    //    止损基数使用 fullSquadSize（attackerTarget + healerCount）。
     if (isAttritionLost(plan.spawned ?? 0, fullSquadSize, CONFIG.war.casualtyMultiplier)) {
       demobilize(ctx.tick, REASON_ATTRITION);
       // 收摊后整军休战 — 下一轮评估前先让经济喘息，防止换目标立即再送。
@@ -364,7 +364,7 @@ export function markSquadMaterialized(
  * reason：收摊原因编码（WarOutcome 事件 d[2]，黑匣子复盘用）。
  * INTEL_STALE / TARGET_SWITCH 是**主动撤换**：跳过核验、不拉黑（见函数内 recall）。
 
- * P0-2 核验盲区修复：unknown（intel 过期/无视野）用更短的黑名单冷却 —
+ * 核验盲区修复：unknown（intel 过期/无视野）用更短的黑名单冷却 —
  * 区分「确定性打不赢」（failure，满额冷却）与「不知道打没打赢」（unknown，半额冷却）。
  * 根因：战后 attacker 撤退路径不一定经过目标房 → sponsor 的 intel 可能在战前就过期。
  * 将 unknown 与 failure 等同拉黑 20000 tick 会让一个「可能打赢了但没看到」的目标长期不可重选。
@@ -374,7 +374,7 @@ export function demobilize(tick: number, reason: number): void {
   const plan = Memory.kernel?.warPlan;
   if (!plan) return;
 
-  // 主动撤换（断供撤军 / A5 改判换目标）不收战果：既没打赢也没打输，是我们自己走的。
+  // 主动撤换（断供撤军 / 改判换目标）不收战果：既没打赢也没打输，是我们自己走的。
   // 判成 failure 会把旧目标拉黑 10000~20000t（换目标时旧目标可能仍是正确目标，威胁
   // 回来就选不到了），并把恢复动作提成"战败重建"——而新计划的补员已经在路上。
   const recall = reason === REASON_INTEL_STALE || reason === REASON_TARGET_SWITCH;
@@ -409,7 +409,7 @@ export function demobilize(tick: number, reason: number): void {
   // 会让一次侦察中断变成 10000~20000 tick 的永久放弃。断供撤军后目标仍可被重新授权
   // （前提是视野回来了 —— 授权本来就要过 fact + targetFreshness 那道门）。
   if (outcome !== "success" && !recall) {
-    // P0-2：unknown 用半额冷却 — intel 过期不是目标的错，缩短冷却让 intel 自然刷新后可重评。
+    // unknown 用半额冷却 — intel 过期不是目标的错，缩短冷却让 intel 自然刷新后可重评。
     // failure 是确定性「打不赢」，用满额冷却防重选循环。
     const cooldown =
       outcome === "unknown"
@@ -429,15 +429,15 @@ export function demobilize(tick: number, reason: number): void {
       `war: recall ${plan.targetRoom}${
         reason === REASON_INTEL_STALE
           ? ` — 情报断供 ${CONFIG.war.planIntelBlackoutTicks}t+`
-          : " — A5 改判新目标，旧编队收摊"
+          : " — 改判新目标，旧编队收摊"
       } (spawned=${plan.spawned ?? 0}, 不拉黑, reason=${reason})`,
     );
   }
 
-  // A5.3.1 GAP-1 修复：写入止损信号供 recovery-execution-system 消费。
+  // 修复：写入止损信号供 recovery-execution-system 消费。
   // recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions 将信号
-  // 转换为 RecoveryAction，复用 A4.6 lifecycle 幂等机制（recoveryIdempotencyKey 去重）。
-  // Military 只产出 Signal，不执行 Recovery。A4.6 负责 Signal → Action → 执行。
+  // 转换为 RecoveryAction，复用 lifecycle 幂等机制（recoveryIdempotencyKey 去重）。
+  // Military 只产出 Signal，不执行 Recovery。recovery-execution-system 负责 Signal → Action → 执行。
   const REASON_LABELS = [
     "POSTURE",
     "ATTRITION",
@@ -447,7 +447,7 @@ export function demobilize(tick: number, reason: number): void {
     "TARGET_SWITCH",
   ];
   const g = globalCache();
-  // 读取 A5.3 operationId（如果 war-planning-system 已写入兼容字段）
+  // 读取 operationId（如果 war-planning-system 已写入兼容字段）
   const compatOp = plan as typeof plan & { operationId?: string };
   g.warAbortSignals = {
     tick,
@@ -472,7 +472,7 @@ export function demobilize(tick: number, reason: number): void {
   }
   recordPlanningDecision("war", outcome === "success");
 
-  // P0-1：从全局编队索引取编队成员，按 name 精确定位 Creep 对象标记 recycle。
+  // 从全局编队索引取编队成员，按 name 精确定位 Creep 对象标记 recycle。
   // 只需遍历编队子集（通常 ≤ 十几条），而非全量 Game.creeps。
   const warSquad = querySquad({ home: plan.sponsor, remoteTarget: plan.targetRoom });
   for (const e of warSquad) {

@@ -11,8 +11,8 @@ export type PlanStatus =
   | "EVALUATED" // 已完成评分 + 成本 + 风险评估
   | "READY" // 所有门控通过，等待批准
   | "APPROVED" // 已批准，等待执行
-  | "WAITING_EXECUTION" // 等待 A3.3 执行层接管
-  | "EXECUTING" // A3.3 执行中（A3.2 不进入此状态）
+  | "WAITING_EXECUTION" // 等待执行层接管
+  | "EXECUTING" // 执行中（仅执行层进入此状态）
   | "COMPLETED" // 扩张成功
   | "CANCELLED" // 被取消（条件变化/失败止损）
   | "BLACKLISTED"; // 失败黑名单冷却
@@ -69,7 +69,7 @@ export interface ExpansionPlan {
   notReadySince?: number;
   /** 取消原因。 */
   cancelReason?: string;
-  /** 取消条件（自动执行，EXPANSION §5）。 */
+  /** 取消条件（自动执行）。 */
   cancelConditions: string[];
   /** 依赖列表（前置条件，如「需先尽调」）。 */
   dependencies: string[];
@@ -109,7 +109,7 @@ export function createPlan(input: PlanInput): ExpansionPlan {
   // 优先级判定：score + payback + risk 综合推导
   const priority = derivePriority(candidate.score, payback.roi, risk.score);
 
-  // 默认取消条件（EXPANSION §5 失败降级表）
+  // 默认取消条件（失败降级表）
   const defaultCancelConditions = [
     "claim stolen / timeout",
     "spawn not built within pioneerTimeout",
@@ -177,7 +177,7 @@ export function updatePlanStatus(
   };
 }
 
-/** R617：该计划状态是否意味着“帝国处于扩张推进态”。
+/** 该计划状态是否意味着“帝国处于扩张推进态”。
  * 用途：升级预留闸（只在扩张计划已评估/待执行时，把升级刹车抬到净流门槛）。
  * 纯函数；终态（COMPLETED/CANCELLED/BLACKLISTED）与 DISCOVERED 不算。 */
 export function isExpansionPushPlan(status: PlanStatus): boolean {

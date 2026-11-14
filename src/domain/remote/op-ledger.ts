@@ -31,9 +31,9 @@ export interface RemoteOpLedger {
    *     （写者 `systems/remote/remote-mining-manager.ts` 里 `recordOpCpu` 那一处），
    *     **不含远矿 creep 的实耗** —— 那一侧的分母在角色榜
    *     （`remoteHarvester` / `remoteHauler` / `reserver`）。两者相差约 30 倍，
-   *     所以引用"这条线值多少 CPU"必须带尺名（roadmap 补303③）。
+   *     所以引用"这条线值多少 CPU"必须带尺名。
    *  2. 它**确实**随账本落盘（快照字段 `c`，见 `toSnapshot` / `fromSnapshot`）——
-   *     本注释此前写"不随账本持久化"，与 #167 落的那半修复相互矛盾，已更正。
+   *     本注释此前写"不随账本持久化"，与后来落的那半修复相互矛盾，已更正。
    */
   cpuPerTick: number;
   /** 窗口起点 tick。 */
@@ -159,8 +159,8 @@ function finiteOrZero(v: number | undefined): number {
  *
  * 为什么要专门标"机械规则"：全库没有"角色→车道"的映射（CPU 只有 per-role 归属，
  * 写者 `kernel/safe-run.ts:157`，投影在 telemetry-collector 的角色榜），而 `reserver`
- * 与跨房 `carrier` 算不算远矿道的成本是**决策口径、不是代码事实**——#138 的教训正是
- * dashboard 拿一片评估切片当分母（线上实测差 47~58 倍，roadmap 补324）。所以这里只做
+ * 与跨房 `carrier` 算不算远矿道的成本是**决策口径、不是代码事实**——教训正是
+ * dashboard 拿一片评估切片当分母（线上实测差 47~58 倍）。所以这里只做
  * 无争议的名字侧求和，把有争议的成员留在字符串注释里由读数人自加，不替人划边界。
  */
 export function sumRemoteNamedRoleCpu(board: Readonly<Record<string, number>> | undefined): {
@@ -181,7 +181,7 @@ export function sumRemoteNamedRoleCpu(board: Readonly<Record<string, number>> | 
 /**
  * 帝国级远矿经济聚合（纯函数，只喂给 `Memory.kernel.remoteEconomyDashboard` 那一格快照）。
  *
- * 立案（roadmap 补218／补219）：`netRate` 与 `cpuPerTick` 此前只存在于 heap 与逐条日志，
+ * 立案：`netRate` 与 `cpuPerTick` 此前只存在于 heap 与逐条日志，
  * 读数人要手工回代才能回答「这条线值多少 CPU」，而扩张闸的 CPU 缺口决策正卡在这个比值上。
  * **零决策输入**：三个判据（`opNetRate`／`opProfitable`／`opUnrecoveredInvestment`）都不读这里的输出。
  *
@@ -220,7 +220,7 @@ export function aggregateRemoteEconomy(
   const round = (v: number): number => Math.round(v * 100) / 100;
   const perCpu = cpuPerTick > 0 ? round(netRate / cpuPerTick) : "n/a";
   // 车道侧分母（名字规则求和，见 sumRemoteNamedRoleCpu）：线上实测 mgr-slice 与它差 47~58 倍
-  // （补324：`e/cpu=119.31` 对真值 1.89~2.34），两个数并排放在同一条串上，误用才会自己显形。
+  // （`e/cpu=119.31` 对真值 1.89~2.34），两个数并排放在同一条串上，误用才会自己显形。
   const laneSum = laneRoleCpu?.sum ?? 0;
   const laneIncluded = laneRoleCpu?.included ?? [];
   const perLaneCpu = laneSum > 0 ? round(netRate / laneSum) : "n/a";
@@ -244,8 +244,7 @@ export function aggregateRemoteEconomy(
       `Remote Economy @${tick} | ops=${activeLedgers.length} active, ${pausedOps} paused | ` +
       `delivered=${round(deliveredRate)} e/tick | net=${round(netRate)} e/tick | ` +
       // 标签必须自带尺名：这里的 cpu 只是"本房 demand 评估跨度 ÷ active 线数"这一片观测切片，
-      // **不含远矿 creep 的实耗**（角色榜上那几个远矿角色才是分母，线上量到差 47~58 倍，
-      // roadmap 补303③／补324）。裸写 `e/cpu` 会被"削远矿线省多少 CPU"这类决策直接误用（#50 的 (a) 支）。
+      // **不含远矿 creep 的实耗**（角色榜上那几个远矿角色才是分母，线上量到差 47~58 倍）。裸写 `e/cpu` 会被"削远矿线省多少 CPU"这类决策直接误用。
       `cpu(demand-eval-slice)=${round(cpuPerTick)}/tick | e/cpu(mgr-slice)=${String(perCpu)} | healthy=${healthy}${
         laneSeg
       }`,
@@ -264,7 +263,7 @@ export function aggregateRemoteEconomy(
     `(${rate >= 0 ? "+" : ""}${rate.toFixed(2)}e/t) ` +
     `delivered=${Math.round(l.delivered)} spawn=${Math.round(l.spawnCost)} ` +
     `refund=${Math.round(l.refund)} infra=${Math.round(l.infraCost)} ` +
-    // 尺名同 `aggregateRemoteEconomy` 的标签：这片分母不含远矿 creep 实耗（roadmap 补303③）。
+    // 尺名同 `aggregateRemoteEconomy` 的标签：这片分母不含远矿 creep 实耗。
     `cpu(demand-eval-slice)=${l.cpuPerTick.toFixed(3)} ` +
     `win=${Math.max(0, nowTick - l.windowStart)}t`
   );

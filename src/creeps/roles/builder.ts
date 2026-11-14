@@ -26,8 +26,8 @@ import { scored } from "../engine/arbiter";
 
 /** 血量缺口（0=满血，1=归零）— 维修类效用的共同尺度。 */
 function hpDeficit(s: { hits: number; hitsMax: number }): number {
-  // R684：效用评分在 resolve 之后才发现目标已消失时，对象 getter 会抛
-  // "Could not find an object with ID" 并中断整只 creep（R676 只护了 execute 侧）。
+  // 效用评分在 resolve 之后才发现目标已消失时，对象 getter 会抛
+  // "Could not find an object with ID" 并中断整只 creep（execute 侧已有保护）。
   // 返回 0 让该候选失去效用，由其它候选继续。
   try {
     if (!(s.hitsMax > 0)) return 0;
@@ -49,7 +49,7 @@ function siteUtility(ac: ActionContext, site: ConstructionSite): number {
     if (near(ac.snapshot.controller?.pos) || ac.snapshot.sources.some(s => near(s.pos)))
       bonus += 20;
   }
-  // R681：RCL4 尚未建成 storage 时，storage 工地是经济解锁项，排在常规维护之前
+  // RCL4 尚未建成 storage 时，storage 工地是经济解锁项，排在常规维护之前
   // （150 = 60 基础 + 90；仍低于 fresh rampart 180，濒死城防急救不被抢）。
   if (site.structureType === STRUCTURE_STORAGE && ac.snapshot.storage === undefined) bonus += 90;
   if (site.progressTotal > 0 && site.progress / site.progressTotal >= 0.8) bonus += 15;
@@ -90,10 +90,10 @@ const policy: RolePolicy = {
   park: true,
   isRepairWorker: true,
   executionOrder: 4,
-  // R674：work 模式效用仲裁 —— 用分数而不是链序分配注意力，避免建造永远命中、
+  // work 模式效用仲裁 —— 用分数而不是链序分配注意力，避免建造永远命中、
   // 修路/工事被链尾饿死（历史实测 16 条路 8 条破 40%）。acquire 仍走链式。
   arbitration: "utility",
-  // R3a：builder 声明生存豁免 — recovery 重建被毁基建 + bootstrap 建造关键基建
+  // builder 声明生存豁免 — recovery 重建被毁基建 + bootstrap 建造关键基建
   // 都是生存行为，不是发展。colonyStateFreezesRole 读此标志放行。
   recoveryEligible: true,
   gate: builderGate,
@@ -134,7 +134,7 @@ const policy: RolePolicy = {
         : 50 + siteUtility(ac, s),
     ),
     // 紧急：修复衰减中的 container（< 80% 血量）— 失去 container = 物流链断裂。
-    // R674b：按缺口缩放（80% 时≈40，50%≈85，20%≈130），避免「刚破 80%」就压过建造；
+    // 按缺口缩放（80% 时≈40，50%≈85，20%≈130），避免「刚破 80%」就压过建造；
     // claimedRepair 保证每目标每 tick 至多 1 人（线上实证 3/3 builder 同修一个容器）。
     scored(claimedRepair(repairContainerDecay()), (_ac, c) => {
       const ratio = c.hitsMax > 0 ? c.hits / c.hitsMax : 1;

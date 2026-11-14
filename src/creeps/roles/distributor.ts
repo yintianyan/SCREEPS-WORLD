@@ -189,9 +189,9 @@ const policy: RolePolicy = {
   park: true,
   isDistributor: true,
   isLifeLine: true,
-  // R675：work 模式走任务账本 + 效用仲裁；acquire 保持链式（storage 取能/需求门禁）。
+  // work 模式走任务账本 + 效用仲裁；acquire 保持链式（storage 取能/需求门禁）。
   arbitration: "utility",
-  // R676：物流任务稳定，10 拍决策一次，降低全量评分开销。
+  // 物流任务稳定，10 拍决策一次，降低全量评分开销。
   decisionInterval: 10,
   gate: distributorGate,
   acquire: [
@@ -256,7 +256,7 @@ const policy: RolePolicy = {
     scored(stockFactoryEnergy(), () => 85),
     // commodity 生产补料（deposit 相）。
     scored(stockFactoryComponents(), () => 95),
-    // 化合物供料到 lab。R675：账本按搬运条目数提权（90–130），不再被 fillTarget 永久遮蔽。
+    // 化合物供料到 lab。账本按搬运条目数提权（90–130），不再被 fillTarget 永久遮蔽。
     scored(supplyLabs(), ac => ledgerValue(getRoomTaskLedger(ac.snapshot), "supply-labs", 90)),
     // powerSpawn 原料投放相。
     scored(stockPowerSpawn(), () => 45),

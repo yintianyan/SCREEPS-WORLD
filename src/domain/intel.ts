@@ -77,19 +77,19 @@ export interface RoomIntel {
   /** home 锚点到该房中心的 PathFinder 实测成本（swampCost:5 计入地形）；地形静态、
    * 算一次终身缓存，缺失时评选方回退线性距离估算。 */
   pathCost?: number;
-  /** R651 选点前置：自然墙占比（0..1）。地形静态 ⇒ 有视野算一次后终身保留。 */
+  /** 选点前置：自然墙占比（0..1）。地形静态 ⇒ 有视野算一次后终身保留。 */
   wallRatio?: number;
-  /** R651：沼泽占比（0..1）——通勤与道路维护成本的一阶代理。 */
+  /** 沼泽占比（0..1）——通勤与道路维护成本的一阶代理。 */
   swampRatio?: number;
-  /** R651：`selectAnchors` 最佳锚点评分（与 claim 后 `seedLayoutAnchor` 同一套尺）。 */
+  /** `selectAnchors` 最佳锚点评分（与 claim 后 `seedLayoutAnchor` 同一套尺）。 */
   bestAnchorScore?: number;
-  /** R651：最佳锚点到 controller 的曼哈顿距离。 */
+  /** 最佳锚点到 controller 的曼哈顿距离。 */
   anchorToController?: number;
-  /** R651：最佳锚点到最近 source 的曼哈顿距离。 */
+  /** 最佳锚点到最近 source 的曼哈顿距离。 */
   anchorToSources?: number;
-  /** R651：最佳锚点到遗留 spawn 的曼哈顿距离（无 spawn 则缺省）。 */
+  /** 最佳锚点到遗留 spawn 的曼哈顿距离（无 spawn 则缺省）。 */
   leftoverSpawnToAnchor?: number;
-  /** R662：锚点上 v3 模板格的地形可放率（0..1）。 */
+  /** 锚点上 v3 模板格的地形可放率（0..1）。 */
   anchorPlaceableRatio?: number;
   lastSeen: number;
 }
@@ -239,7 +239,7 @@ export function highwayRoomNamesInRange(center: string, range: number): string[]
 
 /** 扫描单个邻房的情报；visibleRoom 为 undefined 时只落房名分类与房态。
  * prev：既有条目 — 无视野时保留上次的 sources/mineral/owner/towers 与 pathCost；
- * 不传视为首次建档。P1-G 后 dangerUntil 已迁至 RemoteOp，intel 不再保留。 */
+ * 不传视为首次建档。dangerUntil 已迁至 RemoteOp，intel 不再保留。 */
 export function scanNeighborIntel(
   roomName: string,
   status: string,
@@ -259,7 +259,7 @@ export function scanNeighborIntel(
     powerBankPower?: number;
     /** 有视野时观测到的 deposit 列表（空数组 = 确认无 deposit）。 */
     deposits?: DepositIntel[];
-    // R651：侦察那趟顺带算的地形选点指标（有视野才算）。
+    // 侦察那趟顺带算的地形选点指标（有视野才算）。
     wallRatio?: number;
     swampRatio?: number;
     bestAnchorScore?: number;
@@ -300,7 +300,7 @@ export function scanNeighborIntel(
     }
     // Deposit 列表：有视野即覆写（空数组 = 确认当前无 deposit）；消费方按 lastSeen 判新鲜度。
     intel.deposits = visibleRoom.deposits ?? [];
-    // R651：地形选点指标（有视野才有；地形静态，数值终身有效）。
+    // 地形选点指标（有视野才有；地形静态，数值终身有效）。
     if (visibleRoom.wallRatio !== undefined) intel.wallRatio = visibleRoom.wallRatio;
     if (visibleRoom.swampRatio !== undefined) intel.swampRatio = visibleRoom.swampRatio;
     if (visibleRoom.bestAnchorScore !== undefined)
@@ -328,7 +328,7 @@ export function scanNeighborIntel(
     if (prev.powerBankUntil !== undefined) intel.powerBankUntil = prev.powerBankUntil;
     if (prev.powerBankPower !== undefined) intel.powerBankPower = prev.powerBankPower;
     if (prev.deposits !== undefined) intel.deposits = prev.deposits;
-    // R651：地形静态 ⇒ 无视野也沿用（与 pathCost 同待遇）。
+    // 地形静态 ⇒ 无视野也沿用（与 pathCost 同待遇）。
     if (prev.wallRatio !== undefined) intel.wallRatio = prev.wallRatio;
     if (prev.swampRatio !== undefined) intel.swampRatio = prev.swampRatio;
     if (prev.bestAnchorScore !== undefined) intel.bestAnchorScore = prev.bestAnchorScore;
@@ -348,13 +348,13 @@ export function scanNeighborIntel(
   return intel;
 }
 
-// ─── 情报时效分级（P1-1）─────────────────────────────────────
+// ─── 情报时效分级 ─────────────────────────────────────
 
 /** 情报置信度分级 — 按时效衰减分档，消费方按各自风险容忍度选择阈值。 */
 export type IntelConfidence = "fresh" | "stale" | "expired" | "unknown";
 
 /**
- * 情报时效分级纯函数（P1-1）。
+ * 情报时效分级纯函数。
 
  * 设计理念：不同消费方对情报新鲜度的要求不同——战争目标需要极新鲜（<500 tick），
  * 远矿运营可容忍较旧（<2000 tick），扩张评选介于两者之间。本函数提供统一的
@@ -604,13 +604,13 @@ export function upsertPlayerObservation(
   players.set(owner, entry);
 }
 
-// ─── Observer 请求账本（#100 的仪器）──────────────────────────
+// ─── Observer 请求账本 ──────────────────────────
 /**
  * 「Observer 楼到底在不在、请求发没发、引擎怎么答、视野有没有真落下来」的落盘读数。
  *
- * 为什么必须有（线上）：#100 查「情报采集面窄」时发现，`room-observer` 的 observer 分支被
+ * 为什么必须有（线上）：查「情报采集面窄」时发现，`room-observer` 的 observer 分支被
  * `snapshot.observer &&` 挡在最外层 —— **楼不存在时整条链一声不响**，与「楼在但挑不出目标」
- * 「楼在但引擎回 ERR_RCL_NOT_ENOUGH」三种情况在现有仪器上完全同形（四源全空，见 R307/R308）。
+ * 「楼在但引擎回 ERR_RCL_NOT_ENOUGH」三种情况在现有仪器上完全同形（四源全空）。
  * 三种形状要的动作相反（盖楼 / 改选靶权重 / 改 RCL 前提），不能再靠推理挑。
  *
  * 本层只出类型：写者在 `systems/room-observer.ts`（heap 计数），读者是
@@ -623,7 +623,7 @@ export function upsertPlayerObservation(
 export interface ObserveCounters {
   /** 到点该发起观察的次数（分母；含没有 Observer 的房）。 */
   gate: number;
-  /** 到点但本房没有 observer 结构 —— 这一列>0 就是 #100 的「楼不在」正面读数。 */
+  /** 到点但本房没有 observer 结构 —— 这一列>0 就是「楼不在」的正面读数。 */
   noObserver: number;
   /** 有楼、到点，但一个邻房都没选中（全新鲜 / 全公路房）。 */
   noTarget: number;
@@ -631,7 +631,7 @@ export interface ObserveCounters {
   ok: number;
   /**
    * 非 OK 返回码直方图，键 = String(返回码)。
-   * 故意不写死枚举名：本服返回码要按记忆造会错（R316 同族），原始码永远可读且可对照 @types。
+   * 故意不写死枚举名：本服返回码要按记忆造会错，原始码永远可读且可对照 @types。
    */
   codes: Record<string, number>;
   /** OK 之后下一 tick 真拿到视野并入库的次数。 */

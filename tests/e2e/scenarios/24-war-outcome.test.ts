@@ -388,7 +388,7 @@ describe("E2E-024 战后核验 — demobilize 全链路核验与 intel 状态一
     expect(firstPlan, `未立项 warPlan：\n${posture.join(", ")}`).toBeDefined();
     expect(
       verdict,
-      `未观测到 W1N1 核验事件（R4 止损/姿态翻转/planTimeout 任一路径都应触发 demobilize）：\n${warLogs.join("\n")}`,
+      `未观测到 W1N1 核验事件（止损/姿态翻转/planTimeout 任一路径都应触发 demobilize）：\n${warLogs.join("\n")}`,
     ).toBeDefined();
     // 核验 = failure（核验时点 fresh fact towers=1——塔未破不判胜）。
     expect(

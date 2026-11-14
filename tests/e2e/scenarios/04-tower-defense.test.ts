@@ -17,7 +17,7 @@ describe("E2E-004 Tower 防御", () => {
       //（CONTROLLER_STRUCTURES.tower[1] = 0），attack 返回 ERR_RCL_NOT_ENOUGH。
       controllerLevel: 3,
     });
-    // 夹具塔收编（R20/T6）：addBot 前插入的塔缺 user + store 形态，不收编则
+    // 夹具塔收编：addBot 前插入的塔缺 user + store 形态，不收编则
     // 塔防永远看不到它（见 injectFriendlyTower 注释）。
     await injectFriendlyTower(runner, "W0N1", 600);
   }, 120000);
@@ -43,7 +43,7 @@ describe("E2E-004 Tower 防御", () => {
     await runner.bot.getMemory();
 
     // 跑 400 tick：塔初始空能量（0/1000），需先经经济链补能再开火 ——
-    // 20 tick 只够崩不崩检查，不够火力真值（R20/T6 前提修正）。
+    // 20 tick 只够崩不崩检查，不够火力真值（前提修正）。
     const snapshots = await runner.runTicks(400);
     const last = snapshots.at(-1)!;
 
@@ -74,7 +74,7 @@ describe("E2E-004 Tower 防御", () => {
     // 核心断言：注入 hostile 后系统继续运行不崩
     expect(snapshots.length, "应运行 400 tick").toBe(400);
 
-    // 火力真值断言（R20/T6）：hostile 受伤或被击杀（roomObjects 直读 hits）。
+    // 火力真值断言：hostile 受伤或被击杀（roomObjects 直读 hits）。
     // 失败时输出威胁/塔可见性/能量三档诊断，定位断链层级。
     const after = await runner.inspector.creepHitPoints("W0N1", "Invader1");
     if (after !== undefined && after.hits >= after.hitsMax) {

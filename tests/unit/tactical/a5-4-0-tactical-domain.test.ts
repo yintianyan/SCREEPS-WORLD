@@ -1,4 +1,4 @@
-/** A5.4.0 Tactical Combat — Domain Tests. */
+/** Tactical Combat — Domain Tests. */
 
 import { describe, expect, it } from "vitest";
 import {

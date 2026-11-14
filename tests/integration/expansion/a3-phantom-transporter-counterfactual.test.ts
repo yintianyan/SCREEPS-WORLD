@@ -1,4 +1,4 @@
-/** A3 Phantom Transporter Bug — 反事实测试 (CF-1 到 CF-12) */
+/** Phantom Transporter Bug — 反事实测试 (CF-1 到 CF-12) */
 
 import { describe, it, expect } from "vitest";
 import { CONFIG } from "../../../src/config";

@@ -45,7 +45,7 @@ export function updateMode(creep: Creep): void {
   }
 }
 
-/** P1-1 距离分级：仅当威胁在 fleeRange 范围内才触发逃跑，远端过境威胁不中断经济。 */
+/** 距离分级：仅当威胁在 fleeRange 范围内才触发逃跑，远端过境威胁不中断经济。 */
 export function shouldFlee(creep: Creep, snapshot: RoomSnapshot): boolean {
   if (snapshot.threatCreeps.length === 0) return false;
   return isThreatWithin(snapshot.threatCreeps, creep.pos, CONFIG.defense.fleeRange);
@@ -145,7 +145,7 @@ export function evadeNuke(creep: Creep, snapshot: RoomSnapshot): boolean {
  *   2) spawn 不可达时走向敌人反向出口（避免冲向敌人）
  *   3) 无安全出口时走向任意最远出口
  * flee 期间释放普通 assignment（G-SM-05），仅移动不执行经济动作。
- * P0-2 修复：haul 的"防御圈内安全充能"已移入 RolePolicy.onFlee 钩子，
+ * 修复：haul 的"防御圈内安全充能"已移入 RolePolicy.onFlee 钩子，
  * flee() 只负责通用移动逻辑，不感知任何具体角色。
  */
 export function flee(creep: Creep, snapshot: RoomSnapshot): void {

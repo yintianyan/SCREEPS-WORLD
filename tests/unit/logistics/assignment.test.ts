@@ -82,7 +82,7 @@ beforeEach(() => {
 
 // ── buildRoomTasks ──
 describe("Assignment — buildRoomTasks (pure)", () => {
-  it("does not generate harvest tasks (source 分配统一归 targeting.getSource, P1-1)", () => {
+  it("does not generate harvest tasks (source 分配统一归 targeting.getSource)", () => {
     const source1 = { id: "src1", pos: { x: 10, y: 10, roomName: "W1N1" } } as unknown as Source;
     const source2 = { id: "src2", pos: { x: 40, y: 40, roomName: "W1N1" } } as unknown as Source;
     const snapshot = mockSnapshot({ sources: [source1, source2] });
@@ -342,7 +342,7 @@ describe("Assignment — validateAssignmentRules (pure)", () => {
 
 // ── chooseTaskForRole (pure) ──
 describe("Assignment — chooseTaskForRole (pure)", () => {
-  it("harvester gets no assignment tasks (source 统一归 getSource, P1-1)", () => {
+  it("harvester gets no assignment tasks (source 统一归 getSource)", () => {
     // 即使存在 fill 之外的任务，harvester 也只接受 fill；
     // source 分配不经 assignment，故无 harvest 任务可选。
     const tasks = [
@@ -467,7 +467,7 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
     expect(chosen!.targetId).toBe("storage1");
   });
 
-  // ── P2-4 距离感知选择 ──
+  // ── 距离感知选择 ──
   it("同优先级中选距离 creep 最近的任务", () => {
     const near = {
       id: "build:W1N1:near",
@@ -773,8 +773,8 @@ describe("Assignment — TaskPool.assignCreep", () => {
   });
 });
 
-// ── haul 任务拆分 (P2-5) ──
-describe("Assignment — haul task split (P2-5)", () => {
+// ── haul 任务拆分 ──
+describe("Assignment — haul task split", () => {
   function container(id: string, energy: number, x: number, y: number): StructureContainer {
     return {
       id,
@@ -784,7 +784,7 @@ describe("Assignment — haul task split (P2-5)", () => {
     } as unknown as StructureContainer;
   }
 
-  // P3 迁移：haul 任务生成已整体迁往 logistics 请求池（REQUEST_POOL_DESIGN §1）——
+  // P3 迁移：haul 任务生成已整体迁往 logistics 请求池——
   // 正向覆盖见 tests/unit/logistics/request-pool.test.ts（拆分聚合/防超卖/塔提级）。
   // 此处保留边界守卫：buildRoomTasks 不再产出任何搬运任务。
   it("buildRoomTasks 不再生成 haul 任务（搬运归请求池）", () => {
@@ -991,7 +991,7 @@ describe("chooseTaskForRole — 同优先级按剩余建造量（D1）", () => {
     expect(picked?.targetId).toBe("ctrl-c");
   });
 
-  // #115（2026-10-04 线上实证 W38S58，自主扩张的第三间房）：spawn 工地剩 15,000，
+  // （2026-10-04 线上实证 W38S58，自主扩张的第三间房）：spawn 工地剩 15,000，
   // 源旁 container 剩 4,872，两者同 priority=1（`isPriorityContainerSite` 把源旁 container
   // 也判 1）⇒ D1 恒选 container，而它 maxWorkers=2 恰好吃掉房里仅有的两只 builder。
   // 现场跨 1,688 拍七次读数 spawn 恒 0/15,000，期间两只 builder 各全新孵化并重选过一次

@@ -8,7 +8,7 @@ import { globalCache } from "../../kernel/global-cache";
 import { findMyCreepsCached } from "../support/room-scans";
 import { getObjectById } from "../support/obj-cache";
 
-/** A5.4.1 战术指令接口（与 domain/tactical/role-intent.ts RoleActionIntent 对齐）。 */
+/** 战术指令接口（与 domain/tactical/role-intent.ts RoleActionIntent 对齐）。 */
 interface TacticalIntent {
   moveDirective: string;
   combatDirective: string;
@@ -16,9 +16,9 @@ interface TacticalIntent {
 }
 
 /**
- * A5.4.1 从 globalCache 读取当前 creep 的战术指令。
+ * 从 globalCache 读取当前 creep 的战术指令。
 
- * 角色层不导入 systems 层（R3 架构守卫），直接从 globalCache 读取
+ * 角色层不导入 systems 层（架构守卫），直接从 globalCache 读取
  * tactical-runtime-system 写入的 RoleActionIntent。
  * 无指令时返回 null → 角色回退到 Legacy 行为。
  */
@@ -66,7 +66,7 @@ function findWounded(creep: Creep): Creep | undefined {
 }
 
 /**
- * A5.4.1 战术指令消费 — 优先消费 Tactical Runtime 产出的 RoleActionIntent。
+ * 战术指令消费 — 优先消费 Tactical Runtime 产出的 RoleActionIntent。
 
  * 当有 HEAL/RANGED_HEAL 指令 + targetId 时，按指令治疗指定目标。
  * 无指令时回退到 Legacy findWounded/findBuddy 逻辑。
@@ -161,7 +161,7 @@ const policy: RolePolicy = {
   combat: true,
   park: true,
   hold: attackerHold,
-  // A5.4.1：tactical-intent 优先于 Legacy 候选；无指令时回退到 healAllies
+  // tactical-intent 优先于 Legacy 候选；无指令时回退到 healAllies
   acquire: [healByTacticalIntent(), healAllies()],
   work: [healByTacticalIntent(), healAllies()],
 };

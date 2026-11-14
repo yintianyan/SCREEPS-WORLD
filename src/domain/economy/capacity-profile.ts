@@ -6,14 +6,14 @@ import { NOMINAL_INCOME_PER_SOURCE } from "./accounting";
 /**
  * Room Capacity Profile — 产能维度剖面。
 
- * 五域容量（ECONOMY §2.1 + GOAL_POLICY_PLAN §4 五域预算下钻）：
+ * 五域容量（五域预算下钻）：
  * - Energy Production：source 产能 × 效率系数（Income 上界）
  * - Energy Storage：storage/terminal/link 总容量（储备上界）
  * - Spawn Capacity：spawn+extension 总容量（孵化吞吐上界）
  * - Logistics Capacity：hauler 运力 × 趟频率（物流吞吐上界，近似）
  * - Construction Capacity：builder 编制 × 单趟建造量（建造吞吐上界，近似）
 
- * 效率系数从实测收入速率 ÷ 名义产能 EMA 平滑（ECONOMY §2.1）。
+ * 效率系数从实测收入速率 ÷ 名义产能 EMA 平滑。
  * 本模型只组装剖面，不做预算分配（分配在 Empire Budget，步 9）。
  */
 export interface RoomCapacityProfile {

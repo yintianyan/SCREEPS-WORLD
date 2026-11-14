@@ -1,4 +1,4 @@
-/** A3.3 Contract Tests — Expansion Execution 全链路合约测试。 */
+/** Contract Tests — Expansion Execution 全链路合约测试。 */
 
 import { describe, it, expect } from "vitest";
 import {
@@ -213,7 +213,7 @@ function makeThreatInput(over: Partial<ThreatEscalationInput> = {}): ThreatEscal
 // 1. Execution Gate — 11 项 TOCTOU 验证
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 Execution Gate", () => {
+describe("Execution Gate", () => {
   it("passes all 11 gates when everything valid", () => {
     const result = validateExecutionGate(makeGateInput());
     expect(result.allPassed).toBe(true);
@@ -298,7 +298,7 @@ describe("A3.3 Execution Gate", () => {
 // 2. Execution State Machine — 状态转换
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 Execution State Machine", () => {
+describe("Execution State Machine", () => {
   it("VALIDATING → PREPARING when gate passed", () => {
     const r = transitionExecutionState(
       makeTransitionInput({
@@ -446,7 +446,7 @@ describe("A3.3 Execution State Machine", () => {
 // 3. Checkpoint System — 5 个检查点
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 Checkpoint System", () => {
+describe("Checkpoint System", () => {
   it("CP1_CLAIMED passes when controller claimed", () => {
     const r = evaluateCheckpoint(
       makeCheckpointInput({
@@ -632,7 +632,7 @@ describe("A3.3 Checkpoint System", () => {
 // 4. Economic Activation — 三段判据
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 Economic Activation", () => {
+describe("Economic Activation", () => {
   it("activates when all criteria met + 500 consecutive ticks", () => {
     const r = evaluateEconomicActivation(
       makeEconomicInput({
@@ -751,7 +751,7 @@ describe("A3.3 Economic Activation", () => {
 // 5. Empire Integration — 5 系统覆盖
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 Empire Integration", () => {
+describe("Empire Integration", () => {
   it("integrates when all 5 systems covered + in owned list", () => {
     const r = evaluateEmpireIntegration(makeIntegrationInput());
     expect(r.integrated).toBe(true);
@@ -843,7 +843,7 @@ describe("A3.3 Empire Integration", () => {
 // 6. Threat Escalation — 三级威胁
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 Threat Escalation", () => {
+describe("Threat Escalation", () => {
   it("GREEN when no threats → CONTINUE", () => {
     const r = evaluateThreatEscalation(makeThreatInput());
     expect(r.level).toBe("GREEN");
@@ -947,7 +947,7 @@ describe("A3.3 Threat Escalation", () => {
 // 7. Resource Reservation
 // ═══════════════════════════════════════════════════════════════
 
-describe("A3.3 Resource Reservation", () => {
+describe("Resource Reservation", () => {
   it("reserves when budget sufficient", () => {
     const r = tryReserve({
       planId: "p1",

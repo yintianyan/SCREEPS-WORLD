@@ -1,12 +1,12 @@
 import type { Blueprint, BlueprintCell } from "../types";
 
 /**
- * compact-core-v3 — v2 棋盘核心 + 功能性修正（R661）。
+ * compact-core-v3 — v2 棋盘核心 + 功能性修正。
  *
  * 与 v2 的差异（均有 `layout-v3-contract` / `layout-v3-fullrcl` 合约守护）：
  * 1. Terminal 从 (4,6) 移到 (-2,2)：紧贴 storage (0,2)（Chebyshev 2），
  *    缩短 terminal↔storage 的最后一公里；原 (4,6) 对 RCL6 的物流无优势。
- * 2. Lab RCL7 批次修正（继承 v2 的 R660 修复）：RCL7 上限 6，NE 反应三连保留。
+ * 2. Lab RCL7 批次修正（继承 v2 的修复）：RCL7 上限 6，NE 反应三连保留。
  * 3. 其余 cells 与 v2 完全一致——几何（偶校验棋盘）已被证明是 range1 约束下的最密可行解。
  *
  * 为什么不固定 controller/source link：它们的位置随房（controller/source 坐标）变化，
@@ -140,7 +140,7 @@ export const COMPACT_CORE_V3: Blueprint = {
     cell("core.spawn.03", 0, -2, STRUCTURE_SPAWN, 8, "rcl8", 1, ["core"]),
 
     // ── Industry: Terminal (RCL6) ──
-    // R661：紧贴 storage 的 terminal 位（原 (4,6) 通勤更远）。
+    // 紧贴 storage 的 terminal 位（原 (4,6) 通勤更远）。
     cell("core.terminal.01", -2, 2, STRUCTURE_TERMINAL, 6, "rcl6", 1, ["core", "logistics"]),
 
     // ── Industry: Factory (RCL7) ──
@@ -156,7 +156,7 @@ export const COMPACT_CORE_V3: Blueprint = {
     cell("core.lab.05", 4, -6, STRUCTURE_LAB, 7, "rcl7", 2, ["core", "industry"]),
     // NW cluster（2 labs，可 boost）
     cell("core.lab.06", -6, 4, STRUCTURE_LAB, 7, "rcl7", 2, ["core", "industry"]),
-    // R660 修复：RCL7 上限 6 —— NW 第二只 lab 下放到 RCL8（NE 反应三连 lab03/04/05 保留在 RCL7）。
+    // 修复：RCL7 上限 6 —— NW 第二只 lab 下放到 RCL8（NE 反应三连 lab03/04/05 保留在 RCL7）。
     cell("core.lab.07", -6, 6, STRUCTURE_LAB, 8, "rcl8", 2, ["core", "industry"]),
     // SW cluster（3 labs，可反应：lab08+lab09 → lab10）
     cell("core.lab.08", -6, -4, STRUCTURE_LAB, 8, "rcl8", 2, ["core", "industry"]),

@@ -20,7 +20,7 @@ export interface RemoteTargetingInput {
   homeRoom: string;
   /** 邻居房情报（来自 RoomMemory.intel）。 */
   intel: Readonly<Record<string, RoomIntel>> | undefined;
-  /** 已有远矿运营（避免重复选择）。P1-G 后含 dangerUntil 字段用于危险冷却判定。 */
+  /** 已有远矿运营（避免重复选择）。含 dangerUntil 字段用于危险冷却判定。 */
   existingOps: Readonly<Record<string, { state: string; dangerUntil?: number }>> | undefined;
   tick: number;
   /** 视野新鲜度阈值（超过此 tick 数视为旧情报）。 */
@@ -192,7 +192,7 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
     if (isHostilePlayerReservation(info.reservedBy, input.myUsername)) continue;
     if (info.status !== "normal") continue;
     // 排除危险冷却中的房间 — 威胁刚出现过的房不送兵（止损）。
-    // P1-G：dangerUntil 从 intel 迁移到 remoteOps（remote-mining-manager 唯一写入）。
+    // dangerUntil 从 intel 迁移到 remoteOps（remote-mining-manager 唯一写入）。
     const dangerUntil = existingOps?.[roomName]?.dangerUntil;
     if (dangerUntil !== undefined && tick < dangerUntil) continue;
 

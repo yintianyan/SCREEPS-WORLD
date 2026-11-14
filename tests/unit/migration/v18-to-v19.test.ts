@@ -1,4 +1,4 @@
-/** v18 → v19 迁移独立测试（P1-J：demand 迟滞状态入迁移体系）。 */
+/** v18 → v19 迁移独立测试（demand 迟滞状态入迁移体系）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

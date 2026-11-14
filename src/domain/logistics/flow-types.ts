@@ -1,8 +1,7 @@
 /**
  * 能量流规划（FlowTask / FlowPlanner）的类型定义。
  *
- * Phase 0 只做纯数据与纯函数，不访问 Game/Memory/globalCache。
- * 设计来源：`.trae/documents/能量流任务分配机制设计（FlowTask+FlowPlanner）.md`。
+ * 只做纯数据与纯函数，不访问 Game/Memory/globalCache。
  */
 
 /** 能量流车道：core=孵化池、tower=防御、upgrade=升级链、lab/terminal=工业。 */
@@ -25,7 +24,7 @@ export interface FlowLinkNode {
  * 单个汇的流量需求。
  *
  * 汇是「一组结构」（如 spawn+extension 池、controller link/cc），
- * 任务执行时再由 targetSelector 解析具体结构；Phase 0 只算速率与承运人数。
+ * 任务执行时再由 targetSelector 解析具体结构；只算速率与承运人数。
  */
 export interface FlowSinkDemand {
   /** 稳定任务 id 的一部分：deliver:<room>:<lane>:<groupId>。 */
@@ -53,7 +52,7 @@ export interface FlowSinkDemand {
   readonly carrierCap?: number;
 }
 
-/** 承运人池 — Phase 0 用统一池；后续按 lane/role 细分为多池。 */
+/** 承运人池 — 用统一池；后续按 lane/role 细分为多池。 */
 export interface FlowCarrierPool {
   readonly count: number;
   readonly carry: number;

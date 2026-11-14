@@ -47,7 +47,7 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
   const workParts = creep.getActiveBodyparts(WORK);
   if (energyInStore <= 0) {
     counters.noEnergy++;
-    // 观测拆分（#111/R286 定价）：`noEnergy` 先于射程判定，会把「空手但脚下就有自己的 site」
+    // 观测拆分（定价）：`noEnergy` 先于射程判定，会把「空手但脚下就有自己的 site」
     // 这一类整个盖住，于是「让空载腿留着能量施工」的收益无法计算。这里只补一次遍历
     // （site 走 room-scans 的按房按 tick 缓存；未命中最坏多一次 `find`，上界=每房每拍 1 次），
     // 不改任何动作、不发 build、不发寻路。
@@ -65,7 +65,7 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
     counters.noWork++;
     // 与上面同族、但补的是**仪器的盲区**：`noEnergyInRange` 前置 `workParts > 0`，所以 0-WORK
     // 走廊（线上实测 W38S56/W39S56 用 `[0W 16C 16M]` 档）里那一列恒为 0，不能被读成「没机会」。
-    // 这一列量的正是「补一个 WORK 就会真建上」的拍数 —— #111 的 WORK 下限之问要有读数。
+    // 这一列量的正是「补一个 WORK 就会真建上」的拍数 —— WORK 下限之问要有读数。
     // 同样只遍历 room-scans 的**按房按 tick 缓存**：命中即纯数组遍历；未命中时最坏是
     // **本房这一拍多一次 `FIND_MY_CONSTRUCTION_SITES` find**（缓存按房共享 ⇒ 增量上界是
     // 每房每拍 1 次，不随该房 creep 数放大）。不发寻路、不发 build。
@@ -267,7 +267,7 @@ function findDroppedEnergy(creep: Creep, minAmount = 0): Resource | undefined {
 
 const policy: RolePolicy = {
   park: true,
-  // P2-M：原 role-runner 硬编码 `role === "remoteHauler" && mode === "work" && room === home`
+  // 原 role-runner 硬编码 `role === "remoteHauler" && mode === "work" && room === home`
   //   下沉为角色钩子。work 在 home 房无候选时切 idle（ensureHome 保持在家）；
   //   acquire 在 home 房不切 idle（保持 acquire mode，ensureHome 导航去 remoteTarget）。
   shouldIdleWhenNoCandidate: ac => {

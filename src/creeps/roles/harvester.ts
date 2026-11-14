@@ -28,7 +28,7 @@ const policy: RolePolicy = {
   ],
 
   work: [
-    // 0. 站桩采集同 tick 倒能 — 拦截站桩矿工，使其永不因 container 满而落到后续离岗动作（P2-7）。
+    // 0. 站桩采集同 tick 倒能 — 拦截站桩矿工，使其永不因 container 满而落到后续离岗动作。
     stationaryMine(),
     // 1. 矿物优先卸载（不应占用 energy carry 空间）。
     dumpMineralsToNearbyContainer(),

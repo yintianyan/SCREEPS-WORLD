@@ -1,4 +1,4 @@
-/** 选点前置校验用的地形摘要（R651）——墙/沼泽占比 + 最佳锚点几何。
+/** 选点前置校验用的地形摘要——墙/沼泽占比 + 最佳锚点几何。
  *
  * 为什么单独成一模块：`buildCandidate` 是纯函数，只能读 intel；而这些量需要
  * 距离场与 `selectAnchors`（此前只在 claim 之后由 `seedLayoutAnchor` 跑）。把计算
@@ -23,7 +23,7 @@ export interface TerrainIntelSummary {
   anchorToSources?: number;
   /** 回 claim 房：最佳锚点到**遗留 spawn** 的曼哈顿距离（无 spawn 则 undefined）。 */
   leftoverSpawnToAnchor?: number;
-  /** R662：最佳锚点上 v3 模板格的地形可放率（0..1）——"看起来能放"变成可计算的门。 */
+  /** 最佳锚点上 v3 模板格的地形可放率（0..1）——"看起来能放"变成可计算的门。 */
   anchorPlaceableRatio?: number;
 }
 
@@ -93,7 +93,7 @@ export function summarizeTerrain(input: TerrainIntelInput): TerrainIntelSummary 
   if (input.spawns && input.spawns.length > 0) {
     summary.leftoverSpawnToAnchor = Math.min(...input.spawns.map(s => manhattan(best, s)));
   }
-  // R662：模板格在锚点周围的地形可放率（1..48 且非墙）。
+  // 模板格在锚点周围的地形可放率（1..48 且非墙）。
   let fit = 0;
   for (const c of COMPACT_CORE_V3.cells) {
     const x = best.x + c.dx;

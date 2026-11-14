@@ -1,5 +1,5 @@
 /**
- * E2E 断言辅助 — 跨层断言原语已收敛至 tests/support/assertions（R20①/T3），
+ * E2E 断言辅助 — 跨层断言原语已收敛至 tests/support/assertions，
  * 本文件保留 e2e 专属调试输出并转断言原语（审计孤儿清理：assertRoleCount /
  * assertTotalCreeps / assertLastSnapshot / assertAnySnapshot 零引用、
  * assertNoErrors 死引用 —— 统一由 support 版本承接）。

@@ -1,4 +1,4 @@
-/** v21 → v22 迁移独立测试（P0-1 srcRatio 强制 crisis 通道字段建档）。 */
+/** v21 → v22 迁移独立测试（srcRatio 强制 crisis 通道字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

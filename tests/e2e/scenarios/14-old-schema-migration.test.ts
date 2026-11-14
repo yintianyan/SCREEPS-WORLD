@@ -77,7 +77,7 @@ describe("E2E-014 旧 Schema 迁移", () => {
     const snapshots = await runner.runTicks(500);
     const last = snapshots.at(-1)!;
 
-    // Phase 6: 验证迁移完成且 kernel 恢复
+    // 验证迁移完成且 kernel 恢复
     // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=CONFIG.memory.schemaVersion）
     const mem = await runner.bot.getMemory();
     expect(mem.schemaVersion, "schemaVersion 应存在").toBeDefined();
@@ -123,7 +123,7 @@ describe("E2E-014 旧 Schema 迁移", () => {
     expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(
       CONFIG.memory.schemaVersion,
     );
-    // Phase 6: 验证有实际生产/执行行为
+    // 验证有实际生产/执行行为
     expect(last.rawMemory?.kernel, "kernel 应存在").toBeDefined();
   }, 180000);
 });

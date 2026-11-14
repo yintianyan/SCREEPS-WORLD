@@ -19,7 +19,7 @@
  *    仍 bootstrap 2489/2500（需求侧自然只保持 ~2 只），反常激励原封不动。
  *  - srcRatio 口径改成**平均**填充率（`averageSourceFillRatio`），room-state 与
  *    tuning-engine 两处生产者共用这一个定义（原先各写一份"取最满"）。
- * "采不动"这层含义仍归 srcRatio + storage 流失的 P0-1 通道，与欠员不重叠。
+ * "采不动"这层含义仍归 srcRatio + storage 流失的强制 crisis 通道，与欠员不重叠。
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -72,7 +72,7 @@ function evalOnce(input: PhaseInput, prev: PhaseState) {
   });
 }
 
-describe("欠员判据按编制上限截断（#10-a）", () => {
+describe("欠员判据按编制上限截断", () => {
   it("顶格编制的 5-source 房拿得到 growth —— 旧判据在这里恒判 bootstrap", () => {
     // 这条就是当年那条「缺陷修好时会红」的反向引线，方向已翻正：
     // 若有人把判据改回「人头数 < source 数」，它立刻红。
@@ -114,14 +114,14 @@ describe("欠员判据按编制上限截断（#10-a）", () => {
   });
 });
 
-describe("srcRatio 改平均口径（#10-b：欠员不再被伪装成采集塌方）", () => {
+describe("srcRatio 改平均口径（欠员不再被伪装成采集塌方）", () => {
   const src = (energy: number): { energy: number; energyCapacity: number } => ({
     energy,
     energyCapacity: 3000,
   });
 
   it("5 source 里 4 颗被采着、1 颗没人派：平均 0.2 ⇒ 不算塌方", () => {
-    // 旧口径在这里取最满 = 1.0 ⇒ P0-1 通道常驻，实测 stall 8730/9000 tick。
+    // 旧口径在这里取最满 = 1.0 ⇒ 强制 crisis 通道常驻，实测 stall 8730/9000 tick。
     const ratio = averageSourceFillRatio([src(0), src(0), src(0), src(0), src(3000)]);
     expect(ratio).toBeCloseTo(0.2, 5);
     expect(ratio).toBeLessThan(DEFAULT_PHASE_OPTIONS.srcRatioTrap);
@@ -143,7 +143,7 @@ describe("srcRatio 改平均口径（#10-b：欠员不再被伪装成采集塌�
   });
 
   it("forceCrisis 仍需要双条件：塌方但不流失 ⇒ 不进危机带", () => {
-    // 平均口径放宽了 srcRatio，但 P0-1 通道本就是 srcRatio + storage 流失双条件；
+    // 平均口径放宽了 srcRatio，但强制 crisis 通道本就是 srcRatio + storage 流失双条件；
     // 这条钉住"塌方信号单独不再足够"，防止改口径时被顺手放宽成单条件。
     const r = evalOnce(healthy({ srcRatio: 1, storageDrainRate: 0 }), GROWING);
     expect(r.srcStallTicks).toBe(0);

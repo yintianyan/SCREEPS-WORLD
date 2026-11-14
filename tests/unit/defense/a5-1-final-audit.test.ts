@@ -1,4 +1,4 @@
-/** A5.1 FINAL AUDIT — Threat / Combat / Remote Defense 完整审计测试。 */
+/** FINAL AUDIT — Threat / Combat / Remote Defense 完整审计测试。 */
 import { describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
 
@@ -212,10 +212,10 @@ function makeRemoteInput(opts: Partial<RemoteDefenseInput> = {}): RemoteDefenseI
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4 G1 Threat Model 验证（8 场景）
+// G1 Threat Model 验证（8 场景）
 // ═══════════════════════════════════════════════════════════
 
-describe("§4 G1 Threat Model — 8 场景验证", () => {
+describe("G1 Threat Model — 8 场景验证", () => {
   it("S1: 单 Invader 无 Boost → LOW/MEDIUM（根据 Capability）", () => {
     const invader = makeHostile([{ type: ATTACK }, { type: MOVE }], {
       owner: "Invader",
@@ -356,10 +356,10 @@ describe("§4 G1 Threat Model — 8 场景验证", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §5 G1 Evidence Audit — 10 个 ThreatAssessment 可追溯
+// G1 Evidence Audit — 10 个 ThreatAssessment 可追溯
 // ═══════════════════════════════════════════════════════════
 
-describe("§5 G1 Evidence Audit — 10 评估可追溯", () => {
+describe("G1 Evidence Audit — 10 评估可追溯", () => {
   // 生成 10 个不同的 ThreatAssessment
   const scenarios: Array<{ name: string; input: ThreatAssessmentInput }> = [
     { name: "无威胁", input: makeThreatInput({ hostiles: [] }) },
@@ -462,10 +462,10 @@ describe("§5 G1 Evidence Audit — 10 评估可追溯", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §6 G2 Combat Capability Audit — 部件组合
+// G2 Combat Capability Audit — 部件组合
 // ═══════════════════════════════════════════════════════════
 
-describe("§6 G2 Combat Capability — 部件组合维度独立", () => {
+describe("G2 Combat Capability — 部件组合维度独立", () => {
   it("ATTACK → attack 维度独立", () => {
     const cap = evaluateCombatCapability(makeCreep([{ type: ATTACK }, { type: MOVE }]));
     expect(cap.attack).toBe(ATTACK_POWER);
@@ -520,10 +520,10 @@ describe("§6 G2 Combat Capability — 部件组合维度独立", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §7 G2 Boost Reality Audit — T1/T2/T3 倍率核对
+// G2 Boost Reality Audit — T1/T2/T3 倍率核对
 // ═══════════════════════════════════════════════════════════
 
-describe("§7 G2 Boost Reality — 引擎常量核对", () => {
+describe("G2 Boost Reality — 引擎常量核对", () => {
   it("ATTACK boost: T1=×2, T2=×3, T3=×4", () => {
     expect(BOOST_MULTIPLIERS.attack[1]).toBe(2);
     expect(BOOST_MULTIPLIERS.attack[2]).toBe(3);
@@ -582,7 +582,7 @@ describe("§7 G2 Boost Reality — 引擎常量核对", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §7b 与引擎 BOOSTS 逐档对表（取代"抄本比抄本"式自证）
+// 与引擎 BOOSTS 逐档对表（取代"抄本比抄本"式自证）
 // ═══════════════════════════════════════════════════════════
 
 /** 我们消费的每一档倍率，都要能在引擎表里找到同名家族与同值效果。 */
@@ -637,7 +637,7 @@ const BOOST_CONTRACTS: ReadonlyArray<{
   },
 ];
 
-describe("§7b BOOST_MULTIPLIERS 逐档等于引擎 BOOSTS", () => {
+describe("BOOST_MULTIPLIERS 逐档等于引擎 BOOSTS", () => {
   for (const c of BOOST_CONTRACTS) {
     it(`${c.label} ⇐ BOOSTS.${c.part}.${c.effect}`, () => {
       c.compounds.forEach((compound, i) => {
@@ -651,10 +651,10 @@ describe("§7b BOOST_MULTIPLIERS 逐档等于引擎 BOOSTS", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §8 G2 Mobility Audit — estimate 标注
+// G2 Mobility Audit — estimate 标注
 // ═══════════════════════════════════════════════════════════
 
-describe("§8 G2 Mobility — estimate 语义验证", () => {
+describe("G2 Mobility — estimate 语义验证", () => {
   it("mobility 是 estimate，不是 Pathfinding 结果", () => {
     const cap = evaluateCombatCapability(makeCreep([{ type: ATTACK }, { type: MOVE }]));
     // mobility 存在且为有限值
@@ -687,10 +687,10 @@ describe("§8 G2 Mobility — estimate 语义验证", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §9 G2 CombatPower Audit — 反例场景
+// G2 CombatPower Audit — 反例场景
 // ═══════════════════════════════════════════════════════════
 
-describe("§9 G2 CombatPower — 反例场景验证", () => {
+describe("G2 CombatPower — 反例场景验证", () => {
   it("Scenario A: 高 powerScore 无 Heal vs 低 powerScore 高 Heal → 不能仅看 powerScore", () => {
     const noHeal = evaluateCombatCapability(
       makeCreep([
@@ -745,10 +745,10 @@ describe("§9 G2 CombatPower — 反例场景验证", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §10 G4 Remote Defense Audit — 7 场景
+// G4 Remote Defense Audit — 7 场景
 // ═══════════════════════════════════════════════════════════
 
-describe("§10 G4 Remote Defense — 7 场景验证", () => {
+describe("G4 Remote Defense — 7 场景验证", () => {
   it("S1: 无 Threat → CONTINUE", () => {
     const d = decideRemoteDefenseAction(makeRemoteInput({ threat: makeThreat("NONE", "UNKNOWN") }));
     expect(d.action).toBe("CONTINUE");
@@ -822,10 +822,10 @@ describe("§10 G4 Remote Defense — 7 场景验证", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §11 Remote Defense Expected Value — 消费因素验证
+// Remote Defense Expected Value — 消费因素验证
 // ═══════════════════════════════════════════════════════════
 
-describe("§11 Remote Defense EV — 消费因素验证", () => {
+describe("Remote Defense EV — 消费因素验证", () => {
   it("EV 消费 Mining Income (sources)", () => {
     const ev2 = evaluateRemoteExpectedValue(
       makeRemoteInput({ remoteOp: makeRemoteOp({ sources: 2 }) }),
@@ -897,10 +897,10 @@ describe("§11 Remote Defense EV — 消费因素验证", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §12 ESCORT 权责审计 — 不直接 spawn
+// ESCORT 权责审计 — 不直接 spawn
 // ═══════════════════════════════════════════════════════════
 
-describe("§12 ESCORT 权责审计 — 不直接 spawn", () => {
+describe("ESCORT 权责审计 — 不直接 spawn", () => {
   it("ESCORT 决策输出 escortDemand（需求标记），不调用 spawnCreep", () => {
     const d = decideRemoteDefenseAction(
       makeRemoteInput({
@@ -957,10 +957,10 @@ describe("§12 ESCORT 权责审计 — 不直接 spawn", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §13 RETREAT / ABORT 审计 — 不直接 kill
+// RETREAT / ABORT 审计 — 不直接 kill
 // ═══════════════════════════════════════════════════════════
 
-describe("§13 RETREAT / ABORT 审计", () => {
+describe("RETREAT / ABORT 审计", () => {
   it("RETREAT 只输出决策，不直接 kill creep", () => {
     const d = decideRemoteDefenseAction(
       makeRemoteInput({
@@ -1022,10 +1022,10 @@ describe("§13 RETREAT / ABORT 审计", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §14 Decision Trace Audit — 6 类 Decision 记录验证
+// Decision Trace Audit — 6 类 Decision 记录验证
 // ═══════════════════════════════════════════════════════════
 
-describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
+describe("Decision Trace — 6 类 Decision 可记录性", () => {
   // 验证 6 类军事决策能够生成 DecisionRecord 格式的数据
   // DecisionRecord 需要：decisionId, tick, category, actor, scope, reasons, evidence,
   //   selectedAction, rejectedAlternatives, expectedOutcome, correlationId, severity,
@@ -1122,10 +1122,10 @@ describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §15 Replay Audit — DecisionHash 一致性 + Divergence
+// Replay Audit — DecisionHash 一致性 + Divergence
 // ═══════════════════════════════════════════════════════════
 
-describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
+describe("Replay Audit — Hash 一致性与 Divergence", () => {
   // 生成 20 个不同的 G1/G4 Decision
   const scenarios: Array<{
     name: string;
@@ -1222,17 +1222,17 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
     },
     // G4 Remote Defense Scenarios (10)
     {
-      name: "R1-Continue",
+      name: "Continue",
       type: "remote",
       input: makeRemoteInput({ threat: makeThreat("NONE", "UNKNOWN") }),
     },
     {
-      name: "R2-Pause",
+      name: "Pause",
       type: "remote",
       input: makeRemoteInput({ threat: makeThreat("MEDIUM", "HARASSMENT") }),
     },
     {
-      name: "R3-Escort",
+      name: "Escort",
       type: "remote",
       input: makeRemoteInput({
         threat: makeThreat("HIGH", "HARASSMENT"),
@@ -1241,7 +1241,7 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
       }),
     },
     {
-      name: "R4-Retreat",
+      name: "Retreat",
       type: "remote",
       input: makeRemoteInput({
         threat: makeThreat("HIGH", "SIEGE"),
@@ -1249,7 +1249,7 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
       }),
     },
     {
-      name: "R5-Abort",
+      name: "Abort",
       type: "remote",
       input: makeRemoteInput({
         threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
@@ -1258,7 +1258,7 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
       }),
     },
     {
-      name: "R6-Low-Threat-Continue",
+      name: "Low-Threat-Continue",
       type: "remote",
       input: makeRemoteInput({
         threat: makeThreat("LOW", "SCOUTING"),
@@ -1266,7 +1266,7 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
       }),
     },
     {
-      name: "R7-War-Retreat",
+      name: "War-Retreat",
       type: "remote",
       input: makeRemoteInput({
         threat: makeThreat("HIGH", "SIEGE"),
@@ -1275,7 +1275,7 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
       }),
     },
     {
-      name: "R8-Abort-Far",
+      name: "Abort-Far",
       type: "remote",
       input: makeRemoteInput({
         threat: makeThreat("HIGH", "SIEGE"),
@@ -1284,7 +1284,7 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
       }),
     },
     {
-      name: "R9-Escort-High-Value",
+      name: "Escort-High-Value",
       type: "remote",
       input: makeRemoteInput({
         threat: makeThreat("MEDIUM", "HARASSMENT"),
@@ -1293,7 +1293,7 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
       }),
     },
     {
-      name: "R10-Critical-Nuke",
+      name: "Critical-Nuke",
       type: "remote",
       input: makeRemoteInput({
         threat: makeThreat("CRITICAL", "NUCLEAR"),

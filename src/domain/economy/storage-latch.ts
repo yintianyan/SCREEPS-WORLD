@@ -1,5 +1,5 @@
 /**
- * 富 storage 闩锁（Phase 2.5）。
+ * 富 storage 闩锁。
  *
  * 单阈值 50K 会让 upgrade/lab 在 49K↔51K 之间每 tick 开合；
  * 用回差：低于 enter(50K) 关，涨到 resume(100K) 才重新开。

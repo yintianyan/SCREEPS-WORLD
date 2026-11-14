@@ -1,4 +1,4 @@
-/** 资源流状态（Phase A 接线）单测：库存差分、状态机落盘、读数新鲜度。 */
+/** 资源流状态（接线）单测：库存差分、状态机落盘、读数新鲜度。 */
 import { describe, expect, it } from "vitest";
 import { diffResourceStocks } from "../../../src/domain/economy/resource-stock";
 import {

@@ -194,7 +194,7 @@ function resolveMetricName(shortName: string): string {
   return `screeps_${shortName.replace(/\./g, "_")}`;
 }
 
-/** 获取已注册指标数量（R6 上限审计）。 */
+/** 获取已注册指标数量（上限审计）。 */
 export function registeredMetricCount(): number {
   try {
     return metricCount();

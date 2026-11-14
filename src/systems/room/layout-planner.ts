@@ -54,10 +54,10 @@ import {
  * domain/layout/planner.ts，此处只 import 复用。
  */
 
-// ─── P1-F.6：4-stage 分片跨 tick 中间产物 ──────────────────
+// ─── 4-stage 分片跨 tick 中间产物 ──────────────────
 
 /**
- * 规划分片跨 tick 中间产物（存 globalCache，不进 Memory — plan §7：大对象不进 Memory）。
+ * 规划分片跨 tick 中间产物（存 globalCache，不进 Memory）。
  * 跨 tick 持久：planStage > 0 时各 stage 共享；global reset 丢失 → 下 tick 重置
  * planStage=0 重新开始（最多损失一个规划周期）。
  * stage 0 产出（只读消费于 1-3）：anchor/completedKeys/structureCounts/occupiedSet/
@@ -94,7 +94,7 @@ interface PlanStageData {
   targetingChanged: boolean;
   /** 已入队 link 数（stage 2 内部累加，防超额分配 RCL link 槽位）。 */
   queuedLinks: number;
-  /** R2 队列治理：本规划周期内因背景任务队列硬上限被拒绝的候选数。 */
+  /** 队列治理：本规划周期内因背景任务队列硬上限被拒绝的候选数。 */
   capRejected: number;
 }
 
@@ -122,7 +122,7 @@ function clearPlanStageData(roomName: string): void {
 /**
  * D2 归位：tryAddTask 闭包逻辑已下沉到 domain/layout/planner.ts 的 makeTryAddTaskDomain。
  * 系统侧薄壳包装——从 planStageData 提取参数委托给纯函数。
- * R2 队列治理：启用背景任务硬上限 + 入队 tick 盖戳（queuedAt）。
+ * 队列治理：启用背景任务硬上限 + 入队 tick 盖戳（queuedAt）。
  */
 function makeTryAddTask(
   data: PlanStageData,
@@ -136,7 +136,7 @@ function makeTryAddTask(
 }
 
 /**
- * 布局规划器 — P3 低频系统，负责生成和维护建造计划（plan §5.6.3）。
+ * 布局规划器 — P3 低频系统，负责生成和维护建造计划。
 
  * 动态生成 source/controller container 任务；评估交通热度生成道路候选。
  * 触发（shouldPlan 判定，每 tick 调用但内部早返回）：首次运行 / RCL 变化 /
@@ -151,7 +151,7 @@ export const layoutPlannerSystem: System & {
   name: "layout-planner",
   priority: 3 as Priority,
   /**
-   * P1-F：recoveryEligible 钩子 — 任一 snapshot 命中紧急重建（关键基建
+   * recoveryEligible 钩子 — 任一 snapshot 命中紧急重建（关键基建
    * 缺失：spawn/storage/tower/sourceContainer）时自报 true，让 kernel
    * 将本系统提升为 P1 等效优先级通过 budget 拦截。
 
@@ -183,12 +183,12 @@ export const layoutPlannerSystem: System & {
       roomMem.layout = {
         version: 2,
         templateId: "compact-core-v2",
-        // R663：先建布局的老房保持 constraint，直到显式迁移。
+        // 先建布局的老房保持 constraint，直到显式迁移。
         mode: "constraint",
         state: "accepted",
         revision: 0,
         nextPlanTick: ctx.tick,
-        // P1-F.6：4-stage 分片起始为 0（空闲态）。
+        // 4-stage 分片起始为 0（空闲态）。
         planStage: 0,
       };
     }
@@ -198,12 +198,12 @@ export const layoutPlannerSystem: System & {
     // 人工 manual 状态不自动规划。
     if (layout.state === "manual") return;
 
-    // P1-F.6：4-stage 分片调度。
+    // 4-stage 分片调度。
     // stage 0：prep（锚点 + shouldPlan + 构建 PlanStageData）→ 1；
     // stage 1：核心结构（constraint/template）→ 2；
     // stage 2：物流结构（container/link/extractor）→ 3；
     // stage 3：道路 + spawn 重建 + 收尾 → 0 + 清 planStageData。
-    // 跨 tick 中间产物放 globalCache（plan §7：大对象不进 Memory）；global reset 丢失
+    // 跨 tick 中间产物放 globalCache（大对象不进 Memory）；global reset 丢失
     // planStageData 时下 tick 重置 planStage=0 重新开始（最多损失一个规划周期）。
     const stage = layout.planStage ?? 0;
     if (stage === 0) {
@@ -228,7 +228,7 @@ export const layoutPlannerSystem: System & {
   },
 };
 
-// ─── P1-F.6：4-stage 分片实现 ─────────────────────────────
+// ─── 4-stage 分片实现 ─────────────────────────────
 
 /**
  * Stage 0：prep — 锚点确定 + shouldPlan 门禁 + 构建 PlanStageData。
@@ -325,8 +325,8 @@ function planStage0Prep(
   // link 角色感知（2026-08-02）：总数满足但角色分布错（死资产）时暴露真实缺口。
   const linkRoleRanges = resolveLinkRoleRanges(CONFIG.economy.link);
   mergeLinkRoleGaps(gaps, auditLinkRoleGaps(snapshot, queue, linkRoleRanges));
-  // 死资产检测（2026-08-02，§3.3）：source link 持续 500t 三重校验失败 → 触发规划。
-  // deadAssetLink key 值为死资产数量，触发 shouldPlan；拆改通道由 P1-4 实现。
+  // 死资产检测（2026-08-02）：source link 持续 500t 三重校验失败 → 触发规划。
+  // deadAssetLink key 值为死资产数量，触发 shouldPlan；拆改走受限拆改通道。
   const deadAssets = getDeadAssetLinks(ctx.tick);
   if (deadAssets.length > 0) {
     gaps.deadAssetLink = deadAssets.length;
@@ -486,7 +486,7 @@ function planStage2Logistics(
     );
   }
 
-  // 3.6 P1-4 受限拆改：死资产 link 检测到替代位置后创建拆改计划。
+  // 3.6 受限拆改：死资产 link 检测到替代位置后创建拆改计划。
   // 流程：死资产检测就绪（getDeadAssetLinks 持续 500t 三重校验失败）→ 替代位置由
   // createSourceLinkTasks 搜索（死 link 不可喂 → findAdjacentBuildable 找新位置 →
   // 替代任务已入队）→ 此处登记拆改计划，跟踪「替代建成 → 验证灌能 → destroy 旧 link」。
@@ -540,7 +540,7 @@ function planStage2Logistics(
  * - planRoads 生成道路任务
  * - 紧急 spawn 重建（无 spawn 且 anchor 已设置）
  * - rotateTraffic 数据轮换
- * - 更新 buildQueue、revision、nextPlanTick（带 P1-F 相位偏移）
+ * - 更新 buildQueue、revision、nextPlanTick（带房间相位偏移）
  * - 重置 planStage=0 + 清 planStageData
  */
 function planStage3RoadsAndFinalize(
@@ -616,7 +616,7 @@ function planStage3RoadsAndFinalize(
       const posKey = `${task.pos.x},${task.pos.y}`;
       if (existingKeys.has(task.key) || existingPositions.has(posKey)) continue;
       if (isBlacklisted(task.key)) continue;
-      // R2 队列治理：道路是背景任务（priority 3），直达 push 也受硬上限约束。
+      // 队列治理：道路是背景任务（priority 3），直达 push 也受硬上限约束。
       const backgroundQueued = queue.filter(
         t => (t.state === "queued" || t.state === "blocked") && t.priority >= 2,
       ).length;
@@ -708,7 +708,7 @@ function planStage3RoadsAndFinalize(
 
   roomMem.buildQueue = queue;
 
-  // R2 队列治理观测：本周期背景任务上限拒绝计数（每规划周期至多一条日志）。
+  // 队列治理观测：本周期背景任务上限拒绝计数（每规划周期至多一条日志）。
   if (data.capRejected > 0) {
     log.info(
       "layout-planner",
@@ -723,7 +723,7 @@ function planStage3RoadsAndFinalize(
   }
 
   // 更新规划时间戳和 RCL 跟踪。
-  // P1-F：nextPlanTick 加房间名哈希偏移 — 消除「N 个房每 50 tick 同一 tick 扎堆重规划」
+  // nextPlanTick 加房间名哈希偏移 — 消除「N 个房每 50 tick 同一 tick 扎堆重规划」
   // 的 CPU 尖峰（roomPhase 与 systemPhase 同 DJB-like 哈希算法）。首次初始化不加偏移 —
   // 房间刚建立时需立即规划。
   // 2026-08-01 目标清单闭环：用更新后队列重算缺口（本周期新任务已入队，缺口应闭合）；
@@ -737,7 +737,7 @@ function planStage3RoadsAndFinalize(
     auditLinkRoleGaps(snapshot, roomMem.buildQueue, resolveLinkRoleRanges(CONFIG.economy.link)),
   );
   recordLayoutGaps(snapshot.roomName, gapsAfter);
-  // #82：布局可观测通道重新接线。metrics.ts 此前**零调用点**（dist 里连 "layoutMetrics" 字样都没有），
+  // 布局可观测通道重新接线。metrics.ts 此前**零调用点**（dist 里连 "layoutMetrics" 字样都没有），
   // 而 Memory.kernel.layoutMetrics 里躺着旧二进制留下的化石值 —— 读者（包括今天的我）会把它当现值。
   // 只写在能拿到真输入的地方；minCut 未算完时靠 defenseCutComplete 标出"防御两格是占位"。
   recordLayoutMetrics(snapshot, gapsAfter, ctx.tick, roomMem);
@@ -854,7 +854,7 @@ function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {
   }
 }
 
-// ─── P1-4 拆改辅助 ─────────────────────────────────────────
+// ─── 拆改辅助 ─────────────────────────────────────────
 
 /**
  * 为死资产 link 找到对应的替代 build task。
@@ -887,7 +887,7 @@ export function findReplacementForDeadLink(
   );
 }
 
-// ─── #82 布局指标落盘（重新接线）─────────────────────────────
+// ─── 布局指标落盘（重新接线）─────────────────────────────
 
 /**
  * 把布局可观测指标写进 `Memory.kernel.layoutMetrics[room]`。

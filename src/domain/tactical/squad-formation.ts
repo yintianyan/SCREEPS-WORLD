@@ -4,13 +4,13 @@ import type { FormationType, TacticalState, SquadPlan } from "./types";
 import type { TerrainContext } from "../defense/terrain-context";
 
 // ═══════════════════════════════════════════════════════════
-// §1. SquadSnapshot — 编队运行时快照
+// SquadSnapshot — 编队运行时快照
 // ═══════════════════════════════════════════════════════════
 
 /**
  * Squad 成员运行时快照 — 从 Game 对象提取的 DTO，不持有 Runtime 引用。
 
- * 与 A5.4.0 SquadMemberSnapshot 的区别：
+ * 与 SquadMemberSnapshot 的区别：
  *   - SquadMemberSnapshot 是 SquadPlan 的静态成员列表（孵化时确定）。
  *   - SquadMemberRuntimeSnapshot 是每 tick 从 Game 对象采集的实时状态。
  *   - 前者用于计划，后者用于执行。
@@ -36,7 +36,7 @@ export interface SquadMemberRuntimeSnapshot {
   readonly alive: boolean;
   /** 是否被 boost。 */
   readonly boosted: boolean;
-  /** 战斗能力快照（可选，A5.4.0 已有）。 */
+  /** 战斗能力快照（可选，SquadMemberSnapshot 已有）。 */
   readonly capability?: {
     attack: number;
     rangedAttack: number;
@@ -81,7 +81,7 @@ export interface SquadSnapshot {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. FormationSlot — 每个 Member 的阵型槽位
+// FormationSlot — 每个 Member 的阵型槽位
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -108,7 +108,7 @@ export interface FormationSlot {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. Anchor — 编队锚点
+// Anchor — 编队锚点
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -237,7 +237,7 @@ export function computeSquadAnchor(squad: SquadSnapshot): FormationAnchor {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. Formation Slot 计算
+// Formation Slot 计算
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -535,7 +535,7 @@ function computeSlotTolerance(role: string, formation: FormationType): number {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. Cohesion — 编队凝聚力指标
+// Cohesion — 编队凝聚力指标
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -738,7 +738,7 @@ function getCohesionThresholds(formation: FormationType): CohesionThresholds {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. SquadMovementIntent — 编队移动意图
+// SquadMovementIntent — 编队移动意图
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -864,7 +864,7 @@ export function produceSquadMovementIntent(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §7. Destination 决策
+// Destination 决策
 // ═══════════════════════════════════════════════════════════
 
 /** 目标决策结果。 */
@@ -993,7 +993,7 @@ function determineDestination(squad: SquadSnapshot, state: TacticalState): Desti
 }
 
 // ═══════════════════════════════════════════════════════════
-// §8. Formation Break & Regroup
+// Formation Break & Regroup
 // ═══════════════════════════════════════════════════════════
 
 /** Formation 退化级别。 */
@@ -1053,7 +1053,7 @@ export function computeRegroupPoint(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §9. Healer Cohesion — 特殊关系保障
+// Healer Cohesion — 特殊关系保障
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -1129,7 +1129,7 @@ export function checkHealerCohesion(squad: SquadSnapshot): HealerCohesionCheck {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §10. Retreat Formation
+// Retreat Formation
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -1212,7 +1212,7 @@ export function computeRetreatFormation(squad: SquadSnapshot): RetreatFormationD
 }
 
 // ═══════════════════════════════════════════════════════════
-// §11. Stuck Detection — 编队级卡位
+// Stuck Detection — 编队级卡位
 // ═══════════════════════════════════════════════════════════
 
 /** Stuck 级别。 */
@@ -1294,7 +1294,7 @@ export function detectSquadStuck(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §12. Determinism — 确定性 Hash
+// Determinism — 确定性 Hash
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -1335,7 +1335,7 @@ function fnv1a32Hex(str: string): string {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §13. 辅助函数
+// 辅助函数
 // ═══════════════════════════════════════════════════════════
 
 /** 切比雪夫距离（Screeps 使用的距离公式）。 */
@@ -1348,9 +1348,9 @@ function chebyshevDist(pos1: number, pos2: number): number {
 }
 
 /**
- * 从 SquadPlan (A5.4.0) + 成员运行时数据构建 SquadSnapshot。
+ * 从 SquadPlan + 成员运行时数据构建 SquadSnapshot。
 
- * 这是系统层薄壳的辅助函数 — 将 A5.4.0 的 SquadPlan 与每 tick 采集的
+ * 这是系统层薄壳的辅助函数 — 将 SquadPlan 与每 tick 采集的
  * 成员运行时数据合并为 SquadSnapshot。
  */
 export function buildSquadSnapshot(

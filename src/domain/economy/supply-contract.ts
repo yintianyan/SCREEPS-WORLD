@@ -406,7 +406,7 @@ export function getContractsByTarget(
 // ─── 序列化 / 反序列化 ───────────────────────────────────
 
 /**
- * A4.2: ResourceType 短码编解码。
+ * ResourceType 短码编解码。
 
  * 编码方案（无冲突）：
  * - `"energy"` → `"E"`（大写，不与 mineral 单字母冲突）

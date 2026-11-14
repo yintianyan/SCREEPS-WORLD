@@ -1,4 +1,4 @@
-/** v17 → v18 迁移独立测试（P1-I：tuning baselineVersion 版本戳建档）。 */
+/** v17 → v18 迁移独立测试（tuning baselineVersion 版本戳建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

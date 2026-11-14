@@ -1,5 +1,5 @@
 /**
- * #62 —— creep 命名的确定性（后缀从 Math.random 换成帝国级单调序号）。
+ * creep 命名的确定性（后缀从 Math.random 换成帝国级单调序号）。
  *
  * 为什么这组用例存在：孪生跑（同二进制、同 seed 两遍 `17-multi-room-soak`）在 tick 2001 就给出不同人口，
  * 而 `queues` 逐字一致 ⇒ 分叉在孵化侧。根因是名字里的随机后缀**进了决策路径**两处：
@@ -56,7 +56,7 @@ function hatchOnce(): string {
   return String(first?.[1]);
 }
 
-describe("#62 命名确定性", () => {
+describe("命名确定性", () => {
   it("(a) 同初始状态 ⇒ 同名字（可复现的正证）", () => {
     expect(hatchOnce()).toBe(hatchOnce());
   });
@@ -109,7 +109,7 @@ describe("#62 命名确定性", () => {
 
   it("(e) 离散度门槛：只差后缀时连续序号的 hash 分桶不得劣于随机基线（去偏置没被拆）", () => {
     // 门槛来自 2026-10-02 实测（200 轮 × N=32，**只差后缀**）：随机基线 max 桶的 p95 如下；
-    // 序号方案实测 max = 18/12/9/7/8/5，全表优于基线且不留空桶。见 pending-62-patch.md 附二。
+    // 序号方案实测 max = 18/12/9/7/8/5，全表优于基线且不留空桶。
     const limits: Array<[number, number]> = [
       [2, 21],
       [3, 16],

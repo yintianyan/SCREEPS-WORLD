@@ -1,6 +1,6 @@
 /** TestWorld — 完整 Screeps Runtime 模拟器。 */
 
-// 官方常量唯一来源 = tests/support/constants（FREEZE R20②）。
+// 官方常量唯一来源 = tests/support/constants。
 // 本文件此前手写的 RCL_PROGRESS / PART_COST / BUILD_COST / FIND_* 私有表已退役；
 // find() 的 case 值与 setup.ts 注入的全局常量同源，杜绝双表漂移。
 import { C } from "../../support/constants";
@@ -65,7 +65,7 @@ export interface WorldConfig {
   cpuLimit?: number;
   /** Math.random 种子（默认 12345）— 每个 installGlobals 重置为该种子，使仿真轨迹
    * 完全可复现（spawn 命名含随机后缀，会经排序/平局裁决影响逐 tick 轨迹；
-   * A0 验收证据合同要求同输入同行为）。 */
+   * 同输入同行为）。 */
   randomSeed?: number;
   /** 预设房间 Memory 为 normal/steady 状态（防止 room-state 首 tick 计算 bootstrap 阻塞 P2 角色） */
   preseedRoomState?: boolean;
@@ -1785,7 +1785,7 @@ export class TestWorld {
 }
 
 // ─── 地形工具 ───────────────────────────────────────────────
-// 唯一实现升格 tests/support/terrain（R20①）— 此处保持再导出以兼容
+// 唯一实现升格 tests/support/terrain — 此处保持再导出以兼容
 // ScenarioBuilder / framework barrel 的既有引用。
 
 export { flatTerrain, terrainWithSwamps, terrainWithWalls };

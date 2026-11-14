@@ -1,4 +1,4 @@
-/** D-FINDING-04: 多房远矿同时失守级联故障测试 — 验证多 remoteOps 同时失效时系统不崩溃。 */
+/** 多房远矿同时失守级联故障测试 — 验证多 remoteOps 同时失效时系统不崩溃。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote/remote-mining-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
@@ -48,7 +48,7 @@ beforeEach(() => {
   resetGlobals();
 });
 
-describe("D-FINDING-04: 多房远矿同时失守级联故障", () => {
+describe("多房远矿同时失守级联故障", () => {
   it("两个主房各有远矿目标同时失守 — 不崩溃，remoteOps 不交叉污染", () => {
     const g = globalThis as any;
     g.Game.time = 2000;

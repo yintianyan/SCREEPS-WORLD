@@ -1,4 +1,4 @@
-/** P1-2 srcRatio 信号 + 危机解锁冻结 — 单元测试。 */
+/** srcRatio 信号 + 危机解锁冻结 — 单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tuningEngineSystem } from "../../../src/systems/empire/tuning-engine";
 import { CONFIG } from "../../../src/config";
@@ -26,7 +26,7 @@ beforeEach(() => {
   delete (globalThis as any).__segStore;
   // Mock RawMemory for segment-store migration checks.
   (globalThis as any).RawMemory = { segments: {}, setActiveSegments: () => {} };
-  // ISSUE-008: 清理 creepRefs，防跨用例污染。
+  // 清理 creepRefs，防跨用例污染。
   globalCache().creepRefs = undefined;
 });
 
@@ -91,7 +91,7 @@ function setupTimeseries(econ: RingBuffer<EconomySample>, cpu: RingBuffer<CpuSam
 }
 
 /** 向 Game.creeps 追加指定角色的 creep。
- *  ISSUE-008: 同步写入 globalCache().creepRefs 供 tuning-engine 消费。 */
+ *  同步写入 globalCache().creepRefs 供 tuning-engine 消费。 */
 function setupCreeps(roomName: string, roles: Record<string, number>): void {
   const existing = (globalThis as any).Game.creeps ?? {};
   let idx = Object.keys(existing).length;
@@ -253,7 +253,7 @@ function lastEval(): any {
 
 // ─── Tests ──────────────────────────────────────────────────
 
-describe("P1-2 srcRatio 信号 + 危机解锁冻结", () => {
+describe("srcRatio 信号 + 危机解锁冻结", () => {
   // 1. 正常路径：解冻 + excludedParams 删除
   it("srcRatio>0.9 + srcStallTicks>50 + 冻结 → 解冻 harvester/hauler maxCount + excludedParams 删除", () => {
     // 设置 harvester 4（达 maxCount=4）+ avgReserveDelta=-80（储备下降）

@@ -176,7 +176,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(reserverReqs).toHaveLength(0);
   });
 
-  it("recovery 状态允许现役 op 补员（R3b 收入路径豁免），但不孵 reserver", () => {
+  it("recovery 状态允许现役 op 补员（收入路径豁免），但不孵 reserver", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       colonyState: "recovery",

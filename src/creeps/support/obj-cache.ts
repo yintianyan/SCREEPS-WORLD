@@ -1,4 +1,4 @@
-/** 每 tick 对象缓存（P2-6）— 去重同 tick 内对同一 id 的重复 Game.getObjectById */
+/** 每 tick 对象缓存 — 去重同 tick 内对同一 id 的重复 Game.getObjectById */
 
 import { globalCache } from "../../kernel/global-cache";
 

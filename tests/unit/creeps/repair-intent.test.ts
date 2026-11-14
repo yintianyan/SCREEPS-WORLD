@@ -1,4 +1,4 @@
-/** R676：修复计量对「目标在 resolve/execute 之间消失」的防护。 */
+/** 修复计量对「目标在 resolve/execute 之间消失」的防护。 */
 import { describe, expect, it } from "vitest";
 import { repairIntentAmount } from "../../../src/creeps/engine/actions/helpers";
 

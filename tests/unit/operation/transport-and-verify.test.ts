@@ -1,4 +1,4 @@
-/** A3-006: Transport Planning（路由 + Carrier Body + ETA） */
+/** Transport Planning（路由 + Carrier Body + ETA） */
 import { describe, expect, it } from "vitest";
 import {
   verifyTransfer,
@@ -79,7 +79,7 @@ function makeProfile(overrides: Partial<RoomEconomicProfile> = {}): RoomEconomic
   } as RoomEconomicProfile;
 }
 
-describe("A3-007: Transfer Verification", () => {
+describe("Transfer Verification", () => {
   it("增量 ≥ 期望 → 验证通过", () => {
     let op = createOperation("W1N1", "W2N1", "energy", 2000, 1, TICK + 2000, TICK);
     op = markReady(op, TICK).op;
@@ -149,7 +149,7 @@ describe("A3-007: Transfer Verification", () => {
   });
 });
 
-describe("A3-001: Room Registry", () => {
+describe("Room Registry", () => {
   it("makeRegistryEntry 正确创建", () => {
     const profile = makeProfile();
     const entry = makeRegistryEntry(profile, 100000, TICK);
@@ -196,7 +196,7 @@ describe("A3-001: Room Registry", () => {
   });
 });
 
-describe("A3-019: Operation Failure 完整链路", () => {
+describe("Operation Failure 完整链路", () => {
   it("重试上限 → 失败 → 归档删除", () => {
     const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK, 2)];
 

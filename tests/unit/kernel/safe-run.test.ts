@@ -1,4 +1,4 @@
-/** safe-run 错误边界测试 — K-2 冷却三修的回归保护。 */
+/** safe-run 错误边界测试 — 冷却三修的回归保护。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { recordTickFatal, runWithFatalGuard, safeRun } from "../../../src/kernel/safe-run";
 import { EventKind } from "../../../src/kernel/event-log";
@@ -29,7 +29,7 @@ beforeEach(() => {
   delete g().telemetry;
 });
 
-describe("safeRun — 冷却触发与可观测性（K-2a/K-2c）", () => {
+describe("safeRun — 冷却触发与可观测性", () => {
   it("连续 3 次错误进入冷却，冷却期间不执行且记 skipReason", () => {
     failTimes("system/link-system", 3);
     expect(g().pluginCooldowns.get("system/link-system")).toBeGreaterThan(g().Game.time);
@@ -59,7 +59,7 @@ describe("safeRun — 冷却触发与可观测性（K-2a/K-2c）", () => {
   });
 });
 
-describe("safeRun — 冷却时长真递增（K-2b）", () => {
+describe("safeRun — 冷却时长真递增", () => {
   it("冷却期满后再失败：计数续增，第二轮冷却 90 tick", () => {
     failTimes("system/y", 3); // count=3 → 冷却 80
     // 快进到冷却期满。

@@ -70,7 +70,7 @@ describe("remote-mining-manager — 敌方 reservation 运行时退出", () => {
 
     const roomMem = g.Memory.rooms[homeRoom];
     expect(roomMem.remoteOps[targetRoom].state).toBe("abandoned");
-    // P1-G：dangerUntil 迁至 remoteOps（remote-mining-manager 唯一写入）。
+    // dangerUntil 迁至 remoteOps（remote-mining-manager 唯一写入）。
     expect(roomMem.remoteOps[targetRoom].dangerUntil).toBeGreaterThan(now);
     expect(reserver.memory.recycle).toBe(true);
   });

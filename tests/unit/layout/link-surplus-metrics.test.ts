@@ -1,16 +1,16 @@
 /**
- * #82 + #75 —— 布局可观测通道**重新接线**后的两块新读数。
+ * 布局可观测通道**重新接线**后的两块新读数。
  *
  * 立案理由（都在同一批读数里）：
  *  · `computeLayoutMetrics` 曾经**零调用点**（dist 里连 "layoutMetrics" 字样都没有），
  *    而 `Memory.kernel.layoutMetrics` 里躺着旧二进制的化石值 ⇒ 读者会把它当现值。
  *    现在 `recordLayoutMetrics()` 在每次规划收尾写入，且只写有真实来源的字段。
- *  · #74 摘掉不可满足的 `linkHub` 虚期望之后，真实现场形状（6 只 link 里 3 只挤在
+ *  · 摘掉不可满足的 `linkHub` 虚期望之后，真实现场形状（6 只 link 里 3 只挤在
  *    controller range≤2 内、两只恒 0 能量）在账上仍无处可计 —— 缺口审计按
  *    `Math.max(0, expected - have)` 把超配截成 0，而死资产检测只认 role=source。
  *
  * ⚠️本文件最重要的一条是**回归护栏**：超配只进仪表，**绝不进 `shouldPlan` 消费的缺口字典** ——
- *  否则等于把 #74 刚拆掉的那根 gap-force 钉重新钉回去（这次以"死资产"的名义）。
+ *  否则等于把刚拆掉的那根 gap-force 钉重新钉回去（这次以"死资产"的名义）。
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -56,7 +56,7 @@ const FINGERPRINT = [
   linkAt(18, 20, "l_ctrl3"),
 ];
 
-describe("#75 auditLinkRoleSurplus —— 角色超配", () => {
+describe("auditLinkRoleSurplus —— 角色超配", () => {
   it("W37S58 指纹：controller 建 3 只要 1 ⇒ 超配 2", () => {
     expect(auditLinkRoleSurplus(snapRcl8(FINGERPRINT), [])).toBe(2);
   });
@@ -89,10 +89,10 @@ describe("#75 auditLinkRoleSurplus —— 角色超配", () => {
 
   /**
    * ⚠️回归护栏：超配**不得**变成规划触发器。
-   * #74 的病灶就是"不可满足的期望"把 gap-force 永久钉住；超配同样不可由"再建结构"解决
+   * 当初的病灶就是"不可满足的期望"把 gap-force 永久钉住；超配同样不可由"再建结构"解决
    * （名额已满，出路只有拆/迁＝人工排产），所以它只能进仪表。
    */
-  it("超配不进入 shouldPlan 消费的缺口字典（不得把 #74 拆掉的钉钉回去）", () => {
+  it("超配不进入 shouldPlan 消费的缺口字典（不得把刚拆掉的钉钉回去）", () => {
     const snap = snapRcl8(FINGERPRINT);
     expect(auditLinkRoleSurplus(snap, [])).toBe(2); // 仪表看得见
     const roleGaps = auditLinkRoleGaps(snap, []);
@@ -102,7 +102,7 @@ describe("#75 auditLinkRoleSurplus —— 角色超配", () => {
   });
 });
 
-describe("#82 computeLayoutMetrics —— 新字段的来源标记", () => {
+describe("computeLayoutMetrics —— 新字段的来源标记", () => {
   it("超配数透传；割集未完成时 defenseCutComplete=false 且防御值是占位", () => {
     const snap = snapRcl8(FINGERPRINT);
     const m = computeLayoutMetrics(

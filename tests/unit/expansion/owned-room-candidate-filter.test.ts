@@ -1,5 +1,5 @@
 /**
- * #86 —— 自有房必须从候选池里剔掉（与 `dropReleasedRooms` 同一个洞的另一半）。
+ * 自有房必须从候选池里剔掉（与 `dropReleasedRooms` 同一个洞的另一半）。
  *
  * 现场证据（2026-10-02 20:5xZ，t=83386099）：`Memory.kernel.expansionCandidates` 十条满格里躺着
  * `W38S56 st=QUALIFIED`，而 W38S56 就是我自己的幼房（claim 成功在 8.5 小时前，
@@ -17,7 +17,7 @@ type Row = { roomName: string; status: string };
 const row = (roomName: string, status = "QUALIFIED"): Row => ({ roomName, status });
 const names = (rows: readonly Row[]) => rows.map(r => r.roomName).join(",");
 
-describe("#86 自有房不进候选池", () => {
+describe("自有房不进候选池", () => {
   it("(a) 现场形状：我已经拥有的房即使 st=QUALIFIED 也被剔掉", () => {
     const pool = [row("W38S57"), row("W38S56"), row("W39S55")];
     expect(names(dropOwnedRooms(pool, ["W37S58", "W38S56"]))).toBe("W38S57,W39S55");

@@ -99,7 +99,7 @@ describe("Links — planLinkTransfers", () => {
   });
 
   it("sends remaining source to storage via second link when first fills controller", () => {
-    // P0-B：source link 按能量降序 —— s2(400) 先发，s1(300) 补缺口。
+    // source link 按能量降序 —— s2(400) 先发，s1(300) 补缺口。
     const links = [
       link("s1", "source", 300),
       link("s2", "source", 400),
@@ -122,13 +122,13 @@ describe("Links — planLinkTransfers", () => {
       link("c1", "controller", 100), // needs 700
     ];
     const transfers = planLinkTransfers(links);
-    // P0-B：s2(300) 先发，到账 291，剩需 409；s1(200) 再发，到账 194，剩需 215。
+    // s2(300) 先发，到账 291，剩需 409；s1(200) 再发，到账 194，剩需 215。
     expect(transfers).toHaveLength(2);
     expect(transfers[0]).toEqual({ fromId: "s2", toId: "c1", amount: 300 });
     expect(transfers[1]).toEqual({ fromId: "s1", toId: "c1", amount: 200 });
   });
 
-  it("P0-B：storageSinkMinFree=200 时，storage 只剩 2 格不发小额传输", () => {
+  it("storageSinkMinFree=200 时，storage 只剩 2 格不发小额传输", () => {
     const links = [
       link("s1", "source", 500),
       link("c1", "controller", 800), // 满，不需要
@@ -137,7 +137,7 @@ describe("Links — planLinkTransfers", () => {
     expect(planLinkTransfers(links, { storageSinkMinFree: 200 })).toHaveLength(0);
   });
 
-  it("P0-B：storageSinkMinFree=200 且有 200 格空闲 ⇒ 正常溢出回收", () => {
+  it("storageSinkMinFree=200 且有 200 格空闲 ⇒ 正常溢出回收", () => {
     const links = [
       link("s1", "source", 500),
       link("c1", "controller", 800),
@@ -183,8 +183,8 @@ describe("Links — planLinkTransfers", () => {
   });
 });
 
-// ── P1-4 最小传输阈值 ──
-describe("Links — minTransfer 阈值（P1-4）", () => {
+// ── 最小传输阈值 ──
+describe("Links — minTransfer 阈值", () => {
   it("低于阈值且远未满时不传输", () => {
     const links = [
       link("s1", "source", 300, { capacity: 800 }), // 300 < 400 且 300 < 720(90%)

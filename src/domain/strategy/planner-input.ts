@@ -44,7 +44,7 @@ export interface EmpirePlannerInput {
   readiness: ExpansionReadinessResult;
   /** 安全边际。 */
   safetyMargin: SafetyMarginResult;
-  /** A3.2 扩张压力评估。 */
+  /** 扩张压力评估。 */
   expansionPressure?: ExpansionPressureResult;
   // ── 派生 ──
   /** 人类可读摘要（供 dashboard / log 用）。 */

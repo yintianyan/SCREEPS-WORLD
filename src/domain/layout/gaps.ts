@@ -33,7 +33,7 @@ export interface LinkRoleGaps {
  * GAP_RETRY_INTERVAL(500) 慢速重试（同二进制控制组：无缺口的幼房 nextPlanTick 仅 +79），
  * 真实新缺口要等 ~450 拍才被排产，且 layoutGaps 恒红会淹掉同通道的真信号。
  * 某角色建得比期望多（如 3 只 controller 角色 link）不由本表报缺口，
- * 那是放置侧/死资产检测的口径，见 #75。
+ * 那是放置侧/死资产检测的口径。
  */
 export function expectedLinkRoleCounts(rcl: number, sourceCount: number): LinkRoleGaps {
   if (rcl < 5) return { source: 0, controller: 0, storage: 0, hub: 0 };
@@ -148,15 +148,15 @@ export function mergeLinkRoleGaps(gaps: StructureGaps, linkRoleGaps: LinkRoleGap
 }
 
 /**
- * link **角色超配**审计（#75，纯函数）：某角色建得比期望多时的那部分数量之和。
+ * link **角色超配**审计（纯函数）：某角色建得比期望多时的那部分数量之和。
  *
  * 为什么需要它：`auditLinkRoleGaps` 只报缺口（`Math.max(0, expected - have)`），
  * 超配被截成 0 ⇒ "6 个名额建满、其中 3 只挤在 controller range≤2 内"这种现场形状
- * 在缺口账上完全隐形，而 `#74` 摘掉虚期望之前，它还被误报成 `linkHub:2`。
+ * 在缺口账上完全隐形；摘掉虚期望之前，它还被误报成 `linkHub:2`。
  * 只统计**有创建器的角色**（source/controller/storage）——hub 不是需求（无常驻消费者）。
  *
  * ⚠️输出只供仪表（layoutMetrics.linkRoleSurplus）：**不得**并进 shouldPlan 消费的缺口字典，
- * 否则等于把 #74 刚拆掉的 gap-force 钉重新钉回去。
+ * 否则等于把刚拆掉的 gap-force 钉重新钉回去。
  */
 export function auditLinkRoleSurplus(
   snapshot: RoomSnapshot,

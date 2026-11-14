@@ -4,7 +4,7 @@ import type { WarCost } from "./war-cost";
 import type { RiskResult } from "./risk-model";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 类型定义
+// 类型定义
 // ═══════════════════════════════════════════════════════════
 
 export interface OperationValueInput {
@@ -48,7 +48,7 @@ export interface OperationValueResult {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. 评估纯函数
+// 评估纯函数
 // ═══════════════════════════════════════════════════════════
 
 export function evaluateOperationValue(input: OperationValueInput): OperationValueResult {

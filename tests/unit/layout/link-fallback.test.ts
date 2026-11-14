@@ -1,4 +1,4 @@
-/** P1-3 link 网络演化 fallback 测试（link 槽位 fallback 链）。 */
+/** link 网络演化 fallback 测试（link 槽位 fallback 链）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   shouldHaveControllerLink,
@@ -97,7 +97,7 @@ function snapshotAt(rcl: number, overrides: Partial<RoomSnapshot> = {}): RoomSna
 
 // ─── shouldHaveControllerLink 谓词 ──────────────────────────
 
-describe("P1-3 shouldHaveControllerLink", () => {
+describe("shouldHaveControllerLink", () => {
   it("RCL4：不应有 controller link（RCL < 5）", () => {
     const snap = snapshotAt(4);
     expect(shouldHaveControllerLink(snap, 0)).toBe(false);
@@ -149,7 +149,7 @@ describe("P1-3 shouldHaveControllerLink", () => {
 
 // ─── shouldHaveStorageLink 谓词 ─────────────────────────────
 
-describe("P1-3 shouldHaveStorageLink", () => {
+describe("shouldHaveStorageLink", () => {
   it("RCL4：不应有 storage link（RCL < 5）", () => {
     const snap = snapshotAt(4);
     expect(shouldHaveStorageLink(snap, 0)).toBe(false);
@@ -194,7 +194,7 @@ describe("P1-3 shouldHaveStorageLink", () => {
 
 // ─── linkConstrained 标记逻辑 ───────────────────────────────
 
-describe("P1-3 linkConstrained 标记", () => {
+describe("linkConstrained 标记", () => {
   it("未标记时 isLinkConstrained 返回 false", () => {
     expect(isLinkConstrained("W7N4", 1000)).toBe(false);
   });

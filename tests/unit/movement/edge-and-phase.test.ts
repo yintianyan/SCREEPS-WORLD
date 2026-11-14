@@ -1,4 +1,4 @@
-/** MV-4 回归 — moveTowardRoom/ensureHome 跨房修缮（审查补测试债）。 */
+/** moveTowardRoom/ensureHome 跨房修缮回归（审查补测试债）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ensureHome } from "../../../src/creeps/movement";
 import { systemPhase } from "../../../src/kernel/phase";
@@ -12,7 +12,7 @@ beforeEach(() => {
 
 // ─── stepOffEdge：边界格防弹回 ───────────────────────────────
 
-describe("MV-4 — ensureHome 边界格内移", () => {
+describe("ensureHome 边界格内移", () => {
   function edgeCreep(x: number, y: number, terrainWall = false): any {
     const creep = mockCreep({ name: "h_1", role: "hauler", home: "W7N4" });
     creep.pos = { ...creep.pos, x, y, getDirectionTo: vi.fn(() => 3) };

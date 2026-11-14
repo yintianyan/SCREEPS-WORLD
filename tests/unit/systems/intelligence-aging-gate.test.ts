@@ -1,5 +1,5 @@
 /**
- * 老化批到期门（#115）的纯算术回归测试。
+ * 老化批到期门的纯算术回归测试。
  *
  * 立案理由（线上实测）：原先是单拍相位门 `(tick - PARENT_PHASE) % 100 === 0`，
  * 而本系统每 10 拍才跑一次 —— 到期那一拍若被调度器跳过（CPU 紧张时 kernel 跳过低优先级系统），
@@ -13,7 +13,7 @@ import { agingDue } from "../../../src/systems/intelligence";
 const AGING = 100;
 const SYS_INTERVAL = 10; // intelligence 系统自身的 interval
 
-describe("agingDue — #115 老化批到期门", () => {
+describe("agingDue — 老化批到期门", () => {
   it("从未跑过（boot / 换码后）第一拍就跑", () => {
     expect(agingDue(1_000, undefined)).toBe(true);
   });

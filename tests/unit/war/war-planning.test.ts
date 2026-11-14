@@ -172,7 +172,7 @@ describe("decideHealerCount — heal-tank 治疗配比", () => {
   });
 });
 
-describe("R4 — 失败目标黑名单过滤", () => {
+describe("失败目标黑名单过滤", () => {
   it("黑名单冷却期内的目标被剔除", () => {
     const target = selectWarTarget({
       ...BASE_INPUT,
@@ -200,7 +200,7 @@ describe("R4 — 失败目标黑名单过滤", () => {
   });
 });
 
-describe("R4 — nextWavePhase 波次相位迟滞", () => {
+describe("nextWavePhase 波次相位迟滞", () => {
   it("build：满编才 advance；未满编保持 build", () => {
     expect(nextWavePhase("build", 3, 3, 0.5)).toBe("advance");
     expect(nextWavePhase("build", 2, 3, 0.5)).toBe("build");
@@ -262,7 +262,7 @@ describe("boost 战前强化 — evaluateBoostGate 门禁降级", () => {
   });
 });
 
-describe("R4 — isAttritionLost 战损止损", () => {
+describe("isAttritionLost 战损止损", () => {
   it("spawned 超过 squadSize × 倍数 → 止损；边界值不触发", () => {
     expect(isAttritionLost(8, 3, 2.5)).toBe(true); // 8 > 7.5
     expect(isAttritionLost(7, 3, 2.5)).toBe(false); // 7 ≤ 7.5
@@ -270,7 +270,7 @@ describe("R4 — isAttritionLost 战损止损", () => {
   });
 });
 
-describe("R4 — evaluateWarOutcome 战后核验", () => {
+describe("evaluateWarOutcome 战后核验", () => {
   it("情报过期（lastSeen 超出 freshness）→ unknown", () => {
     expect(evaluateWarOutcome(2, 0, "Enemy", 1000 - 1600, 1000, 1500)).toBe("unknown");
     expect(evaluateWarOutcome(2, 0, "Enemy", undefined, 1000, 1500)).toBe("unknown");

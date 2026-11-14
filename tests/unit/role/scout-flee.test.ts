@@ -1,4 +1,4 @@
-/** Scout 过境房威胁行为测试（R6b 扩张修复 Fix #3：pushThrough）。 */
+/** Scout 过境房威胁行为测试（pushThrough）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { scoutRole } from "../../../src/creeps/roles/scout";
 import { defineRole } from "../../../src/creeps/engine/role-runner";

@@ -5,7 +5,7 @@ function lab(id: string, x: number, y: number): LabPos {
   return { id, x, y };
 }
 
-describe("Lab 相邻校验 — selectReactionTrio（P2-8）", () => {
+describe("Lab 相邻校验 — selectReactionTrio", () => {
   it("lab 数量不足 3 时返回 undefined", () => {
     expect(selectReactionTrio([])).toBeUndefined();
     expect(selectReactionTrio([lab("a", 10, 10)])).toBeUndefined();

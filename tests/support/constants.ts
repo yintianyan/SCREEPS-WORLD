@@ -1,5 +1,5 @@
 /**
- * 常量唯一真相源（FREEZE R20②）— 全仓测试侧唯一允许出现官方常量字面值的地方。
+ * 常量唯一真相源 — 全仓测试侧唯一允许出现官方常量字面值的地方。
  *
  * 来源：@screeps/driver 的 constants 模块（官方引擎发行组件，423 键，含 FIND_* /
  * CONTROLLER_LEVELS / CONSTRUCTION_COST / BODYPART_COST / CONTROLLER_STRUCTURES /
@@ -21,7 +21,7 @@ import { constants as driverConstants } from "@screeps/driver";
 export const C = driverConstants;
 
 /**
- * driver 未覆盖的官方全局常量补充表 — 本文件是唯一登记处（R20②）。
+ * driver 未覆盖的官方全局常量补充表 — 本文件是唯一登记处。
  * 新增条目必须注释官方出处。
  */
 export const SUPPLEMENTAL_CONSTANTS = {

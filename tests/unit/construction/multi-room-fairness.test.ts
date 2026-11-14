@@ -1,4 +1,4 @@
-/** Phase R2 验收加固 — 多房间建造公平性单元测试。 */
+/** 验收加固 — 多房间建造公平性单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { constructionManagerSystem } from "../../../src/systems/room/construction-manager";
 import { resetGlobals } from "../../support/factories";

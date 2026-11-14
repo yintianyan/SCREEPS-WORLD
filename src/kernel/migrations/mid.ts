@@ -6,7 +6,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 16,
     to: 17,
     run: () => {
-      // v17：P1-F layout 4-stage 分片 — 新增 planStage；回填 0（空闲态），
+      // v17：layout 4-stage 分片 — 新增 planStage；回填 0（空闲态），
       // 非数字值清除（layout-planner 视作 0）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
@@ -29,10 +29,10 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 17,
     to: 18,
     run: () => {
-      // v18：P1-I tuning 版本戳 — TuningMemory 新增 baselineVersion（可选）。
+      // v18：tuning 版本戳 — TuningMemory 新增 baselineVersion（可选）。
       // 设计决策：只「建档」不「定版」——故意不写 CONFIG.tuning.baselineVersion，
       // 让 tuning-engine 首次评估检测 undefined ≠ CONFIG → 清空 rooms 覆盖
-      // （清零重来）；若直接定版，存量旧覆盖会继续压制新基线，违背 P1-I 目标。
+      // （清零重来）；若直接定版，存量旧覆盖会继续压制新基线，违背上述目标。
       // tuning-engine 是 baselineVersion 的唯一写者（迁移除外）。
       const kernel = Memory.kernel as Record<string, unknown> | undefined;
       if (!kernel) return;
@@ -47,7 +47,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 18,
     to: 19,
     run: () => {
-      // v19：P1-J demand 纯度收口 — distScaleUpSince/builderPressureState 由
+      // v19：demand 纯度收口 — distScaleUpSince/builderPressureState 由
       // domain/spawn/demand.ts 直读写收敛为 spawn-manager 适配层显式输入输出
       // （字段早已登记于 global.d.ts:215/221，但游离在迁移体系外，本迁移纳入
       // schema 管理）。语义不变：v18 前 demand 直写 Memory，v19 后由适配层
@@ -72,7 +72,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 19,
     to: 20,
     run: () => {
-      // v20：tuning 改进 A — 新增 pendingValidation + frozenParams。
+      // v20：tuning 闭环验证 — 新增 pendingValidation + frozenParams。
       // 设计决策（同 v18）：只建档 + 畸形自愈，不写字段值；tuning-engine 是两字段唯一写者。
       // 自愈：非对象删除；条目缺关键字段删除（pendingValidation: adjustTick/preAdjustValue/
       // expectedDirection∈{improve,worsen}/adjustDirection∈{up,down}；
@@ -181,7 +181,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 21,
     to: 22,
     run: () => {
-      // v22：P0-1 srcRatio 强制 crisis 通道 — 新增 phase.srcStallTicks 与
+      // v22：srcRatio 强制 crisis 通道 — 新增 phase.srcStallTicks 与
       // phase.storageEnergyPrev（可选）。设计决策（同 v20/v21）：只建档 + 畸形自愈；
       // room-state 是两字段唯一写者，缺失视为 0 / 当前 storage 能量（current 兜底，drainRate=0）。
       for (const roomName in Memory.rooms) {
@@ -202,7 +202,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 22,
     to: 23,
     run: () => {
-      // v23：P0-3 spawn churn 熔断 — 新增 RoomMemory.churnFreezeUntil（可选）。
+      // v23：spawn churn 熔断 — 新增 RoomMemory.churnFreezeUntil（可选）。
       // 设计决策（同 v20）：只建档 + 畸形自愈；spawn-manager 是唯一写者
       // （cleanQueue 触发 churn 计数 → 熔断写入），demand 读取跳过。缺失视为无熔断。
       // 自愈：非对象删除；[role] 非数字删除（视为到期）；空对象回收防膨胀。
@@ -230,7 +230,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 23,
     to: 24,
     run: () => {
-      // v24：P0-1 srcRatio 通道修正 — 新增 phase.storageDrainAccum：累积净流失量
+      // v24：srcRatio 通道修正 — 新增 phase.storageDrainAccum：累积净流失量
       // 替代单 tick drainRate 判定（实测稀疏大脉冲下单 tick 失效）。
       // room-state 是唯一写者，缺失视为 0（phase.ts ?? 0 兜底）。
       for (const roomName in Memory.rooms) {
@@ -248,7 +248,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 24,
     to: 25,
     run: () => {
-      // v25：P1-3 defense 误触发修复 — 新增 RoomMemory.prevThreatCount：威胁新增
+      // v25：defense 误触发修复 — 新增 RoomMemory.prevThreatCount：威胁新增
       // （count 增加）时才刷新 lastHostileAt，防旧威胁永久维持 defense 姿态。
       // room-state 是唯一写者，缺失视为 0（首威胁即新增）。
       for (const roomName in Memory.rooms) {
@@ -264,7 +264,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 25,
     to: 26,
     run: () => {
-      // v26：R3 战时闭环 — 新增 KernelMemory.warPlan（war-planner 写入）。
+      // v26：战时闭环 — 新增 KernelMemory.warPlan（war-planner 写入）。
       // 畸形自愈：非对象 / targetRoom 或 sponsor 非字符串 / squadSize 非数字 → 删除（下 tick 重建）。
       const kernel = Memory.kernel as Record<string, unknown> | undefined;
       if (!kernel) return;
@@ -284,7 +284,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 26,
     to: 27,
     run: () => {
-      // v27：R4 战争自治升级 — warPlan 扩展 phase/spawned；新增 warBlacklist、
+      // v27：战争自治升级 — warPlan 扩展 phase/spawned；新增 warBlacklist、
       // strategy.warPressureTicks。设计决策（同 v20/v21）：只建档 + 畸形自愈；
       // 唯一写者：warPlan/warBlacklist = war-planner，warPressureTicks = empire-strategy。
       // 缺失语义：phase 缺失视为 build（保守：满编才推进）、spawned 缺失视为 0、
@@ -333,7 +333,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 27,
     to: 28,
     run: () => {
-      // v28：R6a 帝国议程 — 新增 KernelMemory.agenda（empire-strategy 每 tick
+      // v28：帝国议程 — 新增 KernelMemory.agenda（empire-strategy 每 tick
       // 重建，缺失视为 develop 兜底）。建档 + 畸形自愈：非对象 / initiative
       // 不在枚举 / since 非数字 → 删除整个字段（下 tick 重建）。
       const kernel = Memory.kernel as Record<string, unknown> | undefined;
@@ -355,7 +355,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 28,
     to: 29,
     run: () => {
-      // v29：R6b 主动情报 — 新增 KernelMemory.prospect / prospectCooldown
+      // v29：主动情报 — 新增 KernelMemory.prospect / prospectCooldown
       // （prospect-manager 唯一写者）。建档 + 畸形自愈：prospect 非对象 /
       // target/sponsor 非字符串 / startedAt/spawned 非数字 → 删除（管理器重建）；
       // prospectCooldown 非对象或条目非数字 → 删除该条目/字段。
@@ -393,7 +393,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 29,
     to: 30,
     run: () => {
-      // v30：R7a 容量感知 — 新增 KernelMemory.capacity（empire-strategy 每 tick
+      // v30：容量感知 — 新增 KernelMemory.capacity（empire-strategy 每 tick
       // 重建）、agenda.progressBase（rcl-push 归因基线）。建档 + 畸形自愈：
       // capacity 非对象 / tier 不在枚举 / since·upgradeTicks 非数字 → 删除；
       // progressBase 非数字 → 删除（缺失视为无基线，窗口归因跳过）。
@@ -426,7 +426,7 @@ export const MID_MIGRATIONS: MigrationStep[] = [
     from: 30,
     to: 31,
     run: () => {
-      // v31：R7b 扩张节奏自适应 — 新增 KernelMemory.expansionRhythm /
+      // v31：扩张节奏自适应 — 新增 KernelMemory.expansionRhythm /
       // expansionPausedUntil（expansion-manager 唯一写者）。建档 + 畸形自愈：
       // expansionRhythm 非对象 → 删除；ring 非数组或条目非数字 → 清空 ring；
       // blacklistMultiplier/minSources 非数字或越界 → 回默认；pausedUntil 非数字 → 删除。

@@ -17,7 +17,7 @@ export interface CandidateInput {
 }
 
 /**
- * 新房锚点评分 — 纯函数（plan §5.6.3）。分数越高越好；
+ * 新房锚点评分 — 纯函数。分数越高越好；
  * 前置约束（调用方保证）：核心矩形不越界、关键格非墙、
  * 距出口保留安全距离、不占 source/controller/mineral。
  */
@@ -31,7 +31,7 @@ export function scoreCandidate(input: CandidateInput): number {
   );
 }
 
-/** 从 Room/Blueprint 扫描提取评分数据；大扫描只能在 Green 下增量完成（plan §5.6.3）。 */
+/** 从 Room/Blueprint 扫描提取评分数据；大扫描只能在 Green 下增量完成。 */
 export function evaluateCandidate(
   room: Room,
   blueprint: Blueprint,

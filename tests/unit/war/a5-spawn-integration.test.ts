@@ -1,4 +1,4 @@
-/** A5.3 Spawn 集成测试 — WarPlan → a5ForceReq → war-planner 消费。 */
+/** Spawn 集成测试 — WarPlan → a5ForceReq → war-planner 消费。 */
 import { describe, expect, it } from "vitest";
 import { submitSquadRequest } from "../../../src/systems/military/war-planner";
 import { resetGlobals } from "../../support/factories";
@@ -41,7 +41,7 @@ function makePlanWithA5(): Plan {
   };
 }
 
-describe("A5.3 Spawn 集成 — a5ForceReq 消费", () => {
+describe("Spawn 集成 — a5ForceReq 消费", () => {
   it("a5ForceReq 存在时 submitSquadRequest 正常提交 attacker 请求", () => {
     resetGlobals();
     const queue = makeQueue();

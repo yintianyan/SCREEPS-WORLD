@@ -6,7 +6,7 @@ import {
 } from "../../../src/domain/industry/feasibility";
 
 /**
- * P0-B：私服 market.orders=0 时的目标可达性判定。
+ * 私服 market.orders=0 时的目标可达性判定。
  * 现场：storage 有 L/H/O/G，缺 U/X；XGH2O 链第一步 U+L 无法本地闭环。
  */
 describe("工业目标本地可达性", () => {

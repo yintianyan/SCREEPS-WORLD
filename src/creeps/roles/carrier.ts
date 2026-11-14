@@ -58,7 +58,7 @@ function transferTargetStorage(): ActionCandidate<StructureStorage> {
           amount,
           tick: Game.time,
         };
-        // 两侧同一拍成对入账（债单 #42 下半场 / #59）：收端按「目标池所在房」记 imported，
+        // 两侧同一拍成对入账：收端按「目标池所在房」记 imported，
         // 发端按「背包出发的那间房」记 exported。取能时刻不记 —— storage→carry 两头都在同一房的
         // tracked 池里，先记 exported 会把"满载但还没出门"（线上实测过停滞形态）当成已发出。
         bumpEnergyCounter(ac.creep.room.name, "imported", amount);

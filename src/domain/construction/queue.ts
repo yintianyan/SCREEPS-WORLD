@@ -116,7 +116,7 @@ export function syncTaskStates(queue: BuildTask[], snapshot: RoomSnapshot): void
 /**
  * 移除已完成任务和过期阻塞任务：done → 删除；blocked + attempts>=3 → 删除
  * （永久冲突，防内存泄漏）；blocked + retryAt 过期 → 转回 queued（保留 attempts）。
- * R2 队列治理新增：queued 任务超龄（tick - queuedAt > maxQueuedAge）且非关键
+ * 队列治理新增：queued 任务超龄（tick - queuedAt > maxQueuedAge）且非关键
  * （priority > 0）→ 清除（staleKeys 返回，仅计数观测，不进黑名单 — 超龄≠永久无效，
  * 规划器下周期可重新入队获得新 queuedAt）。
  * 返回被删除的永久冲突任务 key 列表（黑名单语义不变）+ 超龄清除 key 列表（观测语义）。
@@ -155,7 +155,7 @@ export function cleanTasks(
       }
       continue;
     }
-    // R2 队列治理：queued 任务超龄清除。priority 0（生存关键：spawn 重建等）
+    // 队列治理：queued 任务超龄清除。priority 0（生存关键：spawn 重建等）
     // 永不清除 — 等待再久也必须建成。blocked 任务走上方专属链路，不在此列。
     if (
       task.state === "queued" &&
@@ -258,7 +258,7 @@ export function isEmergencyTask(
 /**
  * 检测是否有房间的 buildQueue 存在 P0 queued 的关键基建任务（storage/tower/spawn）
  * — 这类结构缺失时经济链路断裂，必须让 construction-manager 在任何 budget tier
- * 下都能运行（以 P1 等效优先级）。P1-F：从 kernel.ts 搬来，作为 recoveryEligible
+ * 下都能运行（以 P1 等效优先级）。从 kernel.ts 搬来，作为 recoveryEligible
  * 钩子实现 — kernel 只读钩子不识系统名。
  */
 export function hasCriticalStructureGap(
@@ -279,7 +279,7 @@ export function hasCriticalStructureGap(
   );
 }
 
-// ─── R2：developmentGate 结构化原因码（可观测性契约）──────────
+// ─── developmentGate 结构化原因码（可观测性契约）──────────
 
 /**
  * developmentGate 判定结果原因码。"ok" 表示允许建造；其余值即被跳过的具体原因。
@@ -361,7 +361,7 @@ export function evaluateDevelopmentGate(inputs: DevelopmentGateInputs): Developm
   return "ok";
 }
 
-// ─── R2：关键发展建设通道（RCL2-3 development lane）──────────
+// ─── 关键发展建设通道（RCL2-3 development lane）──────────
 
 /** 关键发展结构判定 — extension 与 controller 邻接 container（不含 source 邻接，
  * 后者归 emergency 车道）。extension 是 RCL2 唯一提升孵化容量的结构，是早期
@@ -428,7 +428,7 @@ export interface DevelopmentLaneInputs {
 
 /**
  * RCL2 关键发展建设通道判定 — 修复「extension 作为普通背景 P2 被门禁永久阻塞」
- * 的 RCL2 停摆闭环（Phase R2 根因）。
+ * 的 RCL2 停摆闭环（队列治理根因）。
 
  * 通道语义：当 developmentGate 因 claimSecure / pressure / conserve 等门禁拒绝时，
  * 若房间满足全部生存前提（无敌人、无 P0 孵化缺口、无紧急重建缺口）且能量不低于

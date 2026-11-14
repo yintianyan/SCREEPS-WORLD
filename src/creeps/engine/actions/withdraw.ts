@@ -23,7 +23,7 @@ export function withdrawRichestContainer(): ActionCandidate<StructureContainer> 
 }
 
 /**
- * R647：RCL<4 早期/回 claim 房兜底 —— 从最满 container（**含 source container**）取能。
+ * RCL<4 早期/回 claim 房兜底 —— 从最满 container（**含 source container**）取能。
  *
  * 这类房通常没有 controller container/link/storage（或有遗留 storage 但为 0），能量积压在
  * source container 里；upgrader 若被「不抢物流源」规则排除就会直接停摆（线上 W38S58 RCL2：
@@ -242,7 +242,7 @@ interface StorageCappedTarget {
 /**
  * 从 storage 限量取能（upgrader 专用）— 防止一次取走大量能量致 storage 突降、
  * 触发 economyPressure 连锁降级。单次取 min(可用, 空闲, limit)。
- * P1-1: limit 可为固定值或动态函数 — 允许按 storage 水位缩放取能上限。
+ * limit 可为固定值或动态函数 — 允许按 storage 水位缩放取能上限。
  */
 export function withdrawStorageCapped(
   limit: number | ((ac: ActionContext) => number),

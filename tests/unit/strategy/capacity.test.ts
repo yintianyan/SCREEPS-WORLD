@@ -1,4 +1,4 @@
-/** 算力容量模型纯函数测试（R7a）。 */
+/** 算力容量模型纯函数测试）。 */
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CAPACITY_OPTIONS,
@@ -236,9 +236,9 @@ describe("pickCpuUsagePerTick — 用哪一份 CPU 均值分档", () => {
   });
 });
 
-// R614：升档窗口的单位是“拍”，不是“评估次数”。
+// 升档窗口的单位是“拍”，不是“评估次数”。
 // empire-strategy 每 5 拍评估一次；若逐次 +1，300 的窗口会被拉成 1,500 拍
-// （R613 实测：147 拍只推进 28，历史 G6 长期红的机制）。
+// （实测：147 拍只推进 28，历史 G6 长期红的机制）。
 describe("evaluateCapacity — elapsedTicks 按真实拍数累加", () => {
   it("5 拍 cadence：60 次评估 ×5 = 300 拍才翻档（不是 60 拍）", () => {
     let tick = TICK;

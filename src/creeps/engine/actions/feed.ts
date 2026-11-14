@@ -1,4 +1,4 @@
-/** R672：施工优先的「hauler → builder」供能车道。
+/** 施工优先的「hauler → builder」供能车道。
  *
  * 现场问题：新区没有 link，controller container 被 upgrader 持续抽走，hauler 按
  * fillTargets 每拍"追着补"，运力被升级吸走；builder 只能自己跑 source→工地。
@@ -14,7 +14,7 @@ import { ACTION_RANGE_NEAR, runAction } from "./helpers";
 const LOW_ENERGY_FREE = 25;
 
 /**
- * R672b：核心供给是否已接近饱和（spawn/extension 合计空闲 ≤25% 容量）。
+ * 核心供给是否已接近饱和（spawn/extension 合计空闲 ≤25% 容量）。
  * 让“供建造”车道不会跟 spawn/extension 抢能量：核心空着时 hauler 先填核心；
  * 核心接近满时，才把能量转给缺能 builder / 丢在工地旁。
  */

@@ -9,7 +9,7 @@ import type {
 } from "./types";
 
 // ═══════════════════════════════════════════════════════════
-// §1. RoleActionIntent — 角色可执行的结构化指令
+// RoleActionIntent — 角色可执行的结构化指令
 // ═══════════════════════════════════════════════════════════
 
 /** 角色移动指令。 */
@@ -51,7 +51,7 @@ export interface RoleActionIntent {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. TacticalDecision → RoleActionIntent 映射纯函数
+// TacticalDecision → RoleActionIntent 映射纯函数
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -127,7 +127,7 @@ function mapCombatIntent(intent: CombatIntent): RoleCombatDirective {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. TacticalObjective 生命周期状态
+// TacticalObjective 生命周期状态
 // ═══════════════════════════════════════════════════════════
 
 /** TacticalObjective 运行时生命周期状态。 */
@@ -166,7 +166,7 @@ export function isObjectiveActive(state: ObjectiveLifecycleState): boolean {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. TacticalObjective 运行时记录
+// TacticalObjective 运行时记录
 // ═══════════════════════════════════════════════════════════
 
 /** TacticalObjective 运行时记录 — 生命周期管理用。 */
@@ -192,7 +192,7 @@ export interface TacticalObjectiveRecord {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. 生命周期评估纯函数
+// 生命周期评估纯函数
 // ═══════════════════════════════════════════════════════════
 
 /** 生命周期评估输入。 */

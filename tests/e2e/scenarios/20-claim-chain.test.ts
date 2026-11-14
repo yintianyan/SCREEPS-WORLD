@@ -1,5 +1,5 @@
 /**
- * E2E-020 claim 授权全链 — expansion 立项→claimer→claim→bootstrap（CANARY §5.2）。
+ * E2E-020 claim 授权全链 — expansion 立项→claimer→claim→bootstrap。
  *
  * 场景：主房 RCL6（满扩展，可孵 claimer）+ 邻房 W0N2 自由 controller。
  * GCL 预置 2（余量门：gcl 2 > owned 1）。

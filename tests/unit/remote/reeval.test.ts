@@ -98,7 +98,7 @@ describe("remote-mining-manager — 现役 op 周期经济重估", () => {
   });
 });
 
-describe("remote-mining-manager — haulerNeed 决策权回归（A4.4 authority 死锁）", () => {
+describe("remote-mining-manager — haulerNeed 决策权回归（authority 死锁）", () => {
   it("Plan 存在且新鲜（不含 operation 请求）→ haulerNeed 仍被重算覆写（线上 18k tick 冻结回归）", () => {
     // 线上形态：op.haulerNeed 冻结在 1（2 源），运力仅产出 12%。
     // 旧代码 planActive 恒真 → 覆写被跳过；修复后重估是唯一决策源。

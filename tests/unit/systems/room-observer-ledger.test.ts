@@ -1,9 +1,9 @@
 /**
- * Observer 请求账本（#100 的仪器）—— 每条分支都必须有**被跑过**的写者。
+ * Observer 请求账本 —— 每条分支都必须有**被跑过**的写者。
  *
  * 立案理由（线上）：`room-observer` 的 observer 分支原先被 `snapshot.observer &&` 挡在最外层，
  * 于是「楼不存在」「楼在但选不出目标」「楼在但引擎回 ERR_*」三种形状在现有仪器上完全同形
- * （都表现为"什么都不发生"），四源取证全空（R307/R308）⇒ 「给选靶加权重」与「先盖楼」两个动作
+ * （都表现为"什么都不发生"），四源取证全空⇒ 「给选靶加权重」与「先盖楼」两个动作
  * 无法区分。本文件不测算术，测的是**接线**：每个桶各由一条真实分支写出，且自洽式
  * `ok === captured + lostVision + staleSlot` 在真实调用序列上成立。
  */
@@ -40,7 +40,7 @@ beforeEach(() => {
   g().Memory.rooms["W7N4"] = {}; // run() 对无 Memory 的房直接 continue
 });
 
-describe("observeCounters — room-observer 的每条分支都有写者（#100 的接线证明）", () => {
+describe("observeCounters — room-observer 的每条分支都有写者（接线证明）", () => {
   it("到点但没有 Observer 楼 → gate++ 且 noObserver++（这一列>0 就是「楼不在」的正面读数）", () => {
     roomObserverSystem.run(ctxAt(DUE_TICK, {}));
     const c = observeCounters("W7N4");

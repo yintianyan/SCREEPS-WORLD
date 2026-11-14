@@ -7,7 +7,7 @@ export interface RoomStrategyInput {
   economyPressure: number;
   /** 最近一次房内出现威胁的 tick（无记录为 undefined）。带滞回的记忆。 */
   lastHostileAt?: number;
-  /** 最近一次确认由 NPC（Invader）或玩家造成的威胁 tick（#198-B）。
+  /** 最近一次确认由 NPC（Invader）或玩家造成的威胁 tick。
    * 与 `lastHostileAt` 同拍盖章、按行凶者身份分尺（room-state 写）。
    * 只用于「战争态下扩张是否解锁」：确认仅 NPC 骚扰时战争不拦扩张。 */
   lastInvaderHostileAt?: number;
@@ -33,7 +33,7 @@ export interface PostureOptions {
   threatWindow: number;
   /** fortify → war 的耐心窗口：设防状态持续超过此时长且敌情未消 → 升战争。 */
   warPatience: number;
-  /** war 可持续性耐心窗口（R4）：war 下经济压力持续超 warMaxPressure 达此值 → 降级
+  /** war 可持续性耐心窗口：war 下经济压力持续超 warMaxPressure 达此值 → 降级
    * fortify（打不起就撤资）；与威胁升级同待遇立即生效不等 minDwell，压力恢复即清零。 */
   warExitPatienceTicks: number;
   /** 降级最短驻留期：fortify/war 至少维持此时长才允许回落。 */
@@ -42,7 +42,7 @@ export interface PostureOptions {
   expandMinBucket: number;
   /** expand 姿态要求的最高平均经济压力。 */
   expandMaxPressure: number;
-  /** P2-2：扩张 CPU ROI 门禁——总 creep CPU 占 limit 比例超过此值时
+  /** 扩张 CPU ROI 门禁——总 creep CPU 占 limit 比例超过此值时
    * 拒绝扩张。新增房间会带来 ~3-5 CPU/tick 的 creep 增量（harvester/
    * hauler/upgrader/builder 等），在已接近 limit 的情况下会导致 CPU 死亡螺旋。
    * 默认 0.6：留 40% 余量给系统开销 + 突发。 */
@@ -82,19 +82,19 @@ export interface PostureInput {
   bucket: number;
   /** 上一次评估结果（滞回基准）；首次评估为 undefined。 */
   prev?: { posture: EmpirePosture; since: number };
-  /** war 压力连续超标 tick 数（R4）：由 empire-strategy 持久化（kernel.strategy.warPressureTicks）后回传；缺失视为 0。 */
+  /** war 压力连续超标 tick 数：由 empire-strategy 持久化（kernel.strategy.warPressureTicks）后回传；缺失视为 0。 */
   warPressureTicks?: number;
-  /** P2-2：帝国总 creep CPU 消耗（Σ cpuByHome，来自 telemetry 采样）。
+  /** 帝国总 creep CPU 消耗（Σ cpuByHome，来自 telemetry 采样）。
    * 用于扩张 ROI 门禁：扩张会增加归属 CPU，若现有 CPU 已接近 limit
    * 的一定比例，新增房间将导致 CPU 死亡螺旋。缺省视为 0（不门禁）。 */
   totalCreepCpu?: number;
-  /** P2-2：有效 CPU limit（min(cpuLimit, tickLimit)），用于计算 CPU 占比。 */
+  /** 有效 CPU limit（min(cpuLimit, tickLimit)），用于计算 CPU 占比。 */
   effectiveCpuLimit?: number;
 }
 
 /** 姿态评估结果 — 姿态 + 各域指令（执行系统只消费指令）。 */
 /**
- * 本次姿态由哪条分支产生（#140）。
+ * 本次姿态由哪条分支产生。
  *
  * 立案理由（线上实测）：`finalize` 原先不带"走了哪个 return"的信息，而 war 进/出的候选分支有六条，
  * 每次复盘都要现场考古——对方量过代价：console 2 发＋`econ-ring` 1 发＋读码 5 处，
@@ -103,7 +103,7 @@ export interface PostureInput {
 export type PostureBranch =
   /** prev=war 且任一房 recovery/bootstrap 且无活敌 ⇒ fortify（危机撤资，经济前置）。 */
   | "war-divest-crisis"
-  /** 威胁窗口内、prev=war、压力计数到达 warExitPatienceTicks ⇒ fortify（R4 止损）。 */
+  /** 威胁窗口内、prev=war、压力计数到达 warExitPatienceTicks ⇒ fortify（止损）。 */
   | "war-exit-patience"
   /** 威胁窗口内、prev=war、未达止损 ⇒ 继续 war（压力计数累加或清零）。 */
   | "war-sustain"
@@ -153,7 +153,7 @@ export function postureTransitionEventData(
 }
 
 export interface PostureResult {
-  /** 本次判定走的分支（#140）。 */
+  /** 本次判定走的分支。 */
   reason: PostureBranch;
   posture: EmpirePosture;
   /** 当前姿态的起始 tick。 */
@@ -162,7 +162,7 @@ export interface PostureResult {
   expansionAllowed: boolean;
   /** 是否允许开辟新的远矿点（现役运营不受影响）。 */
   newRemoteOpsAllowed: boolean;
-  /** 下一步 war 压力计数（R4）— 调用方（empire-strategy）须持久化供下 tick 回传，否则无法跨 tick 累积。 */
+  /** 下一步 war 压力计数 — 调用方（empire-strategy）须持久化供下 tick 回传，否则无法跨 tick 累积。 */
   warPressureTicks: number;
 }
 
@@ -174,7 +174,7 @@ export function evaluateEmpirePosture(
   options: PostureOptions = DEFAULT_POSTURE_OPTIONS,
 ): PostureResult {
   const { tick, rooms, gclLevel, bucket, prev } = input;
-  // P2-2：CPU ROI 门禁——扩张会增加 creep CPU（新房间至少 +harvester+hauler+upgrader），
+  // CPU ROI 门禁——扩张会增加 creep CPU（新房间至少 +harvester+hauler+upgrader），
   // 若现有 CPU 已占 limit 的 expandMaxCpuRatio 以上，新房间将吃掉剩余预算触发死亡螺旋。
   const totalCreepCpu = input.totalCreepCpu ?? 0;
   const effectiveLimit = Math.max(1, input.effectiveCpuLimit ?? 20);
@@ -187,7 +187,7 @@ export function evaluateEmpirePosture(
   // 零滞回「此刻有敌」：任一房本 tick 有真实在房威胁（已剔除盟友）。这是冻结指令的
   // 真相来源——不读滞回记忆，只读当下视线。敌人撤离即清零，自治立即恢复。
   const liveThreat = rooms.some(r => r.hasLiveThreat === true);
-  // #198-B：战争态拦扩张的依据必须与「谁在打」一致。房级 `lastHostileAt` 把 NPC 过境与
+  // 战争态拦扩张的依据必须与「谁在打」一致。房级 `lastHostileAt` 把 NPC 过境与
   // 玩家宣战记成同一件事（NPC 到达间隔≈威胁窗 ⇒ war 占空比≈100%，扩张被永久冻结）。
   // 这里只在**确认仅 NPC 骚扰**时给 war 解禁；玩家敌意或来源不明仍按原语义拦住（保守），
   // 且 liveThreat 的冻结优先于一切。war 姿态本身、防御响应与 warPressure 计数不变。
@@ -233,7 +233,7 @@ export function evaluateEmpirePosture(
     avgPressure <= options.expandMaxPressure &&
     sponsorReady &&
     youngestMature &&
-    cpuRatioOk; // P2-2：CPU 余量不足以支撑新房间时不扩张
+    cpuRatioOk; // CPU 余量不足以支撑新房间时不扩张
 
   // ── 危机下强行撤资（经济前置）：若上一态为 war 且当前无真实在房威胁，立即降
   // fortify —— recovery/bootstrap 是比威胁记忆更强的经济信号，战争机器烧的是存活所需的
@@ -254,7 +254,7 @@ export function evaluateEmpirePosture(
 
   // ── 威胁升级：立即生效（紧急旁路，不等驻留期）──
   if (threatRecent) {
-    // ── war 可持续性（R4 止损）：打不动经济必须退 ──
+    // ── war 可持续性（止损）：打不动经济必须退 ──
     // 计数跨 tick 累积（调用方持久化回传）、压力恢复即清零；达窗口立即降级
     // fortify，不等 minDwell — 战争机器烧的是存活所需的经济。
     // （危机撤资已由上方统一早退处理；此处仅处理正常经济下的可持续止损。）
@@ -378,7 +378,7 @@ export function evaluateEmpirePosture(
  * 扩张授权（expansionAllowed）= 扩张健康门(expandHealth) && 无活威胁 && (非战争态 或 仅 NPC 骚扰)：
  *  - 不再要求 posture==="expand"——殖民是高承诺动作，授权门由"全面健康+无活敌"决定，
  *    与姿态显示解耦（fortify 记忆不封锁扩张）；
- *  - war 姿态在**玩家敌意或来源不明**时硬性关闭扩张；#198-B：确认仅 NPC 过境
+ *  - war 姿态在**玩家敌意或来源不明**时硬性关闭扩张；确认仅 NPC 过境
  *    （invader 近期且 player 不近期）时不再拦扩张——NPC 骚扰间隔≈威胁窗，
  *    按原语义会把扩张永久冻结（10 拍过境 → 5,000 拍冻结）。war 姿态/防御本身不变；
  *  - liveThreat 门禁保留（有活敌不打殖民，防御优先于速度）。

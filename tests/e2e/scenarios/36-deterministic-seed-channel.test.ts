@@ -1,7 +1,7 @@
 /**
- * E2E-036 探索种子的注入通路（#62 的端到端那一半）。
+ * E2E-036 探索种子的注入通路（端到端那一半）。
  *
- * 为什么必须单独有一例：`#62` 的修复是"让长 soak 可复现"，而它的根因是
+ * 为什么必须单独有一例：修复的目标是"让长 soak 可复现"，而它的根因是
  * **bot 跑在 @screeps/driver 的 isolated-vm isolate 里** —— 测试进程替换 `Math.random`
  * 到不了被测物（10-01 实测同 seed 两跑仍分叉）。唯一通道是 bot 的 console 写 Memory。
  * 于是这条通道本身要有人看着：
@@ -16,7 +16,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 
-describe("E2E-036 探索种子注入通路（#62）", () => {
+describe("E2E-036 探索种子注入通路", () => {
   const runners: ScenarioRunner[] = [];
 
   async function bootWith(seedEnv: string | undefined) {

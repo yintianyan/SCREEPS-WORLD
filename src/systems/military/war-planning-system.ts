@@ -24,15 +24,15 @@ import { roomLinearDistance } from "../../domain/remote/targeting";
 import { demobilize, REASON_TARGET_SWITCH } from "./war-planner";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 系统定义
+// 1. 系统定义
 // ═══════════════════════════════════════════════════════════
 
 export const warPlanningSystem: System = {
   name: "war-planning",
   priority: 2 as Priority,
   interval: CONFIG.war.interval,
-  // FINDING-08 修复：war 姿态下必须运行——否则 Recovery tier 跳过 war-planning-system，
-  // war-planner 的 Legacy fallback 路径会产出与 A5.3 不一致的编制（decideSquadSize vs a5ForceReq），
+  // 修复：war 姿态下必须运行——否则 Recovery tier 跳过 war-planning-system，
+  // war-planner 的 Legacy fallback 路径会产出不一致的编制（decideSquadSize vs a5ForceReq），
   // 导致编队在两套逻辑间震荡。
   recoveryEligible: () => Memory.kernel?.strategy?.posture === "war",
 
@@ -40,7 +40,7 @@ export const warPlanningSystem: System = {
     const tick = ctx.tick;
     const g = globalCache();
 
-    // #99：本 pass 的漏斗计量。scratch 每次换新对象 ⇒ Memory 里那份快照不会被后续 pass 改写；
+    // 本 pass 的漏斗计量。scratch 每次换新对象 ⇒ Memory 里那份快照不会被后续 pass 改写；
     // 由 intelligence 的老化批（每 100 拍）与 intelCoverage 同拍快照进 Memory。
     const funnel = newWarFunnel(tick);
     g.warFunnelScratch = funnel;
@@ -102,7 +102,7 @@ export const warPlanningSystem: System = {
       // 无计划（无威胁 / 未授权 / 经济护栏失败）：撤掉物流需求，但不清 warPlan —
       // 收摊（recycle + 撤请求 + 核验）是 war-planner 的职责，它每轮自己复核授权证据，
       // 断供超窗才撤军。这里抢着清 warPlan 会让旧编队变成没人回收的孤儿。
-      // #99：无威胁单列一位，剩下的合并成 noPlan（domain 的三处 bail 在系统层不可分辨，
+      // 无威胁单列一位，剩下的合并成 noPlan（domain 的三处 bail 在系统层不可分辨，
       // 复制它的判据只会与真判据漂移）。
       if (funnel.noThreats === 0) funnel.noPlan = 1;
       g.warLogisticsDemand = undefined;
@@ -111,7 +111,7 @@ export const warPlanningSystem: System = {
 };
 
 // ═══════════════════════════════════════════════════════════
-// §2. 运行时数据采集 → WarPlanningInput
+// 2. 运行时数据采集 → WarPlanningInput
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -216,7 +216,7 @@ function buildWarPlanningInput(
         }, threatAssessments[0]!)
       : undefined;
 
-  const playerIntel: PlayerIntelRecord | undefined = undefined; // PlayerIntel 系统由 A5.2 管理
+  const playerIntel: PlayerIntelRecord | undefined = undefined; // PlayerIntel 系统
   const confidence: MultiDimensionalConfidence | undefined = maxThreat?.assessment.multiConfidence;
 
   // 是否有活跃 Operation
@@ -250,7 +250,7 @@ function buildWarPlanningInput(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. 目标候选采集
+// 3. 目标候选采集
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -259,15 +259,15 @@ function buildWarPlanningInput(
  * ⚠️数据源是 `queryRoomIntel()`（`systems/intelligence.ts` 的模块级 heap Map，**不是** `Memory.rooms[].intel`
  * ——那个键并不存在）。旧注释曾把消费方引向空键，照着它排查会得出"战争系统读空键⇒永久无目标"这条**假根因**。
  *
- * ⚠️**本函数的产物今天不在决策路径上**（#99 计数时读码实证，写单测才撞出来的）：
+ * ⚠️**本函数的产物今天不在决策路径上**（计数时读码实证，写单测才撞出来的）：
  * `deriveOperationType()` 的 10 个 ThreatIntent 分支只返回 `DEFEND | ESCORT | RETREAT`，
  * `isOffensive()` 因此恒 false ⇒ `deriveTarget()` 必走防御支（目标＝受威胁房本身），
  * `selectTarget()` 与它携带的 `occupied/blacklist/targetFreshness·maxTowers·maxDistance`
  * 四道进攻闸**从生产链上进不到**（唯一调用者是 `tests/unit/military/war-planning-a5-3.test.ts` 手递的进攻夹具）。
- * ⇒ 推论：#95 的"零计划零编队"只可能由 `noThreats` 解释，**不能**由候选被筛光解释；
+ * ⇒ 推论："零计划零编队"只可能由 `noThreats` 解释，**不能**由候选被筛光解释；
  * 反过来"候选表是空的"也不是缺陷证据。这些计数是为进攻链接线那天预备的仪器。
  *
- * #99 在此处计前三道出口（非 fact / 无主或我方 / `kind!=='normal'`）+ 池子规模 + 存活数；
+ * 在此处计前三道出口（非 fact / 无主或我方 / `kind!=='normal'`）+ 池子规模 + 存活数；
  * 后四道在 domain 的 `selectTarget` 里，其拒因随 `rejectedAlternatives` 落进计划，本处不重复计
  * （复制一份判据只会与真判据漂移）。
  */
@@ -307,7 +307,7 @@ function buildTargetCandidates(tick: number, funnel: WarFunnelCounters): TargetC
   const entries = queryRoomIntel();
   funnel.intelEntries = entries.length;
   for (const entry of entries) {
-    // 授权硬门槛：非 fact 级情报不进入战争目标候选（INTELLIGENCE §5）。
+    // 授权硬门槛：非 fact 级情报不进入战争目标候选。
     if (!intelActionUsable(entry.subject, tick)) {
       funnel.notFact++;
       continue;
@@ -346,7 +346,7 @@ function buildTargetCandidates(tick: number, funnel: WarFunnelCounters): TargetC
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. 我方战斗力聚合
+// 4. 我方战斗力聚合
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -453,7 +453,7 @@ function computeOurPower(g: ReturnType<typeof globalCache>): CombatPower {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. 兼容写入 Memory.kernel.warPlan
+// 5. 兼容写入 Memory.kernel.warPlan
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -500,7 +500,7 @@ function resolveSponsor(targetRoom: string, ctx: TickContext): string | undefine
  * 兼容格式：
  *   targetRoom, sponsor, squadSize, since, towersSeen, phase, spawned
 
- * 新字段（A5.3 运行时字段，无 schema 变更）：
+ * 新字段（运行时字段，无 schema 变更）：
  *   operationId, warPosture, operationType
 
  * sponsor 由调用方解析后传入（见 resolveSponsor）——本函数只负责投影，
@@ -528,7 +528,7 @@ function writeCompatibleWarPlan(plan: WarPlan, tick: number, sponsor: string): v
     sponsor,
     squadSize: Math.max(1, squadSize),
     since: keep ? existing!.since : tick,
-    // 恒 0，且这是正确值不是丢失：A5 只产防御型目标（受威胁的自有房/远矿房），
+    // 恒 0，且这是正确值不是丢失：只产防御型目标（受威胁的自有房/远矿房），
     // deriveTarget 的合成候选 towers=undefined。towersSeen 的用途是「进去时要拆掉几座
     // 塔」（核弹门槛 + 战后核验基线），对自家/远矿房本就无从谈起 —— 核弹门在防御型
     // 计划上不发射是期望行为，真正的进攻型计划由 war-planner 的选目标路径给出塔数。
@@ -538,7 +538,7 @@ function writeCompatibleWarPlan(plan: WarPlan, tick: number, sponsor: string): v
     spawnedKeys: keep ? existing!.spawnedKeys : undefined,
   };
 
-  // A5.3 运行时扩展字段（无 schema 变更，遵循 R12 先例）
+  // 运行时扩展字段（无 schema 变更）
   const wp = Memory.kernel.warPlan as typeof Memory.kernel.warPlan & {
     operationId?: string;
     warPosture?: string;
@@ -550,7 +550,7 @@ function writeCompatibleWarPlan(plan: WarPlan, tick: number, sponsor: string): v
   wp.operationType = plan.operation.type;
   wp.warPlanHash = plan.hash;
 
-  // A5.3 编队需求：写入 a5ForceReq 供 war-planner 消费
+  // 编队需求：写入 a5ForceReq 供 war-planner 消费
   // war-planner 用它替代旧 decideSquadSize/decideHealerCount
   const a5 = {
     attacker: plan.forceRequirement.attacker + plan.forceRequirement.ranged,
@@ -576,7 +576,7 @@ function writeCompatibleWarPlan(plan: WarPlan, tick: number, sponsor: string): v
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. 事件编码
+// 6. 事件编码
 // ═══════════════════════════════════════════════════════════
 
 const PLAN_EVENT_CODES: Record<string, number> = {

@@ -1,4 +1,4 @@
-/** v3 布局合约（R660）——把「每个建筑都要能发挥作用」写成可执行的几何/功能断言。
+/** v3 布局合约——把「每个建筑都要能发挥作用」写成可执行的几何/功能断言。
  *
  * 覆盖用户要求：RCL 分批数量、建筑位置唯一/奇偶走道、每结构至少一个可站邻格、
  * storage link 的角色分类、实验室/塔/终端的功能可达性、地形鲁棒性、锚点选择，
@@ -102,7 +102,7 @@ describe("v3 合约 — storage link 的角色与位置", () => {
   });
 });
 
-describe("v3 合约 — terminal 紧贴 storage（R661 优化）", () => {
+describe("v3 合约 — terminal 紧贴 storage（优化）", () => {
   it("terminal 到 storage 的 Chebyshev ≤2（最后一公里）", () => {
     const storage = COMPACT_CORE_V3.cells.find(c => c.structureType === STRUCTURE_STORAGE)!;
     const terminal = COMPACT_CORE_V3.cells.find(c => c.structureType === STRUCTURE_TERMINAL)!;

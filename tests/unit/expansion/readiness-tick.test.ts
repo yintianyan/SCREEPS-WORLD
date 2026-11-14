@@ -1,11 +1,11 @@
 /**
- * `expansionDashboard.readinessTick` 的不变量 —— 立案过程见 roadmap #178（commit 0a1be15e）。
+ * `expansionDashboard.readinessTick` 的不变量。
  *
  * 为什么需要这一列：仪表盘每拍给自己盖 `tick`，可 `failedGates` 里的闸门值来自 empire-economy
  * 的 heap 缓存（`expansion-planner.ts:47` → `queryEmpirePlannerInput()` → `empire-economy.ts:206/214`）。
  * 两者不同时刻，而缓存的构建拍号以前从没落过盘 ⇒ 读数人无法区分"刚算的"与"旧账"。
  * ⚠️立案时曾用 `kernel.strategy.since` 反推出"闸门值旧 2,251 拍"——那把尺用错了对象（`since` 是**姿态翻档拍**，
- * 不是这个布尔位的成立时刻；作废过程见 roadmap `补294⑥` 与 §3.5 #178）。本列正是它的合法替代尺。
+ * 不是这个布尔位的成立时刻）。本列正是它的合法替代尺。
  *
  * 为什么这个文件不直接跑 planner：这一列的**语义**（未知怎么表示、年龄怎么算、两条分支是否同源）
  * 全部可在纯函数与源码形状上钉住；跑一趟 planner 需要整套 EmpireResourceView 夹具，

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dropInsufficientSources } from "../../../src/domain/expansion/candidate";
 
 /**
- * R7b「扩张节奏自适应」里 `minSources` 这一路的消费方。
+ * 「扩张节奏自适应」里 `minSources` 这一路的消费方。
  * 旧唯一消费者 `domain/expansion/evaluator.ts` 在生产零调用者（只有它自己的测试在读）
  * ⇒ 「连续被抢之后只挑 ≥2 source 的目标」从未生效。这里把接上后的语义钉住。
  */

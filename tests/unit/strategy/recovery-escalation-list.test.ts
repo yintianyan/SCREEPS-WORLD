@@ -69,13 +69,13 @@ describe("upsertEscalation", () => {
   it("不同房/不同域各占一条；超过上限时淘汰最旧的", () => {
     let list: EscalationEntry[] | undefined;
     for (let i = 0; i < ESCALATIONS_CAP + 3; i++) {
-      const r = upsertEscalation(list, { ...base, room: `R${i}`, tick: 2000 + i });
+      const r = upsertEscalation(list, { ...base, room: `W${i}N0`, tick: 2000 + i });
       list = r.list;
     }
     expect(list).toHaveLength(ESCALATIONS_CAP);
-    // 最新那条（R14）在首位；最旧的 R0 已被挤出。
-    expect(list![0]!.room).toBe(`R${ESCALATIONS_CAP + 2}`);
-    expect(list!.some(e => e.room === "R0")).toBe(false);
+    // 最新那条在首位；最旧的那条已被挤出。
+    expect(list![0]!.room).toBe(`W${ESCALATIONS_CAP + 2}N0`);
+    expect(list!.some(e => e.room === "W0N0")).toBe(false);
   });
 
   it("不修改入参清单（调用方负责写回 Memory）", () => {
@@ -85,7 +85,7 @@ describe("upsertEscalation", () => {
     expect(JSON.stringify(original.list)).toBe(snapshot);
   });
 
-  it("#139 回归：更新非队首条目时，repeats 必须是「那一条」的，不是 list[0] 的", () => {
+  it("回归：更新非队首条目时，repeats 必须是「那一条」的，不是 list[0] 的", () => {
     // 建 A（W1N1/development）→ 建 B（W9N9/mineral）。新条目 unshift ⇒ B 成队首，A 退到队尾，
     // 而"更新"是原地不移位的 —— 于是此后每次升级 A，`list[0]` 都是无关的 B。
     let r = upsertEscalation(undefined, { ...base, tick: 1000 });

@@ -1,4 +1,4 @@
-/** movePriorityFor 卡位升级测试（v33-R12）。 */
+/** movePriorityFor 卡位升级测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { movePriorityFor } from "../../../src/creeps/movement/intent";
 import { CONFIG } from "../../../src/config";

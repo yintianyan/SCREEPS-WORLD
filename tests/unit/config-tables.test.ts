@@ -3,7 +3,7 @@ import { CONFIG } from "../../src/config";
 import { registry } from "../../src/bootstrap";
 import { buildCadenceTable } from "../../src/kernel/cadence";
 
-/** 【F1/G-A~E】CONFIG 四表与 cadence 治理表的契约测试（FREEZE §0 参数表结构冻结）。 */
+/** CONFIG 四表与 cadence 治理表的契约测试（参数表结构冻结）。 */
 describe("F1 config tables", () => {
   it("memory.ttl 表：每行含 maxAge 与合法 sweepPolicy", () => {
     for (const [family, entry] of Object.entries(CONFIG.memory.ttl)) {

@@ -30,7 +30,7 @@ import { log } from "../kernel/log";
 const round2 = (v: number): number => Math.round(v * 100) / 100;
 
 /**
- * 房榜的显示上限（#174 同族，见 roadmap 补252）。
+ * 房榜的显示上限。
  *
  * 房集合含过境房 ⇒ 规模**无界**，所以这里不放开截断，而是**留痕**：同一发里落一列
  * `cpuPerTickByRoomCount`，报截断**前**的房数。理由＝这张榜的唯一用途是把交通解算量按房加总
@@ -93,7 +93,7 @@ export function computeCpuRate(
   bySystem: Record<string, number>;
   byRole: Record<string, number>;
   /** 截断**前**的键数（留痕式，与房榜的 `cpuPerTickByRoomCount` 同形）。
-   *  这两张榜的键是无界的、按设计只留前十 ⇒ 榜里查无此标签**推不出**它没被计费（#142 就在这上面
+   *  这两张榜的键是无界的、按设计只留前十 ⇒ 榜里查无此标签**推不出**它没被计费（就在这上面
    *  错过一次）；只有当 count 小于上限时，"缺席"才升级为有意义的负向证据。
    */
   bySystemCount: number;
@@ -156,10 +156,10 @@ export function computeCpuRate(
     byRoleCount: Object.keys(cum.roles ?? {}).length,
     bySystemTailSum: tailPerTick(cum.systems ?? {}),
     byRoleTailSum: tailPerTick(cum.roles ?? {}),
-    // 相位表**不截断**（#174）。两条理由：一、它的规模由源码里 `measuredRun("phase/…")` 的标签数决定
+    // 相位表**不截断**。两条理由：一、它的规模由源码里 `measuredRun("phase/…")` 的标签数决定
     // （有界，现读 10 枚），不是无界字典；二、它是 `unphased = total − Σphases` 那笔账的复算依据，
     // 而 `unphased` 用的是全量求和 ⇒ 一旦截断把某项切出表，读数人拿 `total − ΣbyPhase` 就得到**假残差**
-    // （两者只在标签数 ≤ 上限时同值；补248 落了 `phase/early` 后正好装满前十，下一枚标签就会分叉）。
+    // （两者只在标签数 ≤ 上限时同值；`phase/early` 落地后正好装满前十，下一枚标签就会分叉）。
     byPhase: perTick(cum.phases ?? {}, Number.POSITIVE_INFINITY),
   };
 }
@@ -327,7 +327,7 @@ export const telemetryCollectorSystem: System = {
       }
       return;
     }
-    // P2-9 修复：conserve 档做轻量 stats 更新（只采样 CPU，跳过事件检测和输出）。
+    // 修复：conserve 档做轻量 stats 更新（只采样 CPU，跳过事件检测和输出）。
     // 确保前馈预测使用新鲜 stats，避免 conserve→healthy 升级后前馈以旧值误判。
     if (ctx.budget.tier === "conserve") {
       const tel = globalCache().telemetry;
@@ -356,10 +356,10 @@ export const telemetryCollectorSystem: System = {
     // 3. 人口普查（每 populationInterval tick = 每 100 tick）
     if ((tick - phase) % CONFIG.telemetry.populationInterval === 0) {
       samplePopulationData(tick);
-      // §3.4 只读普查（L0「失守房间与资产损失处理」的检测面）：#118 是手工探针才发现的
+      // 只读普查（L0「失守房间与资产损失处理」的检测面）：这一面是手工探针才发现的
       // ——「我名下、但房不在 `Memory.rooms`」的残留结构今天**没有任何机制看得见**。
       sampleStrayAssets(tick);
-      // P0-1: Memory 体积监控——与人口普查同频率（每 100 tick），
+      // Memory 体积监控——与人口普查同频率（每 100 tick），
       // RawMemory.get().length 零 JSON 解析成本（只读字符串长度）[Fact: typings 验证]。
       // 官服上限 2MB（2*1024*1024）；超 1.5MB 告警留 25% 余量。
       sampleMemorySize(tick);
@@ -399,7 +399,7 @@ function sampleEconomyData(tick: number, ctx: TickContext): void {
       ? snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY)
       : 0;
 
-    // P0-2: 采集 container 级别能量流数据，用于诊断物流瓶颈。
+    // 采集 container 级别能量流数据，用于诊断物流瓶颈。
     // containerEnergy：所有 container 能量总和（物流缓冲健康度）；
     // controllerContainerEnergy：controller 旁 container 能量（站桩升级供能链健康度）。
     let containerEnergy = 0;
@@ -471,7 +471,7 @@ function samplePopulationData(tick: number): void {
 
   const snapshot: PopulationSnapshot = {
     t: tick,
-    // #141：`counts` 本就枚举了全部角色，此前只把其中 5 个写进快照 ⇒ 覆盖率 11/42，
+    // `counts` 本就枚举了全部角色，此前只把其中 5 个写进快照 ⇒ 覆盖率 11/42，
     // 而"人均 CPU/闲置率"的分母正是它。加 `n`/`rl` 是**只增不改**——
     // hv/ha/up/bd/wk 的语义与既有读数全部保持可比。
     n: roleSummary.n,
@@ -497,7 +497,7 @@ function samplePopulationData(tick: number): void {
   const seg = readCpuSegment();
   seg.population = snapshot;
 
-  // C2-FINDING-01: heap 监控 — 每 100 tick 采样 IVM heap 使用量。
+  // heap 监控 — 每 100 tick 采样 IVM heap 使用量。
   // 社区陷阱 I1/I5: IVM heap 限制 256MB，接近限制时 GC 暂停导致 tick 超时。
   try {
     const heapStats = (
@@ -529,7 +529,7 @@ function samplePopulationData(tick: number): void {
   markCpuDirty();
 }
 
-// ─── Memory 体积监控（P0-1）────────────────────────────
+// ─── Memory 体积监控 ────────────────────────────
 
 /** Memory 体积告警阈值（字符数）。官服 RawMemory.set 上限 2*1024*1024 [Fact: typings]。
  * 1.5MB 留 25% 余量——超此值 console.log 告警，玩家可介入清理。 */
@@ -585,12 +585,12 @@ function sampleMemorySize(_tick: number): void {
       };
     }
     if (g.logisticsHealth) {
-      // #189：原先只镜像 `level` 一列 ⇒ 物流被判 `critical` 时**没有任何事后线索**说它是
+      // 原先只镜像 `level` 一列 ⇒ 物流被判 `critical` 时**没有任何事后线索**说它是
       // 由 `deliveryRate`／`backlogCount` 还是 `lossRate` 撑起来的。而这三列都不是装饰：
       // `deliveryRate` 是恢复生命周期的输入（`recovery-execution-system.ts:1235`→
       // `recovery-lifecycle.ts:397-398` 的 rateDelta），`backlogCount` 是战争规划的
       // `logisticsReliability`（`war-planning-system.ts:185`）。它们只活在 heap ⇒ 一次 global
-      // reset 就永久不可归因（与 #94 的 gclLevel/bucket、#186 的 params、#188 的 capacity.inputs 同族）。
+      // reset 就永久不可归因（与 gclLevel/bucket、params、capacity.inputs 同族）。
       // 不镜像 `message`：那是给人看的自由文本，进 Memory 只涨字节，且数值列已够复算。
       (Memory.kernel.stats as any).logisticsHealth = {
         level: g.logisticsHealth.level,
@@ -603,7 +603,7 @@ function sampleMemorySize(_tick: number): void {
         tick: Game.time,
       };
     }
-    // 【#179 修法 A】调度环「预算尾丢」＝唯一会整批饿死系统的出口，而它故意不写
+    // 调度环「预算尾丢」＝唯一会整批饿死系统的出口，而它故意不写
     // skipReason（逐系统记会淹没 skipHotspot）。**恒定写**：没发作也落一份全零，
     // 于是「键缺席」严格等于「这版码没上线」，不再与「从没发生过」共用同一个形状。
     (Memory.kernel.stats as any).tailDrop = {
@@ -612,13 +612,13 @@ function sampleMemorySize(_tick: number): void {
     };
     if (g.systemBudgetEma instanceof Map && g.systemBudgetEma.size > 0) {
       // 留痕列＝**截断前**的标签数：EMA 榜只给前 10，读数人必须分得清「榜即全集」与
-      // 「榜只是部分和」——否则「某标签不在榜上」会被误读成「它没有写者」（#142 同族）。
+      // 「榜只是部分和」——否则「某标签不在榜上」会被误读成「它没有写者」。
       (Memory.kernel.stats as any).cpuBySystemCount = g.systemBudgetEma.size;
       (Memory.kernel.stats as any).cpuBySystem = Object.fromEntries(
         [...g.systemBudgetEma.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
       );
     }
-    // 房间级 CPU（#45）：按房拆的跨度 ÷ 走到拍尾的拍数 —— 与 cpuPerTickBySystem 同一自证口径。
+    // 房间级 CPU：按房拆的跨度 ÷ 走到拍尾的拍数 —— 与 cpuPerTickBySystem 同一自证口径。
     // ⚠️它是**下界**：单意图快路径（最常见形态）不在这个跨度里，建占位表也不算进来，
     //   与 system 级 EMA 的差额就是那两部分。判"降哪间房"用它，判"总共多少"仍看 system 榜。
     const cumRoom = g.cpuCumulative as
@@ -687,18 +687,18 @@ function sampleMemorySize(_tick: number): void {
       {
         heap: "observeLedger",
         memory: "observe",
-        why: "#100 Observer 请求账本：判楼不存在/选不出目标/报错/视野没落",
+        why: "Observer 请求账本：判楼不存在/选不出目标/报错/视野没落",
       },
       {
         heap: "safeModeLedger",
         memory: "safeMode",
-        why: "#119 safe mode 出口账本：guardMiss>0 而 tried=0 是唯一正面读数",
+        why: "safe mode 出口账本：guardMiss>0 而 tried=0 是唯一正面读数",
       },
-      { heap: "remainsLootLedger", memory: "remainsLoot", why: "#131 C1 遗留物回收漏斗分桶" },
+      { heap: "remainsLootLedger", memory: "remainsLoot", why: "遗留物回收漏斗分桶" },
       {
         heap: "remainsBlindLedger",
         memory: "remainsBlind",
-        why: "#131 C2 零容量遗留盲点（blindFiltered/snapshotTicks 为率）",
+        why: "零容量遗留盲点（blindFiltered/snapshotTicks 为率）",
       },
       { heap: "tradeLedger", memory: "trade", why: "贸易决策现场快照：判被闸挡还是跑了不交易" },
     ];
@@ -708,7 +708,7 @@ function sampleMemorySize(_tick: number): void {
         (Memory.kernel.stats as any)[m.memory] = { ...v };
       }
     }
-    // #57 收口：empire-health 四键原为 heap-only（换码即失，判效只能靠日志行+人工探针）。
+    // 收口：empire-health 四键原为 heap-only（换码即失，判效只能靠日志行+人工探针）。
     // empireHealth/autonomyStatus 是小结形状全量拷贝；recoveryActions 截断 top10 + 留痕列
     // （同 cpuBySystem 的「榜 vs 全集」纪律）；failureGraph 只落规模摘要
     // （整图体积与判效价值不成比例，事后要的是根因规模不是图）。
@@ -1125,11 +1125,11 @@ function incrementCrisisCount(): void {
 }
 
 /**
- * §3.4 残留资产普查的**纯归集部分**（#118 的机器可读版）。
+ * 残留资产普查的**纯归集部分**（机器可读版）。
  *
- * 为什么要有：L0 §3.4 要求处理"失守房间与资产损失"，但今天**没有任何机制能发现**
+ * 为什么要有：L0 要求处理"失守房间与资产损失"，但今天**没有任何机制能发现**
  * "我名下、而那个房不在 `Memory.rooms`"的结构 —— W37S55 那两只 spawn 是靠手工探针
- * 两次读数才发现的（mark R318A2/A4）。凡按 `Memory.rooms`/`snapshots()` 遍历的机制
+ * 两次读数才发现的。凡按 `Memory.rooms`/`snapshots()` 遍历的机制
  * 对它天然失明，所以这台仪器特意**反过来走**：从"我拥有的对象"出发，问它们在哪个房。
  *
  * 取数口径：`Game.structures` / `Game.constructionSites` 就是"我方对象登记表"，

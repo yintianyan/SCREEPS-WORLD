@@ -1,4 +1,4 @@
-/** R675 房间任务账本 — 每房每 tick 一次的需求汇总，供角色效用函数共享。
+/** 房间任务账本 — 每房每 tick 一次的需求汇总，供角色效用函数共享。
  *
  * 为什么要账本：效用一个候选一个公式，若每处各自扫 snapshot / globalCache，
  * 既费 CPU 又会得出互相矛盾的「有多急」。账本把房间级需求（核心填充、storage、
@@ -107,7 +107,7 @@ export function getRoomTaskLedger(snapshot: RoomSnapshot): RoomTaskLedger {
   }
 
   const sites = snapshot.myConstructionSites.length;
-  // R680：crisis/recovery/bootstrap 时 CC 不得压过核心（线上 W39S55：CC 低半满锁住
+  // crisis/recovery/bootstrap 时 CC 不得压过核心（线上 W39S55：CC 低半满锁住
   // 唯一 work hauler，spawn 饿死、源容器积压、harvester idle ⇒ 人口 11→4）。
   const phase = Memory.rooms[snapshot.roomName]?.phase?.phase;
   const crisisLike = phase === "crisis" || phase === "recovery" || phase === "bootstrap";
@@ -131,9 +131,9 @@ export function getRoomTaskLedger(snapshot: RoomSnapshot): RoomTaskLedger {
     tasks.push({ kind: "fill-tower", value: 85, demand: towerCap * towerFreeRatio });
   }
   if (ccCap > 0 && ccFreeRatio > 0) {
-    // 施工期不给 CC 优先档（R672 教训）；和平期低于半满时 CC 是升级生命线。
-    // R680：危机/恢复期同样降档，核心填充优先。
-    // R687：核心接近满时（free<25%）把 CC 抬到 96 — storage(95) 会永久压住 CC(90)，
+    // 施工期不给 CC 优先档；和平期低于半满时 CC 是升级生命线。
+    // 危机/恢复期同样降档，核心填充优先。
+    // 核心接近满时（free<25%）把 CC 抬到 96 — storage(95) 会永久压住 CC(90)，
     // hauler 的效用仲裁只在 CC 被选中时才会走 getHaulFillTarget 的半满优先档。
     // 线上 W39S55：核心 1200/1300、CC 224/2000、两只 8W upgrader 只有 0/42 能量，
     // controller 速率 ≈3.7/拍（RCL5 是扩张 youngestMature 门的最后一格）。

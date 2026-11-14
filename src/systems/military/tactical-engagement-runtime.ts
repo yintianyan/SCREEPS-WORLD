@@ -22,7 +22,7 @@ import type { SquadPlan, TargetScope } from "../../domain/tactical/types";
 import { getSquadMovementIntent } from "./squad-movement-runtime";
 
 // ═══════════════════════════════════════════════════════════
-// §1. GlobalCache 扩展 — Tactical Engagement Runtime 状态
+// 1. GlobalCache 扩展 — Tactical Engagement Runtime 状态
 // ═══════════════════════════════════════════════════════════
 
 /** Tactical Engagement Runtime 在 globalCache 上的扩展字段。 */
@@ -38,7 +38,7 @@ interface TacticalEngagementCache {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. 系统定义
+// 2. 系统定义
 // ═══════════════════════════════════════════════════════════
 
 export const tacticalEngagementSystem: System = {
@@ -86,7 +86,7 @@ export const tacticalEngagementSystem: System = {
     const targetRoom = plan.targetRoom;
     const candidates = collectTargetCandidates(targetRoom, squadPlan);
 
-    // ── 6. 获取 SquadMovementIntent（A5.4.2 产出） ──
+    // ── 6. 获取 SquadMovementIntent（squad-movement-runtime 产出） ──
     const movementIntent = getSquadMovementIntent(squadPlan.squadId);
     const cohesionStatus = movementIntent?.cohesion.status ?? "INTACT";
     const anchorPos = movementIntent?.anchor.pos ?? 25 * 50 + 25;
@@ -146,7 +146,7 @@ export const tacticalEngagementSystem: System = {
 };
 
 // ═══════════════════════════════════════════════════════════
-// §3. SquadPlan 构建（简化版 — 复用 squad-movement 模式）
+// 3. SquadPlan 构建（简化版 — 复用 squad-movement 模式）
 // ═══════════════════════════════════════════════════════════
 
 function buildSquadPlanFromWarPlan(
@@ -256,7 +256,7 @@ function buildSquadPlanFromWarPlan(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. 成员快照采集 — 从 Game.creeps 构建含能力快照
+// 4. 成员快照采集 — 从 Game.creeps 构建含能力快照
 // ═══════════════════════════════════════════════════════════
 
 function collectMemberSnapshots(squad: SquadPlan): FocusFireMemberSnapshot[] {
@@ -280,7 +280,7 @@ function collectMemberSnapshots(squad: SquadPlan): FocusFireMemberSnapshot[] {
       continue;
     }
 
-    // 从 body 构建 CombatCapability（消费 A5.1 G2 — 不重新实现）
+    // 从 body 构建 CombatCapability（消费 G2 — 不重新实现）
     const capability = buildCreepCapability(creep);
 
     result.push({
@@ -365,7 +365,7 @@ function buildCreepCapability(creep: Creep): CombatCapability {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. 目标候选采集 — 从 Game.rooms 采集敌方 creep
+// 5. 目标候选采集 — 从 Game.rooms 采集敌方 creep
 // ═══════════════════════════════════════════════════════════
 
 function collectTargetCandidates(targetRoom: string, _squad: SquadPlan): TargetCandidate[] {
@@ -488,7 +488,7 @@ function getHostilesCached(room: Room): Creep[] {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. 公共 API（供角色层查询）
+// 6. 公共 API（供角色层查询）
 // ═══════════════════════════════════════════════════════════
 
 /**

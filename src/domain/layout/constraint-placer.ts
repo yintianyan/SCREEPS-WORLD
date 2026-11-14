@@ -172,7 +172,7 @@ interface CandidateTile {
  * （减少 hauler 通勤）；离能量端点越近越差 — 让 storage/link 等物流结构优先落在
  * 能量流转路径附近。energyEndpoints 为空时退化为纯几何评分（向后兼容）。
  */
-/** @internal 导出仅供单测验证 P2-N 增量与全量等价性。 */
+/** @internal 导出仅供单测验证增量与全量等价性。 */
 export function buildCandidateGrid(
   anchor: { x: number; y: number },
   field: DistanceField,
@@ -184,7 +184,7 @@ export function buildCandidateGrid(
 ): CandidateTile[] {
   const { maxRadius, minOpenness } = config;
 
-  // P2-N：增量模式 — prevCandidates 与 prevRadius 提供 且 maxRadius == prevRadius+1。
+  // 增量模式 — prevCandidates 与 prevRadius 提供 且 maxRadius == prevRadius+1。
   const useIncremental =
     prevCandidates !== undefined && prevRadius !== undefined && maxRadius === prevRadius + 1;
 
@@ -208,7 +208,7 @@ export function buildCandidateGrid(
     return { x, y, score: openness * 2 - dist - energyPenalty };
   };
 
-  // P2-N：确定性 tiebreaker 保证增量与全量等价 — 全量输入序为扫描序、增量输入序为
+  // 确定性 tiebreaker 保证增量与全量等价 — 全量输入序为扫描序、增量输入序为
   // 「prev 排序序 + 新环带序」，同分元素最终顺序不同；加 (x,y) 升序兜底后两者严格
   // 相等（全量路径本就 x/y 升序，无回归），附带代际稳定性提升。
   const sortByScore = (a: CandidateTile, b: CandidateTile): number => {
@@ -365,7 +365,7 @@ function placeLabCluster(
  * Tower 分桶配额 — 按 RCL 阶段分配 controller 侧 / anchor 侧数量：
  * RCL3 通用池（openness 倾向 anchor 侧）、RCL5/7 全 controller、RCL8 1 controller + 2 anchor
  * （累计 3 anchor + 3 controller）。
- * 硬约束（docs §3.7）：RCL5/7 至少 1 塔 anchor Chebyshev ≤ 5（RCL3 塔满足），
+ * 硬约束：RCL5/7 至少 1 塔 anchor Chebyshev ≤ 5（RCL3 塔满足），
  * RCL8 至少 2 塔（本批次 2 anchor 塔满足）。桶放不满时剩余走通用池，避免静默缺塔。
  * @returns controller 桶 + anchor 桶配额（剩余走通用池）
  */
@@ -377,7 +377,7 @@ function towerBucketQuota(
     case "late": // RCL5/7：全 controller
     case "rcl7":
       return { controller: need, anchor: 0 };
-    case "rcl8": // RCL8：1 controller + 2 anchor（§3.7 至少 2 anchor ≤ 5）
+    case "rcl8": // RCL8：1 controller + 2 anchor（至少 2 anchor ≤ 5）
       return { controller: Math.min(1, need), anchor: Math.max(0, need - 1) };
     default: // rcl3 等：通用池（openness 评分倾向 anchor 侧）
       return { controller: 0, anchor: 0 };
@@ -488,7 +488,7 @@ export function placeStructures(
   // 旧实现仅「池容量 < 需求」时外扩，但存在「池够大、格全不可放」的破碎房
   // （W7N3：r7 池 53 ≥ 需求 31，全被排除）永不触发 → 缺口永远闭合不了。
   // 现改为「一轮放置后仍有缺口 → 外扩重试」至 MAX_SEARCH_RADIUS；开阔地形
-  // 首轮即放满，行为与旧实现一致。P2-N 增量外扩只评分新环带格，与全量等价。
+  // 首轮即放满，行为与旧实现一致。增量外扩只评分新环带格，与全量等价。
   let effectiveRadius = config.maxRadius;
   let candidates = buildCandidateGrid(
     anchor,
@@ -568,7 +568,7 @@ export function placeStructures(
         continue;
       }
 
-      // Tower：分桶放置（§3.7：RCL5+ controller 分桶，RCL8 至少 2 塔 anchor ≤ 5）；
+      // Tower：分桶放置（RCL5+ controller 分桶，RCL8 至少 2 塔 anchor ≤ 5）；
       // 无 controllerPos 时退化为通用池（向后兼容）。
       if (type === STRUCTURE_TOWER && controllerPos) {
         const towerResult = placeTowerBuckets(

@@ -20,7 +20,7 @@ export function systemPhase(name: string, interval: number): number {
   return hashPhase(name, interval);
 }
 
-/** P1-F：房间的相位偏移 — 按房间名哈希稳定分散到 [0, interval)。
+/** 房间的相位偏移 — 按房间名哈希稳定分散到 [0, interval)。
  * layout-planner 用此为每房 nextPlanTick 加偏移，消除「N 个房每 50 tick 在同一
  * tick 扎堆重规划」的 CPU 尖峰节律。与 systemPhase 同算法但语义独立（错峰系统
  * 运行 tick vs 错峰房间规划起点），共用 hashPhase 保证哈希族一致。纯函数。 */

@@ -1,4 +1,4 @@
-/** UOEM Implementation Tests — Phase 6 生产代码验证。 */
+/** UOEM Implementation Tests — 生产代码验证。 */
 import { describe, it, expect } from "vitest";
 import {
   makeOperationId,
@@ -196,8 +196,8 @@ describe("UOEM Implementation: forcedAdvance 传播", () => {
   });
 });
 
-// 说明：TMP-1（duration 全生命周期）、A6-R（delta 差分）、A6-SL（paired
-// observation）、A4（无 before 不造）的不变量由 uoem-proof.test.ts 以
+// 说明：duration 全生命周期、delta 差分、paired
+// observation、无 before 不造的不变量由 uoem-proof.test.ts 以
 // ExpansionEventProducer 链路级测试覆盖，此处不再重复。
 
 describe("UOEM Implementation: Deterministic Replay", () => {
@@ -242,7 +242,7 @@ describe("UOEM Implementation: getOutcomeChannel 幂等", () => {
   });
 });
 
-// ─── Phase 6 第四阶段：Memory 序列化上限证明 ───────────────
+// ─── 第四阶段：Memory 序列化上限证明 ───────────────
 
 describe("UOEM Implementation: Memory 序列化上限", () => {
   it("满队列 + observation + delta 的 JSON 大小 ≤ 6KB", () => {
@@ -266,7 +266,7 @@ describe("UOEM Implementation: Memory 序列化上限", () => {
     // seen 数组在 drain 前最大
     const jsonSize = JSON.stringify(ch).length;
     // 压缩字段名后：16 * ~128B (event) + 16 * ~20B (seen) + 16B (counters) ≈ 2.4KB
-    // 冻结契约：≤3.2KB（PHASE38_B_FINAL_VERDICT.md §11）
+    // 冻结契约：≤3.2KB
     expect(jsonSize).toBeLessThan(3200);
   });
 

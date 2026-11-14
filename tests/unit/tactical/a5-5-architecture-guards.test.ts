@@ -39,7 +39,7 @@ const RUNTIME_CODE = codeLines(COMBAT_MICRO_RUNTIME);
 
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.5 Architecture Guards", () => {
+describe("Architecture Guards", () => {
   // ── 1. Domain 禁止 Game ──
   it("combat-micro.ts 禁止引用 Game", () => {
     expect(DOMAIN_CODE).not.toMatch(/\bGame\b/);
@@ -113,14 +113,14 @@ describe("A5.5 Architecture Guards", () => {
   });
 
   // ── 13. Micro 禁止第二套 CombatCapability ──
-  it("combat-micro.ts 应消费 A5.1 CombatCapability（不重新解析 body）", () => {
+  it("combat-micro.ts 应消费 CombatCapability（不重新解析 body）", () => {
     expect(DOMAIN_CODE).toMatch(/import.*CombatCapability.*from.*combat\/capability/);
     // 禁止重新解析 body
     expect(DOMAIN_CODE).not.toMatch(/\.body\b/);
   });
 
   // ── 14. Micro 禁止第二套 Formation ──
-  it("combat-micro.ts 应消费 A5.4.2 Formation（不重新计算 slot）", () => {
+  it("combat-micro.ts 应消费 Formation（不重新计算 slot）", () => {
     expect(DOMAIN_CODE).toMatch(/import.*FormationSlot.*from.*squad-formation/);
     expect(DOMAIN_CODE).toMatch(/import.*CohesionMetric.*from.*squad-formation/);
     // 禁止重新计算 formation slot
@@ -129,7 +129,7 @@ describe("A5.5 Architecture Guards", () => {
   });
 
   // ── 15. Micro 禁止第二套 FocusFire ──
-  it("combat-micro.ts 应消费 A5.4.3 FocusFirePlan（不重新实现 target selection）", () => {
+  it("combat-micro.ts 应消费 FocusFirePlan（不重新实现 target selection）", () => {
     expect(DOMAIN_CODE).toMatch(/import.*FocusFirePlan.*from.*focus-fire/);
     expect(DOMAIN_CODE).toMatch(/import.*AttackIntent.*from.*focus-fire/);
     // 禁止重新实现 planFocusFire
@@ -170,7 +170,7 @@ describe("A5.5 Architecture Guards", () => {
   // ── 额外：bootstrap 注册 combatMicroSystem（通过 pipeline 合并）──
   it("bootstrap.ts 应通过 pipeline 注册 combatMicroSystem", () => {
     const bootstrap = readFileSync(join(SRC, "bootstrap.ts"), "utf-8");
-    // R10 ADR 合并后：combatMicroSystem 通过 tacticalRuntimePipelineSystem 注册
+    // ADR 合并后：combatMicroSystem 通过 tacticalRuntimePipelineSystem 注册
     expect(bootstrap).toMatch(/tacticalRuntimePipelineSystem/);
     expect(bootstrap).toMatch(/tactical-runtime-pipeline/);
   });

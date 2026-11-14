@@ -24,7 +24,7 @@ export interface RemoteDemandInput {
    */
   avoidRooms?: ReadonlySet<string>;
   homeRoom: string;
-  /** ColonyState（bootstrap 暂停、recovery 限补员，见 R3b 门禁）。 */
+  /** ColonyState（bootstrap 暂停、recovery 限补员的安全门禁）。 */
   colonyState: ColonyState;
   energyCapacityAvailable: number;
   tick: number;
@@ -91,7 +91,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     return list;
   };
 
-  // 安全门禁（R3b）：bootstrap 暂停（保命孵化优先）；recovery 允许现役 op 补员
+  // 安全门禁：bootstrap 暂停（保命孵化优先）；recovery 允许现役 op 补员
   // （远矿是唯一增量收入，冻结致贫困陷阱 — W7N3/W7N4 实证）。
   if (colonyState === "bootstrap") {
     return { requests: stampAvoidRooms(requests) };
@@ -356,7 +356,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       }
     }
 
-    // 3. Reserver — 每目标 1 个（RCL 门禁由系统层检查）。R3b：仅 normal 生成 —
+    // 3. Reserver — 每目标 1 个（RCL 门禁由系统层检查）。仅 normal 生成 —
     //    recovery 下 P2 角色被 kernel 门禁跳过，孵出即在 home 闲置白耗孵化窗。
     //    威胁窗（economySuppressed 口径：在房威胁 + 失明 hold + dangerUntil 冷却）内
     //    停发（含替补）：reserver 是无战力纯 CLAIM 单位，威胁蹲守入口格时送一只死
@@ -504,7 +504,7 @@ function findReplacement(
 }
 
 /**
- * 替补请求稳定去重 key — 绑定被替换 creep 名（P1-5）。
+ * 替补请求稳定去重 key — 绑定被替换 creep 名。
  * 不用 spawnKey(role, home, total, target)：total 随 pending 每周期漂移，
  * 同一濒死者会产生一串不同 key 的重复请求；creep 名生命周期内唯一稳定，天然幂等。
  */

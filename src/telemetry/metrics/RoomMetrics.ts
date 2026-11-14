@@ -33,7 +33,7 @@ export function collectRoomMetrics(snapshots: Iterable<RoomSnapshot>): void {
   markCollected("room_energy");
 
   try {
-    // 角色计数 — ISSUE-008: 消费共享快照总线 creepRefs
+    // 角色计数 — 消费共享快照总线 creepRefs
     const roomRoles: Record<string, Record<string, number>> = {};
     const refs = globalCache().creepRefs ?? [];
     for (const c of refs) {

@@ -1,4 +1,4 @@
-/** P1-4 findReplacementForDeadLink 单测（staged link 拆改）。 */
+/** findReplacementForDeadLink 单测（staged link 拆改）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { findReplacementForDeadLink } from "../../../src/systems/room/layout-planner";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
@@ -49,7 +49,7 @@ function makeLinkTask(
   };
 }
 
-describe("P1-4 findReplacementForDeadLink — 替代任务关联", () => {
+describe("findReplacementForDeadLink — 替代任务关联", () => {
   it("死 link 紧邻 source，queue 中有紧邻同一 source 的 queued link 任务 → 返回该任务", () => {
     const source = { x: 10, y: 10 };
     const deadLink = { id: "deadLink1", pos: { x: 11, y: 10 } }; // 紧邻 source

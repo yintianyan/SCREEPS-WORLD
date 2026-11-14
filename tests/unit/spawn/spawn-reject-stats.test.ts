@@ -1,5 +1,5 @@
 /**
- * #54 拒因计数（spawnRejects）单测 —— 验的是**观测的口径分得开**，不是行为变了。
+ * 拒因计数（spawnRejects）单测 —— 验的是**观测的口径分得开**，不是行为变了。
  *
  * 为什么每例都要断言"别的档没跟着涨"：这五档里 `budget`/`reserveOnly` 来自同一条不等式的两组阈值
  * （`cost > energyBudget` vs `cost > energyBudget - reserve`），互斥三分支的老写法会把
@@ -49,7 +49,7 @@ beforeEach(() => {
   Memory.rooms[ROOM] = { colonyState: "normal", economyPressure: 0 };
 });
 
-describe("#54 拒因计数 — budget 与 reserveOnly 必须是两档", () => {
+describe("拒因计数 — budget 与 reserveOnly 必须是两档", () => {
   it("钱够但被预留扣走 ⇒ 只记 reserveOnly，不记 budget", () => {
     const spawn = mockSpawn(300);
     const queue = [makeRequest()];
@@ -71,7 +71,7 @@ describe("#54 拒因计数 — budget 与 reserveOnly 必须是两档", () => {
   });
 });
 
-describe("#54 拒因计数 — 降级分支的两档", () => {
+describe("拒因计数 — 降级分支的两档", () => {
   it("饥饿降级连最小可用 body 都凑不出 ⇒ 记 noDegrade", () => {
     const spawn = mockSpawn(50);
     // starvedP1：waitTicks ≥ 2×(4 件 ×3) = 24。
@@ -128,7 +128,7 @@ describe("#54 拒因计数 — 降级分支的两档", () => {
   });
 });
 
-describe("#54 拒因计数 — P0 生存否决那条 return", () => {
+describe("拒因计数 — P0 生存否决那条 return", () => {
   it("P0 孵不动时整轮非 P0 一次都不被尝试 ⇒ 记被跳过的条数", () => {
     const spawn = mockSpawn(50);
     const p0 = makeRequest({
@@ -165,11 +165,11 @@ describe("#54 拒因计数 — P0 生存否决那条 return", () => {
 });
 
 /**
- * #64 第 6 档 `degradeGateClosed` —— 它是**正交标签**（与 budget/reserveOnly 出自同一次判定），
+ * 第 6 档 `degradeGateClosed` —— 它是**正交标签**（与 budget/reserveOnly 出自同一次判定），
  * 所以本块的第一条用例故意断言"两档同时涨"，与上面五档的互斥口径不同；
  * 而第三条对照用例（降级许可打开时它必须**不涨**）才是防止它退化成"每拍常数的"关键。
  */
-describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
+describe("降级许可从未打开 ⇒ 单独可计", () => {
   const gatedBuilder = () =>
     makeRequest({
       key: "builder:W7N4:0",
@@ -193,7 +193,7 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
   });
 
   it("旧五键形状的 Memory ⇒ 新档补零后计数（否则 undefined+1=NaN，计数器上线即哑火）", () => {
-    // 线上各房的 spawnRejects 由 #54 那批建成，**没有第六键**；`??=` 对已存在对象不生效。
+    // 线上各房的 spawnRejects 由早期那批建成，**没有第六键**；`??=` 对已存在对象不生效。
     (Memory.rooms[ROOM] as any).spawnRejects = {
       survivalBlock: 0,
       budget: 3,
@@ -217,7 +217,7 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
     expect(rejects()?.degradeGateClosed).toBe(0);
   });
 
-  it("R677：colonyState=normal 但 economy phase=bootstrap ⇒ P1 立即降级（不等饥饿计时）", () => {
+  it("colonyState=normal 但 economy phase=bootstrap ⇒ P1 立即降级（不等饥饿计时）", () => {
     (Memory.rooms[ROOM] as any).phase = { phase: "bootstrap" };
     const spawn = mockSpawn(150);
     const req = makeRequest(); // P1 hauler，200 能量，createdAt=now（wait < 48）
@@ -226,7 +226,7 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
     expect(rejects()?.degradeGateClosed ?? 0).toBe(0);
   });
 
-  it("R677 控制组：phase=growth 且未饥饿 ⇒ 仍记 degradeGateClosed", () => {
+  it("控制组：phase=growth 且未饥饿 ⇒ 仍记 degradeGateClosed", () => {
     (Memory.rooms[ROOM] as any).phase = { phase: "growth" };
     const spawn = mockSpawn(150);
     trySpawn(mockSnapshot({ spawns: [spawn] }), [makeRequest()], 3, 1, false);
@@ -234,7 +234,7 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
     expect(rejects()?.degradeGateClosed).toBe(1);
   });
 
-  it("R679：无 storage 的 RCL<4 幼房，P2 饥饿可降级（pressure 结构性为 0 不再挡）", () => {
+  it("无 storage 的 RCL<4 幼房，P2 饥饿可降级（pressure 结构性为 0 不再挡）", () => {
     const spawn = mockSpawn(300);
     const req = makeRequest({
       priority: 2,
@@ -289,7 +289,7 @@ describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
     expect(rejects()?.degradeGateClosed ?? 0).toBe(0);
   });
 
-  it("R679 控制组：幼房但未饥饿 ⇒ 不提前降级", () => {
+  it("控制组：幼房但未饥饿 ⇒ 不提前降级", () => {
     const spawn = mockSpawn(300);
     const req = makeRequest({
       priority: 2,

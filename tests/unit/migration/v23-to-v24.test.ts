@@ -1,4 +1,4 @@
-/** v23 → v24 迁移独立测试（P0-1 srcRatio 修正 / storageDrainAccum 字段建档）。 */
+/** v23 → v24 迁移独立测试（srcRatio 修正 / storageDrainAccum 字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

@@ -19,7 +19,7 @@ const src = (id: string, available: number): SupplySource => ({
 });
 const lease = (sourceId?: string, valid = true): LeaseSummary => ({ sourceId, valid });
 
-describe("P3-1：租约超时回收 — leaseExpired → valid=false", () => {
+describe("租约超时回收 — leaseExpired → valid=false", () => {
   it("过期租约标记 invalid → 不占并发槽位 → 源重新可用", () => {
     const sources = [src("c1", 1000)];
     // 两个租约：一个过期（valid=false），一个活跃（valid=true）。
@@ -50,7 +50,7 @@ describe("P3-1：租约超时回收 — leaseExpired → valid=false", () => {
   });
 });
 
-describe("P3-2：空载观测指标 — idleRatio 计算", () => {
+describe("空载观测指标 — idleRatio 计算", () => {
   const hauler = (name: string, lastAction: number, ttl = 1500): HaulerIdleSummary => ({
     name,
     lastActionTick: lastAction,
@@ -92,7 +92,7 @@ describe("P3-2：空载观测指标 — idleRatio 计算", () => {
   });
 });
 
-describe("P3-3：tower 补给请求 — 低能量塔生成独立搬运任务", () => {
+describe("tower 补给请求 — 低能量塔生成独立搬运任务", () => {
   it("towerStarving 时收集请求整体提级 P0", () => {
     const reqs = buildTransportRequests({
       roomName: "W1N1",

@@ -26,7 +26,7 @@ export interface RoadBuildCounters {
    *
    * 为什么要单独立一列：`classifyRoadBuildAttempt` 先判能后判人（本文件注释自己承认 `noEnergy`
    * 会盖住双重缺陷），于是 2026-10-04 线上 `W36S58` 的 `noEnergy=3,216` 里**有多少落在射程内**
-   * 账本答不出来 ⇒ 「让空载腿留 200-300 能量」这条修法的收益无法定价（见 #111/R286）。
+   * 账本答不出来 ⇒ 「让空载腿留 200-300 能量」这条修法的收益无法定价。
    * 不变式：`noEnergyInRange ≤ noEnergy`（它是子集，不是并列桶），所以两者**不可相加**。
    */
   noEnergyInRange: number;
@@ -34,7 +34,7 @@ export interface RoadBuildCounters {
    * 因 body 无 WORK 早退的次数。
    *
    * ⚠️ 这一列在 2026-10-04 之前读到 0，本文件曾据此写「该归因已被证伪」——**那句话现在作废**：
-   * 只读探针（R316）普查 10 台 remoteHauler 的 body，W36S58/W37S57/W37S58 是 `[1W 20C 21M]`，
+   * 只读探针普查 10 台 remoteHauler 的 body，W36S58/W37S57/W37S58 是 `[1W 20C 21M]`，
    * 而 W38S56(3 台)/W39S56(1 台) 是 `[0W 16C 16M]` —— 0 WORK 是 `bodies.ts` 里按
    * `energyCapacityAvailable`  affordable 出来的**合法档位**，不是坏 creep。首轮的 0 只说明
    * **那两条走廊当时用的是带 WORK 的档**，不说明这条通道不存在。
@@ -45,7 +45,7 @@ export interface RoadBuildCounters {
    *
    * 为什么必须有：`noEnergyInRange` 的前置是 `workParts > 0`（那一类的动作是留能量），于是
    * 0-WORK 走廊里 `noEnergyInRange` **恒为 0** —— 那是仪器的结构性盲区，不是「这条线没机会」。
-   * 少了这一列，#111 的「远矿 hauler 要不要设 WORK 下限」只能靠推理（会错第四次的方向）。
+   * 少了这一列，「远矿 hauler 要不要设 WORK 下限」只能靠推理（会错第四次的方向）。
    *
    * 两条不变式：`noWorkInRange ≤ noWork`（子集，**不可与父桶相加**）；
    * 与 `noEnergyInRange` **互斥**（前置条件分别是 `workParts === 0` / `> 0`），所以两列**可以相加**，
@@ -78,7 +78,7 @@ export interface RoadBuildCounters {
    * 远矿采集腿（remote-harvester 的 `remote-harvest:build-road`）发出且被接受的 build() 次数。
    *
    * 为什么单列：`built` 只由 hauler 的脚下腿递增（`remote-hauler.ts:113-115`），两条腿共用一枚
-   * 计数器就永远判不出"harvester 那条免费腿有没有在出力"（R466 实测 W38S55 `built=11` 无法归因）。
+   * 计数器就永远判不出"harvester 那条免费腿有没有在出力"（实测 W38S55 `built=11` 无法归因）。
    * 本列只由采集腿递增，零行为改动。
    */
   builtRemoteLeg: number;

@@ -1,4 +1,4 @@
-/** 环境画像（P1-3）— 纯函数，不访问 Game/Memory。 */
+/** 环境画像 — 纯函数，不访问 Game/Memory。 */
 
 /** 市场快照输入。 */
 export interface MarketSnapshotInput {
@@ -45,7 +45,7 @@ export interface EnvironmentProfile {
 }
 
 /**
- * 计算环境画像（P1-3 纯函数）。
+ * 计算环境画像（纯函数）。
 
  * 消费方（empire-strategy）按画像调整策略参数——如市场活跃时提高矿物出售
  * 意愿、邻居密度高时收紧扩张半径、GCL 速率快时放宽远矿上限。

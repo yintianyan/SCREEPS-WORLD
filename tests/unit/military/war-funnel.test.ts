@@ -1,7 +1,7 @@
 /**
- * #99 — 战争候选漏斗计数。
+ * 战争候选漏斗计数。
  *
- * 钉的是"归因能力"本身：#95 的「war 零计划零编队」之所以不可归因，是因为选靶链路上
+ * 钉的是"归因能力"本身：「war 零计划零编队」之所以不可归因，是因为选靶链路上
  * 每道筛子都是裸 `continue`/`return undefined` —— 跑一千小时也答不出"是没敌人、没情报、
  * 还是情报不够格"。本文件锁住三件事：
  * 1. 每道出口各归一位（不合并、不串味）；
@@ -43,7 +43,7 @@ const SNAP = () =>
 const CTX = () => mockRoomStateCtx([SNAP()], TICK);
 
 /**
- * #115 换门后的驱动方式：老化批不再对齐到某个固定相位拍，而是"距上次跑够 100 拍即开"，
+ * 换门后的驱动方式：老化批不再对齐到某个固定相位拍，而是"距上次跑够 100 拍即开"，
  * 到期拍若被跳过则下一个可用拍（+10）必开 ⇒ 延后上界 110 拍。
  * 这里按系统自身 interval 前进，直到快照真的落在这一拍上；跑不到就把最后拍的 tick 交回，
  * 让下面的断言把它钉成失败（而不是静默通过）。
@@ -169,7 +169,7 @@ beforeEach(() => {
   setup();
 });
 
-describe("#99 出口计数：每道筛子各归一位", () => {
+describe("出口计数：每道筛子各归一位", () => {
   it("非 fact / 无主 / 我方 / 非 normal 各记一位，活下来的进 candidates", () => {
     seedIntel([
       // ally 是非直接来源 ⇒ 置信度 inferred ⇒ 出口①
@@ -211,7 +211,7 @@ describe("#99 出口计数：每道筛子各归一位", () => {
   });
 });
 
-describe("#99 漏斗闭合：终局计数恰有一项成立", () => {
+describe("漏斗闭合：终局计数恰有一项成立", () => {
   /** 闭合不变式：每次 pass 落在且只落在一个终局。 */
   function assertClosed(f: NonNullable<ReturnType<typeof funnel>>): void {
     expect(f.noInput + f.noThreats + f.noPlan + f.plans).toBe(1);
@@ -282,7 +282,7 @@ describe("#99 漏斗闭合：终局计数恰有一项成立", () => {
   });
 });
 
-describe("#99 落盘：intelligence 老化批与 intelCoverage 同拍快照", () => {
+describe("落盘：intelligence 老化批与 intelCoverage 同拍快照", () => {
   beforeEach(() => {
     // 老化批先做 segment 冷存 I/O 再写 stats：`segmentUnavailable()` 第一行就读 RawMemory。
     // 单测环境没有这个全局（生产环境恒有），不补桩则整段被 safeRun 吞掉 ⇒ 两份读数都写不出。
@@ -306,7 +306,7 @@ describe("#99 落盘：intelligence 老化批与 intelCoverage 同拍快照", ()
 
     const stats = G().Memory.kernel.stats;
     expect(stats.intelCoverage.tick).toBe(at);
-    expect(at - TICK).toBeLessThanOrEqual(110); // #115：延后上界 = 100 + 一个系统 interval
+    expect(at - TICK).toBeLessThanOrEqual(110); // 延后上界 = 100 + 一个系统 interval
     expect(stats.warFunnel).toEqual({ ...funnel()! });
     expect(stats.warFunnel.tick).toBe(TICK);
     expect(stats.warFunnel).not.toBe(funnel());

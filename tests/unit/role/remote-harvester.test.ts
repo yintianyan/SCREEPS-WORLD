@@ -1,4 +1,4 @@
-/** RemoteHarvester 角色测试 — v33-R11 站桩锚定与占位自报。 */
+/** RemoteHarvester 角色测试 — 站桩锚定与占位自报。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHarvesterRole } from "../../../src/creeps/roles/remote-harvester";
 import { getIntentLedger } from "../../../src/creeps/movement/intent";

@@ -29,7 +29,7 @@ export function releaseFromTask(creep: Creep): void {
   pool.releaseCreep(assignment.id, creep.name);
 }
 
-/** 获取或续约任务分配（plan §5.7.2）：验证现有 assignment（目标存在性 +
+/** 获取或续约任务分配：验证现有 assignment（目标存在性 +
  * layout.revision + 任务池存活）→ 有效续约 / 无效释放并 chooseTaskForRole 选新。
  * 无可用任务返回 undefined — 角色进入 idle 或回退。 */
 function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | undefined {
@@ -39,7 +39,7 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
     const layoutRevision = Memory.rooms[home]?.layout?.revision ?? 0;
     const assignment = creep.memory.assignment;
 
-    // 通过缓存版 getObjectById 检查 target/source 存在性（P2-6 去重）。
+    // 通过缓存版 getObjectById 检查 target/source 存在性（去重）。
     const targetExists = !assignment.targetId || getObjectById(assignment.targetId) !== null;
     const sourceExists = !assignment.sourceId || getObjectById(assignment.sourceId) !== null;
 
@@ -139,7 +139,7 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
 }
 
 /**
- * 获取或续约 creep 的任务分配（plan §5.7.2）。
+ * 获取或续约 creep 的任务分配。
  * 如果现有 assignment 有效则续约；否则从可用任务列表分配新的。
  * 无可用任务时返回 undefined — 角色应进入 idle 或回退行为。
  */

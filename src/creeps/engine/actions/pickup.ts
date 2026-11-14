@@ -52,7 +52,7 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
     resolve: ac => {
       // 遗留物按「任意资源总量」筛选（不限能量）— 只装矿物的坟墓同样值得回收，
       // 否则满载矿物的 mineralMiner 死后，其矿物随尸体灭失（线上实证）。
-      // 实测漏斗（#131 C1，heap，不参与任何决策）：桶按 minAmount 分开，因为
+      // 实测漏斗（heap，不参与任何决策）：桶按 minAmount 分开，因为
       // 「零头由链尾无阈值实例顺手清理」是下面注释里的**设计意图**，不是执行证据；
       // 两档混在一列，"阈值档什么都没筛掉"与"兜底档从没跑过"长得一模一样。
       const bucket = remainsLootBucket(ac.creep.room.name, minAmount);

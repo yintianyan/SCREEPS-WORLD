@@ -32,7 +32,7 @@ export interface WarTargetInput {
   freshness: number;
   /** 目标 tower 数上限（≥ 此值不可攻击）。 */
   maxTowers: number;
-  /** R4：战争失败目标黑名单（房名 → 冷却到期 tick）。冷却期内的候选直接剔除。 */
+  /** 战争失败目标黑名单（房名 → 冷却到期 tick）。冷却期内的候选直接剔除。 */
   blacklist?: Readonly<Record<string, number>>;
 }
 
@@ -52,7 +52,7 @@ export function selectWarTarget(input: WarTargetInput): WarTarget | undefined {
     if (input.tick - c.lastSeen > input.freshness) continue;
     if ((c.towers ?? 0) >= input.maxTowers) continue;
     if (c.occupied) continue;
-    // R4：失败目标黑名单 — 冷却期内不重选（避免「打不过 → 收摊 → 再选 → 再送」）。
+    // 失败目标黑名单 — 冷却期内不重选（避免「打不过 → 收摊 → 再选 → 再送」）。
     if (input.blacklist && (input.blacklist[c.roomName] ?? 0) > input.tick) continue;
     const distance = c.pathCost ?? roomLinearDistance(c.home, c.roomName);
     if (best === undefined || distance < best.distance) {
@@ -76,13 +76,13 @@ export function decideHealerCount(squadSize: number, ratio: number): number {
   return Math.max(1, Math.ceil(squadSize / ratio));
 }
 
-// ─── R4：波次相位与战损止损（纯函数）──────────────────────────
+// ─── 波次相位与战损止损（纯函数）──────────────────────────
 
 /** 战争计划相位：build 集结 / advance 推进。 */
 export type WarPlanPhase = "build" | "advance";
 
 /**
- * 波次相位迟滞推进（R4）— 「整波集结」替代「散兵逐个送」：
+ * 波次相位迟滞推进 — 「整波集结」替代「散兵逐个送」：
  * build 满编（live ≥ squadSize）才 advance；advance 被打残（live < squadSize ×
  * regroupRatio）才回落 build 重组。双阈值不对称：推进保守、重组迟滞，防相位抖动。
  * boostReady（boost 战前强化门禁）：false = 编队未全员强化，满编也继续集结；
@@ -119,7 +119,7 @@ export function evaluateBoostGate(
 }
 
 /**
- * 战损止损判定（R4）：累计 spawned > squadSize × casualtyMultiplier 即判消耗战失败
+ * 战损止损判定：累计 spawned > squadSize × casualtyMultiplier 即判消耗战失败
  *（目标打不穿，再添油只是持续放血）。spawned 含在队 pending，但提交受
  * live+pending < squadSize 约束不会无限膨胀，TTL 重提交频率也远低于阈值，误判可忽略。
  */
@@ -178,7 +178,7 @@ export function shouldLaunchNuke(input: NukeLaunchInput): boolean {
 }
 
 /**
- * 战后核验（R4）：情报过期 → unknown（无证据不宣称胜利）；敌人弃房或塔网清零
+ * 战后核验：情报过期 → unknown（无证据不宣称胜利）；敌人弃房或塔网清零
  *（本轮远征的可达成目标 = 拆掉反制能力）→ success；其余 failure。
  * success 免黑名单（目标已无价值/已瘫痪），failure/unknown 进黑名单。
  */

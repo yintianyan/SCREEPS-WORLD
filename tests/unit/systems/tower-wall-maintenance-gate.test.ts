@@ -168,7 +168,7 @@ describe("tower-defense — Phase D 修墙闸", () => {
     expect(tower.repair).toHaveBeenCalled();
   });
 
-  it("存在维修 creep 时塔让出维修（既有 A3 门禁不回退）", () => {
+  it("存在维修 creep 时塔让出维修（既有门禁不回退）", () => {
     setRoomMem({ fortifyActive: true });
     globalCache().repairRooms = new Set(["W8N3"]);
     const tower = towerMock();

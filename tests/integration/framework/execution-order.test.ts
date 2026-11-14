@@ -1,5 +1,5 @@
 /**
- * R3 — 跨系统执行顺序契约。
+ * 跨系统执行顺序契约。
  *
  * 背景：`Kernel` 并不二次排序（`sortedSystems` 只是按 phase / 观测层过滤），
  * 所以一个 tick 内的有效顺序 = Registry 的 priority 升序 + 同优先级靠注册先后。
@@ -22,7 +22,7 @@ function pos(name: string): number {
   return i;
 }
 
-describe("R3 — bootstrap 声明的运行顺序边", () => {
+describe("bootstrap 声明的运行顺序边", () => {
   const edges: ReadonlyArray<readonly [string, string, string]> = [
     [
       "room-state",
@@ -54,7 +54,7 @@ describe("R3 — bootstrap 声明的运行顺序边", () => {
   }
 });
 
-describe("R3 — 排序契约本身", () => {
+describe("排序契约本身", () => {
   it("注册表按 priority 非降序给出系统（P0 一定在 P1/P2/P3 之前）", () => {
     const systems = registry.getSystems();
     for (let i = 1; i < systems.length; i++) {

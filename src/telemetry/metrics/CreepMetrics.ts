@@ -39,7 +39,7 @@ export function collectCreepMetrics(): void {
     const ttls: Record<string, number[]> = {};
     const modes: Record<string, { acquire: number; work: number; idle: number; flee: number }> = {};
 
-    // ISSUE-008: 消费共享快照总线 creepRefs，不再独立全量遍历 Game.creeps。
+    // 消费共享快照总线 creepRefs，不再独立全量遍历 Game.creeps。
     const refs = globalCache().creepRefs ?? [];
     for (const c of refs) {
       const role = c.role ?? "unknown";

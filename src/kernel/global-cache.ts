@@ -6,9 +6,9 @@ import type { RoadBuildCounters } from "../domain/logistics/road-build";
 import type { ObserveCounters } from "../domain/intel";
 
 /**
- * Safe mode 出口账本（#119）。为什么就地声明而不进 `domain/`：这三列只在
+ * Safe mode 出口账本。为什么就地声明而不进 `domain/`：这三列只在
  * 「系统侧写 → telemetry flush 读」之间流动，没有任何领域判据要吃它；放进 domain 反而
- * 造出一个没人读的领域类型（#106/#107 那一族的教训）。
+ * 造出一个没人读的领域类型（同族教训）。
  *
  * 立案理由（线上）：`tryActivateSafeMode()` 丢弃 `activateSafeMode()` 的返回码，且四条前置
  * 不齐时静默跳过 ⇒ 「最后防线该响没响」今天**不可归因**：现象是"核心被拆而什么都没发生"，
@@ -24,7 +24,7 @@ export interface SafeModeCounters {
 }
 
 /**
- * 单个链位实例（按 `minAmount` 分桶）的回收漏斗。#131 的 C1。
+ * 单个链位实例（按 `minAmount` 分桶）的回收漏斗。
  * 自洽式（读侧可用来自证仪器没坏）：
  *   `seen === belowThreshold + eligible`、`resolved ≤ eligible`、
  *   `executed + skippedMineralNoBank + skippedNoResource === resolved`。
@@ -48,13 +48,13 @@ export interface RemainsLootBucket {
   skippedNoResource: number;
 }
 
-/** 遗留物回收账本（#131 C1）。桶键 = String(minAmount)，"0" 即链尾无阈值兜底档。 */
+/** 遗留物回收账本。桶键 = String(minAmount)，"0" 即链尾无阈值兜底档。 */
 export interface RemainsLootCounters {
   buckets: Record<string, RemainsLootBucket>;
 }
 
 /**
- * 快照侧盲点体量（#131 的 C2）：`room-snapshot` 先按 `store>0` 过滤，零容量遗留
+ * 快照侧盲点体量：`room-snapshot` 先按 `store>0` 过滤，零容量遗留
  * 根本不进决策面 ⇒ "被选中后又被取空/衰减殆尽"这类竞态今天**不可见**。
  * 本计数器量的就是这个不可见面的体量，`snapshotTicks` 是它的分母（先定分子再定分母）。
  */
@@ -129,10 +129,10 @@ export interface CpuRateSnapshot {
  * `g.xxx` 访问点，属纯类型增强，可工作在大批量、独立提交上进行。 */
 export interface GlobalCache {
   errorLog?: Map<string, number>;
-  /** R674b：本 tick 的修复目标占用（targetId → creepName），每 tick 自动清空。 */
+  /** 本 tick 的修复目标占用（targetId → creepName），每 tick 自动清空。 */
   repairReservations?: Map<string, string>;
   repairReservationTick?: number;
-  /** R678：本 tick 的任务目标占用（"lab:<labId>:<res>" / "mineral:<containerId>"）。 */
+  /** 本 tick 的任务目标占用（"lab:<labId>:<res>" / "mineral:<containerId>"）。 */
   taskClaims?: Map<string, string>;
   taskClaimTick?: number;
   /** 每个 label 的连续错误计数（用于冷却跟踪）。 */
@@ -209,7 +209,7 @@ export interface GlobalCache {
    * 本字段按 intent 签发顺序先到先得，与引擎的额度分配顺序一致。
    */
   upgradeLedgerTick?: { tick: number; byRoom: Record<string, number> };
-  /** 本 tick 拥有 builder/worker creep 的房间名集合（Kernel.buildSnapshots 预构建，P1-3）；
+  /** 本 tick 拥有 builder/worker creep 的房间名集合（Kernel.buildSnapshots 预构建）；
    * tower-defense 消费，避免独立全量 Game.creeps 扫描。 */
   repairRooms?: ReadonlySet<string>;
   /** 本 tick 拥有存活 hauler 的房间名集合（Kernel.buildSnapshots 预构建）。
@@ -231,7 +231,7 @@ export interface GlobalCache {
    * 直送核心 sink — 否则能量锁进无人能取的仓库，energyAvailable 卡死在 spawn 自充值，
    * 全舰队孵化饥饿降级。 */
   distributorRooms?: ReadonlySet<string>;
-  /** 【F1/G-B】各系统 CPU 消耗 EMA（budgetCap 局部截断判据）。heap 存储，reset 后从零重建（EMA 快速收敛可接受）。 */
+  /** 各系统 CPU 消耗 EMA（budgetCap 局部截断判据）。heap 存储，reset 后从零重建（EMA 快速收敛可接受）。 */
   systemBudgetEma?: Map<string, number>;
   /**
    * 系统单价的 per-tick 口径（EMA ÷ interval）—— 判「这个系统一天吃多少 CPU」只能用这个，
@@ -255,7 +255,7 @@ export interface GlobalCache {
     roles: Record<string, number>;
     /** 相位跨度（`phase/*`）：与上面两张榜是**嵌套**关系，单独成桶、不与它们相加。 */
     phases?: Record<string, number>;
-    /** 房间级跨度（`room/*`）：同样与 systems/roles **嵌套**（#45）——
+    /** 房间级跨度（`room/*`）：同样与 systems/roles **嵌套**——
      * 它回答的是「3.15/拍的 traffic-manager 里哪间房占多少」，system 级榜给不出这个答案。 */
     rooms?: Record<string, number>;
     /** 本拍拍中采样值（拍尾用来减出尾差的被减数，每拍覆盖）。 */
@@ -315,7 +315,7 @@ export interface GlobalCache {
     tick: number;
     byRoom: Record<string, import("../domain/industry/types").LabDemandTable>;
   };
-  /** R675：本 tick 的房间任务账本（每房一次，角色效用函数共享）。 */
+  /** 本 tick 的房间任务账本（每房一次，角色效用函数共享）。 */
   roomTaskLedger?: {
     tick: number;
     byRoom: Record<string, import("../creeps/support/task-ledger").RoomTaskLedger>;
@@ -337,36 +337,36 @@ export interface GlobalCache {
   actionCpuWindowSince?: number;
   /** Traffic Manager 的 per-tick 移动意图/锚定账本（intent.ts 构建，traffic-manager 消费）。 */
   __moveIntents?: import("../creeps/movement/intent").IntentLedger;
-  /** P0-A：per-tick 全局 site 创建计数器（construction-manager 与 remote-mining-manager 共享）。
+  /** per-tick 全局 site 创建计数器（construction-manager 与 remote-mining-manager 共享）。
    * normal = 普通槽位（每 tick 全局 1 个，自有房与远矿公平竞争）；emergency = 紧急重建槽位
    * （每 tick 1 个，独立计额）。远矿 site 永远让位 emergency。与 maxNormalLaneSites 是两个维度。 */
   sitesCreatedThisTick?: { tick: number; normal: number; emergency: number };
-  /** P0-A：per-tick 远矿 site 总量缓存（Σ remoteOps[*].siteCount，非 abandoned）。
+  /** per-tick 远矿 site 总量缓存（Σ remoteOps[*].siteCount，非 abandoned）。
    * construction-manager 全局上限判定读此值（与 ctx.globalSiteCount 相加 < maxNormalLaneSites）。
    * 由 site-quota.ts 的 getRemoteSiteTotal() 惰性构建。 */
   remoteSiteTotal?: { tick: number; count: number };
   /** 远矿 road site 跨主房总量缓存（Σ op.roadSiteCount）— 由 getRemoteRoadSiteTotal() 惰性构建。 */
   remoteRoadSiteTotal?: { tick: number; count: number };
-  /** R2：construction-manager 跳过原因 L1 计数（heap — 观测数据不上 Memory，
-   * STATE_OWNERSHIP §3.10）。rooms 按窗口聚合，结构化日志输出后清零。 */
+  /** construction-manager 跳过原因 L1 计数（heap — 观测数据不上 Memory）。
+   * rooms 按窗口聚合，结构化日志输出后清零。 */
   constructionSkips?: {
     rooms: Record<string, Record<string, number>>;
     total: number;
     lastReportTick?: number;
   };
-  /** P1-1 死资产检测：source link 持续满足三重校验（role=source + energy=0 + !linkHasOutlet）
+  /** 死资产检测：source link 持续满足三重校验（role=source + energy=0 + !linkHasOutlet）
    * 达 DEAD_ASSET_THRESHOLD(500) tick → 判定死资产。key = link.id，value = 首次检测 tick。
    * heap 存储 — global reset 丢失可接受（reset 极少，且死资产会快速重建）。 */
   deadAssetSince?: Map<string, number>;
-  /** P1-3 link 几何受限标记：controller link + storage link 都放不下时标记，避免重复空转。
+  /** link 几何受限标记：controller link + storage link 都放不下时标记，避免重复空转。
    * key = roomName，value = 标记 tick；LINK_CONSTRAINED_RETRY_INTERVAL(1000t) 后过期重试
    *（RCL 升级或拆改后可能解锁）。heap 存储 — global reset 丢失可接受。 */
   linkConstrained?: Map<string, number>;
-  /** P1-4 拆改计划跟踪：死资产 link 检测到替代位置后创建拆改计划，跟踪
+  /** 拆改计划跟踪：死资产 link 检测到替代位置后创建拆改计划，跟踪
    * 「先建替代 → 验证灌能 → 拆旧」完整生命周期。key = deadLinkId，value = 拆改计划。
    * heap 存储 — global reset 丢失可接受；不进 Memory 避免结构变更与 schema 升级。 */
   dismantlePlans?: Map<string, DismantlePlan>;
-  /** P1-4 拆改冷却账本：key = roomName，value = 最近一次拆改启动 tick。
+  /** 拆改冷却账本：key = roomName，value = 最近一次拆改启动 tick。
    * DISMANTLE_COOLDOWN(1000t) 内不再启动新拆改 — 避免同房频繁拆改空转。
    * heap 存储 — global reset 丢失可接受（冷却期短，重开后快速恢复）。 */
   lastDismantleTick?: Map<string, number>;
@@ -387,7 +387,7 @@ export interface GlobalCache {
   /** defense-planner 的出口位置缓存（room.find(FIND_EXIT) 结果，1000t 过期）。
    * heap 存储 — global reset 丢失可接受（重开后首个周期重建）。 */
   __exitCache?: Record<string, ExitCache>;
-  /** P0-1 全局编队索引：Kernel.buildSnapshots 预构建，按 (home, remoteTarget,
+  /** 全局编队索引：Kernel.buildSnapshots 预构建，按 (home, remoteTarget,
    * mission) 归组的编队 creep 摘要。war-planner / power-farm-manager /
    * prospect-manager / expansion-manager 从中取子集，避免各系统独立全量遍历
    * Game.creeps（4 系统 × O(creeps) → 1 次遍历 O(creeps)）。
@@ -463,28 +463,28 @@ export interface GlobalCache {
   cpuByHome?: Map<string, number>;
   /** 各系统最近一次实际执行 tick（kernel.runSystems 记录）—— 期望自检的 P3 存活判据输入。heap 存储。 */
   systemLastRun?: Record<string, number>;
-  /** 【#179 修法 A】主环／post 环「预算尾丢」的聚合计数（heap，与 systemLastRun 同生命周期：
+  /** 主环／post 环「预算尾丢」的聚合计数（heap，与 systemLastRun 同生命周期：
    * global reset 即清零）。这条出口故意不写 skipReason，所以没这份账就只能靠窗口抽样猜。 */
   tailDrop?: import("./tail-drop").TailDropStat;
-  // 【F-DEAD-2 已删除】empireTransportRequests — A3.0 帝国级跨房调拨请求池
+  // 【已删除】empireTransportRequests — 帝国级跨房调拨请求池
   // 连生产者都不存在（agenda-manager 不写、logistics 不读），只有 cache 槽位和
-  // 文档描述。若 A3.0 帝国调拨进入路线图，须重新设计完整链路而非留假装存在的槽位。
+  // 文档描述。若帝国调拨进入路线图，须重新设计完整链路而非留假装存在的槽位。
   // 【WO-DEAD 已删除】agendaMetrics — 只写不读的诊断字段，无消费者。
-  /** A3.1：Resource Network Snapshot（agenda-manager 每 100t 写入）。
+  /**Resource Network Snapshot（agenda-manager 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   networkSnapshot?: import("../domain/operation/network-snapshot").NetworkSnapshot;
-  /** A3.1：Network Health 指标（agenda-manager 每 100t 写入）。
+  /**Network Health 指标（agenda-manager 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   networkHealth?: import("../domain/operation/network-health").NetworkHealthResult;
-  /** A3.2：Expansion Dashboard（expansion-planner 每 interval tick 写入）。
+  /**Expansion Dashboard（expansion-planner 每 interval tick 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   expansionDashboard?: import("../domain/expansion/dashboard").ExpansionDashboard;
-  /** A4.2：多资源帝国健康度（empire-economy 每 100t 写入）。
+  /**多资源帝国健康度（empire-economy 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   multiResourceHealth?: import("../domain/strategy/multi-resource-health").MultiResourceEmpireHealth;
   // 【WO-DEAD 已删除】resourceBottlenecks — 只写不读的诊断字段，无消费者。
   // 【WO-DEAD 已删除】empireResourceLedger — 只写不读的诊断字段，无消费者。
-  /** A4.3：Empire Logistics Plan（logistics-planner 每 100t 写入）。
+  /**Empire Logistics Plan（logistics-planner 每 100t 写入）。
    * 包含 Transport Requests + Routes + 成本/时间/风险估算。
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   logisticsPlan?: {
@@ -492,23 +492,23 @@ export interface GlobalCache {
     plan: import("../domain/logistics/transport-plan").TransportPlan;
   };
   // 【WO-DEAD 已删除】logisticsDashboard — 只写不读的仪表盘字段，无消费者。
-  /** A4.3：Empire Logistics Health（logistics-planner 每 100t 写入）。
+  /**Empire Logistics Health（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsHealth?: import("../domain/logistics/logistics-health").LogisticsHealthResult;
-  /** A4.3：Empire Logistics Capacity（logistics-planner 每 100t 写入）。
+  /**Empire Logistics Capacity（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsCapacity?: {
     tick: number;
     result: import("../domain/logistics/capacity-planning").EmpireCapacityResult;
   };
   // 【WO-DEAD 已删除】logisticsScaling — 只写不读的观测字段，无消费者。
-  /** A4.3：闲置 hauler 名称列表（logistics-planner 每 100t 写入）。
+  /**闲置 hauler 名称列表（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsIdleHaulers?: { tick: number; names: string[] };
   /** P3：各房 hauler 空载率快照（logistics 每 tick 写入）。
    * 消费方：self-healing 收缩判定、tuning-engine 调参、empire-economy 健康度。 */
   logisticsIdleRatio?: { tick: number; byRoom: Record<string, number>; max: number };
-  /** A4.4：Transport Accounting 运行时追踪（logistics-planner 每 100t 写入）。
+  /**Transport Accounting 运行时追踪（logistics-planner 每 100t 写入）。
    * 包含 summary 统计 + entries 每条 Request 的会计明细。
    * 标注为观测字段 — summary+entries 均无代码消费者，
    * 保留在 heap 供 console 内省。 */
@@ -529,79 +529,79 @@ export interface GlobalCache {
     };
     entries: import("../domain/logistics/transport-accounting").TransportAccounting[];
   };
-  /** A4.5：Empire Health 综合评估结果（empire-health-system 每 100t 写入）。
+  /**Empire Health 综合评估结果（empire-health-system 每 100t 写入）。
    * 包含 8 维度健康度 + Hysteresis 等级 + 瓶颈维度 + 恢复中标记。
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   empireHealth?: import("../domain/strategy/empire-health").EmpireHealthResult;
-  /** A4.5：Failure Propagation 失败传播图（empire-health-system 每 100t 写入）。
+  /**Failure Propagation 失败传播图（empire-health-system 每 100t 写入）。
    * 包含活跃失败节点 + 传播边 + 根因/症状标记。
    * heap 存储 — global reset 丢失可接受。 */
   failureGraph?: import("../domain/strategy/failure-propagation").FailureGraph;
-  /** A4.5：Recovery Priority 恢复优先级列表（empire-health-system 每 100t 写入）。
+  /**Recovery Priority 恢复优先级列表（empire-health-system 每 100t 写入）。
    * 排序后的恢复动作列表，供执行系统消费。
    * heap 存储 — global reset 丢失可接受。 */
   recoveryActions?: import("../domain/strategy/recovery-priority").RecoveryAction[];
-  /** A4.5：Autonomy Status 自治状态（empire-health-system 每 100t 写入）。
+  /**Autonomy Status 自治状态（empire-health-system 每 100t 写入）。
    * 包含 Autonomy Score + No-Progress + Thrashing 检测结果。
    * heap 存储 — global reset 丢失可接受。 */
   autonomyStatus?: import("../domain/strategy/autonomy-metrics").AutonomyStatus;
-  /** A4.5：Recovery Cooldown Table（empire-health-system 维护，跨 tick 持久）。
+  /**Recovery Cooldown Table（empire-health-system 维护，跨 tick 持久）。
    * key = cooldownKey(domain, room)，value = cooldown entry。
    * heap 存储 — global reset 丢失可接受（冷却期短，重开后快速重建）。 */
   recoveryCooldowns?: import("../domain/strategy/recovery-priority").CooldownTable;
-  /** A4.5：健康度历史（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
+  /**健康度历史（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
   __healthHistory?: Array<{ tick: number; level: string; score: number }>;
-  /** A4.5：姿态历史（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
+  /**姿态历史（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
   __postureHistory?: Array<{ tick: number; posture: string }>;
-  /** A4.5：净能量流历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
+  /**净能量流历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
   __netFlowHistory?: number[];
-  /** A4.5：总储备历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
+  /**总储备历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
   __reserveHistory?: number[];
-  /** A4.5：总人口历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
+  /**总人口历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
   __populationHistory?: number[];
-  /** A4.5：失败计数历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
+  /**失败计数历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
   __failureCountHistory?: number[];
-  /** A4.5：连续稳态 tick 数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  /**连续稳态 tick 数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
   __consecutiveStableTicks?: number;
-  /** A4.5：累计检测到的失败数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  /**累计检测到的失败数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
   __totalFailuresDetected?: number;
-  /** A4.5：累计自动恢复的失败数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  /**累计自动恢复的失败数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
   __autoRecoveredFailures?: number;
-  /** A4.5：累计扰动次数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  /**累计扰动次数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
   __perturbationCount?: number;
-  /** A4.5：累计恢复总时间（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  /**累计恢复总时间（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
   __totalRecoveryTime?: number;
-  /** A4.5：失败领域循环计数（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
+  /**失败领域循环计数（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
   __failureDomainCycles?: Record<string, number>;
-  /** A4.6：Recovery Action 追踪表（recovery-execution-system 维护，跨 tick 持久）。
+  /**Recovery Action 追踪表（recovery-execution-system 维护，跨 tick 持久）。
    * key = idempotencyKey(domain:type:room)，value = RecoveryActionRecord。
    * heap 存储 — global reset 丢失可接受（冷却期短，重开后快速重建）。 */
   recoveryActionTable?: import("../domain/strategy/recovery-lifecycle").RecoveryActionTable;
-  /** A4.6：Recovery 统计数据（recovery-execution-system 每 interval tick 写入）。heap 存储。 */
+  /**Recovery 统计数据（recovery-execution-system 每 interval tick 写入）。heap 存储。 */
   recoveryStats?: import("../domain/strategy/recovery-lifecycle").RecoveryStats;
-  /** A4.6：Recovery Before-State 快照（用于 Verification 的 Before/After 对比）。heap 存储。 */
+  /**Recovery Before-State 快照（用于 Verification 的 Before/After 对比）。heap 存储。 */
   recoveryBeforeStates?: Map<
     string,
     import("../domain/strategy/recovery-lifecycle").RecoveryWorldSnapshot
   >;
-  /** A5.1：per-tick 威胁评估结果（room-state 每 tick 对有威胁的自有房写入）。
+  /**per-tick 威胁评估结果（room-state 每 tick 对有威胁的自有房写入）。
    * key = roomName，value = ThreatAssessment。tower-defense / war-planner 消费。
    * heap 存储 — global reset 丢失可接受（下 tick 重建）。仅 threatCount > 0 的房有条目。 */
   threatAssessments?: Map<string, import("../domain/defense/threat-assessment").ThreatAssessment>;
-  /** A5.1：per-tick 远矿防御决策结果（remote-mining-manager 按 interval 写入）。
+  /**per-tick 远矿防御决策结果（remote-mining-manager 按 interval 写入）。
    * key = targetRoomName，value = RemoteDefenseDecision。诊断观测字段。
    * heap 存储 — global reset 丢失可接受。 */
   remoteDefenseDecisions?: Map<
     string,
     import("../domain/defense/remote-defense").RemoteDefenseDecision
   >;
-  /** A5.3：per-interval 军事行动计划结果（war-planning-system 按 interval 写入）。
+  /**per-interval 军事行动计划结果（war-planning-system 按 interval 写入）。
    * 供 war-planner 消费。heap 存储 — global reset 丢失可接受。 */
   warPlanCache?: {
     tick: number;
     plan: import("../domain/military/war-planning").WarPlan | undefined;
   };
-  /** #99：最近一次 war-planning pass 的候选漏斗计数（每 pass 换新对象，不由老化批复用）。
+  /** 最近一次 war-planning pass 的候选漏斗计数（每 pass 换新对象，不由老化批复用）。
    * 由 intelligence 的老化批每 100 拍与 `intelCoverage` 同拍快照进 Memory —— 两道读数必须
    * 同时刻才答得出「池子里有 7 间房，为什么候选是 0」。
    * heap 存储 — global reset 丢失可接受（下一个 pass 即重建）。undefined = 本进程还没跑过 war-planning。 */
@@ -610,7 +610,7 @@ export interface GlobalCache {
    * heap 存储 — global reset 丢失可接受（情报按 TTL 重访重建）；写侧有界，
    * 超限丢弃最旧（观察可复采，无丢失风险）。 */
   intelHandoff?: import("../domain/intel").RoomObservation[];
-  /** A5.3：战争物流需求（war-planning-system 从 WarPlan.logisticsRequirement 提取写入）。
+  /**战争物流需求（war-planning-system 从 WarPlan.logisticsRequirement 提取写入）。
    * 供 logistics-planner 消费作为额外 demand node。heap 存储 — global reset 丢失可接受。 */
   warLogisticsDemand?: {
     tick: number;
@@ -621,10 +621,10 @@ export interface GlobalCache {
     transport: number;
     replacement: number;
   };
-  /** A5.3：战争止损信号（war-planner demobilize 时写入）。
+  /**战争止损信号（war-planner demobilize 时写入）。
    * 供 recovery-execution-system 消费，触发经济恢复动作。
-   * A5.3.1 GAP-1 修复：recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions
-   * 将信号转换为 RecoveryAction，复用 A4.6 lifecycle 幂等机制。
+   * 修复：recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions
+   * 将信号转换为 RecoveryAction，复用 recovery lifecycle 幂等机制。
    * heap 存储 — global reset 丢失可接受。 */
   warAbortSignals?: {
     tick: number;
@@ -633,7 +633,7 @@ export interface GlobalCache {
     sponsor: string;
     spawned: number;
     outcome: string;
-    /** A5.3 operationId（如果来自 A5.3 路径，诊断关联用）。 */
+    /** operationId（如果来自 war-planning 路径，诊断关联用）。 */
     operationId?: string;
   };
 
@@ -844,7 +844,7 @@ export interface CreepRef {
 }
 
 /**
- * P1-4 拆改计划（完整 Plan 契约）。
+ * 拆改计划（完整 Plan 契约）。
  * 生命周期：waiting（替代 link 未建成，construction-manager 检查替代任务 state）→
  * validating（替代建成，等 500t 验证灌能 energy > 0）→ 终态。
  * 终态：success（验证灌能成功 → destroy 旧 link + clearDeadAssetLink）；
@@ -899,7 +899,7 @@ export interface ExitCache {
 }
 
 /**
- * P0-1：从 squadIndex 中查询编队成员 — 供 war-planner / power-farm-manager /
+ * 从 squadIndex 中查询编队成员 — 供 war-planner / power-farm-manager /
  * prospect-manager / expansion-manager 复用，替代各自独立遍历 Game.creeps。
 
  * 过滤维度均为可选：undefined = 不过滤该维度。
@@ -924,7 +924,7 @@ export function querySquad(filter: {
 }
 
 /**
- * P3 能量核算 L1 计数器（平台 Metrics 设施，ENERGY_ACCOUNTING_MODEL §2）。
+ * P3 能量核算 L1 计数器（平台 Metrics 设施）。
  * 结构镜像 domain/economy/accounting.EnergyLedger —— kernel 不 import 业务类型，
  * 两侧字段集必须保持一致（economy 系统按结构消费）。
  */
@@ -937,7 +937,7 @@ export interface RoomEnergyCounters {
   built: number;
   repaired: number;
   towerSpent: number;
-  /** #80 用途分桶（纯观测，精确划分 towerSpent：三者之和恒等于合计；不进 CONSUMPTION_FIELDS）。 */
+  /** 用途分桶（纯观测，精确划分 towerSpent：三者之和恒等于合计；不进 CONSUMPTION_FIELDS）。 */
   towerSpendCombat: number;
   towerSpendStructures: number;
   towerSpendWalls: number;
@@ -972,7 +972,7 @@ export interface RoomEnergyCounters {
 export type EnergyCounterField = keyof RoomEnergyCounters;
 
 /**
- * L1 计数累加（每 tick 近零成本，R6 声明：聚合档位=economy 50tick 窗）。
+ * L1 计数累加（每 tick 近零成本，声明：聚合档位=economy 50tick 窗）。
  * 计数在堆生命周期内**累计**（不按 tick 重置）——核算窗取前后两次累计差值，
  * 中间 tick 的账不丢。非法输入（非有限/非正）静默忽略，维持 ≥0 不变量。
  * global reset 清零可接受：economy 系统按「无基线/tick 断档」重新播种窗口起点。
@@ -1135,7 +1135,7 @@ export function roadBuildCounters(room: string): RoadBuildCounters {
   });
 }
 
-/** 取（或建行）某自有房的 Observer 请求账本（#100 的仪器）。写者唯一：systems/room-observer.ts；
+/** 取（或建行）某自有房的 Observer 请求账本。写者唯一：systems/room-observer.ts；
  * 读者：telemetry-collector flush ⇒ Memory.kernel.stats.observe。零值字面量全仓唯一建行处 ——
  * 类型契约在 domain/intel，内核不得值导入业务模块，所以零值在此就地构造。 */
 export function observeCounters(room: string): ObserveCounters {
@@ -1153,7 +1153,7 @@ export function observeCounters(room: string): ObserveCounters {
   });
 }
 
-/** 取（或建行）某房的 Safe mode 出口账本（#119）。写者唯一：systems/military/tower-defense.ts；
+/** 取（或建行）某房的 Safe mode 出口账本。写者唯一：systems/military/tower-defense.ts；
  * 读者：telemetry-collector flush ⇒ Memory.kernel.stats.safeMode。零值字面量全仓唯一建行处。 */
 export function safeModeCounters(room: string): SafeModeCounters {
   const g = globalCache();
@@ -1165,7 +1165,7 @@ export function safeModeCounters(room: string): SafeModeCounters {
   });
 }
 
-/** 取（或建行）某房的遗留物回收账本（#131 C1）。写者唯一：creeps/engine/actions/pickup.ts。 */
+/** 取（或建行）某房的遗留物回收账本。写者唯一：creeps/engine/actions/pickup.ts。 */
 export function remainsLootCounters(room: string): RemainsLootCounters {
   const g = globalCache();
   const ledger = (g.remainsLootLedger ??= {});
@@ -1190,7 +1190,7 @@ export function remainsLootBucket(room: string, minAmount: number): RemainsLootB
   });
 }
 
-/** 取（或建行）某房的零容量遗留盲点（#131 C2）。写者唯一：systems/room-snapshot.ts。 */
+/** 取（或建行）某房的零容量遗留盲点。写者唯一：systems/room-snapshot.ts。 */
 export function remainsBlindCounters(room: string): RemainsBlindCounters {
   const g = globalCache();
   const ledger = (g.remainsBlindLedger ??= {});

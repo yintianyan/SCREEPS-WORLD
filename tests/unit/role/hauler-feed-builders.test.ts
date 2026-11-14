@@ -1,4 +1,4 @@
-/** R672：施工优先供能 —— hauler→低能 builder transfer / 工地旁 drop。 */
+/** 施工优先供能 —— hauler→低能 builder transfer / 工地旁 drop。 */
 import { describe, expect, it, vi } from "vitest";
 import {
   dropNearConstruction,
@@ -62,7 +62,7 @@ function makeAc(opts: {
   return { ac, site };
 }
 
-describe("transferToLowBuilder — R672", () => {
+describe("transferToLowBuilder", () => {
   it("4 格内缺能 builder 且携能 ⇒ 选中它", () => {
     const b = builder("builder", 50, 2);
     const { ac } = makeAc({ sites: 1, energy: 50, nearby: [b] });
@@ -87,7 +87,7 @@ describe("transferToLowBuilder — R672", () => {
     expect(transferToLowBuilder().resolve!(ac)).toBeUndefined();
   });
 
-  it("核心（spawn/extension）还空着 ⇒ 先填核心，不喂 builder（R672b 门控）", () => {
+  it("核心（spawn/extension）还空着 ⇒ 先填核心，不喂 builder（门控）", () => {
     const b = builder("builder", 50, 1);
     const { ac } = makeAc({
       sites: 1,
@@ -112,7 +112,7 @@ describe("transferToLowBuilder — R672", () => {
   });
 });
 
-describe("dropNearConstruction — R672", () => {
+describe("dropNearConstruction", () => {
   it("2 格内在建工地且脚下无堆 ⇒ drop", () => {
     const { ac } = makeAc({ sites: 1, energy: 50, siteRange: 2 });
     expect(dropNearConstruction().resolve!(ac)).toBeDefined();
@@ -129,7 +129,7 @@ describe("dropNearConstruction — R672", () => {
     expect(dropNearConstruction().resolve!(ac)).toBeUndefined();
   });
 
-  it("核心还空着 ⇒ 不往工地丢（R672b 门控）", () => {
+  it("核心还空着 ⇒ 不往工地丢（门控）", () => {
     const { ac } = makeAc({
       sites: 1,
       energy: 50,
@@ -151,7 +151,7 @@ import {
   resetGlobals,
 } from "../../support/factories";
 
-describe("施工期 hauler 填充顺序 — R672", () => {
+describe("施工期 hauler 填充顺序", () => {
   function run(hasSites: boolean) {
     resetGlobals();
     const cc = mockStructure("container", { id: "cc1", energy: 100, capacity: 2000 });

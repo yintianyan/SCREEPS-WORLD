@@ -40,7 +40,7 @@ export interface RoomRegistryEntry {
   needsAid: boolean;
   /** 可调拨量（由 ownership.ts computeTransferable 计算）。 */
   transferable: number;
-  /** A4.0 Empire Room Role（经济职能分工）。undefined = 尚未评估。 */
+  /** Empire Room Role（经济职能分工）。undefined = 尚未评估。 */
   empireRole?: EmpireRoomRole;
   /** 最近更新 tick。 */
   updatedAt: number;

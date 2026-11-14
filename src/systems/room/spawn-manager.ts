@@ -45,12 +45,12 @@ import { recordExecution } from "../../telemetry";
 import { log } from "../../kernel/log";
 
 /**
- * P0-A：工业供料链是否有活可干 —— labTender 的门禁事实（适配层现读，domain 保持纯函数）。
+ * 工业供料链是否有活可干 —— labTender 的门禁事实（适配层现读，domain 保持纯函数）。
  *
  * 为什么不能再用「lab 已有矿物」：实验室初始全空，而把矿搬进 lab 的正是 labTender
  * ⇒ 旧门禁恒假、供料链自锁（W8N3 实测 6 座 lab 数小时全空、terminal 里 O/X/H 躺着）。
  * 这里以「反应计划在账」或「labDemands 有装载/回收条目」为准；两者都没有时仍不补孵，
- * 保留 R595 的成本约束（无工业需求时不白养一只 4C4M）。
+ * 保留既有成本约束（无工业需求时不白养一只 4C4M）。
  */
 function hasLabSupplyDemand(roomMem: unknown, roomName: string): boolean {
   const industry = (roomMem as { industry?: unknown } | undefined)?.industry;
@@ -221,13 +221,13 @@ export const spawnManagerSystem: System = {
   name: "spawn-manager",
   priority: 0 as Priority,
   run(ctx: TickContext): void {
-    // P1-1：在循环外预构建全量摘要，避免 O(rooms × creeps) 重复遍历。
+    // 在循环外预构建全量摘要，避免 O(rooms × creeps) 重复遍历。
     // collectCreepSummaries / collectSpawningSummaries 遍历全部 Game.creeps / Game.spawns，
     // 原先在每房间循环内调用，N 房间 × M creep = O(N×M)。现改为 O(M) 一次构建。
     const creeps = collectCreepSummaries();
     const spawning = collectSpawningSummaries();
 
-    // P3-3：预建 per-room 索引，避免 recyclePass 每房全量扫描 Game.creeps。
+    // 预建 per-room 索引，避免 recyclePass 每房全量扫描 Game.creeps。
     // O(M) 一次构建，N 房间各取自己的子集 → 总计 O(M) 而非 O(N×M)。
     const creepsByRoom = new Map<string, CreepSummary[]>();
     for (const s of creeps) {
@@ -240,7 +240,7 @@ export const spawnManagerSystem: System = {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
 
-      // Phase 2.5：storage 富余闩锁（50K 停 / 100K 复），upgrade/lab/节流共用。
+      // storage 富余闩锁（50K 停 / 100K 复），upgrade/lab/节流共用。
       // 无 storage 的早期房不适用（否则 0 能量会让闩锁恒关，误伤 RCL1-3 的发展）。
       let storageEnergyNow = 0;
       try {
@@ -332,18 +332,18 @@ export const spawnManagerSystem: System = {
       //    P0 worker 恢复请求不创建 → 死锁。
       //    ：达重试上限的 key 记入黑名单冷却（1 个 TTL 窗口）— 持久性配置错误
       //    不再「删除 → demand 重建 → 再失败」无限翻炒。
-      //    P2-K：onPurge 回调把两种 churn（retries 烧穿 / TTL 过期）转译为 recordSkip
+      //    onPurge 回调把两种 churn（retries 烧穿 / TTL 过期）转译为 recordSkip
       //    指标，按角色聚合 — key 形如 `role:home:source?:index`，split(':')[0] 取 role
       //    作标签（kebab-case 角色不含 ':'，split 安全）。
       const purgedKeys = cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries, (key, reason) => {
         const role = key.split(":")[0] ?? "";
         recordSkip(`spawn/churn/${role}/${reason}`);
-        // P0-3：同步写入 per-room churnCounter 供熔断判定（role 为空不计数防脏数据）。
+        // 同步写入 per-room churnCounter 供熔断判定（role 为空不计数防脏数据）。
         if (role) recordChurn(snapshot.roomName, role, ctx.tick);
       });
       if (purgedKeys.length > 0) {
         roomMem.spawnBlacklist ??= {};
-        // P0-3：经济命脉角色（采集 harvester/worker + 物流 hauler/distributor）永远豁免隔离。
+        // 经济命脉角色（采集 harvester/worker + 物流 hauler/distributor）永远豁免隔离。
         // 采集端：normal/crisis 态恰是能量低谷最常见态，隔离会把「等能量」变成真死锁
         // （线上 W37S58 死亡螺旋根因：1cca151 的隔离机制在 normal 态把 harvester 关 500 tick
         // → 某 source 停产 → 能量断链）。
@@ -363,7 +363,7 @@ export const spawnManagerSystem: System = {
           );
         }
       }
-      // P0-3：churn 熔断检查 — 在 cleanQueue 之后、evaluateDemand 之前。
+      // churn 熔断检查 — 在 cleanQueue 之后、evaluateDemand 之前。
       // 200 tick 滑窗内同 role churn > 20 次 → 该 role 孵化冻结 100 tick（P0 worker 豁免）。
       checkChurnCircuitBreaker(ctx, roomMem, snapshot.roomName);
       // 到期条目顺手清理 — 防黑名单泄漏为永久封禁。
@@ -430,7 +430,7 @@ export const spawnManagerSystem: System = {
         recyclePass(snapshot, creepsByRoom.get(snapshot.roomName) ?? [], undefined);
         continue;
       }
-      // P1-J：迟滞状态（distScaleUpSince / builderPressureState）原本由 demand 直读写
+      // 迟滞状态（distScaleUpSince / builderPressureState）原本由 demand 直读写
       // Memory，现收敛为显式输入输出 — 适配层从 RoomMemory 读出 prevHysteresis 注入、
       // 将 nextHysteresis 写回；domain 恢复纯函数，单测不再需要 mock Memory。
       const roomCtx: RoomDemandContext = {
@@ -446,16 +446,16 @@ export const spawnManagerSystem: System = {
           distScaleUpSince: roomMem.distScaleUpSince,
           builderPressureState: roomMem.builderPressureState,
         },
-        // P2-2：tuning pending 期间 hauler 主动收敛目标 — 上调 maxCount → preAdjustValue+1；
+        // tuning pending 期间 hauler 主动收敛目标 — 上调 maxCount → preAdjustValue+1；
         // 下调 minCount → preAdjustValue-1；让 demand 扩编/缩编到合同目标（配合 isContractMet）。
         haulerPendingTarget: computeHaulerPendingTarget(snapshot.roomName),
-        // R6a：议程注入（rcl-push 放宽 upgrader 冲刺门槛）。
+        // 议程注入（rcl-push 放宽 upgrader 冲刺门槛）。
         agendaInitiative: Memory.kernel?.agenda?.initiative,
-        // P0-A：工业搬料需求注入 —— 决定 labTender 能否孵化（空 lab 不再自锁）。
+        // 工业搬料需求注入 —— 决定 labTender 能否孵化（空 lab 不再自锁）。
         labSupplyNeeded: hasLabSupplyDemand(roomMem, snapshot.roomName),
         // Phase 2：upgrade 可持续供给，供 demand 按 feed 封顶 upgrader 编制。
         upgradeFeedCap: computeUpgradeFeedCap(snapshot, creepsByRoom.get(snapshot.roomName) ?? []),
-        // Phase 2.5：富 storage 闩锁（50K 停 / 100K 复）。
+        // 富 storage 闩锁（50K 停 / 100K 复）。
         richStorageActive: storageRichActive,
         // Phase D：升级专用闸（50K 停 / 60K 复）—— 与 lab/修墙解耦。
         upgradeActive,
@@ -465,7 +465,7 @@ export const spawnManagerSystem: System = {
         homeMiningActive,
         // 【G-J 合规】churn 冻结表注入（写者=本系统 cleanQueue；domain 不触 Memory）。
         churnFreezeUntil: roomMem?.churnFreezeUntil as Record<string, number> | undefined,
-        // #156：帝国合计储量注入（数据源=各房 economy.cr＝storage+terminal+link 水位；domain 不触 Memory）。
+        // 帝国合计储量注入（数据源=各房 economy.cr＝storage+terminal+link 水位；domain 不触 Memory）。
         empireStoredEnergy: Object.keys(Memory.rooms).reduce(
           (sum, rn) => sum + (Memory.rooms[rn]?.economy?.cr ?? 0),
           0,
@@ -507,7 +507,7 @@ export const spawnManagerSystem: System = {
         Memory.kernel?.upgradeBrake,
       );
       const { requests, nextHysteresis } = demandResult;
-      // #85：把需求阶梯的**结构钳位**抄进 Memory.kernel.demandClamps，供调优器判断
+      // 把需求阶梯的**结构钳位**抄进 Memory.kernel.demandClamps，供调优器判断
       // "这个 ↑ 落得了地吗"。缺键 = 没有钳位在压 maxCount（不钳位）⇒ 只在有值时写、无值时删。
       Memory.kernel ??= {};
       const clamps = (Memory.kernel.demandClamps ??= {});
@@ -522,7 +522,7 @@ export const spawnManagerSystem: System = {
         if ((roomMem.spawnBlacklist?.[req.key] ?? 0) > ctx.tick) continue;
         submitRequest(queue, req);
       }
-      // P1-J：写回迟滞状态。undefined 表示「清除」语义（如需求回落重置），
+      // 写回迟滞状态。undefined 表示「清除」语义（如需求回落重置），
       // 用 delete 而非赋值 undefined 保持 Memory 体积精简。
       if (nextHysteresis.distScaleUpSince === undefined) {
         delete roomMem.distScaleUpSince;
@@ -548,7 +548,7 @@ export const spawnManagerSystem: System = {
         c => c.role === "harvester" || c.role === "worker",
       ).length;
       const distributorCount = roomCreeps.filter(c => c.role === "distributor").length;
-      // P3 Reservation①前馈：任一采集者进入替换窗口（B1 对策，P3_BASELINE §6）。
+      // Reservation①前馈：任一采集者进入替换窗口。
       const replacementReserve = roomCreeps.some(
         c =>
           (c.role === "harvester" || c.role === "worker") &&
@@ -557,8 +557,8 @@ export const spawnManagerSystem: System = {
       );
       trySpawn(snapshot, queue, collectorCount, distributorCount, replacementReserve);
 
-      // 5. B1：回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
-      //    P3-3：传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
+      // 5. 回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
+      //    传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
       recyclePass(
         snapshot,
         creepsByRoom.get(snapshot.roomName) ?? [],
@@ -573,7 +573,7 @@ export const spawnManagerSystem: System = {
 const KNOWN_ROLES: ReadonlySet<string> = new Set(Object.keys(CONFIG.roles));
 
 /**
- * P2-2：从 Memory 读取 hauler tuning pending 状态，计算主动收敛目标。
+ * 从 Memory 读取 hauler tuning pending 状态，计算主动收敛目标。
  * hauler.maxCount pending + up → preAdjustValue + 1（扩编到新上限）；
  * hauler.minCount pending + down → preAdjustValue - 1（缩编到新下限）；否则 undefined。
  * step=1 时 preAdjustValue±1 = newValue，与 isContractMet 合同目标对齐。
@@ -589,7 +589,7 @@ function computeHaulerPendingTarget(roomName: string): number | undefined {
 }
 
 /**
- * B1 回收通道。
+ * 回收通道。
  * 标记规则（保守白名单，不做全量配额对账）：
  *   1. 废弃角色：role 不在 CONFIG.roles 中（角色已下线，creep 永远闲置）；
  *   2. 富余 worker：harvester 满编时保留 1 只作灾后保险，其余回收
@@ -611,7 +611,7 @@ function recyclePass(
   // ── 标记（纯函数决策）──
   // roomCreeps 已按 home 预过滤，selectRecycleCandidates 内部 home 过滤为冗余 no-op，
   // 保留以维护纯函数自包含契约。
-  // P1-1：tuning 下调 hauler.minCount 时传入下调目标，让 recyclePass 主动收敛。
+  // tuning 下调 hauler.minCount 时传入下调目标，让 recyclePass 主动收敛。
   const haulerPendingDown =
     Memory.kernel?.tuning?.rooms?.[home]?.pendingValidation?.["hauler.minCount"];
   const haulerPendingDownTarget =
@@ -634,7 +634,7 @@ function recyclePass(
   }
 
   // ── 执行：引导至最近 spawn 并回收 ──
-  // P3-3：仅遍历本房 creep 列表（来自预建索引），不再全量扫描 Game.creeps。
+  // 仅遍历本房 creep 列表（来自预建索引），不再全量扫描 Game.creeps。
   // 待处理集合 = summary 中已有 recycle 标记的（旧标记）∪ 本 tick 新标记的（markedSet）。
   if (snapshot.spawns.length === 0) return;
   for (const s of roomCreeps) {
@@ -667,7 +667,7 @@ function recyclePass(
   }
 }
 /**
- * #54 拒因计数 — **只观测，不参与任何判定、不改任何阈值**。
+ * 拒因计数 — **只观测，不参与任何判定、不改任何阈值**。
  *
  * 为什么要五档而不是三档：`reserve` 被折进 `effectiveBudget`（:430），
  * "被预留挡" 与 "被预算挡" 是同一条不等式（:447）的两组参数 —— 做成互斥三分支会把
@@ -682,10 +682,10 @@ export type SpawnRejectReason =
   | "reserveOnly"
   | "noDegrade"
   | "floor"
-  /** #64：**正交标签**，不是第六个互斥出口。只记"降级许可从未打开"（allowDegrade 五条件全假）这一型，
+  /** **正交标签**，不是第六个互斥出口。只记"降级许可从未打开"（allowDegrade 五条件全假）这一型，
    *  它与 :481 的 budget/reserveOnly 出自同一次判定 ⇒ 恒有 `degradeGateClosed ⊆ (budget ∪ reserveOnly)`。
    *  为什么必须有它：`noDegrade` 只在**已进入降级分支**时才记，所以它为零有两种互斥解释
-   *  （"总能放行" vs "从没被允许进"），而 #61（预留语义）与 #73（扩张闸输入）的决策都押在这个区分上。
+   *  （"总能放行" vs "从没被允许进"），而预留语义与扩张闸输入的决策都押在这个区分上。
    *  ⚠️旧不变式"五档之和 ≈ 尝试数"作废：加总只看前四档（survivalBlock/budget/reserveOnly/noDegrade/floor）。 */
   | "degradeGateClosed"
   | "poverty";
@@ -703,7 +703,7 @@ function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 
     degradeGateClosed: 0,
     poverty: 0,
   });
-  // `??=` 对**已存在**的对象不生效，而线上各房的 spawnRejects 是 #54 那批建的五键形状 ——
+  // `??=` 对**已存在**的对象不生效，而线上各房的 spawnRejects 是早期那批建的五键形状 ——
   // 直接 `stats.degradeGateClosed += 1` 会得到 NaN（JSON 落成 null，计数器永久哑火）。
   // 单测抓不到这一条：它每次新建 Memory，六键齐 ⇒ 补零必须写在产出侧。
   if (stats.degradeGateClosed === undefined) stats.degradeGateClosed = 0;
@@ -735,7 +735,7 @@ const REMOTE_LINE_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * R590/R591 贫困闸：home storage 低于远矿开点地板时，暂停远矿编制的**首孵/扩编**。
+ * 贫困闸：home storage 低于远矿开点地板时，暂停远矿编制的**首孵/扩编**。
  * 线上实证（10-24）：19K 的房开 7 人远矿线，孵化峰把 storage 打到 2,887、进 crisis；
  * 开点门只判当拍 storage，挡不住孵化期的连续支出。
  * **替换请求放行**（key 含 `:repl:`）：替换是保住现有线收入的最小支出，若一并停，
@@ -759,13 +759,13 @@ export function remoteSpawnPovertyBlocked(
   if (storageEnergy < DEEP_POVERTY_FLOOR) return true;
   // 替换 = 保住现有线收入的最小支出，只受上面的深贫困地板约束。
   if (key.includes(":repl:")) return false;
-  // Phase 2.5：低储回血期暂停远矿「首孵/扩编」—— 新编制是净支出，先让 home storage
+  // 低储回血期暂停远矿「首孵/扩编」—— 新编制是净支出，先让 home storage
   // 回到 expansionMinStorage(100K)。现役成员与替换不受影响，收入线不断。
   return storageEnergy < CONFIG.remote.expansionMinStorage;
 }
 
 /**
- * R647：恢复预留在低容量房上的钳位（纯函数，导出供单测）。
+ * 恢复预留在低容量房上的钳位（纯函数，导出供单测）。
  *
  * RCL1-2 房容量 300，而 `recoveryEnergyReserve=200`；`replacementHorizonTicks=600`
  * 又让「采集者临近换代」近乎常真 ⇒ 除采集者外的请求全部孵不出，spawn 满能空转
@@ -777,7 +777,7 @@ export function spawnReserveFor(energyCapacityAvailable: number, computedReserve
 }
 
 /**
- * R647：bootstrap/recovery 房允许**所有优先级**降级出小 body（纯函数，导出供单测）。
+ * bootstrap/recovery 房允许**所有优先级**降级出小 body（纯函数，导出供单测）。
  *
  * 原先只有 P1 豁免；线上 W38S58（RCL2、容量 300）出现 P2 hauler 300e 永远凑不齐、
  * 容器 4,000 满而 spawn 无物流可花 ⇒ `degradeGateClosed` 死锁。恢复期第一要务是把
@@ -813,12 +813,12 @@ export function trySpawn(
   let energyBudget = primaryRoom.energyAvailable;
   // ：非 P0 请求可用的预算（P0 本身可动用全部能量）。
   // 三个条件保护同一目标——为 P0 恢复/采集链预留孵化能量；取最大值而非累加，
-  // 避免叠加（3× = 600）把非 P0 角色完全阻塞（ISSUE-007 修复）。
+  // 避免叠加（3× = 600）把非 P0 角色完全阻塞。
   let reserve = 0;
   // 条件 1: 采集链濒临断裂（collectorCount ≤ 1）。
   if (collectorCount <= 1) reserve = CONFIG.spawn.recoveryEnergyReserve;
-  // 条件 2: P3 Reservation①扩展（ECONOMY §2.1-7）：RCL4+ 有中央储备时，风险缓冲低于地板
-  // （断供耐受 tick 数不足）即同样为非 P0 预留恢复能源——堵 B1 类「P2 支出抽干
+  // 条件 2: Reservation①扩展：RCL4+ 有中央储备时，风险缓冲低于地板
+  // （断供耐受 tick 数不足）即同样为非 P0 预留恢复能源——堵「P2 支出抽干
   // 替换能力」的死锁路径。仅 storage/terminal/link 任一存在时生效（低容量房无
   // 合同储备口径，维持原动态，避免 RCL1 孵化被饿死）。
   const econSnap = Memory.rooms[snapshot.roomName]?.economy;
@@ -830,7 +830,7 @@ export function trySpawn(
     reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }
   // 条件 3: Reservation①前馈（低容量房形态）：采集者进入替换窗口（TTL < horizon）时同样预留——
-  // 防「P2 支出抽干孵化现金 → 首代替换失败级联」（B1 定量归因见 P3_BASELINE.md §6）。
+  // 防「P2 支出抽干孵化现金 → 首代替换失败级联」。
   if (replacementReserve) {
     reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }
@@ -840,7 +840,7 @@ export function trySpawn(
     reserve,
     energyReserveFor(snapshot.energyCapacityAvailable ?? 0, CONFIG.spawn.energyReserve),
   );
-  // R647：低容量房（RCL1-2，<400）不持有恢复预留。200 的预留占掉 300 容量的 2/3，
+  // 低容量房（RCL1-2，<400）不持有恢复预留。200 的预留占掉 300 容量的 2/3，
   // 而 replacementHorizonTicks=600 让「采集者临近换代」在这类房里近乎常真 ⇒ 除采集者外
   // 所有请求永久落进 noDegrade/degradeGateClosed，spawn 满能空转、新房停在 RCL2
   // （线上 W38S58：Spawn7 300e idle、队列 upgrader/hauler 双双 block）。
@@ -848,7 +848,7 @@ export function trySpawn(
 
   // 生存否决：本房有"不孵就要出事"的请求在排队时，不孵其他请求。
   // 用 survival 而不是 priority === 0 —— 跨房援运/远矿/编队也可能是 P0（帝国层面急），
-  // 让它们取得否决权会让本房基建与自身编制一起停摆（A14）。
+  // 让它们取得否决权会让本房基建与自身编制一起停摆。
   const hasSurvival = hasSurvivalRequest(queue);
 
   // 按优先级顺序处理请求（queue 已排序；splice 会改数组，倒序快照遍历不可行 —
@@ -866,7 +866,7 @@ export function trySpawn(
       continue;
     }
 
-    // R590 贫困闸（见 remoteSpawnPovertyBlocked 注释）。
+    // 贫困闸（见 remoteSpawnPovertyBlocked 注释）。
     if (
       remoteSpawnPovertyBlocked(
         req.role,
@@ -934,14 +934,14 @@ export function trySpawn(
       countSpawnReject(snapshot.roomName, cost > energyBudget ? "budget" : "reserveOnly");
       const roomMem = Memory.rooms[snapshot.roomName];
       const roomState = roomMem?.colonyState ?? "normal";
-      // R677：colonyState 与 economy phase 是两套维度的状态（前者回答"这房会不会出事"，
+      // colonyState 与 economy phase 是两套维度的状态（前者回答"这房会不会出事"，
       // 后者回答"经济处在哪个阶段"），二者不同步。线上 W39S55：colonyState=normal 而
       // phase=bootstrap，P1 harvester 因 allowDegrade 全假被迫等 2×spawnTime 才降级
       // （spawnRejects.degradeGateClosed 累计 2,214）。phase 已 bootstrap/recovery 时
       // P1 是恢复路径，应立即允许降级。
       const economyPhase = roomMem?.phase?.phase;
       const bootstrapPhase = economyPhase === "bootstrap" || economyPhase === "recovery";
-      // R679：无 storage 的 RCL3 房，economyPressure 结构性为 0（压力由 storage 水位派生），
+      // 无 storage 的 RCL3 房，economyPressure 结构性为 0（压力由 storage 水位派生），
       // 旧的 starvedP2 双条件在此永远不成立 ⇒ P2 请求只能等 TTL 过期重排，形成死亡螺旋。
       // 线上 W39S55：人口 11→4、0 upgrader/builder，2 个 hauler + 3 个 upgrader 请求
       // 全部 degradeGateClosed。RCL1-2 有 spawnReserveFor 的低容量钳位与既有集成覆盖，
@@ -956,7 +956,7 @@ export function trySpawn(
       // 时间条件本身足以排除「过早小 body」，因此不再叠加 economyPressure：
       // storage 富余的冲刺房该信号恒为 0，会与 10× 一起把降级通道结构性锁死。
       const starvedP2 = req.priority === 2 && waitTicks >= spawnTime * 4;
-      // R686：**预留单独挡住的 P2**。本房现金付得起整身，只是扣掉 200 预留后不够 —
+      // **预留单独挡住的 P2**。本房现金付得起整身，只是扣掉 200 预留后不够 —
       // 这类请求不必等饥饿窗口（旧实现还要等 10× 且 pressure>0.5，在富房双重不可达），
       // 而道路优化档的 body 恰好按 `capacity-100` 裁（RCL4 hauler 16C8M=1200 / 容量 1300），
       // 预留 200 把它永久挡在 1100 之外 ⇒ 请求只能 TTL 到期重建，人口停止补员。
@@ -999,8 +999,8 @@ export function trySpawn(
         }
         // 饥饿降级成本地板：starved 路径产物低于地板时继续排队等能量 — 等能量不是
         // 失败，不递增 retries（避免烧穿 maxRetries 进黑名单）；生存路径豁免。
-        // R677：economy phase 已 bootstrap/recovery 时按生存路径处理（P1 恢复优先）。
-        // R679：仅 P2 在无 storage 幼房豁免地板（P1/泵断供仍守地板，避免 RCL1-3 铸残废采集/泵）。
+        // economy phase 已 bootstrap/recovery 时按生存路径处理（P1 恢复优先）。
+        // 仅 P2 在无 storage 幼房豁免地板（P1/泵断供仍守地板，避免 RCL1-3 铸残废采集/泵）。
         const survivalPath =
           req.survival ||
           roomState === "bootstrap" ||
@@ -1017,7 +1017,7 @@ export function trySpawn(
         }
         body = degraded;
       } else {
-        // #64：上面已按 budget/reserveOnly 记过"付不起"，这一档答的是另一半问题——**会不会被允许出小 body**。
+        // 上面已按 budget/reserveOnly 记过"付不起"，这一档答的是另一半问题——**会不会被允许出小 body**。
         // 只有这一支能把"等能量"与"永远不会被允许等不到能量"分开；allowDegrade 的五个条件与
         // 两个阈值（pressure>0.5、starvationDegradeFloor）一个都没动 —— 纯加出口。
         req.block = "degradeGateClosed";
@@ -1038,7 +1038,7 @@ export function trySpawn(
 
     // 生成包含 spawnIndex 的唯一 creep 名以供追踪。
     const memSpawnIndex = req.memory.spawnIndex ?? 0;
-    // #62：后缀从 `Math.random` 换成帝国级单调序号 —— 名字不是装饰：
+    // 后缀从 `Math.random` 换成帝国级单调序号 —— 名字不是装饰：
     //   `creeps/support/targeting.ts` 按 `creep.name` 逐字符求 hash 来错开目标选择，
     //   `domain/remote/demand.ts` 把濒死 creep 的名字当替补队列键 ⇒ 每孵一只抽一次真随机，直接分叉世界。
     // 名字**形状一字未改**（role-room-spawnIndex-tick-后缀），按 `-` 解析名字的代码不受影响。
@@ -1053,7 +1053,7 @@ export function trySpawn(
     }
     kernelMem.creepSeq = nameSeq;
 
-    // #169 判别列：只有这一行区分得开「从未被允许试铸」与「每次都去铸」。
+    // 判别列：只有这一行区分得开「从未被允许试铸」与「每次都去铸」。
     req.attempts = (req.attempts ?? 0) + 1;
     req.block = "cast";
     const result = spawn.spawnCreep(body, name, {
@@ -1077,7 +1077,7 @@ export function trySpawn(
         );
       }
       // P1 补位时延结算：匹配同角色死亡锚 → EMA（tick）。
-      // B4-F08 修复：移除 (Memory as any) 类型绕过，使用类型安全访问。
+      // 修复：移除 (Memory as any) 类型绕过，使用类型安全访问。
       const stats = Memory.kernel?.stats;
       const anchor = stats?.deathAnchor?.[req.role];
       if (anchor !== undefined && stats) {
@@ -1190,7 +1190,7 @@ function collectSpawningSummaries(): SpawningSummary[] {
   return result;
 }
 
-// ─── P0-3：spawn churn 熔断 ────────────────────────────────────
+// ─── spawn churn 熔断 ────────────────────────────────────
 
 /**
  * Churn 事件记录结构（存 globalCache.__churnCounter[roomName]）。
@@ -1209,7 +1209,7 @@ const CHURN_WINDOW = 200;
 const CHURN_FREEZE_TICKS = 100;
 
 /**
- * P0-3：计算请求 key 的隔离冷却时长（tick）。
+ * 计算请求 key 的隔离冷却时长（tick）。
 
  * 采集角色（harvester/worker）用短冷却（requestTtl / 2 = 500 tick）—
  * 持续配置错误时更快进入熔断，比永久豁免避免无限 churn。
@@ -1222,7 +1222,7 @@ const CHURN_FREEZE_TICKS = 100;
  *
  * 能量低谷（`ea < 最小 body 成本` ⇒ degradeBody 返回 undefined ⇒ retries 连烧）不是配置错误，
  * 隔离它等于把"等能量"换成"这一整条道 1000 拍不许再提"。采集/物流四件套已按这个理由豁免
- * （见调用点 P0-3 注释，1cca151 的死亡螺旋）。
+ * （见调用点注释，1cca151 的死亡螺旋）。
  * 这里补上同一族里被实测抓到的两个角色：幼房 W38S56 在 83323375 的
  * `spawnBlacklist = {defender:W38S56:0, upgrader:W38S56:0/1/2 → 83323771}`，
  * 而同期 `ea=60~97`、容器满能 4000、房里有敌人 ⇒
@@ -1267,7 +1267,7 @@ export function recordChurn(roomName: string, role: string, tick: number): void 
 }
 
 /**
- * P0-3：检查 churn 熔断状态，触发或清理 per-room 角色 熔断条目。
+ * 检查 churn 熔断状态，触发或清理 per-room 角色 熔断条目。
 
  * 流程：
  *   1. 读取 globalCache.__churnCounter[roomName]，清理 200 tick 滑窗外的过期记录。
@@ -1297,7 +1297,7 @@ export function checkChurnCircuitBreaker(
   g.__churnCounter[roomName] = freshRecords;
 
   // 2. 按 role 聚合，触发熔断（仅当 role 当前未冻结时）。
-  // B4-F04 修复：豁免 hauler/distributor — 它们是能量链命脉，熔断会导致恢复期能量断裂。
+  // 修复：豁免 hauler/distributor — 它们是能量链命脉，熔断会导致恢复期能量断裂。
   // 与隔离豁免（L78-80）口径一致：harvester/worker/hauler/distributor 都是生命线角色。
   const LIFELINE_ROLES = new Set(["harvester", "worker", "hauler", "distributor"]);
   const byRole = new Map<string, number>();
@@ -1307,7 +1307,7 @@ export function checkChurnCircuitBreaker(
   roomMem.churnFreezeUntil ??= {};
   for (const [role, count] of byRole) {
     if (LIFELINE_ROLES.has(role)) {
-      // FINDING-04 修复：生命线角色不冻结（防死亡螺旋），但 churn 超过高阈值时
+      // 修复：生命线角色不冻结（防死亡螺旋），但 churn 超过高阈值时
       // 输出 WARN 告警——配置错误（如 bodyCost 超过 energyCapacityAvailable）
       // 会导致持续 churn 不被熔断捕获，需要可观测性兜底。
       if (count > CHURN_THRESHOLD * 2 && (roomMem.churnWarnAt?.[role] ?? 0) <= ctx.tick) {
@@ -1341,7 +1341,7 @@ export function checkChurnCircuitBreaker(
   if (Object.keys(roomMem.churnFreezeUntil).length === 0) {
     delete roomMem.churnFreezeUntil;
   }
-  // FINDING-04: churnWarnAt 空对象回收。
+  // churnWarnAt 空对象回收。
   if (roomMem.churnWarnAt && Object.keys(roomMem.churnWarnAt).length === 0) {
     delete roomMem.churnWarnAt;
   }

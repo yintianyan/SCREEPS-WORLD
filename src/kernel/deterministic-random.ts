@@ -1,7 +1,7 @@
 /**
- * 调优探索的**可复现**随机源（#62）。
+ * 调优探索的**可复现**随机源。
  *
- * 为什么放在 kernel 而不是 domain/tuning 旁边：架构守卫 R1（`tests/unit/architecture/compliance.test.ts`）
+ * 为什么放在 kernel 而不是 domain/tuning 旁边：架构守卫（`tests/unit/architecture/compliance.test.ts`）
  * 禁止 `domain/**` 引用 `Game./Memory./console.` —— 第一版我把这个文件写在 domain/tuning 里，
  * 被守卫当场拦下（不是我改守卫的理由）。读 Memory 的接缝留在允许读它的层，由 tuning-engine 注入进纯函数评估层。
  *

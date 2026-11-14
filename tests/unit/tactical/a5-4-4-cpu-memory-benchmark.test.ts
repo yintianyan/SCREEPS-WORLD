@@ -1,4 +1,4 @@
-/** A5.4.4 CPU Benchmark & Memory Audit — planFocusFire 性能基准测试。 */
+/** CPU Benchmark & Memory Audit — planFocusFire 性能基准测试。 */
 import { describe, expect, it } from "vitest";
 import {
   planFocusFire,
@@ -94,8 +94,8 @@ function makeSnapshot(overrides: Partial<FocusFireSnapshot> = {}): FocusFireSnap
   };
 }
 
-describe("A5.4.4 CPU Benchmark — planFocusFire", () => {
-  // P0-6 修复：warm-up + 重复采样 + 稳定阈值，消除 JIT 环境抖动导致的 flaky test。
+describe("CPU Benchmark — planFocusFire", () => {
+  // 修复：warm-up + 重复采样 + 稳定阈值，消除 JIT 环境抖动导致的 flaky test。
   // 策略：先执行 N 次 warm-up 让 V8 JIT 热路径生效，再取 K 次采样的中位数。
   const WARMUP = 200;
   const SAMPLES = 5;
@@ -230,7 +230,7 @@ describe("A5.4.4 CPU Benchmark — planFocusFire", () => {
   });
 });
 
-describe("A5.4.4 Memory Audit — FocusFirePlan 序列化大小", () => {
+describe("Memory Audit — FocusFirePlan 序列化大小", () => {
   it("FocusFirePlan JSON.stringify 长度 < 2000 字符", () => {
     const targets = [makeCandidate("enemy-1", 25, 25), makeCandidate("enemy-2", 26, 26)];
     const members = [

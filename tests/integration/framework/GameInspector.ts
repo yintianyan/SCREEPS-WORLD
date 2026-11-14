@@ -97,7 +97,7 @@ export class GameInspector {
       // 死亡螺旋：最后 20 tick 能量持续下降 **且人口同步萎缩**。
       // 仅看能量下降会把「健康支出期」（孵化/建造/升级消费、人口稳定）误判为螺旋 —
       // 实测健康轨迹的 energyTrend 也为负（开局 container 冻结能量被逐步消费是结构性
-      // 支出），故必须以人口趋势作为生产崩溃的见证（P1-D：轨迹脆弱指标修复）。
+      // 支出），故必须以人口趋势作为生产崩溃的见证（轨迹脆弱指标修复）。
       const last20 = records.slice(-20);
       let declining = 0;
       let popDeclining = 0;
@@ -158,5 +158,5 @@ export class GameInspector {
     return lines.join("\n");
   }
 
-  // stuckCreeps 已删除（R20⑤：零引用孤儿方法）。
+  // stuckCreeps 已删除（零引用孤儿方法）。
 }

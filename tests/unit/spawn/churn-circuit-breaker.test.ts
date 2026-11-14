@@ -1,4 +1,4 @@
-/** P0-3：spawn churn 熔断测试。 */
+/** spawn churn 熔断测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   computeQuarantineTtl,
@@ -97,7 +97,7 @@ function normalCtx(pressure = 0, churnFreezeUntil?: Record<string, number>) {
 
 // ─── 正常路径（5 用例）──────────────────────────────────────────
 
-describe("P0-3 spawn churn 熔断 — 正常路径", () => {
+describe("spawn churn 熔断 — 正常路径", () => {
   it("采集角色（harvester）达 maxRetries 也永不进黑名单（自愈语义，防死亡螺旋）", () => {
     // cleanQueue 仍会 purge 达 maxRetries 的请求（防无限翻炒），但 spawn-manager
     // 对采集角色豁免隔离 — 失败后只重试，能量恢复即孵化，杜绝「等能量」变停产死锁
@@ -165,7 +165,7 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
   });
 
   it("近 200 tick 内 upgrader churn > 20 次 → 触发 100 tick 熔断", () => {
-    // B4-F04: harvester 豁免熔断，改用 upgrader（非生命线角色）。
+    // harvester 豁免熔断，改用 upgrader（非生命线角色）。
     for (let i = 0; i < 21; i++) {
       recordChurn(ROOM, "upgrader", 200);
     }
@@ -214,7 +214,7 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
 
 // ─── 边界条件（5 用例）──────────────────────────────────────────
 
-describe("P0-3 spawn churn 熔断 — 边界条件", () => {
+describe("spawn churn 熔断 — 边界条件", () => {
   it("churn 计数窗口：第 201 tick 时第 1 tick 的 churn 已过期（200 tick 滑窗）", () => {
     // tick=1 时记录 20 次（不触发，≤ 阈值）。
     for (let i = 0; i < 20; i++) {
@@ -237,7 +237,7 @@ describe("P0-3 spawn churn 熔断 — 边界条件", () => {
   });
 
   it("不同 role 独立计数（upgrader 21 次 + hauler 5 次 → 只熔断 upgrader）", () => {
-    // B4-F04: harvester 豁免熔断，改用 upgrader（非生命线角色）。
+    // harvester 豁免熔断，改用 upgrader（非生命线角色）。
     for (let i = 0; i < 21; i++) {
       recordChurn(ROOM, "upgrader", 200);
     }
@@ -272,7 +272,7 @@ describe("P0-3 spawn churn 熔断 — 边界条件", () => {
 
 // ─── 异常情况（3 用例）──────────────────────────────────────────
 
-describe("P0-3 spawn churn 熔断 — 异常情况", () => {
+describe("spawn churn 熔断 — 异常情况", () => {
   it("churnCounter globalCache 丢失（global reset）→ 不影响判定，重新计数", () => {
     // global reset 后 __churnCounter 为 undefined。
     // checkChurnCircuitBreaker 应惰性初始化，不报错。
@@ -282,7 +282,7 @@ describe("P0-3 spawn churn 熔断 — 异常情况", () => {
     expect((globalThis as any).Memory.rooms[ROOM].churnFreezeUntil).toBeUndefined();
 
     // 重新计数后正常工作。
-    // B4-F04: harvester 豁免熔断，改用 upgrader（非生命线角色）。
+    // harvester 豁免熔断，改用 upgrader（非生命线角色）。
     for (let i = 0; i < 21; i++) {
       recordChurn(ROOM, "upgrader", 200);
     }
@@ -301,7 +301,7 @@ describe("P0-3 spawn churn 熔断 — 异常情况", () => {
     onPurge(":W1N1:0");
     onPurge("");
     // 21 条合法 upgrader churn → 应触发熔断（异常 key 未占用 upgrader 计数配额）。
-    // B4-F04: harvester/hauler/distributor 豁免熔断，改用 upgrader（非生命线角色）。
+    // harvester/hauler/distributor 豁免熔断，改用 upgrader（非生命线角色）。
     for (let i = 0; i < 21; i++) {
       onPurge("upgrader:W1N1:0");
     }

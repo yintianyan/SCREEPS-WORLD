@@ -1,4 +1,4 @@
-/** Scout 角色 + 侦察视野捕获测试（R6b 主动情报执行端）。 */
+/** Scout 角色 + 侦察视野捕获测试（主动情报执行端）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { scoutRole } from "../../../src/creeps/roles/scout";
 import { roomObserverSystem } from "../../../src/systems/room-observer";
@@ -56,7 +56,7 @@ describe("scout 角色 — 执行端行为", () => {
   });
 });
 
-describe("room-observer — 侦察视野捕获（R6b 接线）", () => {
+describe("room-observer — 侦察视野捕获（接线）", () => {
   it("prospect 任务存续 + scout 在目标房 → intel 落库（sources/owner/towers）", () => {
     (globalThis as any).Memory.kernel = {
       prospect: { target: "W6N4", sponsor: "W7N4", startedAt: 900, spawned: 1 },
@@ -84,7 +84,7 @@ describe("room-observer — 侦察视野捕获（R6b 接线）", () => {
     };
     const creep = makeScout("W6N4");
     (globalThis as any).Game.creeps = { scout_1: creep };
-    // ISSUE-008: captureScoutVision 消费 creepRefs 而非 Game.creeps
+    // captureScoutVision 消费 creepRefs 而非 Game.creeps
     globalCache().creepRefs = [
       {
         name: "scout_1",

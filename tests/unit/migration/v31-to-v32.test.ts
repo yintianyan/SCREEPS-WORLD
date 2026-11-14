@@ -1,4 +1,4 @@
-/** v31 → v32 迁移独立测试（R7c 无害侦察观测 / lastObserverAt + observerSightings 建档）。 */
+/** v31 → v32 迁移独立测试（无害侦察观测 / lastObserverAt + observerSightings 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

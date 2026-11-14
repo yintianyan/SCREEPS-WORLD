@@ -4,7 +4,7 @@ import type { RoomSnapshot } from "../../../src/kernel/contracts";
 import { mockCapacityStore, mockRoomStateCtx } from "../../support/factories";
 
 /**
- * P0-1 room-state srcRatio + storageDrainRate 信号采集 — 单元测试。
+ * room-state srcRatio + storageDrainRate 信号采集 — 单元测试。
 
  * 覆盖病灶 1 中 room-state 层的信号采集逻辑：
  *   - srcRatio：取最满 source 的填充率（source.energy / energyCapacity）
@@ -52,7 +52,7 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
 
 // makeCtx 已归并到 factories.mockRoomStateCtx（T4 批②）。
 
-describe("room-state — P0-1 srcRatio + storageDrainRate 信号采集", () => {
+describe("room-state — srcRatio + storageDrainRate 信号采集", () => {
   let savedMemory: typeof Memory | undefined;
 
   beforeEach(() => {

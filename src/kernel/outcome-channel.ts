@@ -56,7 +56,7 @@ export interface SerializedOutcomeEvent {
 /**
  * Channel 容量上限。
  * cap=16 × ~128B(max event) + 16 × ~20B(seen) + 16B(counters) ≈ 2.4KB < 3.2KB。
- * 冻结契约：≤3.2KB（见文件头 ARCHITECTURE_FREEZE.md §11）。
+ * 冻结契约：≤3.2KB。
  */
 export const OUTCOME_CHANNEL_CAPACITY = 16;
 

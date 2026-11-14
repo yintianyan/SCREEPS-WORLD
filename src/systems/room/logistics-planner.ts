@@ -76,7 +76,7 @@ const routeCache = new RouteCache();
 /** 房间 → hauler 闲置持续 tick 计数（heap，跨 tick 持续）。 */
 const idleTicksByRoom = new Map<string, number>();
 
-// A4.4 修复 BYPASS-010：跨 tick Transport Accounting 追踪（heap，跨 tick 持久）。
+// 修复：跨 tick Transport Accounting 追踪（heap，跨 tick 持久）。
 // key = requestId, value = TransportAccounting。
 // 每 100t 由 logistics-planner 从 Operation 状态同步 delivered/lost。
 const accountingByRequestId = new Map<string, TransportAccounting>();
@@ -103,7 +103,7 @@ export function runLogisticsPlanning(ctx: TickContext): void {
   const surpluses: SupplyNode[] = networkSnapshot?.supplyNodes ?? [];
   const deficits: DemandNode[] = networkSnapshot?.demandNodes ?? [];
 
-  // 1b-A5.3. 战争物流需求注入：从 globalCache.warLogisticsDemand 提取
+  // 1b. 战争物流需求注入：从 globalCache.warLogisticsDemand 提取
   //   WarPlan 产出的 energy/boost/transport/replacement 需求，
   //   适配为 DemandNode 注入物流规划，使战争物资进入物流网络。
   const warLogi = globalCache().warLogisticsDemand;
@@ -125,7 +125,7 @@ export function runLogisticsPlanning(ctx: TickContext): void {
     }
   }
 
-  // 1b-A5.4.1. 战术补给需求注入：从 globalCache.tacticalSupplyDemands 提取
+  // 1b. 战术补给需求注入：从 globalCache.tacticalSupplyDemands 提取
   //   Tactical Runtime 产出的 energy 补给需求，
   //   适配为 DemandNode 注入物流规划，使战术物资进入物流网络。
   const tacG = globalCache() as ReturnType<typeof globalCache> & {
@@ -185,7 +185,7 @@ export function runLogisticsPlanning(ctx: TickContext): void {
   const plan = planLogistics(plannerInput);
 
   // ── 3. 收集 Accounting ──
-  // A4.4 修复 BYPASS-010：跨 tick Accounting 追踪。
+  // 修复：跨 tick Accounting 追踪。
   // 旧问题：collectAccounting 只从 Plan requests 创建初始 Accounting（delivered/lost=0），
   //   无跨 tick 累积 → Logistics Health 基于空数据 → deliveryRate/lossRate 不可信。
   // 修复：
@@ -196,7 +196,7 @@ export function runLogisticsPlanning(ctx: TickContext): void {
   const accountingSummary = summarizeAccounting(accounting);
 
   // ── 4. 计算 Logistics Health ──
-  // A4.4 修复 BYPASS-011：Health 基于真实 Accounting 数据，不再全为 0。
+  // 修复：Health 基于真实 Accounting 数据，不再全为 0。
   const avgLatency = computeAvgLatency();
   const health = computeLogisticsHealth(accounting, plan.requests, avgLatency, ctx.tick);
 
@@ -237,7 +237,7 @@ export function runLogisticsPlanning(ctx: TickContext): void {
   g.logisticsHealth = health;
   g.logisticsCapacity = { tick: ctx.tick, result: capacity };
   g.logisticsIdleHaulers = { tick: ctx.tick, names: idleHaulerNames };
-  // A4.4 修复 BYPASS-010：暴露 Accounting 到 globalCache 供 Observability 消费。
+  // 修复：暴露 Accounting 到 globalCache 供 Observability 消费。
   g.logisticsAccounting = { tick: ctx.tick, summary: accountingSummary, entries: accounting };
 
   // ── 11. 控制台输出（观测用，低频不会刷屏） ──
@@ -426,7 +426,7 @@ function collectThreats(snapshots: readonly RoomSnapshot[]): Map<string, number>
 }
 
 /**
- * A4.4 修复 BYPASS-010：跨 tick Accounting 追踪。
+ * 修复：跨 tick Accounting 追踪。
 
  * 逻辑：
  *   1. 为 Plan 中的新 requests 创建初始 Accounting（如果 requestId 不在缓存中）
@@ -498,7 +498,7 @@ function syncAccountingFromOperations(_tick: number): void {
 
 /**
  * 从 Memory 读取 Operations（与 agenda-manager 的 loadOperations 同口径）。
- * B8-F03 修复：原先读 global.__operations（从未被写入），改为读 Memory.kernel.agendas。
+ * 修复：原先读 global.__operations（从未被写入），改为读 Memory.kernel.agendas。
  */
 function loadOperations(): import("../../domain/operation/agenda-item").OperationContext[] {
   const stored = Memory.kernel?.agendas;

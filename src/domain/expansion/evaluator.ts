@@ -18,7 +18,7 @@ export interface ExpansionInput {
   /** sponsor 房名 → 其邻居情报映射。 */
   intelBySponsor: Readonly<Record<string, Readonly<Record<string, RoomIntel>>>>;
   /**
-   * P1-G：sponsor 房名 → 远矿房名 → dangerUntil 截止 tick（从各 sponsor 的
+   * sponsor 房名 → 远矿房名 → dangerUntil 截止 tick（从各 sponsor 的
    * remoteOps 提取，过滤危险冷却中的扩张候选）；缺失视为无危险标记。
    */
   dangerUntilBySponsor?: Readonly<Record<string, Readonly<Record<string, number>>>>;
@@ -32,7 +32,7 @@ export interface ExpansionInput {
   hostileAdj?: ReadonlySet<string>;
   /** 情报陈旧上限（超过则不可信，不入选）。默认 10000。 */
   maxIntelAge?: number;
-  /** R7b：目标最低 source 数（扩张节奏自适应消费 — stolen 频发时收紧到 2）。默认 1。 */
+  /** 目标最低 source 数（扩张节奏自适应消费 — stolen 频发时收紧到 2）。默认 1。 */
   minSources?: number;
   /** 本帝国用户名 — 排除被他人预定的房（claim 会 ERR_INVALID_TARGET 白费一个 claimer + 超时窗口）。 */
   myUsername?: string;
@@ -77,7 +77,7 @@ export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate
       const age = tick - info.lastSeen;
       if (age > maxIntelAge) continue;
       // 危险冷却中的房不选（威胁刚出现过 — 拓荒编队会被白吃）。
-      // P1-G：dangerUntil 从 intel 迁移到 remoteOps，由调用方提取为 dangerUntilBySponsor。
+      // dangerUntil 从 intel 迁移到 remoteOps，由调用方提取为 dangerUntilBySponsor。
       const dangerUntil = dangerUntilBySponsor?.[sponsor]?.[roomName];
       if (dangerUntil !== undefined && tick < dangerUntil) continue;
       // 有敌塔的房不选：塔会点杀 claimer 与拓荒者，claim 变成送葬。

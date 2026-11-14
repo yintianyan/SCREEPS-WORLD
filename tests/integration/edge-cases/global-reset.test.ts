@@ -177,9 +177,9 @@ describe("Global Reset 恢复韧性", () => {
   });
 });
 
-// ── P0-2: 多房帝国 Global Reset 冷启动测试 ──────────────────────────────
+// ── 多房帝国 Global Reset 冷启动测试 ──────────────────────────────
 
-describe("Global Reset 冷启动 — 多房帝国首 tick 安全性 (P0-2)", () => {
+describe("Global Reset 冷启动 — 多房帝国首 tick 安全性", () => {
   it("reset 后首 tick 不爆 CPU（avgTickMs < 50ms 阈值）", () => {
     // 单房 RCL3 场景已足够验证冷启动路径——多房在测试框架中构建成本高，
     // 且冷启动 CPU 峰值的主要来源是 buildSnapshots 全量遍历，单房已覆盖该路径。

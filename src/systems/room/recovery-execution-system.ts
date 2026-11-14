@@ -81,7 +81,7 @@ export const recoveryExecutionSystem: System = {
     __creepCache = { tick, creeps: Object.values(Game.creeps) };
 
     // ── 1. 读取 recoveryActions + warAbortSignals ──
-    // A5.3.1 GAP-1 修复：消费军事止损信号，通过纯函数转换为 RecoveryAction。
+    // 修复：消费军事止损信号，通过纯函数转换为 RecoveryAction。
     // Military 只产出 Signal（domain 纯函数 mapAbortSignalsToRecoveryActions），
     // 不执行 Recovery。本系统负责将 Signal → Action → 执行。
     // 幂等性：同一 tick 的 signal 只消费一次（lastConsumedAbortTick 去重），
@@ -190,8 +190,8 @@ export const recoveryExecutionSystem: System = {
           record = markFailed(record, tick, execResult.reason, true);
         }
         (g.recoveryActionTable as RecoveryActionTable).set(recoveryIdempotencyKey(action), record);
-        // #105：拒因累计落 Memory。上面那张表住 heap ⇒ 每次部署归零，
-        // "哪类动作反复被拒、被拒了几次"此前不可归因（与 #96 战损、#99 漏斗同一族）。
+        // 拒因累计落 Memory。上面那张表住 heap ⇒ 每次部署归零，
+        // "哪类动作反复被拒、被拒了几次"此前不可归因（与战损、漏斗同一族）。
         recordRecoveryRejection(action.type, classification, execResult.reason, tick);
       }
     }
@@ -207,10 +207,10 @@ export const recoveryExecutionSystem: System = {
     const stats = g.recoveryStats;
     if (stats) {
       // ⚠️吃"同拍增量"不是整表快照：succeeded 记录保留 500 拍而本系统 interval=10，
-      // 快照口径会把一次成功累加成 ≈50 次（#112 的虚高来源）。
+      // 快照口径会把一次成功累加成 ≈50 次（虚高来源）。
       g.__totalFailuresDetected = (g.__totalFailuresDetected ?? 0) + submittedThisTick;
       g.__autoRecoveredFailures = (g.__autoRecoveredFailures ?? 0) + stats.succeededThisTick;
-      // #112 另一半：这两个键此前零写者 ⇒ autonomy 分的扰动支路恒按"无扰动=满分"计。
+      // 另一半：这两个键此前零写者 ⇒ autonomy 分的扰动支路恒按"无扰动=满分"计。
       g.__perturbationCount = (g.__perturbationCount ?? 0) + stats.succeededThisTick;
       g.__totalRecoveryTime = (g.__totalRecoveryTime ?? 0) + stats.recoveryTimeThisTick;
     }
@@ -231,7 +231,7 @@ interface SubmitResult {
  * 这是本系统的核心——只做翻译和提交，不做执行。
  */
 /**
- * #105 —— 恢复动作被拒的持久留痕。
+ * 恢复动作被拒的持久留痕。
  *
  * 为什么单独存：`recoveryActionTable` 住 heap ⇒ 每次部署归零，于是"某类动作一直在被拒"这种
  * 结构性失效在本仓的读数里**从不显形**：`attempts/maxAttempts` 也一起被清零，
@@ -359,7 +359,7 @@ function submitSpawnRecovery(
         role: "worker",
         home: room,
         mode: "acquire",
-        // Correlation ID 供 A4.7 Decision Trace
+        // Correlation ID 供 Decision Trace
         recoveryCorrelationId: correlationId,
       } as CreepMemory,
     }),
@@ -870,7 +870,7 @@ function submitDevelopmentResume(
 }
 
 /**
- * DEFENSE_RESPONSE：基于 A5.1 威胁评估触发防御响应。
+ * DEFENSE_RESPONSE：基于威胁评估触发防御响应。
 
  * 翻译：RecoveryAction → 读取 globalCache.threatAssessments 获取威胁详情
  *   - 威胁 CRITICAL + safeModeAvailable > 0 → 标记 safeMode 需求
@@ -900,7 +900,7 @@ function submitDefenseResponse(
     };
   }
 
-  // 读取 A5.1 威胁评估结果
+  // 读取威胁评估结果
   const threatAssessment = g.threatAssessments?.get(room);
   if (!threatAssessment) {
     // 无威胁评估数据——防御有独立链路（tower-defense），标记不重复
@@ -1330,7 +1330,7 @@ function countActiveRecoveries(table: RecoveryActionTable): number {
   return count;
 }
 
-// ─── A5.3.1 GAP-1: War Abort Signal 消费 ──────────────────
+// ─── War Abort Signal 消费 ──────────────────
 
 /**
  * 消费 globalCache.warAbortSignals，通过纯函数转换为 RecoveryAction。
@@ -1338,7 +1338,7 @@ function countActiveRecoveries(table: RecoveryActionTable): number {
  * 幂等性机制（双层去重）：
  *   1. tick 级去重：lastConsumedAbortTick 确保同一 tick 不重复消费
  *   2. domain 级去重：recoveryIdempotencyKey 确保同一 sponsor+reason
- *      不重复提交（A4.6 lifecycle cooldown 机制）
+ *      不重复提交（lifecycle cooldown 机制）
 
  * 边界：
  *   - 不直接读 Military 内部状态
@@ -1391,7 +1391,7 @@ function consumeWarAbortSignals(g: ReturnType<typeof globalCache>, tick: number)
   return actions;
 }
 
-// ─── A5.4.1: Tactical Abort Signal 消费 ──────────────────
+// ─── Tactical Abort Signal 消费 ──────────────────
 
 /**
  * 消费 globalCache.tacticalAbortSignals，转换为 WarAbortSignal 格式后走同一管线。

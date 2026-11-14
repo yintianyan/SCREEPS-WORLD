@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TuningSignals } from "../../../src/domain/tuning/types";
 
 /**
- * 探索随机源的**注入是否真的生效**（#62 的第二半）。
+ * 探索随机源的**注入是否真的生效**（注入这一半）。
  *
  * `deterministic-random.test.ts` 只验了种子本身；这里验评估层**用不用**注入进来的那个源 ——
  * e2e 可复现的前提是"种子决定探索抽到哪个参数、哪个方向"，只要评估层还从别处取 Math.random，
@@ -58,7 +58,7 @@ async function freshWarmedExplore(overrides: Partial<TuningSignals> = {}): Promi
   return mod.exploreParameter;
 }
 
-describe("#62 探索随机源注入", () => {
+describe("探索随机源注入", () => {
   it("前两拍不探索（稳态计数未达阈值）—— 上面已断言，这里只确认第 3 拍开始有输出", async () => {
     const explore = await freshWarmedExplore();
     expect(explore(signals(), BOUNDS, {}, 100_000, () => 0)).not.toBeNull();

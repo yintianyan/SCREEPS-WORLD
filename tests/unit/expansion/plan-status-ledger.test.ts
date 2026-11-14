@@ -1,5 +1,5 @@
 /**
- * B5-㉒ 扩张计划状态账：EXECUTING 是"在途"，不是"删除"。
+ * 扩张计划状态账：EXECUTING 是"在途"，不是"删除"。
  *
  * 起因：`updatePlanStatus(planId, status: string)` 收自由字符串，于是
  * plan-adapter 的硬失败分支写着 "EXECUTING" 而注释说 CANCELLED；而
@@ -88,7 +88,7 @@ beforeEach(() => {
   resetGlobals();
 });
 
-describe("B5-㉒ EXECUTING 算在途", () => {
+describe("EXECUTING 算在途", () => {
   it("EXECUTING 的计划活过 prunePlans（任何时长都活）", () => {
     const executing = planWith(TARGET, "EXECUTING", 0);
     const wayOld = TICK - 10 * DEFAULT_LIFECYCLE_OPTIONS.rebuildCooldown;
@@ -139,7 +139,7 @@ describe("B5-㉒ EXECUTING 算在途", () => {
   });
 });
 
-describe("B5-㉒ 硬失败必须落到 CANCELLED 并真的进冷却", () => {
+describe("硬失败必须落到 CANCELLED 并真的进冷却", () => {
   it("有视野且 controller 已有主（真不可 claim）→ 计划记 CANCELLED 而非 EXECUTING", () => {
     setup([memoryPlan("WAITING_EXECUTION")]);
     // 看得见却被别人占着：这才是 GATE_TARGET_CLAIMABLE 要拦的那种事实。
@@ -218,7 +218,7 @@ describe("B5-㉒ 硬失败必须落到 CANCELLED 并真的进冷却", () => {
  * "门一开就把我们主动放弃过的房再 claim 一次"是通得过的 —— 释放后的房没有 owner
  * 也没有 reservation，GATE_TARGET_CLAIMABLE 拦不住它。
  */
-describe("B5-㉓ 消费期的重占/黑名单复检", () => {
+describe("消费期的重占/黑名单复检", () => {
   /** 目标房可见、controller 无主 ⇒ 唯一还能拦住它的就是复检表。 */
   function claimableTarget(): any {
     const G = globalThis as any;

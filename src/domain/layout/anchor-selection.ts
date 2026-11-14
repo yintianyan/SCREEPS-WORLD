@@ -1,4 +1,4 @@
-/** 约束推导锚点选择 — 从地形约束推导最优核心位置（plan §5.6）。 */
+/** 约束推导锚点选择 — 从地形约束推导最优核心位置。 */
 
 import type { DistanceField } from "./terrain-analysis";
 import { opennessAt, countBlockedCells } from "./terrain-analysis";

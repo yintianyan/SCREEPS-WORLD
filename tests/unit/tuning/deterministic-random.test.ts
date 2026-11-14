@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tuningRandom } from "../../../src/kernel/deterministic-random";
 
 /**
- * #62 的可复现随机源单测。
+ * 可复现随机源单测。
  *
  * 为什么值得单独一份：长 soak 的 e2e 不可复现，根因是调优的随机探索（`exploreParameter` 抽随机参数
  * + 随机方向）；而 bot 跑在 @screeps/driver 的 isolated-vm isolate 里，**测试进程替换 Math.random 到不了它**
@@ -24,7 +24,7 @@ function series(seed: number | undefined, n: number): number[] {
   return Array.from({ length: n }, () => tuningRandom());
 }
 
-describe("tuningRandom（#62：探索随机源的可复现化）", () => {
+describe("tuningRandom（探索随机源的可复现化）", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });

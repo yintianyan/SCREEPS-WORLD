@@ -405,7 +405,7 @@ describe("hauler — flee", () => {
 });
 
 /**
- * P0-2 修复：hauler 在 flee 状态下的"防御圈内安全充能"。
+ * 修复：hauler 在 flee 状态下的"防御圈内安全充能"。
 
  * 场景：战斗中 Tower 能量耗尽，hauler 全部 flee 到 spawn 旁。
  * 修复后：hauler 距 spawn ≤ safeRefuelRange(3) 且携带能量时，
@@ -423,7 +423,7 @@ describe("hauler — flee", () => {
  *   - 目标不能在敌人侧（目标距敌人 < hauler 距敌人 → 不安全）
  *   - 优先级与 getHaulFillTarget 对齐：threat 时 tower 优先
  */
-describe("hauler — flee 安全充能（P0-2）", () => {
+describe("hauler — flee 安全充能", () => {
   /**
    * 构造精确距离的 pos mock。
    * distances 是 "x,y" → 距离的映射，用于 getRangeTo(target) 的返回值。

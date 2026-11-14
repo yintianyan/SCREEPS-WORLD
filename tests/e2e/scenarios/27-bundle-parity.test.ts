@@ -67,7 +67,7 @@ describe("生产 bundle parity — bootstrap 注册集合 vs dist/main.js", () =
     expect(bundle).toContain("kernel");
   });
 
-  it("bundle 不包含已裁决删除的模块（R12③ 自 compliance.test.ts 迁移，R20③）", () => {
+  it("bundle 不包含已裁决删除的模块（自 compliance.test.ts 迁移）", () => {
     if (!existsSync(BUNDLE_PATH)) return;
     const bundle = readFileSync(BUNDLE_PATH, "utf8");
     const forbidden = [

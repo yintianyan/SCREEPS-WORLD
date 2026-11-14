@@ -1,5 +1,5 @@
 /**
- * 人口普查总数列（#141）的纯函数回归测试。
+ * 人口普查总数列的纯函数回归测试。
  *
  * 立案理由（线上）：段 1 的 `population` 只写 `hv/ha/up/bd/wk` 五个角色，
  * 现读某刻这五列之和 = **11**，而同拍 `Game.creeps` 实数 = **42**
@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest";
 import { summarizeRoles } from "../../../src/kernel/timeseries";
 
-describe("summarizeRoles — #141 普查覆盖率", () => {
+describe("summarizeRoles — 普查覆盖率", () => {
   it("n 计入全部角色，rl 只留前 N：五列之和 ≤ 11 而 n = 42 的那个现场形状", () => {
     // 复刻现读的两个数：**五列之和 = 11、总量 = 42**。逐角色的分布是比例示例，
     // 现读只拿到那两个聚合值，没有逐角色明细，别把它读成实测快照。

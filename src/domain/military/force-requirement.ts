@@ -4,7 +4,7 @@ import type { OperationType } from "./operation";
 import type { CombatPower } from "../combat/capability";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 类型定义
+// 类型定义
 // ═══════════════════════════════════════════════════════════
 
 export interface RequiredCapability {
@@ -48,7 +48,7 @@ export interface ForceComposition {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. 从 OperationType 推导 RequiredCapability
+// 从 OperationType 推导 RequiredCapability
 // ═══════════════════════════════════════════════════════════
 
 export function deriveRequiredCapability(
@@ -219,7 +219,7 @@ export function deriveRequiredCapability(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. Capability Gap 计算
+// Capability Gap 计算
 // ═══════════════════════════════════════════════════════════
 
 export function computeCapabilityGap(
@@ -276,7 +276,7 @@ export function computeCapabilityGap(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. Force Composition 推导
+// Force Composition 推导
 // ═══════════════════════════════════════════════════════════
 
 export function deriveForceComposition(

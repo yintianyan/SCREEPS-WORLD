@@ -1,7 +1,7 @@
 /**
- * 跨层断言原语（FREEZE R20①）— 纯函数，吃 support/snapshot 的 TestSnapshot 形状。
+ * 跨层断言原语 — 纯函数，吃 support/snapshot 的 TestSnapshot 形状。
  *
- * 语义等价断言的对（审计 R20）：integration Assertions.assertRoleExists ≡
+ * 语义等价断言的对（审计）：integration Assertions.assertRoleExists ≡
  * e2e assertRoleCount；assertNoRuntimeError ≈ assertNoErrors —— 本文件是它们的
  * 公共底座；各层的富诊断（integration failureReport / e2e debugSnapshot）留在
  * 本层之上，不进内核。

@@ -1,4 +1,4 @@
-/** 改进 A 闭环验证测试 — 覆盖附录 D.8 用例（domain 层纯函数测试）。 */
+/** 闭环验证测试（domain 层纯函数）。 */
 import { describe, expect, it } from "vitest";
 import {
   evaluateTuning,
@@ -86,9 +86,9 @@ function configBaselines(): Record<string, number> {
   };
 }
 
-// ─── D.8 用例 1：pending-lock 竞态 ──────────────────────────
+// ─── 用例 1：pending-lock 竞态 ──────────────────────────
 
-describe("D.8 pending-lock 竞态", () => {
+describe("pending-lock 竞态", () => {
   it("验证窗口内反向信号不触发反向调整（excludedParams 排除 + trend 置 none）", () => {
     // 场景：T=1000 时 hauler.maxCount 6→7 上调，pendingValidation 写入。
     // 之后 container 变空（反向信号），但因 pending-lock 不评估该参数。
@@ -182,9 +182,9 @@ describe("D.8 pending-lock 竞态", () => {
   });
 });
 
-// ─── D.8 用例 2：人口合同 blocked ─────────────────────────────
+// ─── 用例 2：人口合同 blocked ─────────────────────────────
 
-describe("D.8 人口合同 blocked", () => {
+describe("人口合同 blocked", () => {
   it("上调后 roleCount 未达新边界 → 标 blocked，不回滚不计回滚次数", () => {
     // 场景：hauler.maxCount 6→7 上调，但 hauler 实际只 6（demand 阻塞未孵化到 7）
     const pending: Record<string, PendingValidation> = {
@@ -219,7 +219,7 @@ describe("D.8 人口合同 blocked", () => {
 
 // ─── P1 补充：人口合同 blocked TTL ────────────────────────────
 
-describe("P1 人口合同 blocked TTL（附录 E.2 修复）", () => {
+describe("P1 人口合同 blocked TTL", () => {
   it("首次 blocked → 写入 blockedSinceTick + contractBlocked，pending 保留", () => {
     // 场景：hauler.maxCount 6→7 上调，verifyDelay 到期但 roleCount=6（未达 7）
     const pending: Record<string, PendingValidation> = {
@@ -350,9 +350,9 @@ describe("P1 人口合同 blocked TTL（附录 E.2 修复）", () => {
   });
 });
 
-// ─── D.8 用例 3：人口合同 + 效果 ─────────────────────────────
+// ─── 用例 3：人口合同 + 效果 ─────────────────────────────
 
-describe("D.8 人口合同 + 效果", () => {
+describe("人口合同 + 效果", () => {
   it("人口到位但信号未改善 → 正常回滚", () => {
     // 场景：hauler.maxCount 6→7 上调，hauler 已孵化到 7（合同满足），
     // 但 containerFill 反而升高（hauler 增加未改善物流）
@@ -389,9 +389,9 @@ describe("D.8 人口合同 + 效果", () => {
   });
 });
 
-// ─── D.8 用例 4：下调护栏 ────────────────────────────────────
+// ─── 用例 4：下调护栏 ────────────────────────────────────
 
-describe("D.8 下调护栏", () => {
+describe("下调护栏", () => {
   it("hauler 下调后 containerFill 改善但 spawnFill 跌破阈值 → 回滚", () => {
     // 场景：hauler.maxCount 7→6 下调，containerFill 0.2→0.5（改善=hauler 减少后 container 更满），
     // 但 spawnFill 0.9→0.4（跌破 0.5 护栏且恶化）→ 护栏触发回滚
@@ -531,9 +531,9 @@ describe("P2 hauler 下调护栏 reserveDelta 分支（死代码修复）", () =
   });
 });
 
-// ─── D.8 用例 5：冻结复位 ────────────────────────────────────
+// ─── 用例 5：冻结复位 ────────────────────────────────────
 
-describe("D.8 冻结复位", () => {
+describe("冻结复位", () => {
   it("连续 3 次回滚 → 冻结 + 参数复位到 CONFIG 基线", () => {
     // 场景：hauler.maxCount 反复调整-回滚 3 次，第 3 次触发冻结。
     // preAdjustValue=5（低于 CONFIG 基线 6），冻结时复位到基线 6 而非 preAdjustValue。
@@ -569,7 +569,7 @@ describe("D.8 冻结复位", () => {
     expect(freezeResult.newlyFrozen).toHaveLength(1);
     expect(freezeResult.newlyFrozen[0]!.param).toBe("hauler.maxCount");
 
-    // D.5：rb3.newValue 被修改为 CONFIG 基线（6），而非 preAdjustValue(5)
+    // rb3.newValue 被修改为 CONFIG 基线（6），而非 preAdjustValue(5)
     expect(rb3.newValue).toBe(configBaseline);
 
     // 冻结状态写入
@@ -596,7 +596,7 @@ describe("D.8 冻结复位", () => {
 
 // ─── P4 补充：解冻时清零 rollbackCount ────────────────────────
 
-describe("P4 解冻时清零 rollbackCount（附录 E.2 修复）", () => {
+describe("P4 解冻时清零 rollbackCount", () => {
   it("冻结期满后参数解冻 → 从 frozenParams 移除（rollbackCount 清零）", () => {
     // 场景：hauler.maxCount 冻结到 tick=10500，T=10500 解冻
     const baselines = configBaselines();

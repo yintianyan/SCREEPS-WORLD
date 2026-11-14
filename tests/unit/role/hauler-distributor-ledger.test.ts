@@ -1,4 +1,4 @@
-/** R675：hauler/distributor 接入任务账本 — lab 供料不再被 storage/fillTarget 永久遮蔽。 */
+/** hauler/distributor 接入任务账本 — lab 供料不再被 storage/fillTarget 永久遮蔽。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { distributorRole } from "../../../src/creeps/roles/distributor";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
@@ -71,7 +71,7 @@ describe("hauler — lab 供料 vs storage", () => {
   });
 });
 
-describe("hauler — R680 crisis 时 CC 不再锁死核心填充", () => {
+describe("hauler — crisis 时 CC 不再锁死核心填充", () => {
   it("crisis 期 spawn 与低半满 CC 同时存在 ⇒ 先填 spawn", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const cc = mockStructure("container", { id: "cc1", energy: 100, capacity: 2000 });

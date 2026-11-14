@@ -4,7 +4,7 @@ import type { RoomSnapshot } from "../../../src/kernel/contracts";
 import { mockRoomStateCtx } from "../../support/factories";
 
 /**
- * P1-3 defense 误触发修复 — lastHostileAt 过期失效机制单元测试。
+ * defense 误触发修复 — lastHostileAt 过期失效机制单元测试。
 
  * 覆盖 room-state 层的威胁过期逻辑：
  *   - lastHostileAt 只在威胁新增（count 增加）时刷新（防旧威胁停留永久维持 defense）
@@ -55,7 +55,7 @@ function makeThreat(n: number): Creep[] {
   return Array.from({ length: n }, (_, i) => ({ id: `h${i}` }) as Creep);
 }
 
-describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
+describe("room-state — lastHostileAt 过期失效机制", () => {
   let savedMemory: typeof Memory | undefined;
 
   beforeEach(() => {
@@ -199,12 +199,12 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
 });
 
 /**
- * P1-3 退出 defense 迟滞 — 威胁消除后维持 defense 姿态 defenseExitHysteresis tick。
+ * 退出 defense 迟滞 — 威胁消除后维持 defense 姿态 defenseExitHysteresis tick。
 
  * 防止敌人短暂进出房间导致 colonyState 高频抖动（525 次/327k tick）。
  * 进入 defense 仍 1 tick 触发（防御不延迟）；退出需连续 defenseExitHysteresis(50) tick 无威胁。
  */
-describe("room-state — P1-3 退出 defense 迟滞", () => {
+describe("room-state — 退出 defense 迟滞", () => {
   let savedMemory: typeof Memory | undefined;
 
   beforeEach(() => {

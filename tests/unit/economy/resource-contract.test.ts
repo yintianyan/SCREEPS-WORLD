@@ -1,4 +1,4 @@
-/** Phase A：资源流契约分类与阈值。 */
+/** 资源流契约分类与阈值。 */
 import { describe, expect, it } from "vitest";
 import {
   classifyFlowResource,

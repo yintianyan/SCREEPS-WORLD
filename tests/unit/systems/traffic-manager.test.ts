@@ -103,11 +103,11 @@ describe("intent — 登记双模", () => {
 });
 
 /**
- * R691：锚点只在冲突/推挤时有意义。站桩升级器与矿工几乎每拍都登记锚点，
+ * 锚点只在冲突/推挤时有意义。站桩升级器与矿工几乎每拍都登记锚点，
  * 旧入口 `anchors.size > 0 → false` 等于让所有带站桩角色的房间永久禁用快路径
  * （W39S55 traffic 1.16 CPU/拍 的主因之一）。
  */
-describe("R691 — 锚点不阻塞无冲突快路径", () => {
+describe("锚点不阻塞无冲突快路径", () => {
   const packed = (x: number, y: number): number => x * 50 + y;
 
   it("有锚定的静止矿工但目标格无冲突 ⇒ 快路径直发 mover，锚定者不动", () => {
@@ -321,7 +321,7 @@ describe("traffic-manager — 解算与签发", () => {
     expect(g.__creepPathCache.c1).toBeDefined();
   });
 
-  // 债单 #39：traffic 开启后绝大多数移动由本系统集中签发，原先只有 pathfinding.ts
+  // traffic 开启后绝大多数移动由本系统集中签发，原先只有 pathfinding.ts
   // 自己 move() 那条路径会 recordPathSuccess ⇒ 被仲裁的 creep 的 failAge 随年龄线性涨、
   // 永不归零，E8 因此在两间房、四类角色上批量报「路径失败」假阳性。
   it("正常签发（OK）：同时记一次路径成功，E8 的 failAge 归零", () => {

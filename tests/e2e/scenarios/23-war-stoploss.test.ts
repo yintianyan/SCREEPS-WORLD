@@ -10,7 +10,7 @@
  * 降级裸攻）→ advance≈7501 → 编队进塔火圈 → 战损 → spawned 累计超
  * squadSize(5)×2.5=12.5 → 止损收摊（REASON_ATTRITION）。
  *
- * 断言（R4 止损三链，cap = fullSquadSize(5 攻 + 3 奶 = 8) × 2.5 = 20）：
+ * 断言（止损三链，cap = fullSquadSize(5 攻 + 3 奶 = 8) × 2.5 = 20）：
  *  1. 满编才 advance：phase=="advance" 的样本 spawned ≥ fullSquadSize——
  *     sponsor 无 lab（canBoost=false）时 boost 门降级豁免（无宽限等待），
  *     满编即裸攻，未满编不得推进；
@@ -352,7 +352,7 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
 
     // ── 断言 2：止损触发即收摊（双路径）──
     // 主路径 REASON_ATTRITION（spawned>20 战损止损）；并发负载下孵化脉冲
-    // 时序漂移可能让 R4 经济止损（warPressureTicks 持续超限 → posture
+    // 时序漂移可能让经济止损（warPressureTicks 持续超限 → posture
     // war→fortify → POSTURE 核验）先行——MILITARY 止损链中两者并列，
     // 「止损触发即收摊」对两条路径都成立。
     const stopLossVerdict =

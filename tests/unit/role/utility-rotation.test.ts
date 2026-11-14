@@ -1,4 +1,4 @@
-/** R674 效用仲裁 — 角色级轮转：链尾任务在有界时间内得到服务。 */
+/** 效用仲裁 — 角色级轮转：链尾任务在有界时间内得到服务。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { builderRole } from "../../../src/creeps/roles/builder";

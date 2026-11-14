@@ -1,4 +1,4 @@
-/** A3 — tower-defense 维修权收窄测试。 */
+/** tower-defense 维修权收窄测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { towerDefenseSystem } from "../../../src/systems/military/tower-defense";
 import {
@@ -12,7 +12,7 @@ import {
 beforeEach(() => {
   resetGlobals();
   vi.clearAllMocks();
-  // P1-3：repairRooms 由 Kernel.buildSnapshots 预构建，测试中手动清除。
+  // repairRooms 由 Kernel.buildSnapshots 预构建，测试中手动清除。
   delete (globalThis as any).repairRooms;
 });
 
@@ -37,9 +37,9 @@ function makeThreat(id: string): any {
   return threat;
 }
 
-describe("A3 — tower-defense 维修权收窄", () => {
+describe("tower-defense 维修权收窄", () => {
   it("有 builder 时塔不维修（让位 creep，省弹药）", () => {
-    // P1-3：模拟 Kernel.buildSnapshots 预构建的 repairRooms。
+    // 模拟 Kernel.buildSnapshots 预构建的 repairRooms。
     (globalThis as any).repairRooms = new Set(["W7N4"]);
 
     const tower = makeTower("t1");
@@ -57,7 +57,7 @@ describe("A3 — tower-defense 维修权收窄", () => {
   });
 
   it("有 worker 时塔同样不维修", () => {
-    // P1-3：模拟 Kernel.buildSnapshots 预构建的 repairRooms。
+    // 模拟 Kernel.buildSnapshots 预构建的 repairRooms。
     (globalThis as any).repairRooms = new Set(["W7N4"]);
 
     const tower = makeTower("t1");
@@ -92,7 +92,7 @@ describe("A3 — tower-defense 维修权收窄", () => {
   });
 
   it("他房的 builder 不算数（只认 home 归属）", () => {
-    // P1-3：repairRooms 包含他房，不含本房 W7N4。
+    // repairRooms 包含他房，不含本房 W7N4。
     (globalThis as any).repairRooms = new Set(["W8N4"]);
 
     const tower = makeTower("t1");
@@ -110,7 +110,7 @@ describe("A3 — tower-defense 维修权收窄", () => {
   });
 
   it("威胁存在时：即使有 builder 也开火（开火职责不被让渡）", () => {
-    // P1-3：模拟 Kernel.buildSnapshots 预构建的 repairRooms。
+    // 模拟 Kernel.buildSnapshots 预构建的 repairRooms。
     (globalThis as any).repairRooms = new Set(["W7N4"]);
 
     const tower = makeTower("t1");

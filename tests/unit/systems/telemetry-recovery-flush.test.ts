@@ -1,5 +1,5 @@
 /**
- * B1-3 回归：recovery 档的事件 flush 必须真的执行。
+ * 回归：recovery 档的事件 flush 必须真的执行。
  *
  * 旧实现用裸 `tick % populationInterval`，而 kernel 把本系统错峰到
  * tick ≡ systemPhase(name, cpuSampleInterval) (mod cpuSampleInterval) —— 两个同余式

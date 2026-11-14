@@ -1,5 +1,5 @@
 /**
- * #80 —— 塔的耗能**用途分桶**（纯观测，不动任何门）。
+ * 塔的耗能**用途分桶**（纯观测，不动任何门）。
  *
  * 立案读数（线上 YD1/YD2@83383931/83383942）：幼房 W38S56 两个 source 的收入物理上限 ≈20/t，
  * 实测 `ei=19.4/t` 已贴顶，而 `towerSpent≈10/t` —— **一半上限花在墙/盾上**；同窗
@@ -11,7 +11,7 @@
  * ⇒ "要不要为发展让路"这个决策只能靠"此刻没有敌人"去推断。
  *
  * 本文件钉住三件事：每个调用点各归各桶；三桶之和恒等于合计；**新键不改变任何消费口径**。
- * 门与阈值一个没动 —— 防御取向属人工排产（§3.5）。
+ * 门与阈值一个没动 —— 防御取向属人工排产。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { towerDefenseSystem } from "../../../src/systems/military/tower-defense";
@@ -60,7 +60,7 @@ beforeEach(() => {
   delete g().repairRooms;
 });
 
-describe("#80 塔耗能用途分桶", () => {
+describe("塔耗能用途分桶", () => {
   it("开火只进 combat 桶，且三桶之和 == towerSpent", () => {
     const tower = makeTower("t1");
     const threat = makeThreat("threat_1");

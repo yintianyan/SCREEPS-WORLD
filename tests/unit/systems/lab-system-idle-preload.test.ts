@@ -4,13 +4,13 @@ import { globalCache } from "../../../src/kernel/global-cache";
 import { mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 /**
- * P0-A：lab-system 休眠期必须持续发布「预装料」需求表。
+ * lab-system 休眠期必须持续发布「预装料」需求表。
  *
  * 线上 W8N3 的形状：反应缺 U 进入 waitingInput → idleUntil 分支直接 continue，
  * labDemands 随 TTL(20) 过期 → supplyLabs 无表可执行 → terminal 里的 O/X/H
  * 一直进不了 lab；缺料又被当成「无活可干」再次休眠 ⇒ 自锁。
  */
-describe("P0-A lab-system 休眠期预装料需求表", () => {
+describe("lab-system 休眠期预装料需求表", () => {
   beforeEach(() => {
     resetGlobals();
     (globalThis as any).Memory.rooms.W7N4 = {};

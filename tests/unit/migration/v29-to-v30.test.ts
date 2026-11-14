@@ -1,4 +1,4 @@
-/** v29 → v30 迁移独立测试（R7a 容量感知 / capacity + agenda.progressBase 建档）。 */
+/** v29 → v30 迁移独立测试（容量感知 / capacity + agenda.progressBase 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

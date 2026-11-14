@@ -538,7 +538,7 @@ export function evaluateExpectations(input: {
   return { violations, p3Starved };
 }
 
-// ── 违例身份留痕（R265）──────────────────────────────────────
+// ── 违例身份留痕 ─────────────────────────────────────────────
 /** 一条违例身份的最近留痕。 */
 export interface ViolationTrace {
   id: string;

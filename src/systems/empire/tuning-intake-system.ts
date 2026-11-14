@@ -2,7 +2,7 @@
  * 经 intake-guardrail 六层护栏校验后，接受的建议写入 Memory.kernel.tuning.intakePending
  * （不直接写 strategyOverrides — 需经 strategy-reviewer 复核后才采纳）。
  *
- * 边界遵守 LLM_BOUNDARY.md：
+ * 边界约束：
  *   - 只读 segment 6（体外写入区）
  *   - 不直接执行 LLM 建议的值
  *   - 体外建议 → intakePending → strategy-reviewer 复核 → strategyOverrides → 生效

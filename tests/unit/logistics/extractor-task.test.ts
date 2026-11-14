@@ -1,4 +1,4 @@
-/** A5 — extractor 动态建造任务测试。 */
+/** extractor 动态建造任务测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createExtractorTask } from "../../../src/domain/layout/task-factory";
 import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
@@ -11,7 +11,7 @@ function mineralAt(x: number, y: number): any {
   return { id: "mineral_1", mineralType: "H", pos: mockPos(x, y) };
 }
 
-describe("A5 — createExtractorTask", () => {
+describe("createExtractorTask", () => {
   it("RCL6 在矿位上生成 extractor 任务", () => {
     const snap = mockSnapshot({ rcl: 6, minerals: [mineralAt(10, 12)] });
     const task = createExtractorTask(snap);

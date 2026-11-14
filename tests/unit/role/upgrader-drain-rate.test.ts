@@ -1,4 +1,4 @@
-/** P0-4 upgrader storage 净流失率门禁 — 场景测试。 */
+/** upgrader storage 净流失率门禁 — 场景测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { upgraderRole } from "../../../src/creeps/roles/upgrader";
 import {
@@ -40,7 +40,7 @@ function clearStorageEnergyPrev(): void {
   if (rooms.W7N4?.phase) delete rooms.W7N4.phase.storageEnergyPrev;
 }
 
-describe("P0-4 upgrader storage 流失率门禁 — 正常路径", () => {
+describe("upgrader storage 流失率门禁 — 正常路径", () => {
   it("high water + no drain → withdraw allowed (normal uptake)", () => {
     // 高水位 60000 + 无流失（prev=cur）→ dynamicStorageLimit 返回 carry 满载，正常取能。
     setStorageEnergyPrev(60000);
@@ -78,7 +78,7 @@ describe("P0-4 upgrader storage 流失率门禁 — 正常路径", () => {
   });
 });
 
-describe("P0-4 upgrader storage 流失率门禁 — 边界条件", () => {
+describe("upgrader storage 流失率门禁 — 边界条件", () => {
   it("drain rate exactly equals limit (5) → not blocked (> triggers only)", () => {
     // drainRate 恰好 = 5（边界）→ 严格 > 才触发，等于不拦截。
     setStorageEnergyPrev(10005);
@@ -125,7 +125,7 @@ describe("P0-4 upgrader storage 流失率门禁 — 边界条件", () => {
   });
 });
 
-describe("P0-4 upgrader storage 流失率门禁 — 异常情况", () => {
+describe("upgrader storage 流失率门禁 — 异常情况", () => {
   it("storage.store read throws → degrade gracefully (no throw)", () => {
     // storage.store.getUsedCapacity 抛错 → dynamicStorageLimit try/catch 退化为返回 0，
     // role.run 不抛错。

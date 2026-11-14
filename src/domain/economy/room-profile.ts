@@ -6,7 +6,7 @@ import type { EmpireRoomRole } from "./empire-role";
 
 /**
  * Economy 查询结果接口（镜像 systems/economy.ts EconomyQuery）。
- * domain 层不能 import systems 层（合规测试 R1），故在此定义结构等效类型。
+ * domain 层不能 import systems 层（合规测试），故在此定义结构等效类型。
  * 系统侧薄壳调用 buildRoomEconomicProfile 时**整个 EconomyQuery 直接传入**（结构兼容）：
  * 不许在调用点重抄一份字段清单——两处各抄过一份，`capexFlow` 落地时都没跟上，
  * 线上 `kernel.brakeNetFlow` 因此与 `kernel.gateNetFlow` 逐位相同（丁静默失效）。
@@ -26,7 +26,7 @@ export interface EconomyQueryInput {
 // ─── Room Economic Classification ──────────────────────────
 
 /**
- * Room 经济分类（EMPIRE_SYSTEM_MODEL §1 Room「能力门槛 phase」隐含定义）。
+ * Room 经济分类（「能力门槛 phase」隐含定义）。
 
  * 从 colonyState + RCL + storage + netFlow 派生的经济能力层级，
  * 供 Empire 判断房间在帝国经济中的角色定位。
@@ -48,11 +48,11 @@ export type RoomEconomicClass = "core" | "production" | "candidate" | "strugglin
  * Room Economic Profile — 房间向 Empire 暴露的标准化经济只读视图。
 
  * 合同映射：
- * - Report 通道（EMPIRE_SYSTEM_MODEL §1 Room）：净流/缺口/风险 → 本 Profile 的
+ * - Report 通道：净流/缺口/风险 → 本 Profile 的
  *   netFlow / deficit / riskBuffer 字段
- * - Economy 三指标（ECONOMY §3）：netFlow / reserve / riskBuffer → 本 Profile
+ * - Economy 三指标：netFlow / reserve / riskBuffer → 本 Profile
  *   的对应字段（从 EconomyQuery 派生）
- * - 九概念快照（ECONOMY §2）：Income/Consumption/Storage/Reservation →
+ * - 九概念快照：Income/Consumption/Storage/Reservation →
  *   本 Profile 的 income / consumption / storage / reserved 字段
  * - Room Economic Classification：economicClass 字段
 
@@ -75,7 +75,7 @@ export interface RoomEconomicProfile {
   /** 是否有 terminal。 */
   hasTerminal: boolean;
 
-  // ── Economy 三指标（ECONOMY §3，从 EconomyQuery 派生）──
+  // ── Economy 三指标（从 EconomyQuery 派生）──
   /** 净流 EMA（能量/tick，可负）。未核算过为 0。 */
   netFlow: number;
   /**
@@ -99,7 +99,7 @@ export interface RoomEconomicProfile {
   /** 最近一次核算 tick。 */
   economyTick: number;
 
-  // ── 储备与可用量（ECONOMY §2.1 Storage + Income）──
+  // ── 储备与可用量（Storage + Income）──
   /** storage 内能量（无 storage 为 0）。 */
   storageEnergy: number;
   /** storage 总容量（无 storage 为 0）。 */
@@ -135,7 +135,7 @@ export interface RoomEconomicProfile {
   /** 经济分类。 */
   economicClass: RoomEconomicClass;
   /**
-   * 本土净流是否为正（ECONOMY §1.2 调拨门控前置 + DECISION_AUTHORITY §2 Q1）。
+   * 本土净流是否为正（调拨门控前置）。
    * 净流 EMA > 0 即视为正（平滑值，非单 tick 脉冲）。
    */
   netFlowPositive: boolean;
@@ -147,11 +147,11 @@ export interface RoomEconomicProfile {
   selfSufficiency: number;
   /**
    * 房间是否处于经济困难态（colonyState 为 bootstrap/recovery/defense）。
-   * 困难房应停止被均衡抽离、优先注入（ECONOMY §1.2 异常房例外）。
+   * 困难房应停止被均衡抽离、优先注入（异常房例外）。
    */
   isStruggling: boolean;
 
-  // ── A4.0 Empire Room Role（经济职能分工，与 economicClass 正交）──
+  // ── Empire Room Role（经济职能分工，与 economicClass 正交）──
   /**
    * Empire Room Role — 房间在帝国经济中的职能分工（CORE/PRODUCTION/SUPPORT/REMOTE）。
 
@@ -201,7 +201,7 @@ export interface RoomEconomicMemory {
 // ─── 纯函数 ─────────────────────────────────────────────────
 
 /**
- * 判定房间经济分类（EMPIRE_SYSTEM_MODEL §1 Room 能力门槛）。
+ * 判定房间经济分类（能力门槛）。
 
  * 优先级：struggling > candidate > production > core
  * - struggling: colonyState 为 bootstrap/recovery/defense
@@ -243,11 +243,11 @@ export function computeSelfSufficiency(netFlow: number, estimatedIncome: number)
  * 从 RoomSnapshot + RoomMemory 子集 + EconomyQuery 组装 RoomEconomicProfile。
 
  * 这是 Room Economic Contract 的核心纯函数：
- * - 不访问 Game/Memory/RawMemory（DEP_GRAPH §3-5 红线）
+ * - 不访问 Game/Memory/RawMemory（架构红线）
  * - 三个输入源由调用方（系统侧薄壳）注入
  * - 只读组装，不写任何状态
 
- * 调用方：empire-economy 系统（A2 后半新增薄壳）或 empire-strategy 扩展。
+ * 调用方：empire-economy 系统（新增薄壳）或 empire-strategy 扩展。
  * 频率：每 N tick（50–100，与 economy 同频或更低）。
 
  * 注意：empireRole 字段不在此函数中设置——它由 Role Evaluation + Role Stability
@@ -258,7 +258,7 @@ export function buildRoomEconomicProfile(
   roomMem: RoomEconomicMemory,
   economy: EconomyQueryInput | undefined,
   _tick: number,
-  /** A4.0：当前 empireRole（从 Role Stability 状态传入，默认 undefined=首次评估）。 */
+  /** 当前 empireRole（从 Role Stability 状态传入，默认 undefined=首次评估）。 */
   currentEmpireRole?: EmpireRoomRole,
 ): RoomEconomicProfile {
   const rcl = snapshot.rcl;
@@ -344,7 +344,7 @@ export function buildRoomEconomicProfile(
 }
 
 /**
- * 判定房间是否具备对外输出能力（ECONOMY §1.2 调拨门控前置）。
+ * 判定房间是否具备对外输出能力（调拨门控前置）。
 
  * 前置条件（全部满足）：
  * 1. 非困难态（colonyState=normal）
@@ -365,7 +365,7 @@ export function canExportEnergy(profile: RoomEconomicProfile): boolean {
 }
 
 /**
- * 判定房间是否需要外部能量援助（ECONOMY §1.2 调拨门控受援侧）。
+ * 判定房间是否需要外部能量援助（调拨门控受援侧）。
 
  * 前置条件（任一满足即视为需要援助）：
  * 1. colonyState 为 recovery/bootstrap（经济困难态）

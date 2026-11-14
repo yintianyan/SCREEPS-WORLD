@@ -229,10 +229,10 @@ describe("recycleExcessRemoteCreeps — 载货保留序", () => {
   });
 });
 
-// R626：扩张推进态下的新开远矿 CPU 预算闸。
+// 扩张推进态下的新开远矿 CPU 预算闸。
 import { newRemoteCpuAllowed } from "../../../src/domain/remote/staffing";
 
-describe("newRemoteCpuAllowed — 新开远矿的 CPU 预算闸（R626）", () => {
+describe("newRemoteCpuAllowed — 新开远矿的 CPU 预算闸", () => {
   it("非扩张推进态：任何档位都放行", () => {
     expect(newRemoteCpuAllowed("constrained", false)).toBe(true);
     expect(newRemoteCpuAllowed("tight", false)).toBe(true);

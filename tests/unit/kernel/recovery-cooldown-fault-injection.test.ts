@@ -1,5 +1,5 @@
 /**
- * P3-1 故障注入测试：recoveryEligible 系统在 safeRun cooldown 中的行为。
+ * 故障注入测试：recoveryEligible 系统在 safeRun cooldown 中的行为。
  *
  * 验证：
  * 1. recoveryEligible=true 时连续失败 3 次不进入 cooldown
@@ -40,7 +40,7 @@ beforeEach(() => {
   delete g().telemetry;
 });
 
-describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
+describe("故障注入：recoveryEligible 与 safeRun cooldown", () => {
   describe("recoveryEligible=true（critical=true 等效）系统连续失败", () => {
     it("连续 3 次失败不进入 cooldown", () => {
       // 模拟 construction-manager 在 recoveryEligible=true 时的行为

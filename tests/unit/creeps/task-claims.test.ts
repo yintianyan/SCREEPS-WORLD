@@ -1,4 +1,4 @@
-/** R678：lab 搬运/矿物补仓的目标级配额（每 tick 每目标 1 人）。 */
+/** lab 搬运/矿物补仓的目标级配额（每 tick 每目标 1 人）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { haulMineralTopUp, supplyLabs } from "../../../src/creeps/engine/actions/industry";
 import { claimTaskTarget, taskTargetClaimedByOther } from "../../../src/creeps/support/task-claims";

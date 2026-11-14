@@ -79,7 +79,7 @@ describe("drift 恒等式：跨池搬运不该被当成账实不符", () => {
     expect(w.drift).toBe(0);
   });
 
-  it("工业桶补上后：factory 烧掉 600 ⇒ drift 归零（这就是 #206 要修的那条）", () => {
+  it("工业桶补上后：factory 烧掉 600 ⇒ drift 归零", () => {
     const start = emptyLedger();
     const end = emptyLedger();
     end.industrialSpend = 600;

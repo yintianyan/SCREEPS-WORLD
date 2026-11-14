@@ -1,5 +1,5 @@
 /**
- * P3-2 故障注入测试：conserve→healthy telemetry 恢复链路。
+ * 故障注入测试：conserve→healthy telemetry 恢复链路。
  *
  * 验证完整时间序列：
  *   healthy → conserve → recovery → conserve → guarded → healthy
@@ -177,7 +177,7 @@ function getStatsLastSample(): number | undefined {
 
 // ── 测试 ──────────────────────────────────────────────
 
-describe("P3-2: conserve→healthy telemetry 恢复链路", () => {
+describe("conserve→healthy telemetry 恢复链路", () => {
   let logLines: string[] = [];
 
   beforeEach(() => {
@@ -229,7 +229,7 @@ describe("P3-2: conserve→healthy telemetry 恢复链路", () => {
       expect(getStatsLastSample()).toBe(100);
 
       // ── 阶段 2: conserve (tick=110, bucket=1500) ──
-      // P2-9 修复后 conserve 档做轻量 stats 更新
+      // 修复后 conserve 档做轻量 stats 更新
       runTelemetry("conserve", 110, 1500);
       phases.push({
         tick: 110,

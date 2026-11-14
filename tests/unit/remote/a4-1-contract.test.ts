@@ -1,4 +1,4 @@
-/** A4.1 Contract Tests — Remote Mining Execution */
+/** Contract Tests — Remote Mining Execution */
 
 import { describe, it, expect } from "vitest";
 import {
@@ -50,9 +50,9 @@ import { createOpportunity } from "../../../src/domain/remote/remote-opportunity
 import { createRemoteSource, makeRemoteSourceId } from "../../../src/domain/remote/remote-source";
 import { assessRemoteValue } from "../../../src/domain/remote/remote-value";
 
-// ─── A4.1-001: Opportunity Execution Gate ────────────────
+// ─── Opportunity Execution Gate ────────────────
 
-describe("A4.1-001: Execution Gate", () => {
+describe("Execution Gate", () => {
   it("should pass when all 10 checks pass", () => {
     const opp = createTestOpportunity();
     const input: ExecutionGateInput = {
@@ -137,9 +137,9 @@ describe("A4.1-001: Execution Gate", () => {
   });
 });
 
-// ─── A4.1-003: Remote Source Identity ───────────────────
+// ─── Remote Source Identity ───────────────────
 
-describe("A4.1-003: Remote Source Identity", () => {
+describe("Remote Source Identity", () => {
   it("should produce stable sourceId", () => {
     const id1 = makeRemoteSourceId("W1N1", "W2N1");
     const id2 = makeRemoteSourceId("W1N1", "W2N1");
@@ -154,9 +154,9 @@ describe("A4.1-003: Remote Source Identity", () => {
   });
 });
 
-// ─── A4.1-004: Operation Deduplication ──────────────────
+// ─── Operation Deduplication ──────────────────
 
-describe("A4.1-004: Operation Deduplication", () => {
+describe("Operation Deduplication", () => {
   it("should detect duplicate active operation", () => {
     const op = createTestOp("W1N1", "W2N1");
     const ops = [op];
@@ -177,11 +177,11 @@ describe("A4.1-004: Operation Deduplication", () => {
   });
 });
 
-// ─── A4.1-009: Container Lifecycle 六状态 ───────────────
+// ─── Container Lifecycle 六状态 ───────────────
 
-// ─── A4.1-011: Harvest Production 追踪 ─────────────────
+// ─── Harvest Production 追踪 ─────────────────
 
-describe("A4.1-011: Harvest Production Tracking", () => {
+describe("Harvest Production Tracking", () => {
   it("should track production and delivery", () => {
     let flow = createEmptyFlow("op1", 0, 100);
     flow = addProduced(flow, 500);
@@ -215,9 +215,9 @@ describe("A4.1-011: Harvest Production Tracking", () => {
   });
 });
 
-// ─── A4.1-017: Economic Accounting ──────────────────────
+// ─── Economic Accounting ──────────────────────
 
-describe("A4.1-017: Economic Accounting", () => {
+describe("Economic Accounting", () => {
   it("should calculate net value correctly", () => {
     let flow = createEmptyFlow("op1", 0, 100);
     flow = addProduced(flow, 1000); // 10 e/tick
@@ -249,9 +249,9 @@ describe("A4.1-017: Economic Accounting", () => {
   });
 });
 
-// ─── A4.1-018: ROI Expected vs Actual ───────────────────
+// ─── ROI Expected vs Actual ───────────────────
 
-describe("A4.1-018: ROI", () => {
+describe("ROI", () => {
   it("should calculate positive ROI when delivered > cost", () => {
     const result = calculateROI("op1", 1000, 500, 900, 800, 400, 0.8);
     expect(isPositiveROI(result.actualROI)).toBe(true);
@@ -272,9 +272,9 @@ describe("A4.1-018: ROI", () => {
   });
 });
 
-// ─── A4.1-019: Budget ───────────────────────────────────
+// ─── Budget ───────────────────────────────────
 
-describe("A4.1-019: Operation Budget", () => {
+describe("Operation Budget", () => {
   it("should detect budget exhaustion", () => {
     const status = computeBudgetStatus(5000, 5000);
     expect(status.exhausted).toBe(true);
@@ -304,9 +304,9 @@ describe("A4.1-019: Operation Budget", () => {
   });
 });
 
-// ─── A4.1-029: Idempotency ──────────────────────────────
+// ─── Idempotency ──────────────────────────────
 
-describe("A4.1-029: Idempotency", () => {
+describe("Idempotency", () => {
   it("should produce same operationId for same rooms", () => {
     const id1 = makeRemoteMiningOperationId("W1N1", "W2N1");
     const id2 = makeRemoteMiningOperationId("W1N1", "W2N1");
@@ -325,9 +325,9 @@ describe("A4.1-029: Idempotency", () => {
   });
 });
 
-// ─── A4.1-030: Economic Activation ──────────────────────
+// ─── Economic Activation ──────────────────────
 
-describe("A4.1-030: Economic Activation", () => {
+describe("Economic Activation", () => {
   it("should not activate with zero production", () => {
     const op = createTestOp("W1N1", "W2N1");
     expect(isEconomicallyActive(op)).toBe(false);
@@ -356,9 +356,9 @@ describe("A4.1-030: Economic Activation", () => {
   });
 });
 
-// ─── A4.1 Hauler Sizing ─────────────────────────────────
+// ─── Hauler Sizing ─────────────────────────────────
 
-describe("A4.1: Hauler Sizing", () => {
+describe("Hauler Sizing", () => {
   it("should compute per-hauler throughput", () => {
     const result = computePerHaulerThroughput(4, 50, true);
     // carryCapacity = 4 × 50 = 200

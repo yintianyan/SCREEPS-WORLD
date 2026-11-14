@@ -43,7 +43,7 @@ function stationedHarvester(opts: { sites?: any[]; containers?: any[] } = {}): a
 }
 
 describe("RM-1 — remote-harvester 自建 source container", () => {
-  it("满载 + 无 container + 无 site → 写 needContainer 申请标记（P0-A 收编后不直接创建）", () => {
+  it("满载 + 无 container + 无 site → 写 needContainer 申请标记（收编后不直接创建）", () => {
     const creep = stationedHarvester();
     remoteHarvesterRole.run(creep, mockContext(mockSnapshot()));
 
@@ -106,7 +106,7 @@ describe("RM-1 — remote-harvester 自建 source container", () => {
     expect(creep.room.createConstructionSite).not.toHaveBeenCalled();
     expect(creep.build).not.toHaveBeenCalled();
     expect(creep.memory.needContainer).toBe(true);
-    // R12：满载且无 container 时 stationaryMine 让位 → dropEnergy 放能，
+    // 满载且无 container 时 stationaryMine 让位 → dropEnergy 放能，
     // 不再徒劳调 harvest（ERR_FULL）— 申请标记不会让产能停摆。
     expect(creep.drop).toHaveBeenCalledWith("energy");
     expect(creep.harvest).not.toHaveBeenCalled();

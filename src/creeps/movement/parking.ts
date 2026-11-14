@@ -311,7 +311,7 @@ export function parkIdleCreep(creep: Creep, snapshot: RoomSnapshot): void {
     return;
   }
 
-  // MV-3：parked creep 优先响应让路请求 — idle creep 无任务在身，是最该让路的对象；
+  // parked creep 优先响应让路请求 — idle creep 无任务在身，是最该让路的对象；
   // 原先 yield 只在 moveToTarget 开头检查，parked creep 不走该入口 → 让路请求对静止目标
   // 永不生效，挡路只能靠移动方 ignoreCreeps:false 绕行。
   // traffic 开启时禁用 — 静止 creep 的让路由集中解算的推挤机制接管。

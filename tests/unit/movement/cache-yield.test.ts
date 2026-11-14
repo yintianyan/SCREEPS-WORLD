@@ -1,4 +1,4 @@
-/** 移动缓存与让路测试（Batch 4 — MV-2/MV-3/MV-4 回归）。 */
+/** 移动缓存与让路测试（路网 revision 失效 / yield TTL / parked 让路回归）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   preloadStructureCache,
@@ -17,9 +17,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ─── MV-2：路网 revision 失效键 ──────────────────────────────
+// ─── 路网 revision 失效键 ──────────────────────────────
 
-describe("MV-2 — structCache revision（布局指纹失效）", () => {
+describe("structCache revision（布局指纹失效）", () => {
   function road(x: number, y: number): any {
     return { structureType: "road", pos: { x, y } };
   }
@@ -51,9 +51,9 @@ describe("MV-2 — structCache revision（布局指纹失效）", () => {
   });
 });
 
-// ─── MV-3：yield TTL + 过期丢弃 ─────────────────────────────
+// ─── yield TTL + 过期丢弃 ─────────────────────────────
 
-describe("MV-3 — yield 请求 TTL", () => {
+describe("yield 请求 TTL", () => {
   function mockMover(name: string, dir = 3): any {
     return {
       name,
@@ -101,9 +101,9 @@ describe("MV-3 — yield 请求 TTL", () => {
   });
 });
 
-// ─── MV-3：parked creep 响应让路 ────────────────────────────
+// ─── parked creep 响应让路 ────────────────────────────
 
-describe("MV-3 — parked creep 响应让路请求", () => {
+describe("parked creep 响应让路请求", () => {
   it("parkIdleCreep 开头执行 yield — 静止 creep 不再让路失效", () => {
     const snap = mockSnapshot();
     const parked: any = {
@@ -127,8 +127,8 @@ describe("MV-3 — parked creep 响应让路请求", () => {
   });
 });
 
-// ─── P2-L：__creepPathCache 死 creep 清理 ────────────────────
-describe("P2-L — pruneDeadCreepCache 清理死 creep 残留", () => {
+// ─── __creepPathCache 死 creep 清理 ────────────────────
+describe("pruneDeadCreepCache 清理死 creep 残留", () => {
   /** 直接写 __creepPathCache 条目（绕过 pathfinding 内部写入逻辑）。 */
   function seedCache(entries: Record<string, any>): void {
     (globalCache() as any).__creepPathCache = { ...entries };

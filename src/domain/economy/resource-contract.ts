@@ -1,8 +1,8 @@
 /**
- * 资源流契约注册表（Phase A）。
+ * 资源流契约注册表。
  *
  * 只做「资源 → 生命周期契约」的分类与阈值声明，不参与运行时决策。
- * 契约字段与《资源流契约表（ResourceFlowContract）》§3/§4/§9 对齐；
+ * 契约字段与下方契约表对齐；
  * 后续阶段（出口车道、停止阀）从这里读取上限与出口顺序。
  *
  * 设计约束：
@@ -77,7 +77,7 @@ export interface ResourceFlowContract {
 /** 统一 stuck 判定窗口（约一个完整孵化/物流周期）。 */
 const STUCK_TICKS_THRESHOLD = 500;
 
-/** 各分类的水位参数（§4 确认值）。 */
+/** 各分类的水位参数（确认值）。 */
 const WATER = {
   energy: { criticalWater: 5000, lowWater: 50000, highWater: 100000, hardCap: 1000000 },
   battery: { criticalWater: 5000, lowWater: 5000, highWater: 100000, hardCap: 150000 },
@@ -93,7 +93,7 @@ const WATER = {
 } as const;
 
 /**
- * 完整契约表。数据来源与理由见《资源流契约表》§4/§9；
+ * 完整契约表。
  * 这里的阈值是「已确认默认值」，不是运行时现状。
  */
 export const RESOURCE_CONTRACTS: Readonly<Record<FlowResourceClass, ResourceFlowContract>> = {

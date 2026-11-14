@@ -1,5 +1,5 @@
 /**
- * #102 — 执行闸 GATE_THREAT_UNCHANGED 接上真数据。
+ * 执行闸 GATE_THREAT_UNCHANGED 接上真数据。
  *
  * 钉的是四件事，每件都对应一个我核过的失败模式：
  * 1. **它真的会拒绝**：目标房有威胁 creep / 有敌方塔 / sponsor 正被打 ⇒ 不消费、不建档，
@@ -106,7 +106,7 @@ beforeEach(() => {
   resetGlobals();
 });
 
-describe("#102 拒绝危险目标", () => {
+describe("拒绝危险目标", () => {
   it("目标房有威胁 creep ⇒ 不建档、计划留在 WAITING_EXECUTION（不是取消）", () => {
     consume({ target: targetRoom({ creeps: [creep(["attack", "move"])] }) });
 
@@ -131,7 +131,7 @@ describe("#102 拒绝危险目标", () => {
   });
 });
 
-describe("#102 控制组：它不是永真闸，也不是永假闸", () => {
+describe("控制组：它不是永真闸，也不是永假闸", () => {
   it("可见且无敌情的目标必须被消费（这条正是旧代码永真通过时唯一的'对'）", () => {
     consume({ target: targetRoom() });
 
@@ -156,7 +156,7 @@ describe("#102 控制组：它不是永真闸，也不是永假闸", () => {
   });
 });
 
-describe("#102 与更硬闸门的分工（YELLOW 不在本层判）", () => {
+describe("与更硬闸门的分工（YELLOW 不在本层判）", () => {
   it("controller 被预约 ⇒ 由 GATE_TARGET_CLAIMABLE 取消整条计划，本闸不参与", () => {
     consume({
       target: targetRoom({ reservation: { username: "Rival", ticksToLive: 100 } }),

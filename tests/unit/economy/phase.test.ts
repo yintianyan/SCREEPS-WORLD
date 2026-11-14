@@ -20,7 +20,7 @@ function input(overrides?: Partial<PhaseInput>): PhaseInput {
     harvesterCount: 2,
     sourceCount: 2,
     rcl: 3,
-    // P0-1 新增字段默认值：srcRatio=0 + storageDrainRate=0 → 不触发 srcRatio 通道，
+    // 新增字段默认值：srcRatio=0 + storageDrainRate=0 → 不触发 srcRatio 通道，
     // 保持既有 drainScore/liquidityScore 测试行为不变。
     srcRatio: 0,
     storageDrainRate: 0,
@@ -124,7 +124,7 @@ describe("Phase — evaluateColonyPhase", () => {
     expect(recover4.phase).toBe("growth");
   });
 
-  it("breaks oscillation with asymmetric recovery step (P0-2)", () => {
+  it("breaks oscillation with asymmetric recovery step", () => {
     // 交替赤字/盈余：旧对称步长下净变化=0，永远卡在 crisis。
     // 同一对赤字+盈余每轮净 -25 分（+15 / -40），最终退出。
     let state = runDrain(FRESH, 2000, -45, 11); // 进入 crisis, drainScore=150
@@ -450,7 +450,7 @@ describe("Phase — 绝对可支付豁免（reserve 高水位下的消费不是�
     expect(s.phase).toBe("crisis");
   });
 
-  it("srcRatio 采集塌方的强制 crisis 不被高储备豁免（P0-1 通道独立）", () => {
+  it("srcRatio 采集塌方的强制 crisis 不被高储备豁免（通道独立）", () => {
     let s: PhaseState = FRESH;
     for (let i = 0; i < DEFAULT_PHASE_OPTIONS.srcStallEnterTicks + 5; i++) {
       s = evaluateColonyPhase(
@@ -595,12 +595,12 @@ describe("Phase — 绝对破产兜底（reserve 水位即判据，不走分数�
   });
 });
 
-// ─── 修法 A：drainScore 按流量而非次数（#11）────────────────────────
+// ─── drainScore 按流量而非次数 ────────────────────────
 // 旧计分是「赤字 tick +15 / 其余 −40」，与亏多少无关 ⇒ 一间房进不进危机带取决于
 // 赤字脉冲怎么排布。实测依据（同一套 5-source 夹具连跑两次，同一份 dist）：
 // 一次 crisis+recovery 占 71.6%（而该局总账其实盈余：赤字合计 5519 vs 盈余 7230），
 // 一次 0%。判据取决于排布就不是迟滞而是随机。
-describe("Phase — drainScore 流量口径（#11-A）", () => {
+describe("Phase — drainScore 流量口径", () => {
   /** 按显式 delta 序列喂若干次评估（reserve 从 base 起累加；可从既有状态续算）。 */
   function runDeltas(
     deltas: number[],
@@ -706,7 +706,7 @@ describe("Phase — drainScore 流量口径（#11-A）", () => {
   });
 });
 
-// ─── bootstrap 驻留闸（#22 R-04 的闪断路径）───────────────────────
+// ─── bootstrap 驻留闸（闪断路径）───────────────────────
 // 判据是"瞬时人头数"，而 bootstrap 属经济生存带 —— posture 的危机撤资在它出现的
 // 第 1 tick 就把 war 降回 fortify。实测两类段长：闪断 1t / 12t，真替换窗 45t / 98t，
 // 所以闸取 20（bootstrapEnterTicks）：吃掉闪断，真欠员只延后 20 tick。

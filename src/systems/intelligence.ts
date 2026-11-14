@@ -42,7 +42,7 @@ const PARENT_INTERVAL = 10;
 let lastAgingTick: number | undefined;
 
 /**
- * 老化批的到期判定（#115）—— 从「相位取模」改成「距上次运行够久」。
+ * 老化批的到期判定—— 从「相位取模」改成「距上次运行够久」。
  * 导出只为让这条算术落在单测里：老化块要吃 Memory/RawMemory 段与 Game，
  * 为它手拼一套假引擎夹具，测到的是夹具而不是行为。
  */
@@ -188,12 +188,12 @@ export const intelligenceSystem: System = {
       false,
     );
 
-    // 老化批处理（#115）—— 两处一起改：**elapsed 到期门** + **三段隔离**。
+    // 老化批处理—— 两处一起改：**elapsed 到期门** + **三段隔离**。
     //
     // 换门的理由（线上实测）：原先是单拍模门 `(tick - PARENT_PHASE) % AGING_INTERVAL === 0`，
     // 而本系统每 PARENT_INTERVAL=10 拍才跑一次 ⇒ 到期那一拍若被调度器跳过（CPU 紧张时 kernel
     // 跳过低优先级系统），整批延后一整个 10 拍；实测本窗 3 次延后、最长 +400 拍，
-    // 于是 `intelCoverage.tick` 会滞后到把"仪器丢沿"照成"服务器变慢"（R391 就被它骗过）。
+    // 于是 `intelCoverage.tick` 会滞后到把"仪器丢沿"照成"服务器变慢"（曾被它骗过）。
     // elapsed 式把延后上界钉死为一个 PARENT_INTERVAL：到点没跑，下一个可用拍一定跑。
     //
     // 拆段的理由（一次真实的红，不是假想）：单段 safeRun 里 **段 IO 抛错会吃掉观测本身**——
@@ -241,7 +241,7 @@ export const intelligenceSystem: System = {
             players: playerEntries.size,
             tick: ctx.tick,
           };
-          // #99：战争候选漏斗（war-planning 每 pass 写 heap scratch）。落在这里的理由：
+          // 战争候选漏斗（war-planning 每 pass 写 heap scratch）。落在这里的理由：
           // 它与 intelCoverage 是同一个问题的两半（"池子里有房，为什么选不出靶"），
           // 同拍写入 ⇒ 两份读数永远同时刻，不必猜谁更旧。
           // scratch 为 undefined = war-planning 自 boot 起还没跑过 ⇒ **不写**（缺键是

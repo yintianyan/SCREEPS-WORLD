@@ -5,7 +5,7 @@ import type { RecoveryAction, RecoveryActionType } from "../strategy/recovery-pr
 import type { FailureDomain } from "../strategy/failure-propagation";
 
 // ═══════════════════════════════════════════════════════════
-// §1. AbortReason 枚举（与 war-planner.ts REASON_* 对齐）
+// AbortReason 枚举（与 war-planner.ts REASON_* 对齐）
 // ═══════════════════════════════════════════════════════════
 
 /** 战争止损原因（与 war-planner.ts 的 REASON_* 编码对齐）。 */
@@ -15,13 +15,13 @@ export type WarAbortReason =
   | "NO_TARGET" // 无合格目标
   | "PLAN_TIMEOUT" // 计划超期
   | "INTEL_STALE" // 授权证据断供超窗 → 撤军（不判负）
-  | "TARGET_SWITCH"; // A5 改判新目标 → 旧编队收摊（不判负）
+  | "TARGET_SWITCH"; // 改判新目标 → 旧编队收摊（不判负）
 
 /** 战后核验结果 — 唯一定义在 domain/war/planning（本模块 re-export 兼容既有读者）。 */
 export type { WarOutcome };
 
 // ═══════════════════════════════════════════════════════════
-// §2. WarAbortSignal（与 globalCache.warAbortSignals 结构一致）
+// WarAbortSignal（与 globalCache.warAbortSignals 结构一致）
 // ═══════════════════════════════════════════════════════════
 
 /** 军事止损信号（由 war-planner demobilize 写入 globalCache）。 */
@@ -38,12 +38,12 @@ export interface WarAbortSignal {
   spawned: number;
   /** 战后核验结果。 */
   outcome: string;
-  /** A5.3 operationId（如果来自 A5.3 路径）。 */
+  /** operationId（如果来自 Operation 路径）。 */
   operationId?: string;
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. AbortReason → RecoveryActionType 映射表
+// AbortReason → RecoveryActionType 映射表
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -56,13 +56,13 @@ export interface WarAbortSignal {
  * - PLAN_TIMEOUT → population_rebuild：计划超期可能有未完成投入，需重建
  * - INTEL_STALE → population_rebuild：授权门槛（fact + 新鲜度）在计划存续期内不再成立，
  *   召回编队撤军。不是战败判定（war-planner 对此原因不写黑名单），但投入已经花掉。
- * - TARGET_SWITCH → auto_resolve：A5 改判换目标，旧编队收摊。投入确实花掉了，但帝国
+ * - TARGET_SWITCH → auto_resolve：改判换目标，旧编队收摊。投入确实花掉了，但帝国
  *   并没有少一支要用的兵——新计划在同一 tick 就声明了自己的补员需求，再报"需重建"
  *   只会和它抢同一份恢复预算（幂等键同为 war-abort:<sponsor>，两边互相屏蔽）。
  * 注意：LOGISTICS_FAILURE / REINFORCEMENT_TIMEOUT / RECOVERY_UNAVAILABLE
- * 不是 war-planner 的止损原因——它们是 A5.3 operation.ts 的 AbortCondition，
+ * 不是 war-planner 的止损原因——它们是 operation.ts 的 AbortCondition，
  * 在当前架构中，war-planner 的 demobilize 只产生上述 6 种 reason。
- * 如果未来 A5.3 完整 Operation lifecycle 接管止损，
+ * 如果未来完整 Operation lifecycle 接管止损，
  * AbortCondition 将通过本接口的 extendAbortReason 映射。
  */
 const ABORT_REASON_MAP: Record<
@@ -134,7 +134,7 @@ const ABORT_REASON_MAP: Record<
 };
 
 // ═══════════════════════════════════════════════════════════
-// §4. 核心纯函数：WarAbortSignal → RecoveryAction
+// 核心纯函数：WarAbortSignal → RecoveryAction
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -142,7 +142,7 @@ const ABORT_REASON_MAP: Record<
 
  * 这是 Military → Recovery 的唯一桥梁：
  * - Military 只产出 RecoveryAction（建议），不执行
- * - A4.6 recovery-execution-system 负责执行
+ * - recovery-execution-system 负责执行
  * - 幂等性由 recoveryIdempotencyKey 保证
 
  * @param signal 止损信号
@@ -215,7 +215,7 @@ function computeBenefit(signal: WarAbortSignal): number {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. 批量转换 + 确定性
+// 批量转换 + 确定性
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -223,7 +223,7 @@ function computeBenefit(signal: WarAbortSignal): number {
 
  * 确定性：输出顺序与输入顺序一致（不排序、不 shuffle）。
  * 幂等性：同一 signal 产出相同 action（相同 id）。
- * 去重由 A4.6 recovery-lifecycle 的 shouldSubmitAction 保证。
+ * 去重由 recovery-lifecycle 的 shouldSubmitAction 保证。
  */
 export function mapAbortSignalsToRecoveryActions(
   signals: readonly WarAbortSignal[],
@@ -240,7 +240,7 @@ export function mapAbortSignalsToRecoveryActions(
  * 生成止损信号的确定性 Hash。
 
  * 相同 WarPlan + 相同 World Snapshot → 相同 AbortSignal Hash。
- * 用于 A5.3.1 确定性审计。
+ * 用于确定性审计。
  */
 export function abortSignalHash(signal: WarAbortSignal): string {
   const payload = JSON.stringify({

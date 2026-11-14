@@ -63,7 +63,7 @@ export function fulfillContainerRequests(
     const room = Game.rooms[roomName];
     if (!room) continue; // 无视野，无法校正也无法创建。
 
-    // 1. siteCount 实测校正 — 同时收集每个 site 附近 source（R2）。
+    // 1. siteCount 实测校正 — 同时收集每个 site 附近 source。
     //    旧实现"actualSites > 0 即清全部 source 组申请标记"，多源远矿房中
     //    A 源建成会一并清 B 源申请 → B 源 creep 等不到 site；A 源 site 成孤儿时
     //    B 被一并阻塞至 orphan sweep 清场。收窄到"已有 site 的 source 组"。
@@ -205,8 +205,8 @@ export function planRemotePathRoads(
   // 旧实现在这段 per-home 调用里用 room.find 自行累加本主房的 op，于是 20 的帽实际
   // 是 20×主房数 —— 名义全局、实为每房（详见 getRemoteRoadSiteTotal）。
   const roadBudget = getRemoteRoadSiteTotal();
-  // 【#139 配额侧留痕】把"闸此刻看到的数"原样落一列：不重算、不新增模块边（曾试过让
-  // telemetry 去求和，那需要一条 systems 间 import，R11 禁；且实测一条未使用的 import
+  // 把"闸此刻看到的数"原样落一列：不重算、不新增模块边（曾试过让
+  // telemetry 去求和，那需要一条 systems 间 import，禁；且实测一条未使用的 import
   // 单独就能弄坏 telemetry 的榜用例）。口径＝与上面两处 `>= cap` 判断逐字同一个数。
   if (Memory.kernel?.stats) {
     const capTotal = CONFIG.remote.roadSitesPerOpTotal;
@@ -224,7 +224,7 @@ export function planRemotePathRoads(
   let released = 0;
   for (const [rn, op] of Object.entries(remoteOps)) {
     // 循环头**不设**「本轮新建已触顶就 return」：那会把后面所有车道的残骸回收与账本校正一起吞掉
-    // （#149，反向实验见 tests/unit/remote/road-site-reaper.test.ts）。新建上限的闸挪到铺路之前。
+    // （反向实验见 tests/unit/remote/road-site-reaper.test.ts）。新建上限的闸挪到铺路之前。
     // 车道已满不是跳过本房的理由 —— 残骸正占着车道，越满越要先扫。预算判定挪到清扫之后。
     if (op.state === "abandoned") {
       // 废弃房的 site 由 construction-manager 孤儿清扫收走，计数立即归零释放车道。
@@ -351,9 +351,9 @@ export function planRemotePathRoads(
     counters.roadProgressSum = roadProgressSum;
     counters.roadSitesPending = roadSitesPending;
     counters.roadsBuilt = roadsBuilt;
-    // #187：`roadLaid` 是**每 pass** 值。三处预算闸原本直接 continue，把赋值留在闸后 ⇒
+    // `roadLaid` 是**每 pass** 值。三处预算闸原本直接 continue，把赋值留在闸后 ⇒
     // 车道饱和时整列停写、保留最后一次铺路的旧值，而"闸关着"恰是最想读它的那一刻
-    // （线上据此误读过一次，见 roadmap 补369②）。本列在 src 零读者，纯留痕 ⇒ 行为不变。
+    // （线上据此误读过一次）。本列在 src 零读者，纯留痕 ⇒ 行为不变。
     let laid = 0;
     // 清扫之后才判预算：本轮释放的额度当场可用（roadBudget 是 tick 入口快照）。
     if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) {
@@ -365,7 +365,7 @@ export function planRemotePathRoads(
       op.roadLaid = laid;
       continue;
     }
-    // 每轮新建限速（#149：这条必须在清扫与账本校正**之后**）。
+    // 每轮新建限速（这条必须在清扫与账本校正**之后**）。
     if (created >= CONFIG.remote.roadSitesPerRun) {
       op.roadLaid = laid;
       continue;

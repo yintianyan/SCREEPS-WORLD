@@ -48,12 +48,12 @@ declare global {
     /** remote-harvester 上次扫描 container 的 tick — 降频重扫用，防止 container 被摧毁后每 tick lookForAtArea。 */
     lastContainerScanTick?: number;
     /**
-     * 远矿 container 建 site 失败冷却到期 tick（RM-1，P0-A 收编后由 remote-mining-manager 写入）—
+     * 远矿 container 建 site 失败冷却到期 tick（由 remote-mining-manager 写入）—
      * 持久失败时放行 dropEnergy；只阻断 create 路径，不阻断 build。
      */
     containerSiteCooldown?: number;
     /**
-     * RM-1/P0-A：远矿 harvester 满载且无 container 时申请建 site 的标记 —
+     * 远矿 harvester 满载且无 container 时申请建 site 的标记 —
      * creep 写入，remote-mining-manager 消费后清除（成功或写冷却）。申请期间走 dropEnergy 释放产能。
      */
     needContainer?: boolean;
@@ -76,7 +76,7 @@ declare global {
      */
     lastRepathAt?: number;
     /**
-     * v33-R11：remoteHarvester 上次改绑 source 的 tick（改绑自愈冷却）—
+     * v33：remoteHarvester 上次改绑 source 的 tick（改绑自愈冷却）—
      * 防止「改绑到空缺源 → 原源变空缺 → 改回去」的振荡。
      * per-creep 运行时状态，无需迁移（同 lastRepathAt 先例）。
      */
@@ -85,7 +85,7 @@ declare global {
     assignment?: CreepAssignment;
     /** 用于稳定孵化 key 生成和替换跟踪的索引。 */
     spawnIndex?: number;
-    /** B1：标记为待回收 — spawn-manager 引导其走向最近 spawn 并 recycleCreep。 */
+    /** 标记为待回收 — spawn-manager 引导其走向最近 spawn 并 recycleCreep。 */
     recycle?: boolean;
     /** F16：attackController cooldown 截止 tick — 避免在 cooldown 中盲调浪费 CPU。 */
     attackCooldownEnd?: number;
@@ -98,7 +98,7 @@ declare global {
     remoteTarget?: string;
     /**
      * 已知 hostile 房集合（owner≠我 / 带遗迹 spawn）— 供 moveTowardRoom 跨房路由绕行
-     * （recon scout 专用，R6b 扩张修复：scout 钻进敌方房会被迫 flee 永远到不了 remoteTarget）。
+     * （recon scout 专用，扩张修复：scout 钻进敌方房会被迫 flee 永远到不了 remoteTarget）。
      * 仅作导航安全网；真正路线优选由 prospect 评分惩罚（hostileAdjacent）在源头完成。
      */
     avoidRooms?: string[];
@@ -107,7 +107,7 @@ declare global {
     /** Distributor 水位分级档位（0-3），由 distributor gate 每 tick 按 storage 水位计算。 */
     distributorTier?: 0 | 1 | 2 | 3;
     /**
-     * R674 效用仲裁状态（仅 arbitration:"utility" 的角色写）：
+     * 效用仲裁状态（仅 arbitration:"utility" 的角色写）：
      * task=当前胜出候选名，since=该任务开始 tick，lastAt=上次完整评分 tick，
      * neglect=候选名→连续未被选中的 tick 当量（老化提权用，选中即清零）。
      * per-creep 运行时状态，无需迁移（无该字段时按首次决策处理）。
@@ -153,13 +153,13 @@ declare global {
     replaceBy?: number;
     retries: number;
     /**
-     * #169 逐请求留痕＝**真的调用过 spawnCreep 的次数**（写者＝trySpawn 里 cast 那一行）。
+     * 逐请求留痕＝**真的调用过 spawnCreep 的次数**（写者＝trySpawn 里 cast 那一行）。
      * 它答的是「这条请求被允许试过没有」——缺席（undefined）＝这一代从未被允许试铸。
      * `submitRequest` 的合并路径（queue.ts:8-22）刻意不清它：它是历史，不是本拍状态。
      */
     attempts?: number;
     /**
-     * #169 最近一次「这一拍这条请求被怎么处置」的码。取值＝`cast`（走到了 spawnCreep）
+     * 最近一次「这一拍这条请求被怎么处置」的码。取值＝`cast`（走到了 spawnCreep）
      * 或 reject 码 "blacklisted" "survivalBlock" "emptyBody" "budget" "reserveOnly"
      * "noDegrade" "floor" "degradeGateClosed" "capacity"。
      * 与房间级 `spawnRejects` 的分工：那一本每拍每请求计数，答「这一房被什么挡住了几拍」；
@@ -179,7 +179,7 @@ declare global {
     state: "queued" | "site" | "done" | "blocked";
     attempts: number;
     retryAt: number;
-    /** 入队 tick（R2 队列治理：年龄观测与超龄清除）。旧数据缺省 → v42 迁移回填。 */
+    /** 入队 tick（队列治理：年龄观测与超龄清除）。旧数据缺省 → v42 迁移回填。 */
     queuedAt?: number;
     assignedTo?: string;
     leaseUntil?: number;
@@ -194,13 +194,13 @@ declare global {
     /**
      * P3 能量核算瘦快照（schema v37，economy 系统唯一写者，50tick 错峰）。
      * 字段镜像 domain/economy/accounting.EconomyMemorySnapshot（整数化短字段，
-     * STATE_OWNERSHIP §2 Memory 白名单）。消费只经 queryEconomy() 公开接口。
+     * Memory 白名单）。消费只经 queryEconomy() 公开接口。
      */
     /** 能量核算瘦快照（编码唯一真源=domain/economy/accounting.ECONOMY_SNAPSHOT_SCALE；消费经 queryEconomy）。 */
     economy?: EconomyMemorySnapshot;
     /**
-     * 资源流量状态（economy 每 50 拍窗口写，Phase A 观测 + 停止阀输入）：
-     * 契约表 §6 的状态机结果按资源投影。消费方经
+     * 资源流量状态（economy 每 50 拍窗口写，观测 + 停止阀输入）：
+     * 状态机结果按资源投影。消费方经
      * `domain/economy/resource-flow-status.readResourceFlowState` 读取（含新鲜度校验）。
      */
     resourceFlow?: import("../domain/economy/resource-flow-status").ResourceFlowMemory;
@@ -224,23 +224,23 @@ declare global {
      */
     claimSecure?: boolean;
     /**
-     * 上一 tick 是否紧急（P1-2 边沿触发）：assignment-service 仅在
+     * 上一 tick 是否紧急（边沿触发）：assignment-service 仅在
      * 「正常 → 紧急」上升沿失效任务，持续紧急不重复失效（防抖动）。
      */
     wasEmergency?: boolean;
     /**
-     * 上次任务抢占 tick（TD-018 冷却）：两次抢占至少间隔 20 tick，
+     * 上次任务抢占 tick（抢占冷却）：两次抢占至少间隔 20 tick，
      * 防紧急/正常快速交替时每个上升沿都 invalidate assignment。
      */
     lastPreemptTick?: number;
     /**
      * 最近一次房内出现威胁 creep 的 tick（v12+，room-state 写入）— 受袭记忆，
-     * 驱动防御姿态（如 wall/rampart 目标血量升档）。P1-3：仅在威胁新增
+     * 驱动防御姿态（如 wall/rampart 目标血量升档）。仅在威胁新增
      * （count 增加）时刷新，防旧威胁停留时永不过期。
      */
     lastHostileAt?: number;
     /**
-     * 与 `lastHostileAt` 同拍盖章、按行凶者身份分尺（#152 落盘，#198-B 起有消费者）。
+     * 与 `lastHostileAt` 同拍盖章、按行凶者身份分尺。
      * 立此因由：把 posture 钉在 `war` 的是上面那把房级尺，而段 5 的按人敌意列对 NPC 恒为 0
      * （`intelligence.ts:83-91` 显式排除 `INVADER_USERNAME`）⇒ 三十天里没有任何玩家攻击记录，
      * 恒战的成因是 **NPC 骚扰与玩家宣战在这把尺上同价**。
@@ -250,10 +250,10 @@ declare global {
     lastInvaderHostileAt?: number;
     lastPlayerHostileAt?: number;
     /**
-     * #168 观测专用（零消费者）：`lastHostileAt` 每次**上抬**的历史环（旧→新，上限 40 条）。
+     * 观测专用（零消费者）：`lastHostileAt` 每次**上抬**的历史环（旧→新，上限 40 条）。
      * 立此因由：判「NPC 骚扰多久来一次」三样载体都不够——事件环跨度实测 3,162 拍 <
      * 威胁窗 5,000 拍（按构造答不了频率）；`lastHostileAt` 只有最新值、每次覆写；
-     * 巡检锁是散文。这条环是第一个能算**簇间隔分布**的载体，#151/#92 要的正是它。
+     * 巡检锁是散文。这条环是第一个能算**簇间隔分布**的载体。
      */
     hostileEdges?: {
       /** 上抬发生的那一拍。 */
@@ -261,11 +261,11 @@ declare global {
       /** 来源（player 优先于 invader；两者都不认识时 unknown）。 */
       s: "player" | "invader" | "unknown";
     }[];
-    /** P1-3：上一 tick 的威胁 creep 数量，用于检测新增威胁（count 增加）。
+    /** 上一 tick 的威胁 creep 数量，用于检测新增威胁（count 增加）。
      * room-state 每 tick 写入，缺失时按 0 处理（首威胁即新增）。 */
     prevThreatCount?: number;
     /**
-     * 无害侦察观测（v32+，R7c，room-state 写入）：最近一次「有敌对但无威胁
+     * 无害侦察观测（v32+，room-state 写入）：最近一次「有敌对但无威胁
      * 部件」（侦察兵）目击 tick 与累计目击次数 — 盯防信号，与 lastHostileAt
      * 威胁记忆刻意分开（不触发防御，纯情报）。
      */
@@ -288,19 +288,19 @@ declare global {
       /** 危机带（crisis/recovery）驻留评估次数（v14+，最短驻留防极限环）。 */
       bandTicks?: number;
       /**
-       * P0-1：srcRatio 满载 + storage 累积流失双条件持续成立的评估次数；
+       * srcRatio 满载 + storage 累积流失双条件持续成立的评估次数；
        * 任一条件不满足立即归零，达 srcStallEnterTicks 后强制 crisis。
        */
       srcStallTicks?: number;
       /** 欠员连续成立的评估次数（bootstrapEnterTicks 的驻留计数）；一断归零。缺席容忍，无 schema 变更。 */
       bootstrapTicks?: number;
       /**
-       * P0-1：上一 tick storage 能量，用于跨 tick 算 storageDrainRate；
+       * 上一 tick storage 能量，用于跨 tick 算 storageDrainRate；
        * 无 storage/首次运行时 undefined（drainRate=0，不触发 srcRatio 通道）。
        */
       storageEnergyPrev?: number;
       /**
-       * P0-1：srcRatio>0.9 期间 storage 累积净流失（E，正值=失血）。
+       * srcRatio>0.9 期间 storage 累积净流失（E，正值=失血）。
        * 流失累加、回填抵消（max(0)）；超 storageDrainAccumThreshold(1000) 触发 srcStalled。
        */
       storageDrainAccum?: number;
@@ -315,17 +315,17 @@ declare global {
     storageNearFull?: boolean;
     spawnQueue?: SpawnRequest[];
     /**
-     * 孵化请求黑名单（SP-2）：key → 冷却到期 tick。重试上限清除的请求在冷却期内
+     * 孵化请求黑名单：key → 冷却到期 tick。重试上限清除的请求在冷却期内
      * 不得重建，打破「删除 → 重建 → 再删」的翻炒循环。
      */
     spawnBlacklist?: Record<string, number>;
     /**
-     * P0-3：spawn churn 熔断 — 角色 → 熔断到期 tick。200 tick 滑窗内同 role
+     * spawn churn 熔断 — 角色 → 熔断到期 tick。200 tick 滑窗内同 role
      * churn > 20 次则冻结孵化 100 tick；spawn-manager 写、demand 读、到期自清理。
      */
     churnFreezeUntil?: Record<string, number>;
     /**
-     * FINDING-04 修复：生命线角色 churn WARN 限频表。
+     * 修复：生命线角色 churn WARN 限频表。
      * role → 下次允许输出 WARN 的 tick。每 CHURN_WINDOW 最多 1 条 WARN。
      */
     churnWarnAt?: Record<string, number>;
@@ -351,7 +351,7 @@ declare global {
     layout?: {
       version: number;
       templateId: string;
-      /** R663：本房布局引擎。缺省沿用 CONFIG.layout.mode（老房 constraint 不变）；
+      /** 本房布局引擎。缺省沿用 CONFIG.layout.mode（老房 constraint 不变）；
        *  新 claim 由 seedLayoutAnchor 写 "template"（V3 模板为唯一放置源）。 */
       mode?: "constraint" | "template";
       state: "proposed" | "accepted" | "building" | "blocked" | "manual";
@@ -362,7 +362,7 @@ declare global {
       revision: number;
       nextPlanTick: number;
       /**
-       * P1-F：4-stage 规划分片状态（v17+）：0 空闲 / 1-3 各 stage 待跑。
+       * 4-stage 规划分片状态（v17+）：0 空闲 / 1-3 各 stage 待跑。
        * 跨 tick 中间产物放 globalCache（大对象不进 Memory）；reset 丢 data 时重置 0 重来。
        */
       planStage?: 0 | 1 | 2 | 3;
@@ -379,7 +379,7 @@ declare global {
       blocked?: Record<string, { code: number; retryAt: number }>;
     };
     /**
-     * 累计拆改计划创建次数（#82）：`layoutMetrics.dismantleCount` 的真实来源。
+     * 累计拆改计划创建次数：`layoutMetrics.dismantleCount` 的真实来源。
      * 没有它就只能给仪表写占位 0 —— 而"用 0 顶替测不出来"正是本模块上次变成化石的病。
      */
     dismantleCount?: number;
@@ -400,7 +400,7 @@ declare global {
      */
     distScaleUpSince?: number;
     /**
-     * Phase 2.5：富 storage 闩锁。storage ≥ richStorageResume(100K) 置 true，
+     * 富 storage 闩锁。storage ≥ richStorageResume(100K) 置 true，
      * < sprintStorage(50K) 置 false；upgrade/lab/节流共用这一把尺。
      */
     storageRichActive?: boolean;
@@ -419,7 +419,7 @@ declare global {
      */
     homeMiningActive?: boolean;
     /**
-     * Phase 1 能量流观测瘦摘要（flow-planner 写，每 5 tick 一次）：
+     * 能量流观测瘦摘要（flow-planner 写，每 5 tick 一次）：
      * a=allocations（lane/via/rate/carriers），u=unmet（lane/rate/reason）。
      * 只供采样与排障，不参与任何决策。
      */
@@ -449,7 +449,7 @@ declare global {
      */
     releaseAt?: number;
     /**
-     * A5.1：防御状态标记（recovery-execution-system 写入，kernel/consumers 读取）。
+     * 防御状态标记（recovery-execution-system 写入，kernel/consumers 读取）。
      * heap 语义——不持久化到 RawMemory（global reset 丢失可接受，下 tick 重建）。
      */
     defenseState?: {
@@ -537,10 +537,10 @@ declare global {
     tier?: CpuTier;
     /** 最近一次 CpuTier 变更 tick（驻留时长观测）。 */
     tierChangedAt?: number;
-    /** 最近一次 posture 变更 tick（决策质量观测）。#140：只在变更那一拍写。 */
+    /** 最近一次 posture 变更 tick（决策质量观测）。只在变更那一拍写。 */
     postureChangedAt?: number;
     /**
-     * 最近一次 posture 变更的现场（#140）：`reason` 是判定走的那条分支，
+     * 最近一次 posture 变更的现场：`reason` 是判定走的那条分支，
      * 复盘 war 进/出时不再需要 console 考古（原先只有日志＋每拍被覆写的 changedAt）。
      */
     postureTransition?: {
@@ -551,7 +551,7 @@ declare global {
     };
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
-    /** B3-F09: 上一 500-tick 窗口的 skipReasons 快照（滑动窗口保留）。 */
+    /** 上一 500-tick 窗口的 skipReasons 快照（滑动窗口保留）。 */
     prevSkipReasons?: Record<string, number>;
     /**
      * 最近一次 generatePixel 的 tick（自愿放血协议）：宽限窗口内 scheduler 把
@@ -630,26 +630,26 @@ declare global {
        * RawMemory.get().length — 零 JSON 解析成本，只读字符串长度。
        * 官服上限 2MB（2*1024*1024）[Fact: typings 验证]；超 1.5MB 告警。 */
       memorySize?: number;
-      /** E-FINDING-09: P1 补位时延起点锚（同角色下次孵化成功时结算 EMA）。
+      /** P1 补位时延起点锚（同角色下次孵化成功时结算 EMA）。
        * 由 recordCreepDeath 写入，maintainMemory 清理已灭绝角色。 */
       deathAnchor?: Record<string, number>;
-      /** #96：死亡原因的累计计数（只增不减、跨部署存活）。
+      /** 死亡原因的累计计数（只增不减、跨部署存活）。
        * 为什么单独存：`CreepDeath` 事件环容量按**事件总数** 500 计 ⇒ 实测只回溯 ~846 拍；
        * M11 的 `globalCache().recentCombatDeaths` 只保留 2×`fleetLossFuse.windowTicks` = **400 拍**且住 heap（换码清零）。
-       * 两者都够不到"这场 war 之前那两次目击"，于是 #90 判据的「持续战损」半边不可测。
+       * 两者都够不到"这场 war 之前那两次目击"，于是「持续战损」那半边判据不可测。
        * `natural` = 寿终（age 达名义寿命线，reserver/claimer 600−60、其余 1500−60），`combat` = 非寿终（战损/事故/回收）。 */
       deathByCause?: { natural: number; combat: number; recycled?: number };
-      /** #99：战争候选漏斗 —— 最近一次 war-planning pass 的各道筛子出口计数。
-       * 为什么单独存：#95「零计划零编队」的归因需要知道候选死在哪一道，而五道筛子全是裸
+      /** 战争候选漏斗 —— 最近一次 war-planning pass 的各道筛子出口计数。
+       * 为什么单独存：「零计划零编队」的归因需要知道候选死在哪一道，而五道筛子全是裸
        * `continue`（heap 里的 scratch 换码即清，且 pass 间隔 10 拍 ⇒ 现场永远追不上）。
        * 由 intelligence 老化批每 100 拍与 `intelCoverage` 同拍写入（见 systems/intelligence.ts）。
        * ⚠️`tick` 是**被计量的那一拍**，不是快照时刻 ⇒ 它落后当前 tick 超过 2×`CONFIG.war.interval`
        * 就说明 war-planning 没在跑，这份计数是残影（与 `energyLedger.tick` 那种"创建时赋一次"的坑同类）。 */
       warFunnel?: import("../domain/military/war-planning").WarFunnelCounters;
-      /** B4-F08: P1 补位时延 EMA（按角色分桶），由 spawn-manager 写入。
+      /** P1 补位时延 EMA（按角色分桶），由 spawn-manager 写入。
        * replaceLatency[role] = prev * 0.8 + latency * 0.2。 */
       replaceLatency?: Record<string, number>;
-      /** C2-FINDING-01: IVM heap 使用快照（每 100 tick 采样）。 */
+      /** IVM heap 使用快照（每 100 tick 采样）。 */
       heapUsed?: number;
       heapTotal?: number;
       heapLimit?: number;
@@ -661,7 +661,7 @@ declare global {
       baselineCreepCount?: number;
       baselineRoomCount?: number;
       baselineLastSample?: number;
-      /** #105：恢复动作被拒的累计计数（key = `动作类型:失败分类`，只增不减、跨部署存活）。
+      /** 恢复动作被拒的累计计数（key = `动作类型:失败分类`，只增不减、跨部署存活）。
        * 为什么单独存：`globalCache().recoveryActionTable` 住 heap ⇒ 每次部署归零，
        * `attempts/maxAttempts` 一起被清，所以"某类动作一直被判拒"这类结构性失效此前**从不显形**；
        * 而这一族里最值得关注的那条是故意的——GLOBAL_ROOM 的动作被显式跳过（不默认"买/建/孵"），
@@ -670,7 +670,7 @@ declare global {
        * 零消费者做决策（纯观测）；键集合有限 ⇒ Memory 体积有界；`lastReason` 截 120 字符。 */
       recoveryRejections?: Record<string, { count: number; lastAt: number; lastReason: string }>;
     };
-    /** 方向 3 E-FINDING-04 补充：P3 长期冻结跟踪。
+    /** P3 长期冻结跟踪。
      * 当 P3 旁路因 bucket < conserve 最低值不生效时，记录冻结开始的 tick。
      * 冻结持续超 P3_FROZEN_ALERT_TICKS 时输出升级告警。 */
     p3FrozenSince?: number;
@@ -679,14 +679,14 @@ declare global {
     /**
      * 当前扩张行动（v11+，同一时刻至多一个）：expansion-manager 状态机。
 
-     * A3.3 扩展：从二态（claiming | pioneering）升级为完整执行链路：
+     * 扩展：从二态（claiming | pioneering）升级为完整执行链路：
      *   validating → preparing → claiming → claimed → bootstrapping →
      *   economic_startup → integrating → completed
 
      * 向后兼容：旧二态作为 claiming/bootstrapping 的子集继续工作。
      */
     expansion?: {
-      /** 执行状态（A3.3 完整状态机）。 */
+      /** 执行状态（完整状态机）。 */
       state: ExpansionExecutionState;
       /** 扩张目标房名。 */
       target: string;
@@ -694,30 +694,30 @@ declare global {
       sponsor: string;
       /** 当前状态的起始 tick（超时判定基准）。 */
       startedAt: number;
-      /** A3.3：关联的 planId。 */
+      /** 关联的 planId。 */
       planId?: string;
-      /** A3.3：已通过 checkpoint 数（0-5）。 */
+      /** 已通过 checkpoint 数（0-5）。 */
       checkpointsPassed?: number;
-      /** A3.3：预留能量。 */
+      /** 预留能量。 */
       reservedEnergy?: number;
-      /** A3.3：连续净流为正的 tick 数（经济激活判据）。 */
+      /** 连续净流为正的 tick 数（经济激活判据）。 */
       consecutivePositiveTicks?: number;
       /** 上一次经济激活评估的 tick —— 用于把 streak 按**拍**累计而非按采样次数累计。 */
       lastEconomicEvalTick?: number;
-      /** AI-2 修复：DecisionTrace 分配的 decisionId（D-{tick}-{seq}）。
+      /** 修复：DecisionTrace 分配的 decisionId（D-{tick}-{seq}）。
        * 由 collectExpansionDecisions 在采集 DecisionRecord 时写入。
-       * Phase 6 UOEM 后：decisionId 仅作为 DecisionTrace 内部引用，
+       * 引入 OutcomeChannel 后：decisionId 仅作为 DecisionTrace 内部引用，
        * 不再作为 outcome 匹配键（由 operationId 替代）。 */
       decisionId?: string;
-      /** Phase 6 UOEM：Operation 唯一身份标识（op:{target}:{consumeTick}）。
+      /** Operation 唯一身份标识（op:{target}:{consumeTick}）。
        * 在 tryConsumePlan 时一次性铸造，写入 Memory，跨 global reset 稳定。
        * Experience Collector 用 operationId 匹配 OutcomeChannel 中的终态事件。 */
       operationId?: string;
-      /** Phase 6 UOEM：Operation 生命周期起点（consume tick，不可变）。
+      /** Operation 生命周期起点（consume tick，不可变）。
        * 与 startedAt（mutable state timer）分离——startedAt 仍用于超时判定，
        * 但 duration 计算使用 openedAt 作为起点。 */
       openedAt?: number;
-      /** Phase 6 UOEM：是否经历过 forced advance（P5/P7 milestone 传播）。
+      /** 是否经历过 forced advance（milestone 传播）。
        * 终态 outcome 携带此标志，区分 COMPLETED 与 COMPLETED_FORCED。 */
       forcedAdvance?: boolean;
     };
@@ -730,7 +730,7 @@ declare global {
     strategy?: {
       /** 当前姿态：develop 固本 / expand 扩张 / fortify 设防 / war 战争。 */
       posture: "develop" | "expand" | "fortify" | "war";
-      /** 当前姿态由哪条分支维持（#140；变更那一拍另见 kernel.postureTransition）。 */
+      /** 当前姿态由哪条分支维持（变更那一拍另见 kernel.postureTransition）。 */
       branch?: string;
       /** 当前姿态的起始 tick（滞回与耐心窗口的基准）。 */
       since: number;
@@ -739,25 +739,25 @@ declare global {
       /** 指令：是否允许开辟新的远矿点（现役运营不受影响）。 */
       newRemoteOpsAllowed: boolean;
       /**
-       * war 可持续性计数（v27+，R4）：war 姿态下经济压力持续超 warMaxPressure 的
+       * war 可持续性计数（v27+）：war 姿态下经济压力持续超 warMaxPressure 的
        * 连续 tick 数（empire-strategy 每 tick 写）；超 warExitPatienceTicks →
        * 降级 fortify；压力恢复即清零 — 纯函数评估的滞回输入。
        */
       warPressureTicks?: number;
       /**
-       * #94：`gclHeadroom` 那一项的**实际输入**（`Game.gcl.level`，缺失时按 1 判定）。
+       * `gclHeadroom` 那一项的**实际输入**（`Game.gcl.level`，缺失时按 1 判定）。
        * 为什么要落盘：这两个标量原先只存在于决策那一拍的 heap，于是
        * `expansionAllowed=false` 之后**没人能回答"当时是哪一合取项在挡"** ——
        * 七个合取项里有五项可从 Memory 复算，恰好这两项不行（线上实测 `kernel.gcl`/`kernel.bucket` 均不存在）。
        */
       gclLevel?: number;
-      /** #94：`bucket ≥ expandMinBucket` 那一项的**实际输入**（`Game.cpu.bucket`，缺失时按 10000 判定）。 */
+      /** `bucket ≥ expandMinBucket` 那一项的**实际输入**（`Game.cpu.bucket`，缺失时按 10000 判定）。 */
       bucket?: number;
       /**
-       * #186：姿态判定**实际用到**的参数集与所用环境档（合并链 DEFAULT→CONFIG.posture→
+       * 姿态判定**实际用到**的参数集与所用环境档（合并链 DEFAULT→CONFIG.posture→
        * 环境基线→strategyOverrides 的最后一层结果，非 CONFIG 字面量）。
        * 为什么要落盘：`CONFIG.posture.threatWindow` 是 3000，而 `neighborPressure==="low"` 档
-       * 的基线把它覆盖成 **5000** —— 只看配置会算错冻结窗口（R407 就据此误判过一次"该退没退"）。
+       * 的基线把它覆盖成 **5000** —— 只看配置会算错冻结窗口（曾据此误判过一次"该退没退"）。
        */
       params?: {
         at: number;
@@ -859,7 +859,7 @@ declare global {
      * 布局可观测性指标（房名 → 快照；字段定义只在 `LayoutMetrics` 一处，别在这里再抄一份 ——
      * 上次这份内联副本与模块脱节，正配合"模块零调用点"把 `layoutMetrics` 变成了化石）。
      *
-     * ⚠️ #82 的历史教训（写给下一个读到这行的人）：本通道曾长期**只有类型与数据、没有写者**
+     * ⚠️ 历史教训（写给下一个读到这行的人）：本通道曾长期**只有类型与数据、没有写者**
      * （`computeLayoutMetrics` 零调用点、dist 里连 "layoutMetrics" 字样都没有），
      * 而 Memory 里的旧值看起来像现值。所以：注释里**不再声称**"某阈值触发某评估"——
      * 那些消费者并不存在；真正的拆改评估由 layout-planner 直接读 `getDeadAssetLinks`。
@@ -868,14 +868,14 @@ declare global {
      */
     layoutMetrics?: Record<string, import("./domain/layout/metrics").LayoutMetrics>;
     /**
-     * #85：需求阶梯对 upgrader 生效的**结构钳位**（房名 → 钳位值；钳位不存在时删键，
+     * 需求阶梯对 upgrader 生效的**结构钳位**（房名 → 钳位值；钳位不存在时删键，
      * 保持"缺键 = 没在压 maxCount"的语义，与 `layoutGaps` 的删除惯例一致）。
      * 写者 = spawn-manager（每拍从 `evaluateDemand` 的返回值抄一次），读者 = tuning-engine 的
      * `aggregateSignals` ⇒ 调优器由此知道"这个 ↑ 物理上落得了地吗"，不必自己复算需求分支。
      */
     demandClamps?: Record<string, number>;
     /**
-     * 帝国战争计划（v26+，war-planner 写入；v27 R4 扩展）：仅 war 姿态时存在，
+     * 帝国战争计划（v26+，war-planner 写入；v27 扩展）：仅 war 姿态时存在，
      * 同一时刻至多一个攻击编队（不并行开多线）；姿态退出/目标失效/战损止损时
      * 清除并回收在役 attacker。
      */
@@ -890,10 +890,10 @@ declare global {
       since: number;
       /** 目标 tower 数（情报快照，供编队/撤退参考）。 */
       towersSeen: number;
-      /** 波次相位（R4）：build 集结（满编才推进）/ advance 推进（整波进攻），按存活数迟滞切换。 */
+      /** 波次相位：build 集结（满编才推进）/ advance 推进（整波进攻），按存活数迟滞切换。 */
       phase?: "build" | "advance";
       /**
-       * 累计提交的 attacker 孵化请求数（R4 止损账本）；
+       * 累计提交的 attacker 孵化请求数（止损账本）；
        * 超 squadSize × CONFIG.war.casualtyMultiplier 判消耗战失败。
        * 计数口径：首次提交 + 前任已实际孵化的同键替换计入；TTL 过期/重试
        * 烧穿后的纯 churn 重提交不计数（否则能量紧张期止损被虚增基数误触）。
@@ -902,13 +902,13 @@ declare global {
       /**
        * 槽位 key → 前任是否已实际孵化（含孵化中）。spawned 去重与替换判定
        * 的依据；随 plan 生命周期存续，收摊时随 plan 一并清除。运行时字段，
-       * 无 schema 变更（遵循 R12 运行时字段先例）。
+       * 无 schema 变更（遵循运行时字段先例）。
        */
       spawnedKeys?: Record<string, boolean>;
       /**
-       * A5.3 运行时编队需求（遵循 R12 运行时字段先例，无 schema 版本变更）。
+       * 运行时编队需求（遵循运行时字段先例，无 schema 版本变更）。
        * 由 war-planning-system 写入、war-planner 消费。存在时 war-planner 使用
-       * A5.3 能力推导的编队替代旧 decideSquadSize/decideHealerCount；不存在时
+       * war-planning 能力推导的编队替代旧 decideSquadSize/decideHealerCount；不存在时
        * 退回旧路径（兼容性）。
        */
       a5ForceReq?: {
@@ -930,7 +930,7 @@ declare global {
      * 为什么必须落 Memory 而不是每 tick 从 warPlan.phase 现推：phase 是波次相位
      * （build/advance），不是战术状态；用它推 state 会让 evaluateTacticalAction 的
      * currentState 恒为 FORMING/MOVING，四道安全闸（regroup / retreat / disengage×2）
-     * 在转换表上永远判非法（A9）。
+     * 在转换表上永远判非法。
      */
     tacticalSquadStates?: Record<string, { state: string; since: number; updatedAt: number }>;
     warBlacklist?: Record<string, number>;
@@ -943,7 +943,7 @@ declare global {
      * 战争计划的情报断供计时（war-planner 写入/清除）：目标房最后一次通过授权那道
      * fact + targetFreshness 门槛之后经过的起点 tick。
      * **刻意不放在 warPlan 里**：warPlan 有两个写者（war-planner 的 legacy 路径与
-     * A5.3 的 writeCompatibleWarPlan），后者每轮用全新对象字面量整体重写 plan，
+     * war-planning-system 的 writeCompatibleWarPlan），后者每轮用全新对象字面量整体重写 plan，
      * 放在 plan 上的字段会被静默冲掉 —— 断供计时被冲零就等于永不撤军（实测 2700 tick
      * 零视野仍在授权）。按房 keyed：换目标即视为重新起算，收摊时随 demobilize 清除。
      */
@@ -957,7 +957,7 @@ declare global {
       initiative: "recovery" | "defense-readiness" | "rcl-push" | "develop";
       since: number;
       /**
-       * rcl-push 窗口起始时的 controller 进度合计（v30+，R7a）：退出 rcl-push
+       * rcl-push 窗口起始时的 controller 进度合计（v30+）：退出 rcl-push
        * 时据此归因窗口内的升级速率（AgendaOutcome 事件）。
        */
       progressBase?: number;
@@ -971,11 +971,11 @@ declare global {
       since: number;
       /** 升档候选连续满足余量的 tick 数（滞回防抖）。 */
       upgradeTicks: number;
-      /** #188：判定那拍的余量（`1 − usage/limit`），与 tier 同源同拍。 */
+      /** 判定那拍的余量（`1 − usage/limit`），与 tier 同源同拍。 */
       headroom?: number;
       /**
-       * #188：`tier` 是 G6 唯一读的词，而"要削多少 CPU 才放行扩张"需要它的**输入**。
-       * 这几枚标量原先只存在于决策那一拍的 heap（同 #94 的 `gclLevel`/`bucket`、#186 的 `params`）。
+       * `tier` 是 G6 唯一读的词，而"要削多少 CPU 才放行扩张"需要它的**输入**。
+       * 这几枚标量原先只存在于决策那一拍的 heap（同 `gclLevel`/`bucket`、`params`）。
        * `avg10` 与 `rateTotal` 一起落盘：读者能看出 `usage` 走了哪条腿，而不必在写者里
        * 复刻 `pickCpuUsagePerTick` 的信任规则。
        */
@@ -1009,13 +1009,13 @@ declare global {
     /** 扩张失败暂停截止（v31+）：此 tick 前不开新扩张行动（连续失败止损）。 */
     expansionPausedUntil?: number;
     /**
-     * Phase 6 UOEM：OutcomeChannel — Memory 持久化的有界 FIFO 通道。
+     * OutcomeChannel — Memory 持久化的有界 FIFO 通道。
      * expansion-manager 在终态时 enqueue OutcomeEvent，
      * experience-collector drain() 读取并匹配 operationId。
-     * cap=16，压缩字段名，≤3.2KB（冻结契约 PHASE38_B §11）。溢出可观测（不静默丢失）。 */
+     * cap=16，压缩字段名，≤3.2KB。溢出可观测（不静默丢失）。 */
     outcomeEvents?: import("../kernel/outcome-channel").OutcomeChannelMemory;
     /**
-     * A3.4：上一次扩张完成的 tick（Cooldown 门禁）。
+     * 上一次扩张完成的 tick（Cooldown 门禁）。
      * expansion-manager 在状态机进入 completed 时写入。
      * evaluateExpansionCooldown 消费——完成后冷却窗口内不启动新扩张。
      */
@@ -1037,7 +1037,7 @@ declare global {
     };
     /** 本次 boot 首个 tick（maintainMemory 记录）—— E2 相对宽限基准。 */
     bootTick?: number;
-    /** #62：creep 命名的帝国内单调序号 —— 后缀从 `Math.random` 换成它，长 soak 才可复现。
+    /** creep 命名的帝国内单调序号 —— 后缀从 `Math.random` 换成它，长 soak 才可复现。
      *  为什么必须是 Memory 而不是 heap：换码即清 heap，而名字会进目标选择的 hash
      *  （`creeps/support/targeting.ts`）与远矿替补的队列键（`domain/remote/demand.ts`）——
      *  一个跨部署归零的序号让"同初始状态 ⇒ 同名字序列"这条要求失效。
@@ -1061,7 +1061,7 @@ declare global {
       violationsTotal?: number;
       violations: string[];
       /**
-       * R265：违例身份留痕。事件 `ExpectationViolation` 只带总数（限流后逐拍不重报），
+       * 违例身份留痕。事件 `ExpectationViolation` 只带总数（限流后逐拍不重报），
        * 而 `violations` 是当前 pass 快照 ⇒ 瞬态违例事后无法归因。这里按 id 跨 pass 累计。
        */
       recent?: import("../kernel/expectations").ViolationTrace[];
@@ -1071,13 +1071,13 @@ declare global {
     /** P3 饥饿旁路截止 tick（expectations E2 触发，scheduler 消费）。运行时字段无 schema 变更。 */
     p3StarveBypassUntil?: number;
     /**
-     * FINDING-02 修复：ESM (Emergency Survival Mode) 持久化标志。
+     * 修复：ESM (Emergency Survival Mode) 持久化标志。
      * 存 Memory.kernel 而非 globalCache — global reset 后首 tick 仍能正确判定
      * ESM 滞回阈值（进入 <100，退出 >=500）。运行时字段无 schema 变更。
      */
     emergencySurvival?: boolean;
     /**
-     * FINDING-11 修复：迁移链快照——migrateMemory 成功执行后记录的最终版本。
+     * 修复：迁移链快照——migrateMemory 成功执行后记录的最终版本。
      * 新 Memory（schemaVersion=0）但 checkpoint 存在时直接跳到 checkpoint，
      * 避免重跑 45 个迁移。只前进不后退（防止回滚后锁住新版本）。
      */
@@ -1096,7 +1096,7 @@ declare global {
       startedAt: number;
       /** 累计提交的 scout 孵化请求数（死亡上限判定）。 */
       spawned: number;
-      /** R653：选点侦察（为缺地形数据的计划补情报）——不受 ea 退出计时中止。 */
+      /** 选点侦察（为缺地形数据的计划补情报）——不受 ea 退出计时中止。 */
       vetting?: boolean;
       /**
        * posture 退出（expansionAllowed=false）的持续起点 tick（Opt B 脱敏计时）。
@@ -1144,7 +1144,7 @@ declare global {
     >;
 
     /**
-     * 环境画像（P1-3，empire-strategy 每 100 tick 采样写入）：市场活跃度 +
+     * 环境画像（empire-strategy 每 100 tick 采样写入）：市场活跃度 +
      * 邻居竞争压力 + GCL 进度速率。供策略层调整扩张节奏/市场交易参数。
      * 无 schema 变更（kernel 可选字段，惰性创建）。
      */
@@ -1161,43 +1161,43 @@ declare global {
       gclProgress: number;
     };
     /**
-     * Empire Economy 瘦快照（A2 后半，empire-economy 每 100 tick 写入）：
+     * Empire Economy 瘦快照（empire-economy 每 100 tick 写入）：
      * 帝国级经济聚合指标——总能量/生产/净流/储备/健康度/扩张就绪度/预算。
-     * 只存 Summary，不复制完整 RoomState（MEMORY_ARCHITECTURE §4）。
+     * 只存 Summary，不复制完整 RoomState。
      */
     /** 帝国经济瘦快照（编码唯一真源=domain/economy/empire-snapshot）。 */
     empireEconomy?: EmpireEconomySnapshot;
     /**
-     * A3.0 帝国议程（agenda-manager 每 100t 写入）— 跨房调拨 Operation 生命周期。
+     * 帝国议程（agenda-manager 每 100t 写入）— 跨房调拨 Operation 生命周期。
      * 只存活跃 + 归档保留期内的终态 Operation；终态超 1000t 清理。
      * 数组上限 = O(active agendas)，通常 ≤ 数条。
      */
     agendas?: unknown[];
     /**
-     * A3.0 跨房资源预留表（agenda-manager 每 100t 写入）— 防超卖。
+     * 跨房资源预留表（agenda-manager 每 100t 写入）— 防超卖。
      * key = operationId, value = Reservation（含 TTL）。TTL 过期自动清除。
      */
     reservations?: Record<string, unknown>;
     /**
-     * A5 跨房供给合同瘦快照（specialization-planner 写入，logistics-planner 每轮读）。
+     * 跨房供给合同瘦快照（specialization-planner 写入，logistics-planner 每轮读）。
      * 瘦快照字段是缩写字母（i/s/t/r/…），类型由各读者本地声明；此处只登记「存在且是数组」，
      * 以便领土释放能按房名摘掉条目 —— 它没有 deadline，不摘就永久留在账上。
      */
     supplyContracts?: unknown[];
     /**
-     * A3.2 扩张计划列表（expansion-planner 每 interval tick 写入）— 有界列表，
+     * 扩张计划列表（expansion-planner 每 interval tick 写入）— 有界列表，
      * 最多 MAX_ACTIVE_PLANS(5) 个 Active Plan + 终态 Plan 保留期内条目。
-     * A3.2 只产出 Plan（到 WAITING_EXECUTION），不执行 Claim/Reserve/Bootstrap。
+     * expansion-planner 只产出 Plan（到 WAITING_EXECUTION），不执行 Claim/Reserve/Bootstrap。
      */
     expansionPlans?: ExpansionPlanMemory[];
     /**
-     * A3.2 扩张候选 Registry（expansion-planner 每 interval tick 更新）—
+     * 扩张候选 Registry（expansion-planner 每 interval tick 更新）—
      * 从 Intel 提取的候选房列表，携带评分和生命周期状态。
      * 有界（maxPoolSize=10），超出截断。
      */
     expansionCandidates?: ExpansionCandidateMemory[];
     /**
-     * A3.2 扩张 Dashboard 快照（expansion-planner 每 interval tick 写入）—
+     * 扩张 Dashboard 快照（expansion-planner 每 interval tick 写入）—
      * Pressure/Readiness/Budget/Candidates/Plan 汇总，供可观测性消费。
      */
     expansionDashboard?: {
@@ -1216,18 +1216,18 @@ declare global {
       /** 这些闸门值**是在哪一拍算出来的**（`-1`＝本 boot 里 empire-economy 还没跑过）。
        *  与上面的 `tick` 相减就是闸门值的年龄：仪表盘每拍盖章，而 `failedGates` 吃的是 heap 缓存，
        *  两者不同时刻——没有这一列时 `G0(v=false)` 既可能是几十拍前的真值、也可能是几千拍前的旧账
-       *  （roadmap #178 的现场就是一发里两者相差 2,251 拍）。 */
+       *  （现场就是一发里两者相差 2,251 拍）。 */
       readinessTick?: number;
     };
     /**
-     * A4.1 远矿经济 Dashboard 快照（remote-mining-manager 每趟聚合一次）—
+     * 远矿经济 Dashboard 快照（remote-mining-manager 每趟聚合一次）—
      * 全链路可观测性：现役/暂停运营数、总交付速率、净营收速率、健康/亏损计数、
      * 线级 CPU 合计，以及 `e/cpu` 比值。
      *
      * 这里**没有** `tp`（总产出）：账本只记交付（`delivered`），产出侧无归属仪器；
-     * 要记采出量得另建仪器，不能拿交付当产出（同一名词两种量）。落这一格的来龙去脉见
-     * roadmap 补218／补219（此前 `netRate` 与 `cpuPerTick` 只在 heap 与逐条日志里，
-     * 读数人要手工回代才能回答"这条远矿线值多少 CPU"，而扩张闸的 CPU 缺口决策正卡在这比值上）。
+     * 要记采出量得另建仪器，不能拿交付当产出（同一名词两种量）。落这一格的来龙去脉：此前 `netRate` 与
+     * `cpuPerTick` 只在 heap 与逐条日志里，
+     * 读数人要手工回代才能回答"这条远矿线值多少 CPU"，而扩张闸的 CPU 缺口决策正卡在这比值上。
      */
     remoteEconomyDashboard?: {
       /** 聚合发生的那一拍。 */
@@ -1253,7 +1253,7 @@ declare global {
     };
   }
 
-  /** A3.3 扩展：扩张执行状态机的完整状态集合。 */
+  /** 扩张执行状态机的完整状态集合。 */
   type ExpansionExecutionState =
     | "validating" // 执行 Gate 验证中
     | "preparing" // 预留资源 + 准备 Claimer
@@ -1266,7 +1266,7 @@ declare global {
     | "failed" // 执行失败
     | "aborted"; // 主动终止
 
-  /** A3.2 扩张计划的 Memory 瘦结构（只存 ID/枚举/少量数字/短 key）。 */
+  /** 扩张计划的 Memory 瘦结构（只存 ID/枚举/少量数字/短 key）。 */
   interface ExpansionPlanMemory {
     /** 全局唯一 planId。 */
     pid: string;
@@ -1308,7 +1308,7 @@ declare global {
     ex: string;
   }
 
-  /** A3.2 扩张候选的 Memory 瘦结构。 */
+  /** 扩张候选的 Memory 瘦结构。 */
   interface ExpansionCandidateMemory {
     /** 房名（稳定 key）。 */
     rn: string;
@@ -1380,7 +1380,7 @@ declare global {
      */
     intakePending?: Record<string, IntakePendingEntry>;
     /**
-     * 生成 rooms 覆盖所基于的 CONFIG.tuning.baselineVersion（P1-I）：tuning-engine
+     * 生成 rooms 覆盖所基于的 CONFIG.tuning.baselineVersion：tuning-engine
      * 每次评估前比对，不匹配即清空 rooms 覆盖（旧值可能基于过时经济假设）从新基线
      * 收敛；undefined 视为不匹配（首次运行或 v18 迁移后）。
      */
@@ -1396,15 +1396,15 @@ declare global {
         signals: Record<string, number>;
         skipped?: string;
         /**
-         * P3 修复（附录 E.2）：verify pass 被跳过时的原因 — 危机/低 bucket 期间外生
+         * P3 修复：verify pass 被跳过时的原因 — 危机/低 bucket 期间外生
          * 信号不可信，verify 跳过保留 pending。取值 "verify_skipped_crisis" /
          * "verify_skipped_cpu_tier" / "verify_skipped_rcl"。
          */
         verifySkipped?: string;
-        /** 本次评估产生的趋势记录（P1-1 调整置信度）。 */
+        /** 本次评估产生的趋势记录（调整置信度）。 */
         trend?: Record<string, "up" | "down" | "none">;
         /**
-         * 改进 A：本次评估时 pending 验证中的参数诊断（精简版，控体积；
+         * 本次评估时 pending 验证中的参数诊断（精简版，控体积；
          * 完整 preAdjustSignals 在 Memory.kernel.tuning.rooms）。
          */
         pendingValidations?: Record<
@@ -1416,7 +1416,7 @@ declare global {
             contractBlocked?: boolean;
           }
         >;
-        /** 改进 A：本次评估时的冻结参数诊断（精简版）。 */
+        /** 本次评估时的冻结参数诊断（精简版）。 */
         frozenParams?: Record<
           string,
           {
@@ -1426,7 +1426,7 @@ declare global {
           }
         >;
         /**
-         * P1 修复（附录 E.2）：人口合同 blocked 参数诊断 — roleCount 持续未达新边界时
+         * P1 修复：人口合同 blocked 参数诊断 — roleCount 持续未达新边界时
          * 记录 blockedSinceTick，连续 2 个 verifyDelay 窗口仍未达 → 回滚 + 计 1 次回滚。
          */
         blockedParams?: Record<
@@ -1505,7 +1505,7 @@ declare global {
      */
     threatUntil?: number;
     /**
-     * P1-G：危险冷却到期 tick（v16+，从 intel.dangerUntil 迁移至此）—
+     * 危险冷却到期 tick（v16+，从 intel.dangerUntil 迁移至此）—
      * remote-mining-manager 唯一写入；冷却期内该房不作远矿/扩张候选（止损）。
      * 迁移原因：intel 双写者（room-observer 透传链）加一个写者就崩，remoteOps
      * 本就单一写者，搬家后字段归单一写者。
@@ -1517,7 +1517,7 @@ declare global {
      */
     lowScoreSince?: number;
     /**
-     * P0-A：本远矿房我方创建的 container construction site 数量（v15+）。
+     * 本远矿房我方创建的 container construction site 数量（v15+）。
      * remote-mining-manager 每 managerInterval tick 用 lookForAtArea 实测校正 —
      * 只增不减会让几个远矿房永久占满 maxNormalLaneSites 饿死自有房重建；
      * construction-manager 全局上限判定读此值（ctx.globalSiteCount + Σ siteCount < maxNormalLaneSites）。
@@ -1543,7 +1543,7 @@ declare global {
      * 观测：最近一轮热度账里的合格格数、扫掉的残骸数、铺下的新格数（判"为什么没动工"用）。
      * ⚠️`roadReaped`／`roadLaid` 都是**每 pass** 值，不是累计量，也不是"上一次有动作的那一趟"：
      * `road-planner.ts` 在三处预算闸（跨主房帽／单 op 帽／每轮限速）之前先扫再判，被闸挡住的趟会
-     * 如实落 0（#187）。此前赋值在闸之后 ⇒ 车道饱和时整列停写、留着最后一次铺路的旧值，
+     * 如实落 0。此前赋值在闸之后 ⇒ 车道饱和时整列停写、留着最后一次铺路的旧值，
      * 于是"2"既可能是"这趟铺了 2"也可能是"闸关着、上趟铺了 2"——线上照后者误读过一次。
      */
     roadHeatTiles?: number;
@@ -1570,28 +1570,28 @@ declare global {
      */
     needWallClear?: boolean;
 
-    // ─── A4.1 扩展：RemoteMiningOperation 关联字段 ────────
+    // ─── 扩展：RemoteMiningOperation 关联字段 ────────
 
     /**
-     * A4.1：关联的 RemoteMiningOperation ID（"remote_mining:${homeRoom}:${targetRoom}"）。
+     * 关联的 RemoteMiningOperation ID（"remote_mining:${homeRoom}:${targetRoom}"）。
      * 渐进迁移：remoteOps 保留为执行器侧扁平结构，此字段关联到
      * globalCache 中的 RemoteMiningOperationContext。undefined = 尚未关联。
      */
     operationId?: string;
     /**
-     * A4.1：Remote Operation Checkpoint（"discovered"|"validated"|"prepared"|
+     * Remote Operation Checkpoint（"discovered"|"validated"|"prepared"|
      * "infrastructure_ready"|"mining_active"|"logistics_active"|"economic_active"）。
      * 镜像 globalCache 中 RemoteMiningOperationContext.checkpoint。
      */
     checkpoint?: string;
     /**
-     * A4.1：Remote Economic Health（"healthy"|"degraded"|"unprofitable"|
+     * Remote Economic Health（"healthy"|"degraded"|"unprofitable"|
      * "suspended"|"failed"）。镜像 globalCache 中
      * RemoteMiningOperationContext.economicHealth。
      */
     economicHealth?: string;
     /**
-     * A4.1：预算消耗累计（能量）。镜像 globalCache 中
+     * 预算消耗累计（能量）。镜像 globalCache 中
      * RemoteMiningOperationContext.budget.consumed。
      */
     budgetConsumed?: number;

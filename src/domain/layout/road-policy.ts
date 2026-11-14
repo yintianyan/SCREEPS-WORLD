@@ -38,7 +38,7 @@ export function minTrafficForRcl(rcl: number): number {
 }
 
 /**
- * 从交通热度评估道路候选（plan §5.6.6）：连续两个采样窗口均超阈值才入选，
+ * 从交通热度评估道路候选：连续两个采样窗口均超阈值才入选，
  * 且不在保留格/出口/墙/已有 road/site 上、至少靠近两个高价值端点
  * （source/spawn/storage/controller）。
  * RCL 分档（P3）：传 rcl 时 minTraffic 由 minTrafficForRcl 派生并覆盖

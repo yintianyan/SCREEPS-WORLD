@@ -61,7 +61,7 @@ export function buildNearestSite(
         : ac.snapshot.myConstructionSites;
       if (sites.length === 0) return undefined;
 
-      // R669：spawn 工地全局优先 —— 新房里 spawn = 能量容量/自孵的唯一解锁项，
+      // spawn 工地全局优先 —— 新房里 spawn = 能量容量/自孵的唯一解锁项，
       // 按"最近"选点会让 extension/container 一直抢工时（W39S55 实测 spawn 卡
       // 3,017/5,000 而同窗 container 以 ~9 hits/拍推进）。只对**在建 spawn** 生效。
       const spawnSites = sites.filter(s => s.structureType === STRUCTURE_SPAWN);

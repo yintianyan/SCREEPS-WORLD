@@ -1,4 +1,4 @@
-/** A5.5 Advanced Tactical Combat Micro — Domain Pure Functions. */
+/** Advanced Tactical Combat Micro — Domain Pure Functions. */
 
 import type { CombatCapability } from "../combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../defense/terrain-context";
@@ -7,7 +7,7 @@ import type { FocusFirePlan, AttackIntent } from "./focus-fire";
 import type { CohesionMetric, FormationSlot, FormationAnchor } from "./squad-formation";
 
 // ═══════════════════════════════════════════════════════════
-// §1. CombatPressure — 多维压力评估（禁止单一 pressureScore）
+// CombatPressure — 多维压力评估（禁止单一 pressureScore）
 // ═══════════════════════════════════════════════════════════
 
 export interface CombatPressure {
@@ -94,7 +94,7 @@ export function assessCombatPressure(snapshot: MicroSnapshot): CombatPressure {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. BodyAwareTacticalState — 基于 CombatCapability 的个体微操能力
+// BodyAwareTacticalState — 基于 CombatCapability 的个体微操能力
 // ═══════════════════════════════════════════════════════════
 
 export interface BodyAwareTacticalState {
@@ -159,7 +159,7 @@ export function deriveBodyAwareState(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. MicroIntent Types
+// MicroIntent Types
 // ═══════════════════════════════════════════════════════════
 
 export type MicroActionType =
@@ -236,7 +236,7 @@ export interface TowerAvoidanceIntent {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. CombatMovementDecision — 统一仲裁输出
+// CombatMovementDecision — 统一仲裁输出
 // ═══════════════════════════════════════════════════════════
 
 export interface CombatMovementDecision {
@@ -260,7 +260,7 @@ export interface MicroRejectedAlternative {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. MicroSnapshot — 纯函数输入
+// MicroSnapshot — 纯函数输入
 // ═══════════════════════════════════════════════════════════
 
 export interface MicroEnemySnapshot {
@@ -309,7 +309,7 @@ export interface MicroSnapshot {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. MicroPlan — 核心输出
+// MicroPlan — 核心输出
 // ═══════════════════════════════════════════════════════════
 
 export interface MicroPlan {
@@ -327,7 +327,7 @@ export interface MicroPlan {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §7. 核心纯函数 — planCombatMicro
+// 核心纯函数 — planCombatMicro
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -442,7 +442,7 @@ export function planCombatMicro(snapshot: MicroSnapshot): MicroPlan {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §8. 仲裁函数 — arbitrateMicro
+// 仲裁函数 — arbitrateMicro
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -717,7 +717,7 @@ function arbitrateMicro(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §9. 微操评估辅助函数
+// 微操评估辅助函数
 // ═══════════════════════════════════════════════════════════
 
 function evaluateKiteIntent(
@@ -903,7 +903,7 @@ function assessHealerProtection(snapshot: MicroSnapshot): ProtectIntent | null {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §10. 辅助函数
+// 辅助函数
 // ═══════════════════════════════════════════════════════════
 
 function buildEmptyMicroPlan(snapshot: MicroSnapshot, reason: string): MicroPlan {
@@ -1020,7 +1020,7 @@ function chebyshevDist(pos1: number, pos2: number): number {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §11. Determinism — 确定性 Hash
+// Determinism — 确定性 Hash
 // ═══════════════════════════════════════════════════════════
 
 export function microPlanHash(plan: MicroPlan): string {

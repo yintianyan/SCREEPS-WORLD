@@ -1,4 +1,4 @@
-/** v30 → v31 迁移独立测试（R7b 扩张节奏自适应 / expansionRhythm + expansionPausedUntil 建档）。 */
+/** v30 → v31 迁移独立测试（扩张节奏自适应 / expansionRhythm + expansionPausedUntil 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

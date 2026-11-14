@@ -25,7 +25,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
   return {
     name,
     priority,
-    // R3a：recovery 豁免从 RolePolicy 透传（builder/mineralMiner 自报）。
+    // recovery 豁免从 RolePolicy 透传（builder/mineralMiner 自报）。
     recoveryEligible: policy.recoveryEligible === true,
     recoveryEligibleYoungRoom: policy.recoveryEligibleYoungRoom === true,
     noIdleCadence: policy.noIdleCadence === true,
@@ -42,13 +42,13 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
     run(creep: Creep, ctx: TickContext): void {
       // finally 块在 CONFIG.debug.statusLight 关闭时为零开销（函数内首行即 return）。
       try {
-        // FINDING-06 修复：去掉非空断言。home 为空时跳过 snapshot 依赖逻辑，
+        // 修复：去掉非空断言。home 为空时跳过 snapshot 依赖逻辑，
         // 直接到 ensureHome（它会用 creep.room.name 设置 home）。下一 tick 正常工作。
         const home = creep.memory.home;
         const snapshot = home ? ctx.getSnapshot(home) : undefined;
         if (home && !snapshot) return;
 
-        // B1：已标记回收的 creep 停止角色工作（移动由 spawn-manager 接管）。
+        // 已标记回收的 creep 停止角色工作（移动由 spawn-manager 接管）。
         if (creep.memory.recycle) {
           creep.memory.mode = "idle";
           return;
@@ -58,7 +58,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // 威胁来源按实际所在房选择：外部房（远矿房/过境中间房）无 snapshot，直接扫当前房
         // （shouldFleeForeignRoom，修复 transit 盲区——必须排在 ensureHome 之前）；
         // home 房用 snapshot 的 threatCreeps（shouldFlee）。
-        // FINDING-06: home 为空时 snapshot 为 undefined，跳过 snapshot 依赖逻辑到 ensureHome。
+        // home 为空时 snapshot 为 undefined，跳过 snapshot 依赖逻辑到 ensureHome。
         const inForeignRoom = creep.room.name !== creep.memory.home;
         // pushThrough（recon scout）：跳过过境房威胁逃跑检测，继续向侦察目标推进。
         // 否则 scout 钻进敌方房（如 Aguia 的 W38S58）即 flee 回 home，永远到不了 remoteTarget。
@@ -94,7 +94,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
             if (creep.memory.assignment) {
               releaseAssignment(creep);
             }
-            // P0-2: 调用角色级 onFlee 钩子 — 角色可自行处理安全区行为（如防御圈内充能）。
+            // 调用角色级 onFlee 钩子 — 角色可自行处理安全区行为（如防御圈内充能）。
             // 返回 true 表示已处理，跳过通用 flee 移动；返回 false 表示需要通用 flee 接管。
             const fleeAc: ActionContext = {
               creep,
@@ -145,7 +145,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         }
 
         // ensureHome 后 home 已确保设置——重新获取 snapshot。
-        // FINDING-06: home 可能在 ensureHome 中刚被设置，原 snapshot 为 undefined。
+        // home 可能在 ensureHome 中刚被设置，原 snapshot 为 undefined。
         const homeAfter = creep.memory.home;
         if (!homeAfter) return; // 防御性检查——ensureHome 返回 true 后不应命中
         const snap = ctx.getSnapshot(homeAfter);
@@ -171,7 +171,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // 消除 predicate-execute 重复计算。actionProfiling 开启时测量每个 resolve/execute
         // 并记录到 globalCache；关闭时走原始路径（零开销）。
         const candidates = creep.memory.mode === "work" ? policy.work : policy.acquire;
-        // R674：work 模式可走效用仲裁（评分选最高价值候选）；acquire 永远保持链式。
+        // work 模式可走效用仲裁（评分选最高价值候选）；acquire 永远保持链式。
         // 仲裁无结果时回落到链式 —— 双保险，防评分层 bug 把整只 creep 变 idle。
         const useUtility = policy.arbitration === "utility" && creep.memory.mode === "work";
         if (CONFIG.debug.actionProfiling) {
@@ -213,7 +213,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         }
         // 远矿角色不在目标房间时不切 idle——idle 会让 ensureHome 导航回 home，
         // 形成 idle→updateMode→acquire→fail→idle 死循环，永远到不了 remoteTarget。
-        // P2-M：原 remoteHauler work-at-home 硬编码下沉为 RolePolicy 钩子，
+        // 原 remoteHauler work-at-home 硬编码下沉为 RolePolicy 钩子，
         // 由角色 policy 声明"无候选时是否切 idle"，引擎不再感知角色名。
         const remoteTarget = creep.memory.remoteTarget;
         if (

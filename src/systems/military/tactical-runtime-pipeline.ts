@@ -11,13 +11,13 @@ import { combatMicroSystem } from "./combat-micro-runtime";
 
 // ─── 各阶段原始 interval ──────────────────────────────────
 
-/** A5.4.1 tactical-runtime interval=10 */
+/** tactical-runtime interval=10 */
 const STAGE_TACTICAL_RUNTIME_INTERVAL = 10;
-/** A5.4.2 squad-movement interval=1 */
+/** squad-movement interval=1 */
 const STAGE_SQUAD_MOVEMENT_INTERVAL = 1;
-/** A5.4.3 tactical-engagement interval=3 */
+/** tactical-engagement interval=3 */
 const STAGE_TACTICAL_ENGAGEMENT_INTERVAL = 3;
-/** A5.4.4 combat-micro interval=3 */
+/** combat-micro interval=3 */
 const STAGE_COMBAT_MICRO_INTERVAL = 3;
 
 /** Pipeline 名称，用于 safeRun label 和日志 */

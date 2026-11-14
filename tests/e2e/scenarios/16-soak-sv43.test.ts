@@ -1,13 +1,13 @@
 /**
- * E2E-016 单房私服 soak — CANARY §5.1。
+ * E2E-016 单房私服 soak。
  *
  * 文件名里的 "sv43" 与日志前缀是历史标签（那次 Memory schema=43 时的重跑），**不随版本更新**；
  * 真实版本只认输出里的 `schemaVersion=`（它读 CONFIG.memory.schemaVersion，不写死数字 ——
  * 曾经写死 43 而配置已是 47，等于往长期登记表里刻了个假读数）。
  *
  * RCL1 起步长程运行：验证 RCL1→2 自然晋级、长程无 JS 错误、Memory 有界、
- * spawnQueue 不堆积、存活不死亡螺旋。深度按 20,000 tick 执行（CANARY §5.1
- * 完整 Soak-Verified 要求 50,000+，深度继续项见 CANARY §5.1 登记表）。
+ * spawnQueue 不堆积、存活不死亡螺旋。深度按 20,000 tick 执行
+ * （完整 Soak-Verified 要求 50,000+）。
  * 证据绑定：commit / schemaVersion / tick / room / collectedAt 在输出登记。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -17,7 +17,7 @@ import { t0Base } from "../fixtures/base";
 import { isJsError } from "../../support/errors";
 
 const ROOM = "W0N1";
-// 深度 soak 由环境变量驱动（CANARY §5.1 要求 50,000+ tick；默认 4×5000=20k）。
+// 深度 soak 由环境变量驱动（要求 50,000+ tick；默认 4×5000=20k）。
 // SOAK_START_RCL：预置起始 RCL 档（分段续跑用——避免每次从 RCL1 重复前段）。
 const STAGE_TICKS = Number(process.env.SOAK_STAGE_TICKS ?? 5000);
 const STAGES = Number(process.env.SOAK_STAGES ?? 4);
@@ -39,11 +39,11 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
   let bucketProbe: number | undefined;
 
   beforeAll(async () => {
-    // L0 基座（E2E_ENV_BASE_CONTRACT §1）+ L1 具名环境注入（§2 逐条登记）：
+    // L0 基座 + L1 具名环境注入（逐条登记）：
     //   injectRcl(START_RCL)   —— controllerLevel 选项（>1 时；此环境非自举所得）
     //   injectStorage(60k)     —— storage 水位（START_RCL>=6 时）
     // 证据效力：本场景为注入轨——只回答运行时不变式（无错误/Memory 有界/存活），
-    // 爬级速率结论以自举轨工件为准（§3 铁律）。
+    // 爬级速率结论以自举轨工件为准。
     const room = t0Base(ROOM);
     if (START_RCL >= 6) {
       room.objects!.push({ type: "storage", x: 24, y: 30, props: { store: { energy: 60000 } } });
@@ -91,9 +91,9 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           const bm = l.match(/BUCKET t=\d+ v=(-?\d+)/);
           if (bm) bucketProbe = Number(bm[1]);
         }
-        // census 证据行（R20①/T3）：结构计数 / roles / upW / cap / prog 全部
+        // census 证据行：结构计数 / roles / upW / cap / prog 全部
         // 走 world.roomObjects 真值（inspector 查询），替代原 bot 侧 CENSUS
-        // console 字符串拼装+解析。字段格式与原探针一致，CANARY §5.1 证据链
+        // console 字符串拼装+解析。字段格式与原探针一致，证据链
         // 可连续比对；采样点为 stage 末端（原为 stage 首 tick——stageProgLog
         // 仅喂证据行不断言，数值平移不影响语义）。
         if ((stage - 1) % 5 === 0) {
@@ -167,7 +167,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
         const popMedian = popSeries[Math.floor(popSeries.length / 2)] ?? 0;
         popMedians.push(popMedian);
         if (popMedian < 5) lowPopStages++;
-        // #37 取证：siteStale 命中时把「引擎侧 site」与「队列侧任务」两份账并排放出来。
+        // 取证：siteStale 命中时把「引擎侧 site」与「队列侧任务」两份账并排放出来。
         // 要分的岔口：孤儿 site（引擎有、队列没有 ⇒ 没人负责它，进度恰好恒 0，
         // 而别的一直在建，built 照常涨）vs 有队列条目但 builder 不选（消费侧口径）。
         if (violations.some((v: string) => (v as string).includes("siteStale"))) {

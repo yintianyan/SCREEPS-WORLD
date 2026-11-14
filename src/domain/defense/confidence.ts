@@ -5,7 +5,7 @@ import type { TerrainContext } from "./terrain-context";
 import { CONFIDENCE_VALUE } from "./player-intel";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 多维度置信度
+// 多维度置信度
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -34,7 +34,7 @@ export interface MultiDimensionalConfidence {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. 各维度置信度计算
+// 各维度置信度计算
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -135,7 +135,7 @@ export function computeIntelConfidence(playerIntel?: PlayerIntelRecord): number 
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. Confidence 聚合
+// Confidence 聚合
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -208,14 +208,14 @@ export function aggregateConfidence(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. 便捷函数
+// 便捷函数
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 从 overallConfidence 映射到 ThreatConfidence（A5.1 兼容）。
+ * 从 overallConfidence 映射到 ThreatConfidence（兼容旧版）。
 
- * A5.1 的 ThreatConfidence 有 4 个等级：fact / stale / inferred / unknown。
- * A5.2 扩展为 6 维，但需要向后兼容 A5.1 的 ThreatAssessment.confidence 字段。
+ * 旧版 ThreatConfidence 有 4 个等级：fact / stale / inferred / unknown。
+ * 多维置信度扩展为 6 维，但需要向后兼容旧版 ThreatAssessment.confidence 字段。
  */
 export function toThreatConfidence(overall: number): "fact" | "stale" | "inferred" | "unknown" {
   if (overall >= 0.8) return "fact";

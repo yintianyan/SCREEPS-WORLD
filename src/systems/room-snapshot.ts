@@ -54,8 +54,8 @@ function readStaticPartsCached(room: Room): StaticParts {
  * 不使用 PathFinder、全房 lookAt 或地形扫描（唯一例外：站桩阻挡在位核验 ≤4 个单格 lookForAt）。
 
  * 三个 global* 参数由 Kernel 预构建（避免每房独立遍历 Game.creeps）：
- * globalSourceOccupancy（source 占用）、globalCreepEnergy（房间 → creep 携带能量，P1-5 ①）、
- * globalPendingHarvesters（房间 → 待计入 harvester，P0-1）。
+ * globalSourceOccupancy（source 占用）、globalCreepEnergy（房间 → creep 携带能量）、
+ * globalPendingHarvesters（房间 → 待计入 harvester）。
  */
 export function buildRoomSnapshot(
   room: Room,
@@ -102,7 +102,7 @@ export function buildRoomSnapshot(
   // 同一份本站列表派生“我方工地”，省一次 FIND_MY_CONSTRUCTION_SITES；仍是本拍新鲜数据。
   const mySites = allSites.filter(s => s.my === true);
   const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
-  // 威胁分级：仅具备攻击/治疗/拆迁/claim 部件且非联盟者才算威胁（P0-2）。
+  // 威胁分级：仅具备攻击/治疗/拆迁/claim 部件且非联盟者才算威胁。
   const threatCreeps = classifyThreats(hostileCreeps, CONFIG.defense.allies);
 
   // 采集本房全部 creep（己方+敌方）的占位表，供 traffic-manager 直接消费——
@@ -139,7 +139,7 @@ export function buildRoomSnapshot(
     tombstones = allTombstones.filter(t => t.store.getUsedCapacity() > 0);
     const allRuins = room.find(FIND_RUINS);
     ruins = allRuins.filter(r => r.store.getUsedCapacity() > 0);
-    // 盲点体量（#131 C2，heap，不参与任何决策）：上面的 `store>0` 过滤把零容量遗留
+    // 盲点体量（heap，不参与任何决策）：上面的 `store>0` 过滤把零容量遗留
     // 整个挡在决策面之外 ⇒ "被选中后又空了"这类竞态今天不可见。这里不改过滤口径，
     // 只把被挡掉的个数与分母一起记下来——先定分子再定分母，率才能被读出来。
     const blind = remainsBlindCounters(room.name);
@@ -183,7 +183,7 @@ export function buildRoomSnapshot(
     sourceOccupancy.set(source.id, globalSourceOccupancy?.get(source.id as string) ?? 0);
   }
 
-  // ── 预热移动模块的结构缓存（P1-2：通过模块公开 API 写入，消除 as any 隐式耦合）──
+  // ── 预热移动模块的结构缓存（通过模块公开 API 写入，消除 as any 隐式耦合）──
   // movement.ts 的 ensureStructureCache 原本每房间每 tick 额外调用
   // room.find(FIND_STRUCTURES) + room.find(FIND_MY_CONSTRUCTION_SITES)。
   // 此处利用 snapshot 已采集的数据直接构建缓存，消除冗余 find。

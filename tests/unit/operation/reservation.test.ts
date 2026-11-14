@@ -1,4 +1,4 @@
-/** A3-003: Resource Reservation 创建/消耗/释放 */
+/** Resource Reservation 创建/消耗/释放 */
 import { describe, expect, it } from "vitest";
 import {
   createReservation,
@@ -16,7 +16,7 @@ import {
 
 const TICK = 1000;
 
-describe("A3-003/A3-004: Reservation CRUD", () => {
+describe("Reservation CRUD", () => {
   it("创建预留并检索", () => {
     let table: ReservationTable = new Map();
     table = createReservation(table, "op-1", "W1N1", "W2N1", 2000, TICK);
@@ -53,7 +53,7 @@ describe("A3-003/A3-004: Reservation CRUD", () => {
   });
 });
 
-describe("A3-004: TTL 过期自动清除（无 Phantom Reservation）", () => {
+describe("TTL 过期自动清除（无 Phantom Reservation）", () => {
   it("过期预留被清扫", () => {
     let table: ReservationTable = new Map();
     table = createReservation(table, "op-1", "W1N1", "W2N1", 2000, TICK, 100);

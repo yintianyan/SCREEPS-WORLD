@@ -1,4 +1,4 @@
-/** R603：建造管理器常态降频判据（紧急豁免必须每拍跑）。 */
+/** 建造管理器常态降频判据（紧急豁免必须每拍跑）。 */
 import { describe, expect, it } from "vitest";
 import { shouldRunConstruction } from "../../../src/domain/construction/cadence";
 

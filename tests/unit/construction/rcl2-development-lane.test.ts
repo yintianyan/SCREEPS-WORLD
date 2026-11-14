@@ -1,4 +1,4 @@
-/** Phase R2 — RCL2 关键发展通道 + 队列治理单元测试。 */
+/** RCL2 关键发展通道 + 队列治理单元测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   evaluateDevelopmentGate,
@@ -248,7 +248,7 @@ function queuedTask(overrides: Partial<BuildTask> = {}): BuildTask {
   };
 }
 
-describe("cleanTasks — R2 超龄清除", () => {
+describe("cleanTasks — 超龄清除", () => {
   it("queued 任务超过 maxQueuedAge → 清除并记入 staleKeys（不进黑名单）", () => {
     const queue = [queuedTask({ key: "old-road", queuedAt: 0 })];
     const result = cleanTasks(queue, CONFIG.construction.maxQueuedTaskAge + 1, {

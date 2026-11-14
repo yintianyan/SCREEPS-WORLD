@@ -4,7 +4,7 @@ import { getIntentLedger } from "../../../src/creeps/movement/intent";
 import { resetGlobals } from "../../support/factories";
 
 /**
- * 债单 #41：无下游出口时不得把背包倒在地上。
+ * 无下游出口时不得把背包倒在地上。
  * drop 的触发条件本身就是「本房消化不了这度电」的时候 —— 落地即衰减，再被 hauler 捡回来走一趟。
  */
 function makeAc(opts: {
@@ -75,7 +75,7 @@ function makeAc(opts: {
   };
 }
 
-describe("stationaryMine — 下游全满且无 storage 时保持背包（#41）", () => {
+describe("stationaryMine — 下游全满且无 storage 时保持背包", () => {
   beforeEach(() => {
     resetGlobals();
     getIntentLedger();
@@ -109,7 +109,7 @@ describe("stationaryMine — 下游全满且无 storage 时保持背包（#41）
     expect(creep.harvest).toHaveBeenCalled();
   });
 
-  it("成熟房（有 storage）：container 暂满仍按旧行为 drop；R643 起不再签发注定失败的 harvest", () => {
+  it("成熟房（有 storage）：container 暂满仍按旧行为 drop；不再签发注定失败的 harvest", () => {
     const { ac, creep, container, source } = makeAc({
       carryFree: 0,
       carryUsed: 200,

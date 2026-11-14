@@ -1,5 +1,5 @@
 /**
- * tests/support 统一脚手架内核 barrel（FREEZE R20①）。
+ * tests/support 统一脚手架内核 barrel。
  * 零引擎依赖，unit / integration / e2e 三层共用。
  */
 export * from "./constants";

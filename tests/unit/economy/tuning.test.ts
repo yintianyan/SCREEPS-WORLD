@@ -55,7 +55,7 @@ const DEFAULT_BOUNDS: Record<string, { minCount: number; maxCount: number }> = {
 };
 
 /**
- * 双次评估辅助（P1-1 趋势确认机制）。
+ * 双次评估辅助（趋势确认机制）。
  * 调优引擎要求连续 2 次评估窗口显示同方向信号才触发调整。
  * 第一次评估记录方向，第二次评估触发调整。
  * @returns 第二次评估的结果（含实际调整）
@@ -334,7 +334,7 @@ describe("Tuning Evaluator — upgrader.maxCount", () => {
   });
 
   it("storage 低位 → 减少", () => {
-    // 改进 C：RCL5 用 mid 档 low=10000（保持原测试意图：5000 < 10000 触发下调）
+    // RCL5 用 mid 档 low=10000（保持原测试意图：5000 < 10000 触发下调）
     const result = evaluateTwice(
       healthySignals({
         avgStorageEnergy: 5000,
@@ -423,7 +423,7 @@ describe("Tuning Evaluator — builder.maxCount", () => {
 
 describe("Tuning Evaluator — 多参数联动", () => {
   it("多个参数可同 tick 调整", () => {
-    // 改进 B 后：hauler.maxCount 上调要求 consumerSaturated=false，
+    // hauler.maxCount 上调要求 consumerSaturated=false，
     // 与 upgrader.maxCount 上调（storage > surplus）在储备上升时互斥。
     // 改用 hauler.maxCount ↑ + builder.maxCount ↓ 验证多参数联动。
     const result = evaluateTwice(
@@ -553,9 +553,9 @@ describe("getRoleBounds — 覆盖层", () => {
   });
 });
 
-// ─── P1-1 趋势确认机制测试 ──────────────────────────────────
+// ─── 趋势确认机制测试 ──────────────────────────────────
 
-describe("Tuning Evaluator — 趋势确认 (P1-1)", () => {
+describe("Tuning Evaluator — 趋势确认", () => {
   it("首次评估不产生调整，只记录方向", () => {
     const result = evaluateTuning(
       healthySignals({
@@ -678,9 +678,9 @@ describe("Tuning Evaluator — 趋势确认 (P1-1)", () => {
   });
 });
 
-// ─── 改进 C：getStorageThresholds 按 RCL 分档 ──────────────────
+// ─── getStorageThresholds 按 RCL 分档 ──────────────────
 
-describe("改进 C — getStorageThresholds RCL 分档", () => {
+describe("getStorageThresholds RCL 分档", () => {
   it("RCL≤4 early 档：surplus=2万 / low=2千", () => {
     const t = getStorageThresholds(4);
     expect(t.surplus).toBe(0.02 * STORAGE_CAPACITY);
@@ -712,9 +712,9 @@ describe("改进 C — getStorageThresholds RCL 分档", () => {
   });
 });
 
-// ─── 改进 C：upgrader.maxCount 按 RCL 分档阈值判定 ─────────────
+// ─── upgrader.maxCount 按 RCL 分档阈值判定 ─────────────
 
-describe("改进 C — upgrader.maxCount RCL 分档阈值", () => {
+describe("upgrader.maxCount RCL 分档阈值", () => {
   it("RCL5 高库存（>mid.surplus=5万）→ 触发上调", () => {
     const result = evaluateTwice(
       healthySignals({
@@ -766,7 +766,7 @@ describe("改进 C — upgrader.maxCount RCL 分档阈值", () => {
   });
 
   it("跨档边界：RCL6→7 刚跨档，signals.rcl=7，storage=6万 → 按 RCL7 处理不触发", () => {
-    // 跨档带来的瞬态不连续可接受（设计文档 §3.3.3）
+    // 跨档带来的瞬态不连续可接受
     const result = evaluateTwice(
       healthySignals({
         rcl: 7,
@@ -783,9 +783,9 @@ describe("改进 C — upgrader.maxCount RCL 分档阈值", () => {
   });
 });
 
-// ─── 改进 B：hauler.maxCount 上调门禁 consumerSaturated ─────────
+// ─── hauler.maxCount 上调门禁 consumerSaturated ─────────
 
-describe("改进 B — hauler.maxCount consumerSaturated 门禁", () => {
+describe("hauler.maxCount consumerSaturated 门禁", () => {
   it("经典门禁解锁：container 满 + spawn 高（旧门禁锁死场景）+ storage 未盈余 → 触发上调", () => {
     // 旧逻辑 spawnFill=0.95 > 0.8 永久不满足，新逻辑用 consumerSaturated 判定
     // RCL7 late surplus=25万，storage=6万 < 25万 → consumerSaturated=false → 可上调
@@ -869,9 +869,9 @@ describe("改进 B — hauler.maxCount consumerSaturated 门禁", () => {
   });
 });
 
-// ─── 改进 B 一致性：hauler.minCount 也共享 consumerSaturated ────
+// ─── hauler.minCount 也共享 consumerSaturated ────
 
-describe("改进 B — hauler.minCount consumerSaturated 一致性", () => {
+describe("hauler.minCount consumerSaturated 一致性", () => {
   it("消费端真饱和时 hauler.minCount 也不上调", () => {
     // RCL5 mid surplus=5万，storage=6万 > 5万 + reserveDelta=+50 → consumerSaturated=true
     const result = evaluateTwice(

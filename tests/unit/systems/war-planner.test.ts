@@ -1,4 +1,4 @@
-/** War Planner 系统测试（R3 战时闭环 + R4 自治升级）。 */
+/** War Planner 系统测试（战时闭环 + 自治升级）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { demobilize, warPlannerSystem } from "../../../src/systems/military/war-planner";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
@@ -80,7 +80,7 @@ function warOutcomeEvents(): any[] {
   return events.filter((e: any) => e.k === 23);
 }
 
-describe("R3 — 姿态消费与编队孵化", () => {
+describe("姿态消费与编队孵化", () => {
   it("war 姿态 + 合法目标 → 发布 warPlan（build 相位）并推 attacker + healer 首请求", () => {
     (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
     setupHome();
@@ -171,7 +171,7 @@ describe("R3 — 姿态消费与编队孵化", () => {
   });
 });
 
-describe("R4 — 收摊与战后核验", () => {
+describe("收摊与战后核验", () => {
   function warPlanFixture(overrides: Record<string, any> = {}): void {
     (globalThis as any).Memory = {
       schemaVersion: 27,
@@ -275,14 +275,14 @@ describe("R4 — 收摊与战后核验", () => {
     expect(warOutcomeEvents()[0]?.d?.[0]).toBe(2);
   });
 
-  it("核验 unknown（情报过期）→ 黑名单（半额冷却 — P0-2 区分 “打不赢” 与 “没看到”）", () => {
+  it("核验 unknown（情报过期）→ 黑名单（半额冷却 — 区分 “打不赢” 与 “没看到”）", () => {
     warPlanFixture();
     seedIntel({ W6N4: { owner: "Enemy", towers: 1, lastSeen: -600 } }); // 距今 1600 > freshness 1500
     setPosture("develop");
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
-    // P0-2：unknown 用半额冷却 — intel 过期不是目标的错。
+    // unknown 用半额冷却 — intel 过期不是目标的错。
     expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(
       TICK + Math.floor(CONFIG.war.warBlacklistTicks / 2),
     );
@@ -303,7 +303,7 @@ describe("R4 — 收摊与战后核验", () => {
   });
 });
 
-describe("R4 — 战损止损与波次相位", () => {
+describe("战损止损与波次相位", () => {
   it("spawned 超合计编制 × casualtyMultiplier → 收摊（attrition）+ 黑名单 + 整军休战", () => {
     (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
     setupHome();
@@ -489,13 +489,13 @@ describe("boost 战前强化 — advance 门禁接线", () => {
   });
 });
 
-// ─── R5 — 存续期情报复核（#12：承诺不得长期越过证据）─────────────────
+// ─── 存续期情报复核（承诺不得长期越过证据）─────────────────
 // 旧行为：fact + targetFreshness 只在选目标时查一次，于是 planTimeout(6000) −
 // targetFreshness(1500) = 4500 tick 的「没人看见却继续烧兵」是合法的。
 // 现行为：断供即停补员；断供累计超 CONFIG.war.planIntelBlackoutTicks 才撤军，
 // 且撤军不写黑名单（看不见 ≠ 打不赢）。计时器住在 Memory.kernel.warIntelLost，
-// 不住在 warPlan 里 —— warPlan 有两个写者，A5.3 每轮整体重写它（见下面那条回归用例）。
-describe("R5 — 存续期情报复核", () => {
+// 不住在 warPlan 里 —— warPlan 有两个写者，每轮整体重写它（见下面那条回归用例）。
+describe("存续期情报复核", () => {
   /** 在指定 tick 跑一轮（intel 的 observedAt 取 payload.lastSeen，与 Game.time 解耦）。 */
   function runAt(tick: number): void {
     const ctx = mockContext(mockSnapshot());
@@ -511,7 +511,7 @@ describe("R5 — 存续期情报复核", () => {
     runAt(1000);
   }
 
-  /** 模拟 A5.3 writeCompatibleWarPlan：用全新对象字面量整体替换 plan。 */
+  /** 模拟 writeCompatibleWarPlan：用全新对象字面量整体替换 plan。 */
   function rewritePlanObject(): void {
     const k = (globalThis as any).Memory.kernel;
     k.warPlan = {
@@ -569,7 +569,7 @@ describe("R5 — 存续期情报复核", () => {
     expect(mapAbortToRecoveryAction(signal!)).not.toBeNull();
   });
 
-  it("A5.3 整体重写 warPlan 不得把断供计时冲零（计时器住在 kernel 而非 plan）", () => {
+  it("整体重写 warPlan 不得把断供计时冲零（计时器住在 kernel 而非 plan）", () => {
     authorizeAt1000();
     runAt(1300); // 断供起点
     rewritePlanObject(); // 写者换了一个不带该字段的对象字面量

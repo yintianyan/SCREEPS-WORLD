@@ -1,4 +1,4 @@
-/** R651：选点前置的地形摘要（墙/沼泽占比 + 最佳锚点几何）。 */
+/** 选点前置的地形摘要（墙/沼泽占比 + 最佳锚点几何）。 */
 import { describe, expect, it } from "vitest";
 import { summarizeTerrain } from "../../../src/domain/layout/terrain-intel";
 
@@ -60,7 +60,7 @@ describe("summarizeTerrain — 最佳锚点几何", () => {
     expect(s.anchorToSources).toBeTypeOf("number");
   });
 
-  it("R651b：遗留 spawn 远 ⇒ leftoverSpawnToAnchor 大（回 claim 布局校验）", () => {
+  it("遗留 spawn 远 ⇒ leftoverSpawnToAnchor 大（回 claim 布局校验）", () => {
     const s = summarizeTerrain({
       getTerrainValue: plain(),
       sources: [
@@ -99,7 +99,7 @@ describe("summarizeTerrain — 最佳锚点几何", () => {
   });
 });
 
-describe("summarizeTerrain — R662 锚点可放率", () => {
+describe("summarizeTerrain — 锚点可放率", () => {
   it("开阔地形 ⇒ ratio = 1", () => {
     const s = summarizeTerrain({
       getTerrainValue: plain(),

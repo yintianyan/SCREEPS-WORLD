@@ -185,7 +185,7 @@ export const logisticsSystem: System = {
       });
 
       // L2 池收缩（断链 fallback 链）：风险缓冲低于地板 → 只保 P0/P1。
-      // Economy → Logistics 的反馈闭环实例（任务书 §26）。
+      // Economy → Logistics 的反馈闭环实例。
       const econSnap = Memory.rooms[roomName]?.economy;
       const shrink =
         econSnap !== undefined &&
@@ -220,7 +220,7 @@ export const logisticsSystem: System = {
         }
       }
 
-      // A4.4 修复 DUPLICATE-002：V1/V2 去重。
+      // 修复：V1/V2 去重。
       // 旧问题：V1 和 V2 可能同时为同一个 container 积压生成运输请求，hauler 看到重复任务。
       // 修复：Plan 存在且有效时，V1 检查 Plan 是否已覆盖该 source，若覆盖则跳过。
       const plan = globalCache().logisticsPlan?.plan;
@@ -253,7 +253,7 @@ export const logisticsSystem: System = {
 
       g.transportPool.rooms[roomName] = dedupedReqs.map(toTaskEntry);
 
-      // P3-3：tower 补给请求 — 塔低于饥渴阈值时生成独立补给请求。
+      // tower 补给请求 — 塔低于饥渴阈值时生成独立补给请求。
       // 不影响收集请求提级（已有 boostedPriority），补充一条从 supply 到 tower 的搬运任务。
       if (towerStarving) {
         const towerReqs = buildTowerSupplyRequests(roomName, supplies, cfg.towerStarveThreshold);
@@ -262,11 +262,11 @@ export const logisticsSystem: System = {
         }
       }
 
-      // A4.3：合并 logistics-planner 产出的 Plan 中 scope="room" 的请求。
+      // 合并 logistics-planner 产出的 Plan 中 scope="room" 的请求。
       // Plan 驱动的请求适配为 AssignmentTaskEntry 格式，追加到本房任务槽。
       // scope="empire" 的请求不进 transportPool — 由 agenda-manager carrier 执行。
       // scope="operation" 的请求不进 transportPool — 由远矿 remoteHauler 执行。
-      // A4.4 修复 BYPASS-012：与 agenda-manager 步 13.5 同口径——消费最近 100t 内的 Plan。
+      // 修复：与 agenda-manager 步 13.5 同口径——消费最近 100t 内的 Plan。
       // 旧逻辑 plannedAt === ctx.tick 导致 99% 的 tick V2 不参与房内物流。
       if (planIsActive) {
         // 消费最近 100 tick 内产出的 Plan（与 agenda-manager 步 13.5 一致）。
@@ -281,8 +281,8 @@ export const logisticsSystem: System = {
         }
       }
     }
-    // P3-2：空载率指标写入 globalCache 供消费方读取。
-    // B8-F01 修复：清理失守房的 poolRooms 条目，防止 heap 膨胀 + 死房遍历。
+    // 空载率指标写入 globalCache 供消费方读取。
+    // 修复：清理失守房的 poolRooms 条目，防止 heap 膨胀 + 死房遍历。
     const activeRoomNames = new Set(Array.from(ctx.snapshots()).map(s => s.roomName));
     const allIdleRatios: Record<string, number> = {};
     let maxIdleRatio = 0;
@@ -296,7 +296,7 @@ export const logisticsSystem: System = {
     }
     g.logisticsIdleRatio = { tick: ctx.tick, byRoom: allIdleRatios, max: maxIdleRatio };
 
-    // A3.0：empire scope 跨房调拨不再通过 transportPool — carrier 角色独立搬运，
+    // empire scope 跨房调拨不再通过 transportPool — carrier 角色独立搬运，
     // 不走 hauler assignment 链。agenda-manager 直接提交 carrier spawn 请求。
 
     // ── 帝国物流规划（并入的原独立系统，每 100t）──
@@ -340,7 +340,7 @@ function buildTowerSupplyRequests(
 }
 
 /**
- * A4.3：TransportRequestV2 → AssignmentTaskEntry 适配器。
+ * TransportRequestV2 → AssignmentTaskEntry 适配器。
 
  * 将 logistics-planner 产出的 V2 请求适配为现有 hauler 认领链可消费的格式。
  * 仅适配 scope="room" 的请求（房内搬运）。

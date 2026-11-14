@@ -176,7 +176,7 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
     expect(r.expansionAllowed).toBe(false); // 无法确认来源 ⇒ 按玩家处理
   });
 
-  // #198-B：NPC 过境间隔≈威胁窗，若与玩家宣战同价，war 占空比≈100% ⇒ 扩张永久冻结。
+  // NPC 过境间隔≈威胁窗，若与玩家宣战同价，war 占空比≈100% ⇒ 扩张永久冻结。
   // 只在「确认仅 NPC 骚扰」时给 war 解禁；玩家敌意/来源不明仍拦。
   it("war 姿态 + 确认仅 NPC 骚扰（invader 近期、player 无）→ expansionAllowed true", () => {
     const r = evaluateEmpirePosture(
@@ -350,7 +350,7 @@ describe("empire posture — 降级滞回", () => {
   });
 });
 
-describe("empire posture — R4 war 可持续退出（经济止损）", () => {
+describe("empire posture — war 可持续退出（经济止损）", () => {
   const pressureRoom = (pressure: number) =>
     room({ lastHostileAt: tick - 100, economyPressure: pressure });
 
@@ -519,9 +519,9 @@ describe("empire posture — defense 不是经济危机（anyRecovery 与 strugg
   });
 });
 
-describe("empire posture — #140 分支标签（转换那一拍走了哪条 return）", () => {
+describe("empire posture — 分支标签（转换那一拍走了哪条 return）", () => {
   const o = DEFAULT_POSTURE_OPTIONS;
-  // 节拍常数一律从导出的默认值推，不写死数字（同批 #139 的教训：猜常数会让判据红在测试自己身上）。
+  // 节拍常数一律从导出的默认值推，不写死数字（同批的教训：猜常数会让判据红在测试自己身上）。
   const hit = (over: Partial<PostureInput> = {}) => evaluateEmpirePosture(input(over));
 
   it("和平路径 → peace", () => {
@@ -547,7 +547,7 @@ describe("empire posture — #140 分支标签（转换那一拍走了哪条 ret
     expect(r.reason).toBe("war-sustain");
   });
 
-  it("威胁窗口内 + prev=war + 压力计满 → war-exit-patience（R4 止损）", () => {
+  it("威胁窗口内 + prev=war + 压力计满 → war-exit-patience（止损）", () => {
     const r = hit({
       rooms: [room({ lastHostileAt: tick - 1, economyPressure: o.warMaxPressure + 0.01 })],
       prev: { posture: "war", since: tick - 50 },

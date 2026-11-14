@@ -1,4 +1,4 @@
-/** A3.2 Contract Tests — Expansion Intelligence 全链路合约测试。 */
+/** Contract Tests — Expansion Intelligence 全链路合约测试。 */
 
 import { describe, it, expect } from "vitest";
 import {
@@ -191,7 +191,7 @@ function makePressure(over: Partial<ExpansionPressureResult> = {}): ExpansionPre
 
 // ─── 1. Pressure ──────────────────────────────────────
 
-describe("A3.2 Pressure", () => {
+describe("Pressure", () => {
   it("LOW when no saturation", () => {
     const r = evaluateExpansionPressure({
       view: makeResourceView(),
@@ -245,7 +245,7 @@ describe("A3.2 Pressure", () => {
 
 // ─── 2. Candidate ─────────────────────────────────────
 
-describe("A3.2 Candidate", () => {
+describe("Candidate", () => {
   it("builds from 2-source intel", () => {
     const c = buildCandidate("W5N5", "W1N1", makeIntel({ sources: 2 }), ["W1N1"], 1000, "p1");
     expect(c.sourceCount).toBe(2);
@@ -289,7 +289,7 @@ describe("A3.2 Candidate", () => {
 
 // ─── 3. Discovery ──────────────────────────────────────
 
-describe("A3.2 Discovery", () => {
+describe("Discovery", () => {
   it("discovers new candidates", () => {
     const r = discoverCandidates({
       ownedRoomNames: ["W1N1"],
@@ -316,7 +316,7 @@ describe("A3.2 Discovery", () => {
 
 // ─── 4. Scoring ────────────────────────────────────────
 
-describe("A3.2 Scoring", () => {
+describe("Scoring", () => {
   it("2-source > 1-source", () => {
     const r2 = scoreCandidate({ candidate: makeCandidate({ sourceCount: 2 }) });
     const r1 = scoreCandidate({ candidate: makeCandidate({ sourceCount: 1 }) });
@@ -352,7 +352,7 @@ describe("A3.2 Scoring", () => {
 
 // ─── 5. Ranking ────────────────────────────────────────
 
-describe("A3.2 Ranking", () => {
+describe("Ranking", () => {
   it("sorts by score descending", () => {
     const ranked = rankCandidates(
       [
@@ -382,7 +382,7 @@ describe("A3.2 Ranking", () => {
 
 // ─── 6. Cost ───────────────────────────────────────────
 
-describe("A3.2 Cost", () => {
+describe("Cost", () => {
   it("total > 0 with all components", () => {
     const c = makeCandidate({ distance: 1 });
     const cost = estimateExpansionCost(c);
@@ -400,7 +400,7 @@ describe("A3.2 Cost", () => {
 
 // ─── 7. Payback ────────────────────────────────────────
 
-describe("A3.2 Payback", () => {
+describe("Payback", () => {
   it("2-source has finite payback", () => {
     const c = makeCandidate({ sourceCount: 2 });
     const pb = evaluatePayback(c, estimateExpansionCost(c));
@@ -427,7 +427,7 @@ describe("A3.2 Payback", () => {
 
 // ─── 8. Risk ──────────────────────────────────────────
 
-describe("A3.2 Risk", () => {
+describe("Risk", () => {
   it("LOW for close safe candidate", () => {
     const r = evaluateRisk(
       makeCandidate({ distance: 1 }),
@@ -466,7 +466,7 @@ describe("A3.2 Risk", () => {
 
 // ─── 9. Tiered Budget ──────────────────────────────────
 
-describe("A3.2 Tiered Budget", () => {
+describe("Tiered Budget", () => {
   it("available = total - emergency - core - operational", () => {
     const t = computeTieredBudget(makeBudget());
     expect(t.emergencyReserve).toBe(10000);
@@ -522,7 +522,7 @@ describe("A3.2 Tiered Budget", () => {
 
 // ─── 10. Plan ──────────────────────────────────────────
 
-describe("A3.2 Plan", () => {
+describe("Plan", () => {
   it("creates from evaluation results", () => {
     const p = makeFullPlan();
     expect(p.planId).toContain("W5N5");
@@ -548,7 +548,7 @@ describe("A3.2 Plan", () => {
 
 // ─── 11. Plan Lifecycle ───────────────────────────────
 
-describe("A3.2 Plan Lifecycle", () => {
+describe("Plan Lifecycle", () => {
   it("deduplicate prevents duplicate roomName", () => {
     const r = deduplicatePlans([makeFullPlan()], makeFullPlan());
     expect(r.deduplicated).toBe(true);
@@ -598,7 +598,7 @@ describe("A3.2 Plan Lifecycle", () => {
     expect(applyHysteresis(revived, true, 1699).status).toBe("EVALUATED");
   });
 
-  it("R624：短暂 not-ready（< downgradeTicks=200）保留升档进度，不重算", () => {
+  it("短暂 not-ready（< downgradeTicks=200）保留升档进度，不重算", () => {
     let p = applyHysteresis(makeFullPlan(), true, 1000);
     p = applyHysteresis(p, true, 1400);
     p = applyHysteresis(p, false, 1450); // 仅 50 拍回落
@@ -611,7 +611,7 @@ describe("A3.2 Plan Lifecycle", () => {
     expect(applyHysteresis(p, true, 1500).status).toBe("READY");
   });
 
-  it("R624：not-ready 持续 ≥ downgradeTicks 才丢弃进度", () => {
+  it("not-ready 持续 ≥ downgradeTicks 才丢弃进度", () => {
     let p = applyHysteresis(makeFullPlan(), true, 1000);
     p = applyHysteresis(p, true, 1400);
     p = applyHysteresis(p, false, 1450);
@@ -683,7 +683,7 @@ describe("A3.2 Plan Lifecycle", () => {
 
 // ─── 12. Explanation ──────────────────────────────────
 
-describe("A3.2 Explanation", () => {
+describe("Explanation", () => {
   it("APPROVE when all conditions met", () => {
     const c = makeCandidate({ score: 0.8, sourceCount: 2, distance: 1 });
     const cost = estimateExpansionCost(c);
@@ -723,7 +723,7 @@ describe("A3.2 Explanation", () => {
 
 // ─── 13. Dashboard ────────────────────────────────────
 
-describe("A3.2 Dashboard", () => {
+describe("Dashboard", () => {
   it("builds with all sections", () => {
     const d = buildExpansionDashboard({
       tick: 1000,
@@ -746,7 +746,7 @@ describe("A3.2 Dashboard", () => {
 
 // ─── 14. Readiness Extended ───────────────────────────
 
-describe("A3.2 Readiness Extended (G12-G15)", () => {
+describe("Readiness Extended (G12-G15)", () => {
   it("all pass when candidate + budget + risk + core ok", () => {
     const c = makeCandidate({ score: 0.8 });
     const cost = estimateExpansionCost(c);

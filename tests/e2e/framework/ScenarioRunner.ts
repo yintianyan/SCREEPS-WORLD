@@ -32,7 +32,7 @@ export interface ScenarioOptions {
   controllerLevel?: number;
   /**
    * bot CPU 上限（mockup 默认 100）。低 CPU soak 设为低于实际用量（如 2–4）
-   * 以触发 bucket 消耗与四档 tier 降级链（CANARY §5.3）。
+   * 以触发 bucket 消耗与四档 tier 降级链。
    */
   cpuLimit?: number;
   /** bot bucket 容量（mockup 默认 10000）。 */
@@ -162,7 +162,7 @@ export class ScenarioRunner {
   }
 
   /**
-   * #62：把调优探索的种子写进 bot 的 Memory（未给 `E2E_RANDOM_SEED` ⇒ 什么都不做）。
+   * 把调优探索的种子写进 bot 的 Memory（未给 `E2E_RANDOM_SEED` ⇒ 什么都不做）。
    *
    * 为什么只能走 bot 的 console：bot 代码由 `@screeps/driver` 在 **isolated-vm isolate** 里执行，
    * 测试进程里替换 `Math.random` 到不了被测物（10-01 实测：同 seed 连跑两遍场景 22，

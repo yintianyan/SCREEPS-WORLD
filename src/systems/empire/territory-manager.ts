@@ -190,7 +190,7 @@ function finalizeRelease(
   const roomMem = Memory.rooms[room];
   const opsDropped = roomMem?.remoteOps ? Object.keys(roomMem.remoteOps).length : 0;
   if (roomMem) delete Memory.rooms[room];
-  // R665：布局冷数据（overrides/blocked）住在 segment，删 Memory.rooms 不会带走它。
+  // 布局冷数据（overrides/blocked）住在 segment，删 Memory.rooms 不会带走它。
   // 重占同一房时，旧 overrides 会把新模板 cell 锚回旧位置（W39S55 实测：claim 后
   // planner 立刻按旧 override/任务重建 7 个旧工地）。释放即清，重占从零开始。
   try {

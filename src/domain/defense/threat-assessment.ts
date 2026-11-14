@@ -22,13 +22,13 @@ import {
 } from "./confidence";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 类型定义
+// 类型定义
 // ═══════════════════════════════════════════════════════════
 
 /** 威胁来源类型。 */
 export type ThreatSource = "npc_invader" | "source_keeper" | "player";
 
-/** 威胁意图（A5.0 THREAT_MODEL.md §3.1）。 */
+/** 威胁意图。 */
 export type ThreatIntent =
   | "UNKNOWN"
   | "SCOUTING"
@@ -44,7 +44,7 @@ export type ThreatIntent =
 /** 威胁级别（五级，非简单 hostile count）。 */
 export type ThreatLevel = "NONE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
-/** 置信度等级（A5.0 INTELLIGENCE_ARCHITECTURE 硬门槛）。 */
+/** 置信度等级（硬门槛）。 */
 export type ThreatConfidence = "fact" | "stale" | "inferred" | "unknown";
 
 /** 推荐防御姿态。 */
@@ -139,17 +139,17 @@ export interface ThreatAssessmentInput {
   hostiles: readonly HostileSnapshot[];
   roomContext: RoomContext;
   defenseContext: DefenseContext;
-  /** A5.1 兼容：旧的 PlayerIntel Map（向后兼容）。 */
+  /** 旧的 PlayerIntel Map（向后兼容）。 */
   playerIntel?: Map<string, PlayerIntelSummary>;
-  /** A5.2：升级后的 PlayerIntelRecord（优先使用）。 */
+  /** 升级后的 PlayerIntelRecord（优先使用）。 */
   playerIntelRecord?: PlayerIntelRecord;
   remoteContext?: RemoteContext;
-  /** A5.2：地形上下文（可选，无则 terrainConfidence=0.3）。 */
+  /** 地形上下文（可选，无则 terrainConfidence=0.3）。 */
   terrainContext?: TerrainContext;
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. ThreatAssessment 输出
+// ThreatAssessment 输出
 // ═══════════════════════════════════════════════════════════
 
 /** 意图推断结果（含置信度和证据）。 */
@@ -186,9 +186,9 @@ export interface ThreatAssessment {
   level: ThreatLevel;
   /** 可拆解的评分。 */
   score: ThreatScoreBreakdown;
-  /** 评估置信度（A5.1 兼容字段）。 */
+  /** 评估置信度（兼容字段）。 */
   confidence: ThreatConfidence;
-  /** A5.2：多维度置信度（不压缩为单一数字）。 */
+  /** 多维度置信度（不压缩为单一数字）。 */
   multiConfidence?: MultiDimensionalConfidence;
   /** 估计的敌方战力。 */
   estimatedPower: {
@@ -211,14 +211,14 @@ export interface ThreatAssessment {
   sources: ThreatSource[];
   /** 推荐姿态。 */
   recommendedPosture: RecommendedPosture;
-  /** A5.2：地形上下文证据（用于 DecisionTrace）。 */
+  /** 地形上下文证据（用于 DecisionTrace）。 */
   terrainEvidence?: {
     terrainType: string;
     retreatQuality: string;
     mobilityModifier: number;
     towerCoverage: string;
   };
-  /** A5.2：情报证据（用于 DecisionTrace）。 */
+  /** 情报证据（用于 DecisionTrace）。 */
   intelEvidence?: {
     hasIntel: boolean;
     aggregatedConfidence: string;
@@ -231,7 +231,7 @@ export interface ThreatAssessment {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. 辅助函数
+// 辅助函数
 // ═══════════════════════════════════════════════════════════
 
 /** 判断 hostile 是否为 NPC。 */
@@ -271,7 +271,7 @@ function toCreepSnapshot(h: HostileSnapshot): CreepSnapshot {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. Body 分析（复用 G2，不写第二套算法）
+// Body 分析（复用 G2，不写第二套算法）
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -283,13 +283,13 @@ export function analyzeHostileBody(hostile: HostileSnapshot): CombatCapability {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. Intent 推断（纯函数，禁止读 Game/Memory）
+// Intent 推断（纯函数，禁止读 Game/Memory）
 // ═══════════════════════════════════════════════════════════
 
 /**
  * 推断威胁意图。
 
- * 推断链（按优先级从高到低，§3.2 规则）：
+ * 推断链（按优先级从高到低）：
  * 1. nuke 落点 → NUCLEAR (fact)
  * 2. claim 部件 → CLAIM (fact)
  * 3. dismantle + 接近 storage → ECONOMIC_ATTACK (fact)
@@ -435,7 +435,7 @@ export function inferThreatIntent(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. 威胁分级 + 评分
+// 威胁分级 + 评分
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -582,13 +582,13 @@ function levelToPosture(level: ThreatLevel, intent: ThreatIntent): RecommendedPo
 }
 
 // ═══════════════════════════════════════════════════════════
-// §7. 主函数 assessThreat
+// 主函数 assessThreat
 // ═══════════════════════════════════════════════════════════
 
 /**
  * 综合评估房间威胁。
 
- * A5.2 链路：
+ * 评估链路：
  *   HostileSnapshot → CombatCapability → TerrainContext → PlayerIntel
  *   → ThreatIntent → ThreatScore → Confidence → ThreatAssessment
 
@@ -599,10 +599,10 @@ function levelToPosture(level: ThreatLevel, intent: ThreatIntent): RecommendedPo
  * 4. 计算可拆解评分 computeThreatScore
  * 5. 映射级别 + 推荐姿态
  * 6. 估计 timeToImpact（TerrainContext.mobilityModifier 影响）
- * 7. A5.2：计算多维度置信度（fact/combat/intent/terrain/intel → overall）
+ * 7. 计算多维度置信度（fact/combat/intent/terrain/intel → overall）
 
  * 向后兼容：terrainContext / playerIntelRecord 为可选参数，不传时
- * terrainConfidence=0.3, intelConfidence=0.0，不影响 A5.1 行为。
+ * terrainConfidence=0.3, intelConfidence=0.0，不影响旧行为。
 
  * 复杂度：O(hostiles.length × body.length)，hostiles 通常 ≤ 20，body ≤ 50。
  */
@@ -696,7 +696,7 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
   const capabilities = hostiles.map(h => analyzeHostileBody(h));
 
   // 2. 编队聚合
-  // A5.2: TerrainContext 不修改 CombatCapability（G2 不变），
+  // TerrainContext 不修改 CombatCapability（G2 不变），
   // 只通过 EffectiveCombatModifier 影响 timeToImpact 等派生量。
   const enemyPower = computeCombatPower(capabilities, {
     towerCoverage:
@@ -708,7 +708,7 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
   });
 
   // 3. 意图推断
-  // A5.2: PlayerIntel 只作为 Intent Evidence，不直接提升 Threat Level。
+  // PlayerIntel 只作为 Intent Evidence，不直接提升 Threat Level。
   const intentAssessment = inferThreatIntent(hostiles, capabilities, roomContext, playerIntel);
 
   // 4. 评分
@@ -724,7 +724,7 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
   const level = scoreToLevel(score.total);
   const recommendedPosture = levelToPosture(level, intentAssessment.intent);
 
-  // 6. A5.2 多维度置信度计算
+  // 6. 多维度置信度计算
   const allBodiesVisible = hostiles.every(h => h.body.length > 0);
   const allBoostsIdentified = capabilities.every(c => !c.boosted || c.maxBoostTier > 0);
 
@@ -746,14 +746,14 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
     intelConfidence,
   );
 
-  // 向后兼容：将 overallConfidence 映射为 A5.1 的 ThreatConfidence
+  // 向后兼容：将 overallConfidence 映射为 ThreatConfidence
   const confidence =
     roomContext.incomingNukes > 0
       ? ("fact" as ThreatConfidence)
       : toThreatConfidence(multiConfidence.overallConfidence);
 
   // 7. timeToImpact 估计
-  // A5.2: TerrainContext.mobilityModifier 影响移动估计
+  // TerrainContext.mobilityModifier 影响移动估计
   let timeToImpact = Infinity;
   const agg = aggregateCombatCapability(capabilities);
   if (hostiles.length > 0 && agg.avgMobility > 0) {
@@ -763,7 +763,7 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
       if (dist < minDistance) minDistance = dist;
     }
     // mobility=1 时平原 1 tick/步，mobility=0.5 时 2 tick/步
-    // A5.2: TerrainContext.mobilityModifier 调整移动速度
+    // TerrainContext.mobilityModifier 调整移动速度
     const terrainMobilityMod = terrainContext?.mobilityModifier ?? 1.0;
     const effectiveMobility = agg.avgMobility * terrainMobilityMod;
     // timeToImpact ≈ distance / (effectiveMobility × 0.5)（保守估计）
@@ -782,7 +782,7 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
     }
   }
 
-  // 9. A5.2: 构建 terrainEvidence 和 intelEvidence（用于 DecisionTrace）
+  // 9. 构建 terrainEvidence 和 intelEvidence（用于 DecisionTrace）
   const terrainEvidence = terrainContext
     ? {
         terrainType: terrainContext.terrainType,

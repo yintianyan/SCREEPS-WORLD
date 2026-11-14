@@ -1,4 +1,4 @@
-/** #112：恢复统计的"整表快照"被消费侧按拍累加 ⇒ 一次成功计约 50 次。
+/** 恢复统计的"整表快照"被消费侧按拍累加 ⇒ 一次成功计约 50 次。
  * 修复口径 = 同拍增量 succeededThisTick / recoveryTimeThisTick。
  * 前提（读码）：succeeded 跃迁只发生在 recovery-execution-system 自己的 verify 通道，
  * 所以 record.updatedAt 必然等于本系统某一次运行的 tick，增量不会漏计。 */
@@ -33,7 +33,7 @@ function tableWith(...records: RecoveryActionRecord[]): RecoveryActionTable {
   return m as unknown as RecoveryActionTable;
 }
 
-describe("#112 恢复统计：快照不得当事件增量", () => {
+describe("恢复统计：快照不得当事件增量", () => {
   it("同拍增量只数这一拍跃迁成功的记录", () => {
     const table = tableWith(succeededRecord(TICK));
     expect(computeRecoveryStats(table, TICK).succeededThisTick).toBe(1);

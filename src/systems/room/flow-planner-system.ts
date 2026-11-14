@@ -72,7 +72,7 @@ export const flowPlannerSystem: System = {
       const distributorCount = liveDistributorCount(refs, roomName);
       if (distributorCount <= 0) continue;
 
-      // Phase 2.5：低储回血期不喂升级车道 —— upgrader 已被角色闸停，继续往 controller
+      // 低储回血期不喂升级车道 —— upgrader 已被角色闸停，继续往 controller
       // link/container 灌能只会把 storage 抽成 link 里的死库存。降级风险豁免。
       // Phase D：跟随升级专用闸 upgradeActive（恢复线 60K），与 lab/修墙解耦。
       const upgradeLatch = roomMem?.upgradeActive ?? roomMem?.storageRichActive;

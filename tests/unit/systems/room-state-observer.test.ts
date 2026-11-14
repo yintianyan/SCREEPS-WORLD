@@ -1,4 +1,4 @@
-/** 无害侦察观测测试（R7c）— room-state 记录「有人盯防」信号。 */
+/** 无害侦察观测测试 — room-state 记录「有人盯防」信号。 */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room/room-state";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
@@ -72,7 +72,7 @@ afterEach(() => {
   }
 });
 
-describe("room-state — 无害侦察观测（R7c）", () => {
+describe("room-state — 无害侦察观测", () => {
   it("敌对无威胁部件 → 写入 lastObserverAt + observerSightings", () => {
     const snapshot = makeSnapshot({ hostileCreeps: [scout()], threatCreeps: [] });
 

@@ -1,4 +1,4 @@
-/** 扩张节奏自适应纯函数测试（R7b）。 */
+/** 扩张节奏自适应纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   appendOutcome,

@@ -1,4 +1,4 @@
-/** Phase R2 — RCL2 Early Development Recovery 集成回归。 */
+/** RCL2 Early Development Recovery 集成回归。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner } from "../framework";
 import type { TestWorld } from "../framework";
@@ -10,7 +10,7 @@ beforeAll(async () => {
   loop = main.loop;
 });
 
-// ─── 采样设施（R2 观测契约）────────────────────────────────
+// ─── 采样设施（观测契约）────────────────────────────────
 
 interface R2Sample {
   tick: number;
@@ -86,7 +86,7 @@ function collectEvery(world: TestWorld, store: R2Sample[], interval = 50): void 
 
 // ─── 场景 1：RCL2 正常 — extension queued 后有限 tick 内出现 site ──
 
-describe("Phase R2 — RCL2 建设闭环", () => {
+describe("RCL2 建设闭环", () => {
   it("场景1: RCL2 正常 CPU/能量 — extension 300 tick 内出现 construction site", () => {
     const world = new ScenarioBuilder("W1N1")
       .rcl(2, 100)

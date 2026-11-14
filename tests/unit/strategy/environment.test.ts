@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evaluateEnvironment } from "../../../src/domain/strategy/environment";
 
-describe("evaluateEnvironment — 环境画像 (P1-3)", () => {
+describe("evaluateEnvironment — 环境画像", () => {
   const baseMarket = { totalOrders: 0, buyOrders: 0, sellOrders: 0, credits: 0 };
   const baseDensity = { totalNeighbors: 0, ownedNeighbors: 0 };
   const baseGcl = { level: 1, progress: 0 };

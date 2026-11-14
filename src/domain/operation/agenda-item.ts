@@ -1,16 +1,16 @@
 /** AgendaItem 类型定义 */
 
 /**
- * 操作类型（A3.3 扩展：新增 claim + colonize；A4.1 扩展：新增 remote_mining）。
+ * 操作类型（扩展新增：claim + colonize + remote_mining）。
 
- * - supply:        资源调拨（A3.0 已实现）
- * - claim:         获取 Controller 所有权（A3.3 新增）
- * - colonize:      建立经济——从 Spawn 到 Autonomous Room（A3.3 新增）
- * - remote_mining: 远矿采集运营（A4.1 新增）
+ * - supply:        资源调拨（已实现）
+ * - claim:         获取 Controller 所有权（新增）
+ * - colonize:      建立经济——从 Spawn 到 Autonomous Room（新增）
+ * - remote_mining: 远矿采集运营（新增）
  */
 export type OperationType = "supply" | "claim" | "colonize" | "remote_mining";
 
-/** 操作状态机九态（PLANNING_ARCHITECTURE §3 AgendaItem 生命周期）。 */
+/** 操作状态机九态（AgendaItem 生命周期）。 */
 export type OperationStatus =
   | "planned"
   | "ready"
@@ -26,11 +26,11 @@ export type OperationStatus =
 export type OperationPriority = 0 | 1 | 2 | 3;
 
 /**
- * 资源类型 — A4.2 从 energy-only 扩展为多资源联合类型。
+ * 资源类型 — 从 energy-only 扩展为多资源联合类型。
 
- * A4.0 §18.4 规划路径：`"energy" | MineralResourceType | CommodityResourceType`。
- * A4.2 执行第一步：加入 `MineralConstant`（7 种基础矿物）。
- * 后续阶段（A4.4+）加入矿物化合物 / 商品类型。
+ * 规划路径：`"energy" | MineralResourceType | CommodityResourceType`。
+ * 第一步：加入 `MineralConstant`（7 种基础矿物）。
+ * 后续阶段加入矿物化合物 / 商品类型。
 
  * `MineralConstant` 是 Screeps 引擎全局 `declare type`（无需 import）：
  *   RESOURCE_UTRIUM | RESOURCE_LEMERGIUM | RESOURCE_KEANIUM |
@@ -43,7 +43,7 @@ export type ResourceType = "energy" | MineralConstant;
 /**
  * OperationContext — AgendaItem 的运行时上下文。
 
- * 瘦结构：只存必要字段，终态归档后删除（MEMORY_ARCHITECTURE §4）。
+ * 瘦结构：只存必要字段，终态归档后删除。
  * 不存完整路径/历史/运行时索引。
  */
 export interface OperationContext {
@@ -168,7 +168,7 @@ export function isExpired(op: OperationContext, tick: number): boolean {
   return tick > op.deadline;
 }
 
-// ─── A3.3 扩展：claim + colonize Operation 创建 ──────────────────
+// ─── claim + colonize Operation 创建 ──────────────────
 
 /**
  * 生成 Claim Operation 的幂等键。
@@ -252,7 +252,7 @@ export function createColonizeOperation(
   };
 }
 
-// ─── A4.1 扩展：remote_mining Operation ────────────────────
+// ─── remote_mining Operation ────────────────────
 
 /**
  * 生成 Remote Mining Operation 的幂等键。

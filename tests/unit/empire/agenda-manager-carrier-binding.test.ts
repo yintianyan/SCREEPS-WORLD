@@ -1,5 +1,5 @@
 /**
- * agenda-manager 行为级夹具（补402 验收单落地）。
+ * agenda-manager 行为级夹具。
  * 钉的是调用点 agenda-manager.ts:585 的悬挂绑定清洗＋:601-631 两段兜底绑定的口径。
  * 早退闸＝:314 `profiles.length < 2` ⇒ 夹具必须给两枚有仓房快照，单子才活得过 stage 15。
  */
@@ -105,7 +105,7 @@ function runNow() {
   agendaManagerSystem.run(ctx(1000));
 }
 
-describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）", () => {
+describe("agenda-manager 悬挂载体绑定清洗（调用点级）", () => {
   beforeEach(() => {
     squad.length = 0;
     for (const k of Object.keys(creeps)) delete creeps[k];
@@ -176,7 +176,7 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
 
     runNow();
 
-    // 补404：:620 的 `?? bound[0]` 让兜底支在没有非孵化载体时**故意**绑第一只在孵的
+    // :620 的 `?? bound[0]` 让兜底支在没有非孵化载体时**故意**绑第一只在孵的
     //（`!c.spawning` 只是优选项，不是硬闸）⇒ 这里钉的是"绑得上"，不是"不绑"。
     expect(saved("op-b")?.carrierName).toBe("carrier-hatching");
   });
@@ -199,7 +199,7 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     expect(o?.deliveredAmount).toBe(1200); // 而这一代不许因此入账
   });
 
-  it("#183 守卫：终态行即便落在声明的 1,000 拍保留窗内，也进不了 Memory ⇒ 那条保留支在管线上不可达", () => {
+  it("守卫：终态行即便落在声明的 1,000 拍保留窗内，也进不了 Memory ⇒ 那条保留支在管线上不可达", () => {
     // saveOperations 的保留条件是 `isTerminalStatus && now - updatedAt < TERMINAL_RETENTION(=1000)`，
     // 但步 16 的 pruneTerminal 在步 18 保存之前就把终态行滤掉了 ⇒ 该条件永远拿不到操作数。
     // 这条断言钉的是**组合**（域层的 pruneTerminal 单例用例钉不到它）。
@@ -439,7 +439,7 @@ describe("agenda-manager 悬挂载体绑定清洗（#181 甲，调用点级）",
     op.type = "supply";
     op.createdAt = 900;
     (globalThis as any).Memory.kernel.agendas = [op];
-    // squad 故意留空 —— 模拟 querySquad 索引里查不到这个人（R611 现场的形状）。
+    // squad 故意留空 —— 模拟 querySquad 索引里查不到这个人（线上现场的形状）。
     creeps["carrier-idx-miss"] = {
       name: "carrier-idx-miss",
       spawning: false,

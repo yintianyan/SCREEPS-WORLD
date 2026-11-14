@@ -1,4 +1,4 @@
-/** v19 → v20 迁移独立测试（改进 A：tuning 闭环验证字段建档）。 */
+/** v19 → v20 迁移独立测试（tuning 闭环验证字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

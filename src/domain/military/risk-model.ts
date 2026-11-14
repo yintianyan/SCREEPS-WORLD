@@ -5,7 +5,7 @@ import type { TerrainContext } from "../defense/terrain-context";
 import type { MultiDimensionalConfidence } from "../defense/confidence";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 类型定义
+// 类型定义
 // ═══════════════════════════════════════════════════════════
 
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -50,7 +50,7 @@ export interface RiskResult {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. 评估纯函数
+// 评估纯函数
 // ═══════════════════════════════════════════════════════════
 
 export function assessOperationRisk(input: RiskInput): RiskResult {

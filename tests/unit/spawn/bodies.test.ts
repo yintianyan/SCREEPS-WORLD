@@ -24,7 +24,7 @@ describe("Bodies — bodyCost", () => {
 });
 
 describe("Bodies — selectBody", () => {
-  it("P1-A：upgrader 容量 5300 选 [40W,2C,2M]@4200；4200 回退 1C@4150", () => {
+  it("upgrader 容量 5300 选 [40W,2C,2M]@4200；4200 回退 1C@4150", () => {
     const big = selectBody("upgrader", 5300, { rcl: 7 });
     expect(bodyCost(big)).toBe(4200);
     expect(big.filter(p => p === "work")).toHaveLength(40);
@@ -133,7 +133,7 @@ describe("Bodies — BODY_TEMPLATES", () => {
       // reserver / claimer 需要 CLAIM 部件（600 能量），无法降级到 200。
       // remoteDefender 最低档 [RANGED_ATTACK,MOVE] = 200（RANGED_ATTACK 150 + MOVE 50），
       // 战斗角色的绝境档刻意低于 200 — 有防御总比没有强。
-      // scout（R6b）为 50 能量 [MOVE] 一次性侦察兵，同样豁免。
+      // scout 为 50 能量 [MOVE] 一次性侦察兵，同样豁免。
       // healer 最低档 [heal,heal,move,move] = 600（HEAL 250×2 + MOVE 50×2）—
       // 单 HEAL 无自保与跟随能力，成对治疗是编队下限。
       // pbCollector 最低档 [carry,carry,move,move] = 500 — 单 CARRY 运力 100，
@@ -178,7 +178,7 @@ describe("Bodies — BODY_TEMPLATES", () => {
   });
 });
 
-describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {
+describe("Bodies — 大 body 档位（随 RCL 容量放大）", () => {
   it("upgrader RCL6(2300) 选 15W 站桩 body，RCL8 恰好顶满 15/tick 上限", () => {
     const body = selectBody("upgrader", 2300, { rcl: 6 });
     expect(body.filter(p => p === "work")).toHaveLength(15);
@@ -188,7 +188,7 @@ describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {
   it("upgrader RCL4(1300) 选 8W2C body；RCL2(550) 选 4W 过渡档", () => {
     const rcl4 = selectBody("upgrader", 1300, { rcl: 4 });
     expect(rcl4.filter(p => p === "work")).toHaveLength(8);
-    // R690：2C 把站桩工作窗从 6 拍拉到 12.5 拍（W39S55 实测旧 1C 掉到 6/拍）。
+    // 2C 把站桩工作窗从 6 拍拉到 12.5 拍（W39S55 实测旧 1C 掉到 6/拍）。
     expect(rcl4.filter(p => p === "carry")).toHaveLength(2);
     expect(bodyCost(rcl4)).toBe(1000);
 

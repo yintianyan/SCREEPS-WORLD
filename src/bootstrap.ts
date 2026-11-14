@@ -154,25 +154,25 @@ export const registry = new Registry()
   // P2：情报（IntelState 唯一写者——legacy 输入桥采用 + 被动威胁信号采集 +
   //   低频老化批处理；玩家域威胁记忆 segment 冷存；消费方走只读查询 API）
   .registerSystem(intelligenceSystem)
-  // P1：Empire Health（A4.5 — 低频 100t，综合 8 维度健康度 + Hysteresis +
+  // P1：Empire Health（低频 100t，综合 8 维度健康度 + Hysteresis +
   //   失败传播 + 恢复优先级 + 自治指标；在 specialization-planner 之后运行，
   //   消费 empireEconomy / logistics / network / colony 信号）
   .registerSystem(empireHealthSystem)
-  // P1：Recovery Execution（A4.6 — interval=10t，薄壳消费 empire-health 产出的
+  // P1：Recovery Execution（interval=10t，薄壳消费 empire-health 产出的
   //   recoveryActions，翻译为 spawn/agenda/terminal/remote 指令并提交；
   //   追踪 Action 生命周期 + Before/After World State 验证 + Retry/Escalation。
   //   在 empire-health 之后运行（同 P1 但 interval=10 远高于 100t，每 10t 消费一次）
   .registerSystem(recoveryExecutionSystem)
-  // P2：战争规划（A5.3 — 低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
+  // P2：战争规划（低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
   //   产出 WarPlan 写入 globalCache.warPlanCache + 兼容 Memory.kernel.warPlan。
   //   war-planner 消费 WarPlan 执行 spawn/止损/核验。纯函数不执行 Game action）
   .registerSystem(warPlanningSystem)
   // P2：战争执行（war 姿态才选目标推 attacker；非 war 收摊；消费 war-planning 产出）
   .registerSystem(warPlannerSystem)
-  // P2：战术运行时 Pipeline（R10 ADR 合并 A5.4.1-A5.4.4 为 1 个 System — interval=1t
+  // P2：战术运行时 Pipeline（ADR 合并 4 阶段为 1 个 System — interval=1t
   //   main 阶段，内部按各阶段原始 interval 分频执行 4 阶段 pipeline：
-  //   A5.4.2 squad-movement(1t) → A5.4.3 tactical-engagement(3t) →
-  //   A5.4.4 combat-micro(3t) → A5.4.1 tactical-runtime(10t)。
+  //   squad-movement(1t) → tactical-engagement(3t) →
+  //   combat-micro(3t) → tactical-runtime(10t)。
   //   在 war-planner 之后运行，不执行 Game action）
   .registerSystem(tacticalRuntimePipelineSystem)
   // P3：布局规划（低频）
@@ -189,7 +189,7 @@ export const registry = new Registry()
   .registerSystem(powerCreepManagerSystem)
   // P3：扩张管理（GCL 有余量时 claim 新房）
   .registerSystem(expansionManagerSystem)
-  // P3：扩张智能（A3.2——Pressure/Candidate/Cost/Risk/Plan 评估，不执行 Claim）
+  // P3：扩张智能（Pressure/Candidate/Cost/Risk/Plan 评估，不执行 Claim）
   .registerSystem(expansionPlannerSystem)
   // P3：PB 野采（power 自给供给源 — war 军事资源不双线）
   .registerSystem(powerFarmManagerSystem)
@@ -243,7 +243,7 @@ export const registry = new Registry()
   .registerRole(remoteDefenderRole)
   // P1：coreClearer（拆 level-0 reserve-only Invader Core 回收远矿 op 名额）
   .registerRole(coreClearerRole)
-  // P1：carrier（A3.0 跨房调拨搬运工，由 agenda-manager 孵化）
+  // P1：carrier（跨房调拨搬运工，由 agenda-manager 孵化）
   .registerRole(carrierRole)
   // P2：depositHarvester（远矿 deposit 采集，由 deposit-manager 孵化）
   .registerRole(depositHarvesterRole);

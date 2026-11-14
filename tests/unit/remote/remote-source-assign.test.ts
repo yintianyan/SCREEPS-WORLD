@@ -138,9 +138,9 @@ describe("remote-harvester — 跨房 occupancy 计入", () => {
   });
 });
 
-// ─── v33-R11：物理站桩占用 + 锁死改绑自愈 ─────────────────────────
+// ─── 物理站桩占用 + 锁死改绑自愈 ─────────────────────────
 
-describe("remote-harvester — v33-R11 绑定自愈", () => {
+describe("remote-harvester — 绑定自愈", () => {
   /** 带独立坐标的 source，getRangeTo 按 Chebyshev 距离计算。 */
   function posSource(id: string, x: number, y: number): any {
     const s = mockSource(id);

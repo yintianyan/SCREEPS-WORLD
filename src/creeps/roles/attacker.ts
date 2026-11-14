@@ -11,14 +11,14 @@ import { globalCache } from "../../kernel/global-cache";
 import { PB_BOOST_HOLD_MIN_TTL } from "../../domain/industry/boost";
 import { CONFIG } from "../../config";
 
-/** A5.4.1 战术指令接口（与 domain/tactical/role-intent.ts RoleActionIntent 对齐）。 */
+/** 战术指令接口（与 domain/tactical/role-intent.ts RoleActionIntent 对齐）。 */
 interface TacticalIntent {
   moveDirective: string;
   combatDirective: string;
   targetId?: string;
 }
 
-/** A5.4.3 AttackIntent 接口（与 domain/tactical/focus-fire.ts AttackIntent 对齐）。 */
+/** FocusFire AttackIntent 接口（与 domain/tactical/focus-fire.ts AttackIntent 对齐）。 */
 interface FocusFireAttackIntent {
   squadId: string;
   creepId: string;
@@ -32,9 +32,9 @@ interface FocusFireAttackIntent {
 }
 
 /**
- * A5.4.1 从 globalCache 读取当前 creep 的战术指令。
+ * 从 globalCache 读取当前 creep 的战术指令。
 
- * 角色层不导入 systems 层（R3 架构守卫），直接从 globalCache 读取
+ * 角色层不导入 systems 层（架构守卫），直接从 globalCache 读取
  * tactical-runtime-system 写入的 RoleActionIntent。
  * 无指令时返回 null → 角色回退到 Legacy 行为。
  */
@@ -44,11 +44,11 @@ function readTacticalIntent(creepName: string): TacticalIntent | null {
 }
 
 /**
- * A5.4.3 从 globalCache 读取当前 creep 的 FocusFire AttackIntent。
+ * 从 globalCache 读取当前 creep 的 FocusFire AttackIntent。
 
- * 角色层不导入 systems 层（R3 架构守卫），直接从 globalCache 读取
+ * 角色层不导入 systems 层（架构守卫），直接从 globalCache 读取
  * tactical-engagement-runtime 写入的 AttackIntent。
- * 无指令时返回 null → 角色回退到 A5.4.1 TacticalIntent → Legacy 行为。
+ * 无指令时返回 null → 角色回退到 TacticalIntent → Legacy 行为。
  */
 function readAttackIntent(creepName: string): FocusFireAttackIntent | null {
   const g = globalCache() as { attackIntents?: Map<string, FocusFireAttackIntent> };
@@ -84,7 +84,7 @@ function structureValueTier(t: StructureConstant): number {
 /** 目标房内 power bank — per-tick per-room 共享缓存已收敛到 support/room-scans。 */
 
 /**
- * A5.4.3 Focus Fire AttackIntent 消费 — 最高优先级的攻击候选。
+ * Focus Fire AttackIntent 消费 — 最高优先级的攻击候选。
 
  * 当 tactical-engagement-runtime 产出 AttackIntent 时，attacker 按指令执行
  * 集火攻击：
@@ -92,7 +92,7 @@ function structureValueTier(t: StructureConstant): number {
  *   - RANGED_ATTACK → rangedAttack
  *   - NO_ATTACK + requiresMovement → 不消费候选，让 Movement 系统处理
 
- * 边界：无指令时返回 undefined → 回退到 A5.4.1 TacticalIntent → Legacy。
+ * 边界：无指令时返回 undefined → 回退到 TacticalIntent → Legacy。
  *      targetId 可能无效（目标死亡）→ resolve 时检查并回退。
  *      requiresMovement=true → 不直接 resolve 目标，让 Movement 系统先移动到位。
  */
@@ -102,7 +102,7 @@ export function attackByFocusFire(): ActionCandidate<Creep | AnyStructure> {
     resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const intent = readAttackIntent(ac.creep.name);
-      if (!intent) return undefined; // 无 FocusFire 指令 → 回退 A5.4.1
+      if (!intent) return undefined; // 无 FocusFire 指令 → 回退 TacticalIntent
       // NO_ATTACK → 不消费候选（目标不在射程，Movement 系统处理接近）
       if (intent.attackType === "NO_ATTACK") return undefined;
       // 解析目标
@@ -156,7 +156,7 @@ export function attackByFocusFire(): ActionCandidate<Creep | AnyStructure> {
  * 的 hostile 链打不到。编队 healer 经 buddy 机制自动跟随贴身覆盖 PB 反击。
  */
 /**
- * A5.4.1 战术指令消费 — 优先消费 Tactical Runtime 产出的 RoleActionIntent。
+ * 战术指令消费 — 优先消费 Tactical Runtime 产出的 RoleActionIntent。
 
  * 当 tactical-runtime-system 产出指令时，attacker 按指令执行移动/攻击/撤退，
  * 而非走 Legacy 的 findClosestByRange 逻辑。指令不覆盖 hold 钩子（波次集结
@@ -296,7 +296,7 @@ export function attackStructures(): ActionCandidate<AnyStructure> {
 }
 
 /**
- * 战备集结（R4 hold 钩子，导出供单测直接调用）。决策矩阵：
+ * 战备集结（hold 钩子，导出供单测直接调用）。决策矩阵：
  * PB 野采编队（mission="powerBank"）→ boost 口径任务先驻留：未强化完不出征
  *   （boost 后反弹 ×4，治疗不 ×4 就是失配送死）。寿命剩余 ≥ PB_BOOST_HOLD_MIN_TTL
  *   期间在 home 停驻等强化（lab 报到拦截优先接管），超龄放行出征由任务
@@ -343,10 +343,10 @@ const policy: RolePolicy = {
   combat: true,
   park: true,
   hold: attackerHold,
-  // A5.4.3：focus-fire 最高优先 → A5.4.1 tactical-intent → Legacy 候选
-  // 无 FocusFire 指令时回退到 A5.4.1 TacticalIntent → PB → enemies → structures
-  // A5.4.3：focus-fire 最高优先 → A5.4.1 tactical-intent → Legacy 候选
-  // 无 FocusFire 指令时回退到 A5.4.1 TacticalIntent → PB → enemies → structures
+  // focus-fire 最高优先 → tactical-intent → Legacy 候选
+  // 无 FocusFire 指令时回退到 TacticalIntent → PB → enemies → structures
+  // focus-fire 最高优先 → tactical-intent → Legacy 候选
+  // 无 FocusFire 指令时回退到 TacticalIntent → PB → enemies → structures
   // defendInTransit 排末尾：目标房候选未命中（过境房）时才触发自卫反击
   acquire: [
     attackByFocusFire(),

@@ -47,7 +47,7 @@ const window: AccountingWindow = {
   otherEnd: 4_960,
   looseDelta: -10,
   // 在途背包：窗内涨了 400（hauler 在远矿装满但还没投递 ⇒ 没有 imported 计数器），
-  // 这正是 #23(2) 那类跨窗残差的来源 —— 落进 ce 之后，drift 的这部分可被单独减掉。
+  // 这正是跨窗残差的来源 —— 落进 ce 之后，drift 的这部分可被单独减掉。
   carryStart: 3_000,
   carryEnd: 3_400,
   drift: -80,

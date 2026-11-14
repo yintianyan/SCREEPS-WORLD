@@ -1,7 +1,7 @@
 /**
- * #173 早段记账（`recordPhaseSpan`）单测 —— 验"补记"落进正确的桶，且闸关时确实记不进去。
+ * 早段记账（`recordPhaseSpan`）单测 —— 验"补记"落进正确的桶，且闸关时确实记不进去。
  *
- * 立案过程见 roadmap 补245／补248：`recordCpu` 第一行要求 `g.telemetry.tick === Game.time`，
+ * 为什么立这条：`recordCpu` 第一行要求 `g.telemetry.tick === Game.time`，
  * 而那个时标要到 `phase/pre` 内部的 telemetry-init 才刷新 ⇒ 早于它的语句（预算判定、上下文构造）
  * 用 `measuredRun` 包也只会得到一个**构造性 0**（不是"那里不花钱"）。线上实测这段 ≈0.87 CPU/拍
  * 长期住在 `unphased` 里；`recordPhaseSpan` 是闸打开之后按已知跨度补记的唯一入口，本文件钉住它。

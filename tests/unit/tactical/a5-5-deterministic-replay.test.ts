@@ -1,4 +1,4 @@
-/** A5.5 Deterministic Replay Validation. */
+/** Deterministic Replay Validation. */
 
 import { describe, expect, it } from "vitest";
 import {
@@ -216,7 +216,7 @@ function generateSnapshots(count: number): MicroSnapshot[] {
 
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.5 Deterministic Replay (100 Snapshots × 1000 Replays)", () => {
+describe("Deterministic Replay (100 Snapshots × 1000 Replays)", () => {
   const snapshots = generateSnapshots(100);
 
   it("100 组 snapshot 全部生成成功", () => {

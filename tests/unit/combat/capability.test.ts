@@ -1,4 +1,4 @@
-/** A5.1 G2 — Combat Capability 纯函数测试。 */
+/** G2 — Combat Capability 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   evaluateCombatCapability,

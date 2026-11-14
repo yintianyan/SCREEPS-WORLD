@@ -1,5 +1,5 @@
 /**
- * B4 — recovery 的暂停请求与 op-lifecycle 的状态所有权交接。
+ * recovery 的暂停请求与 op-lifecycle 的状态所有权交接。
  *
  * 钉住三件事：
  *   1. `state` 只由属主写；recovery 留的是有截止时刻的请求（见 recovery-execution-system）。

@@ -1,4 +1,4 @@
-/** A5.2 Threat Integration 测试。 */
+/** Threat Integration 测试。 */
 import { describe, expect, it } from "vitest";
 import {
   assessThreat,
@@ -147,7 +147,7 @@ function makeNoVisionTerrain(): TerrainSnapshot {
 
 // ─── 测试 ─────────────────────────────────────────────────
 
-describe("A5.2 Threat Integration — Terrain + Intel + Confidence", () => {
+describe("Threat Integration — Terrain + Intel + Confidence", () => {
   it("T01: Enemy Strong + Open Terrain → HIGH/MEDIUM threat, terrain evidence recorded", () => {
     const terrain = buildTerrainContext(makeOpenTerrain(), TICK);
     const input: ThreatAssessmentInput = {

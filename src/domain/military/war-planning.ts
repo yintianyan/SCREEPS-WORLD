@@ -31,7 +31,7 @@ import { type OperationValueResult, evaluateOperationValue } from "./operation-v
 import { type EconomicGuardResult, checkEconomicGuard } from "./economic-guard";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 输入类型
+// 输入类型
 // ═══════════════════════════════════════════════════════════
 
 export interface WarPlanningInput {
@@ -88,7 +88,7 @@ export interface WarPlanningInput {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. WarPlan 输出
+// WarPlan 输出
 // ═══════════════════════════════════════════════════════════
 
 export interface WarPlan {
@@ -142,13 +142,13 @@ export interface WarPlan {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2.5 候选漏斗计数（#99：纯观测，无决策消费者）
+// 候选漏斗计数（纯观测，无决策消费者）
 // ═══════════════════════════════════════════════════════════
 
 /**
  * 一次 war-planning pass 的候选漏斗出口计数。
  *
- * 存在的理由：#95「war 零计划零编队」原本不可归因 —— 选靶链路上的每道筛子都是裸
+ * 存在的理由：「war 零计划零编队」原本不可归因 —— 选靶链路上的每道筛子都是裸
  * `continue`/`return undefined`，跑了一千小时也答不出"是没敌人、没情报、还是情报不够格"。
  * 每条计数只在**本 pass 内**有意义（每次 pass 从零计），终局四项 `noInput | noThreats |
  * noPlan | plans` 恰有一项为 1。
@@ -204,7 +204,7 @@ export function newWarFunnel(tick: number): WarFunnelCounters {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. 核心：从威胁推导 OperationType
+// 核心：从威胁推导 OperationType
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -266,7 +266,7 @@ function deriveOperationType(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. 从威胁推导目标候选
+// 从威胁推导目标候选
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -324,7 +324,7 @@ function deriveTarget(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. 主函数：planMilitaryOperation
+// 主函数：planMilitaryOperation
 // ═══════════════════════════════════════════════════════════
 
 export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefined {
@@ -613,7 +613,7 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. WarPlan Hash（确定性）
+// WarPlan Hash（确定性）
 // ═══════════════════════════════════════════════════════════
 
 export function warPlanHash(plan: WarPlan): string {

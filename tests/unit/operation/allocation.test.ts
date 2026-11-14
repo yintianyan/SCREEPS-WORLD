@@ -1,4 +1,4 @@
-/** A3-015: Multi-Room Allocation（3 房分配 A surplus → B+C deficit） */
+/** Multi-Room Allocation（3 房分配 A surplus → B+C deficit） */
 import { describe, expect, it } from "vitest";
 import {
   allocateMultiRoom,
@@ -33,7 +33,7 @@ function makeEntry(overrides: Partial<RoomRegistryEntry> = {}): RoomRegistryEntr
   };
 }
 
-describe("A3-015: Multi-Room Allocation", () => {
+describe("Multi-Room Allocation", () => {
   it("1 surplus → 1 deficit 单房分配", () => {
     const surplus = [makeEntry({ roomName: "A", transferable: 50000 })];
     const deficit = [

@@ -38,7 +38,7 @@ export const DEFAULT_BOOST_POLICY: BoostPolicy = {
     builder: ["LH2O", "LH"], // T2 → T1
   },
   minRcl: 6,
-  // P0-C：保留量从 CONFIG 读取（默认 100），调优/私服环境可单独调整而不改代码。
+  // 保留量从 CONFIG 读取（默认 100），调优/私服环境可单独调整而不改代码。
   reserveAmount: CONFIG.boost.reserveAmount,
 };
 

@@ -14,7 +14,7 @@ describe("E2E-007 能量危机降级", () => {
       rooms: [standardRoom("W0N1", 300, 1)],
       maxTicks: 1000,
     });
-    // 前提真实化（R20/T6）：addBot 统一供 spawn（夹具 spawn 会被双 spawn 去重
+    // 前提真实化：addBot 统一供 spawn（夹具 spawn 会被双 spawn 去重
     // 剔除——原 standardRoom("W0N1", 200) 的 200 能量从未进引擎）。改走具名
     // 注入把 spawn 压到 200，前提才真正落库。
     await injectSpawnEnergy(runner, "W0N1", 200);

@@ -1,4 +1,4 @@
-/** A5.4.4 Tactical Combat Runtime Validation — Domain 纯函数验证测试。 */
+/** Tactical Combat Runtime Validation — Domain 纯函数验证测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

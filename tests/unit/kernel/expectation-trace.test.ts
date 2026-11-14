@@ -1,4 +1,4 @@
-/** R265：违例身份留痕（mergeViolationTraces）——事件只带总数，瞬态违例事后无法归因。 */
+/** 违例身份留痕（mergeViolationTraces）——事件只带总数，瞬态违例事后无法归因。 */
 import { describe, it, expect } from "vitest";
 import {
   mergeViolationTraces,

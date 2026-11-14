@@ -8,7 +8,7 @@ import {
 } from "../../../src/domain/economy/phase";
 
 /**
- * P0-1 srcRatio 累积净流失 crisis 通道 — 单元测试。
+ * srcRatio 累积净流失 crisis 通道 — 单元测试。
 
  * 仍判 normal/growth — 双维度（drainScore/liquidityScore）在 spawn 口袋健康时
  * 看不到采集塌方。本测试覆盖 srcRatio + storageDrainAccum 累积净流失双条件
@@ -65,7 +65,7 @@ function runDrain(
 }
 
 // ── 正常路径 ──
-describe("P0-1 srcRatio 累积净流失 crisis 通道 — 正常路径", () => {
+describe("srcRatio 累积净流失 crisis 通道 — 正常路径", () => {
   it("srcRatio < 阈值（< 0.9）时不触发，accum 归零，沿用 drainScore 路径", () => {
     const r = evaluateColonyPhase(
       input({ srcRatio: 0.3, storageDrainRate: -5, reserve: 5000 }),
@@ -159,7 +159,7 @@ describe("P0-1 srcRatio 累积净流失 crisis 通道 — 正常路径", () => {
 });
 
 // ── 边界条件 ──
-describe("P0-1 累积净流失 crisis 通道 — 边界条件", () => {
+describe("累积净流失 crisis 通道 — 边界条件", () => {
   it("srcRatio 恰好等于 0.9（边界）→ 不触发（> 才触发，accum 归零）", () => {
     let state = FRESH;
     for (let i = 0; i < 200; i++) {
@@ -284,7 +284,7 @@ describe("P0-1 累积净流失 crisis 通道 — 边界条件", () => {
 });
 
 // ── 异常情况 ──
-describe("P0-1 累积净流失 crisis 通道 — 异常情况", () => {
+describe("累积净流失 crisis 通道 — 异常情况", () => {
   it("srcRatio 为 NaN（source 数据缺失）→ 不触发（保守，按 0 处理，accum=0）", () => {
     // NaN > 0.9 = false → srcRatioHigh=false → accum=0
     let state = FRESH;
@@ -338,14 +338,14 @@ describe("P0-1 累积净流失 crisis 通道 — 异常情况", () => {
   });
 });
 
-// ── P2-3 满仓豁免 ──
+// ── 满仓豁免 ──
 // 注意 storageRatio 与 reserve 必须**自洽**：引擎 STORAGE_CAPACITY=1,000,000（扁平值），
 // 所以 ratio=0.9 意味着光 storage 里就躺着 90 万，reserve 不可能只有 5000。原先这组用例
 // 全都写成 `reserve: 5000 + storageRatio: 0.9`，是一个物理上不存在的世界 —— 它会与
 // 相位机的绝对水位判据（破产兜底 `bankruptReserveFloor`=10k）打架：那条判据按 reserve
 // 合法地把房间推进危机带，本组"不该触发 crisis"的断言就红了，而红的原因跟满仓豁免无关。
 // 更糟的是反过来用低水位输入"期望 crisis"的两条会变成**假绿**（兜底替它通过的）。
-describe("P2-3 forceCrisis 满仓豁免", () => {
+describe("forceCrisis 满仓豁免", () => {
   it("满仓（storageRatio > 0.8）时 srcRatio 高 + storage 流失 → 不触发 crisis", () => {
     // 用低阈值快速触发：accumThreshold=100, enterTicks=1
     const o = opts({ storageDrainAccumThreshold: 100, srcStallEnterTicks: 1 });
@@ -389,7 +389,7 @@ describe("P2-3 forceCrisis 满仓豁免", () => {
     expect(state.phase).toBe("crisis");
   });
 
-  // P2-3 边界测试（2026-08-03 加固）：
+  // 边界测试（2026-08-03 加固）：
   // phase.ts:247 用 `>` 判断（storageRatio > forceCrisisStorageHigh）。
   // 边界值 0.8 应该不豁免（正常触发 crisis）—— 若未来误改为 `>=`，
   // 满仓边界会误触发 forceCrisis，导致 upgrader 冻结 → link 死锁正反馈。

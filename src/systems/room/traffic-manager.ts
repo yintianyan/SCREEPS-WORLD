@@ -91,7 +91,7 @@ export const trafficManagerSystem: System = {
       safeRun(
         `room/${roomName}/traffic`,
         // ⚠️必须套 measuredRun：safeRun 只管错误处理与冷却，**不记 CPU 跨度**，
-        //   所以只写 safeRun 标签时 cpuPerTickByRoom 永远是空的（#45 的仪器第一次就踩了这个）。
+        //   所以只写 safeRun 标签时 cpuPerTickByRoom 永远是空的（这台仪器第一次就踩了这个）。
         () =>
           measuredRun(`room/${roomName}/traffic`, () =>
             resolveAndDispatch(roomName, batch, ctx.getSnapshot(roomName)),
@@ -109,7 +109,7 @@ export const trafficManagerSystem: System = {
  * 目标被占、目标落到墙内结构格等旧形状仍走原路径（保守优先）。
  */
 export function tryFastDispatch(batch: RoomBatch, snapshot: RoomSnapshot | undefined): boolean {
-  // R691：锚点本身不是快路径的否决项——它只在**发生冲突/推挤**时才有意义。
+  // 锚点本身不是快路径的否决项——它只在**发生冲突/推挤**时才有意义。
   // 旧实现 `anchors.size > 0 → false` 把站桩升级器/矿工（几乎每拍都登记）变成
   // 全房禁用快路径的开关：W39S55 每拍 1.16 CPU 的 traffic 里，大量是无冲突的
   // 直发被送进完整解算器。下面的逐目标检查已经覆盖唯一的危险形状——
@@ -153,7 +153,7 @@ export function tryFastDispatch(batch: RoomBatch, snapshot: RoomSnapshot | undef
     recordIntent("move", result);
     if (result === OK || result === ERR_TIRED) {
       recordTraffic(creep);
-      // 与完整解算路径同一条判据的两个出口：两处都必须记成功（#39）。
+      // 与完整解算路径同一条判据的两个出口：两处都必须记成功。
       recordPathSuccess(creep);
     } else if (result !== ERR_BUSY) {
       invalidateCreepPath(it.name);
@@ -212,7 +212,7 @@ function resolveAndDispatch(
     shoveCandidates,
   });
 
-  // 推挤被拒分诊（#38）：线上「stuck 顶格优先级的 creep 被静止者挡死到老死」此前只读得到
+  // 推挤被拒分诊：线上「stuck 顶格优先级的 creep 被静止者挡死到老死」此前只读得到
   // 结果（没签发），读不到原因 —— 不可动/锚定/无落格三种在观测上是同一个形状，修法无从裁决。
   // 走既有 skip 通道 ⇒ observe 的 `skip(500t)` 行自动带出，不加新读数管线。
   for (const [reason, count] of Object.entries(shoveFails)) {
@@ -232,7 +232,7 @@ function resolveAndDispatch(
       recordTraffic(creep);
       // 集中签发的这一拍就是该 creep 本轮的真实移动结果 —— 不记成功时，
       // 被 traffic 仲裁的 creep 的 pathFailure 计数器只有一条「第一次失败后永不归零」
-      // 的路径（E8 因此在两间房、四类角色上批量报错警，实证见债单 #39）。
+      // 的路径（E8 因此在两间房、四类角色上批量报错警）。
       recordPathSuccess(creep);
     } else if (result !== ERR_BUSY) {
       // v33：引擎拒绝签发（目标格被静态阻挡 — 新墙/新落成结构/敌方结构）→

@@ -1,4 +1,4 @@
-/** A5.4.3 E2E Tests — Tactical Engagement & Focus Fire 全链路端到端测试。 */
+/** E2E Tests — Tactical Engagement & Focus Fire 全链路端到端测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

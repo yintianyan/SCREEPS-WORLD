@@ -43,7 +43,7 @@ export function maintainMemory(): void {
 
   // 每 tick 清理死亡 creep memory（小帝国安全且廉价）；清理前记录死亡事件
   // （战斗黑匣子 M9 — 这是死亡的唯一系统性检测点）。
-  // B3-F02 修复：recordCreepDeath 加 try/catch — 单个 creep 死亡记录异常
+  // 修复：recordCreepDeath 加 try/catch — 单个 creep 死亡记录异常
   // 不应连坐失守房清理等后续逻辑。catch 中仍执行 delete 防止死者 Memory 滞留。
   // deathAnchor 清理需要「存活角色集合」，与死亡清理共用同一次 Memory.creeps 遍历，
   // 避免每 tick 两次全量遍历 Memory（Memory 访问成本高）。
@@ -105,7 +105,7 @@ export function maintainMemory(): void {
     }
   }
 
-  // E-FINDING-09: 清理 deathAnchor 中已灭绝角色的条目。
+  // 清理 deathAnchor 中已灭绝角色的条目。
   // deathAnchor 由 recordCreepDeath 写入，记录最后死亡 tick 供 P1 补位 EMA 计算。
   // 当某角色不再存活且超过 2000 tick（长于最长寿命 1500+缓冲），清理过期锚点。
   // activeRoles 来自上方死亡清理同一次遍历（未建集合时无过期锚点可清，直接跳过）。
@@ -131,7 +131,7 @@ export function maintainMemory(): void {
  * FROZEN_DURATION(10000) 也大于 verifyDelay(1500)，能走到删这一步的账本里那份保护
  * 必然早已过期 —— 保不住，只能记下来。
  *
- * 观测失败不阻塞清理（与 recordCreepDeath 同一条纪律，B3-F02）。 */
+ * 观测失败不阻塞清理（与 recordCreepDeath 同一条纪律）。 */
 function recordLostRoomPurge(roomName: string, lostFor: number): void {
   const tuning = Memory.kernel?.tuning;
   const state = tuning?.rooms?.[roomName];
@@ -167,7 +167,7 @@ function recordLostRoomPurge(roomName: string, lostFor: number): void {
  * 版本号只随实际执行的迁移递增，不做无条件盖章：若未来出现断号，版本停在
  * 缺口处暴露问题，而不是被盖章静默掩盖、永久丢失缺口步骤。
  *
- * FINDING-11 修复：迁移链快照——已迁移到的版本记录到 Memory.kernel.migrationCheckpoint。
+ * 修复：迁移链快照——已迁移到的版本记录到 Memory.kernel.migrationCheckpoint。
  * 新 Memory（schemaVersion=0）但 checkpoint 存在时（global reset 不清 Memory），
  * 直接跳到 checkpoint 继续，避免重跑 45 个迁移。
  * 只对新 Memory 首次启动有实质收益（global reset 不重置 schemaVersion）。
@@ -231,7 +231,7 @@ export function flushSkips(): void {
 
   // 防御性 key 数量上限：防止未知的动态 key 导致 Memory 膨胀。
   // 现有调用方（role/system name）都是有限集合，但防御性编程要求不信任未来。
-  // B3-F05 修复：从 50 提高到 200 — 系统数×原因数的乘积可能超过 50。
+  // 修复：从 50 提高到 200 — 系统数×原因数的乘积可能超过 50。
   const MAX_SKIP_REASONS = 200;
 
   for (const [reason, count] of Object.entries(g.skipBuffer)) {
@@ -249,7 +249,7 @@ export function flushSkips(): void {
   }
   g.skipBuffer = {};
 
-  // B3-F09 修复：滑动窗口 — 保留上一窗口快照，而非完全清空。
+  // 修复：滑动窗口 — 保留上一窗口快照，而非完全清空。
   // 防止外部采集器恰好在重置后拉取到空数据，丢失跨窗口趋势。
   if (Game.time % 500 === 0) {
     Memory.kernel.prevSkipReasons = Memory.kernel.skipReasons;

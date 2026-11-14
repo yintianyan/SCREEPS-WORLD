@@ -1,4 +1,4 @@
-/** A5.3 — Military Operation & War Planning 纯函数测试。 */
+/** Military Operation & War Planning 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 
 import {
@@ -203,10 +203,10 @@ function makeWarPlanningInput(overrides: Partial<WarPlanningInput> = {}): WarPla
 }
 
 // ═══════════════════════════════════════════════════════════
-// §1. Operation 模型 — 12 种 OperationType
+// Operation 模型 — 12 种 OperationType
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §1 — Operation 模型", () => {
+describe("Operation 模型", () => {
   const ALL_TYPES: OperationType[] = [
     "DEFEND",
     "ESCORT",
@@ -518,10 +518,10 @@ describe("A5.3 §1 — Operation 模型", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §2. WarPosture — 唯一进攻授权
+// WarPosture — 唯一进攻授权
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §2 — WarPosture 授权矩阵", () => {
+describe("WarPosture 授权矩阵", () => {
   describe("evaluateWarPosture — 姿态评估", () => {
     it("empirePosture != war → CEASEFIRE（不授权进攻）", () => {
       const result = evaluateWarPosture({
@@ -792,10 +792,10 @@ describe("A5.3 §2 — WarPosture 授权矩阵", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §3. Capability 评估 — Force Requirement
+// Capability 评估 — Force Requirement
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §3 — Capability 评估（deriveRequiredCapability × 12 type）", () => {
+describe("Capability 评估（deriveRequiredCapability × 12 type）", () => {
   const enemyPower = makeCombatPower({ burstDamage: 200, effectiveHP: 2000, powerScore: 400 });
 
   it("DEFEND: 需要攻击+治疗+HP（防守核心）", () => {
@@ -878,7 +878,7 @@ describe("A5.3 §3 — Capability 评估（deriveRequiredCapability × 12 type�
   });
 });
 
-describe("A5.3 §3b — computeCapabilityGap", () => {
+describe("computeCapabilityGap", () => {
   const required: RequiredCapability = {
     attack: 200,
     rangedAttack: 100,
@@ -945,7 +945,7 @@ describe("A5.3 §3b — computeCapabilityGap", () => {
   });
 });
 
-describe("A5.3 §3c — deriveForceComposition", () => {
+describe("deriveForceComposition", () => {
   it("DEFEND: 推导 tank + attacker + healer", () => {
     const required: RequiredCapability = {
       attack: 200,
@@ -1017,10 +1017,10 @@ describe("A5.3 §3c — deriveForceComposition", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §4. Economic Guard
+// Economic Guard
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §4 — Economic Guard（经济护栏）", () => {
+describe("Economic Guard（经济护栏）", () => {
   function makeGuardInput(overrides: Partial<EconomicGuardInput> = {}): EconomicGuardInput {
     return {
       empireEnergyReserve: 50000,
@@ -1195,10 +1195,10 @@ describe("A5.3 §4 — Economic Guard（经济护栏）", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §5. Target 选择
+// Target 选择
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
+describe("Target 选择（scoreTarget + selectTarget）", () => {
   describe("scoreTarget — 多维度评分", () => {
     it("近距高分 vs 远距低分", () => {
       const near = makeTargetCandidate({ distance: 1 });
@@ -1379,10 +1379,10 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §6. WarPlan Hash 确定性 + planMilitaryOperation 端到端
+// WarPlan Hash 确定性 + planMilitaryOperation 端到端
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §6 — planMilitaryOperation 端到端 + Hash 确定性", () => {
+describe("planMilitaryOperation 端到端 + Hash 确定性", () => {
   it("无威胁 → undefined", () => {
     const input = makeWarPlanningInput({ threatAssessments: [] });
     const plan = planMilitaryOperation(input);
@@ -1581,7 +1581,7 @@ describe("A5.3 §6 — planMilitaryOperation 端到端 + Hash 确定性", () => 
   });
 });
 
-describe("A5.3 §6b — warPlanHash 确定性", () => {
+describe("warPlanHash 确定性", () => {
   it("相同输入 → 相同 hash", () => {
     const threat = makeThreatAssessment({ level: "HIGH" });
     const input = makeWarPlanningInput({
@@ -1667,10 +1667,10 @@ describe("A5.3 §6b — warPlanHash 确定性", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §7. WarCost 估算
+// WarCost 估算
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §7 — WarCost 估算", () => {
+describe("WarCost 估算", () => {
   function makeCostInput(overrides: Partial<WarCostInput> = {}): WarCostInput {
     return {
       squadSize: 5,
@@ -1733,10 +1733,10 @@ describe("A5.3 §7 — WarCost 估算", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §8. Risk Model
+// Risk Model
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §8 — Risk Model", () => {
+describe("Risk Model", () => {
   function makeRiskInput(overrides: Partial<RiskInput> = {}): RiskInput {
     return {
       enemyPower: makeCombatPower({ powerScore: 400 }),
@@ -1814,10 +1814,10 @@ describe("A5.3 §8 — Risk Model", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// §9. OperationValue 期望价值
+// OperationValue 期望价值
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.3 §9 — OperationValue 期望价值", () => {
+describe("OperationValue 期望价值", () => {
   function makeWarCost(total: number): import("../../../src/domain/military/war-cost").WarCost {
     return {
       spawnEnergyCost: 1000,

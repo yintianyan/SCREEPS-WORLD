@@ -209,7 +209,7 @@ function advanceClaiming(
   if (targetRoom?.controller?.my) {
     expansion.state = "claimed";
     expansion.startedAt = ctx.tick;
-    // UOEM: P1 是 Milestone（CLAIMED），不进 OutcomeChannel
+    // CLAIMED 是 Milestone，不进 OutcomeChannel
     emitMilestone(expansion, "CLAIMED", ctx.tick);
     log.info("expansion", `[${ctx.tick}] expansion: claiming → claimed`);
     return;
@@ -262,7 +262,7 @@ function advanceBootstrapping(
 
   // 失守/失明检查（与旧 advancePioneering 相同逻辑）
   if (!targetRoom?.controller?.my) {
-    // UOEM: terminal outcome 只由 abortExpansion 产生一次
+    // terminal outcome 只由 abortExpansion 产生一次
     // P2/P3 的 LOST/STOLEN 直接传给 abortExpansion，不在前面调 record
     if (!targetRoom) {
       log.info(
@@ -331,7 +331,7 @@ function advanceBootstrapping(
         "expansion",
         `[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`,
       );
-      // UOEM: terminal outcome 只由 abortExpansion 产生一次
+      // terminal outcome 只由 abortExpansion 产生一次
       abortExpansion(ctx, expansion, "LOST");
       return;
     }
@@ -340,7 +340,7 @@ function advanceBootstrapping(
   // 超时
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout) {
     log.info("expansion", `[${ctx.tick}] expansion: bootstrapping ${expansion.target} timed out`);
-    // UOEM: P5 是 Milestone（FORCED_ADVANCE），不进 OutcomeChannel
+    // FORCED_ADVANCE 是 Milestone，不进 OutcomeChannel
     emitMilestone(expansion, "FORCED_ADVANCE", ctx.tick);
     // 不直接 abort — 如果 spawn 已建成，尝试推进到 economic_startup
     if (spawns.length > 0) {
@@ -390,7 +390,7 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
       "expansion",
       `[${ctx.tick}] expansion: lost ${expansion.target} during economic_startup, aborting`,
     );
-    // UOEM: terminal outcome 只由 abortExpansion 产生一次
+    // terminal outcome 只由 abortExpansion 产生一次
     abortExpansion(ctx, expansion, "LOST");
     return;
   }
@@ -486,7 +486,7 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
     );
     // 如果至少 energy loop 活跃，尝试强行推进
     if (cp3.passed) {
-      // UOEM: P7 是 Milestone（FORCED_ADVANCE），不进 OutcomeChannel
+      // FORCED_ADVANCE 是 Milestone，不进 OutcomeChannel
       emitMilestone(expansion, "FORCED_ADVANCE", ctx.tick);
       expansion.state = "integrating";
       expansion.startedAt = ctx.tick;
@@ -591,7 +591,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
       "expansion",
       `[${ctx.tick}] expansion: integrating → completed (CP5 passed) — ${expansion.target} is now AUTONOMOUS`,
     );
-    // UOEM: P8 终态 COMPLETED，直接调 enqueueTerminalOutcome
+    // 终态 COMPLETED，直接调 enqueueTerminalOutcome
     enqueueTerminalOutcome(expansion, ctx.tick, "COMPLETED");
     // 记录完成 tick，供 Cooldown 门禁消费
     if (!Memory.kernel) Memory.kernel = {};
@@ -626,7 +626,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
         "expansion",
         `[${ctx.tick}] expansion: forcing integrating → completed (net positive + integrated)`,
       );
-      // UOEM: P9 终态 COMPLETED_FORCED（经历过 forced advance 的超时强推完成）
+      // 终态 COMPLETED_FORCED（经历过 forced advance 的超时强推完成）
       enqueueTerminalOutcome(expansion, ctx.tick, "COMPLETED_FORCED");
       updatePlanStatus(expansion.planId ?? "", "COMPLETED");
       if (!Memory.kernel) Memory.kernel = {};
@@ -639,7 +639,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
 
 /**
  * 终止扩张行动的统一清理函数。
- * UOEM: 直接接收 ExpansionResult，调用 enqueueTerminalOutcome（唯一终态出口）。
+ * 直接接收 ExpansionResult，调用 enqueueTerminalOutcome（唯一终态出口）。
  * blacklistTarget/reclaimExpeditionCreeps 在此统一执行，调用方不需重复。
  */
 function abortExpansion(
@@ -647,7 +647,7 @@ function abortExpansion(
   expansion: ExpansionState,
   outcome: ExpansionResult,
 ): void {
-  // UOEM: 唯一终态写入 — enqueueTerminalOutcome 幂等去重
+  // 唯一终态写入 — enqueueTerminalOutcome 幂等去重
   enqueueTerminalOutcome(expansion, ctx.tick, outcome);
   // 释放预留资源（预留对象未持久化到 expansion，仅 log 标记；
   // tryReserve 的预留有 tick 过期机制，不释放也会自然过期）
@@ -719,7 +719,7 @@ function seedLayoutAnchor(room: Room): boolean {
   roomMem.layout = {
     version: 2,
     templateId: COMPACT_CORE_V3.id,
-    // R663：新 claim 用 template 引擎 —— V3 模板为唯一放置源（地形冲突走邻近重定位）。
+    // 新 claim 用 template 引擎 —— V3 模板为唯一放置源（地形冲突走邻近重定位）。
     mode: "template",
     state: "accepted",
     revision: 0,

@@ -1,4 +1,4 @@
-/** Phase R2 — RCL2 stall repro：诊断采样 + 可判定回归断言。 */
+/** RCL2 stall repro：诊断采样 + 可判定回归断言。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner } from "../framework";
 import type { TestWorld } from "../framework";
@@ -154,7 +154,7 @@ function assertRcl2Closure(samples: Sample[]): void {
   }
 }
 
-describe("Phase R2 — RCL2 stall repro（可判定）", () => {
+describe("RCL2 stall repro（可判定）", () => {
   it("干净 RCL2 1500 tick：采样 + RCL2 建设闭环硬断言", () => {
     const world = new ScenarioBuilder("W1N1")
       .rcl(2, 100)

@@ -1,4 +1,4 @@
-/** R669：worker body 高容量档 —— carry 不能永远只有 1 个（50 能量/趟）。 */
+/** worker body 高容量档 —— carry 不能永远只有 1 个（50 能量/趟）。 */
 import { describe, expect, it } from "vitest";
 import { selectBody } from "../../../src/config/bodies";
 

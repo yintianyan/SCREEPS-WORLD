@@ -1,4 +1,4 @@
-/** R683：塔火圈外的 perimeter rampart 只维持 bootstrap 线；覆盖内的正常维护。 */
+/** 塔火圈外的 perimeter rampart 只维持 bootstrap 线；覆盖内的正常维护。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { builderRole } from "../../../src/creeps/roles/builder";
 import {
@@ -47,7 +47,7 @@ function setup(opts: { covered: boolean }) {
   return { rampart, creep, ctx: mockContext(snap) };
 }
 
-describe("repairFortifications — R683 塔覆盖维护帽", () => {
+describe("repairFortifications — 塔覆盖维护帽", () => {
   it("覆盖内 perimeter：正常 100K 目标，50K rampart 会被修", () => {
     const { rampart, creep, ctx } = setup({ covered: true });
     builderRole.run(creep, ctx);

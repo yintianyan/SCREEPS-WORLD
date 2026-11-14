@@ -244,7 +244,7 @@ export function reevaluateActiveOps(
       haulerCapacity,
       hasRoad,
     });
-    // 唯一决策源（A4.4 决策权退休）：无条件写入重算结果。
+    // 唯一决策源（决策权退休）：无条件写入重算结果。
     // 旧 planActive 门是 authority 死锁的根因 —— Plan 永不含 operation 请求，
     // 门却几乎恒真，haulerNeed 被冻结在开点值直至 op 死亡（W36S58 实证）。
     op.haulerNeed = haulerNeed;

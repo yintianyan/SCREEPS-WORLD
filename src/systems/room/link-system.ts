@@ -32,7 +32,7 @@ export {
  * Link 能量传输系统 — P1 系统，管理 link 间瞬时能量传输 + 死资产检测。
 
  * 规划 → 执行 link.transferEnergy()；检测死资产 source link（三重校验 + 500t 持续），
- * 暴露给布局规划触发拆改（P1-4 通道）。
+ * 暴露给布局规划触发拆改（受限拆改通道）。
  * link 链路是 RCL5+ 核心物流：source link ← harvester 存能 → controller link →
  * upgrader 取能，全程 0 通勤替代 hauler 往返；storage link 作溢出回收与 controller 补给枢纽。
  * P1：传输极廉价（每房每 tick O(links)），且直接关系升级吞吐，能量链中仅次于孵化。
@@ -51,7 +51,7 @@ export const linkSystem: System = {
 /**
  * 执行单房 link 传输：分类 → 死资产检测 → 规划 → 执行。
  * 死资产检测（2026-08-02）：三重校验（role=source + energy=0 + !linkHasOutlet）
- * 持续 500t → 死资产，id 暴露给 layout-planner 触发拆改规划（P1-4 通道）。
+ * 持续 500t → 死资产，id 暴露给 layout-planner 触发拆改规划（受限拆改通道）。
  */
 function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
   const links = snapshot.links;
@@ -183,7 +183,7 @@ export function clearLinkConstrained(roomName: string): void {
   globalCache().linkConstrained?.delete(roomName);
 }
 
-// ─── P1-4 受限拆改通道 ───
+// ─── 受限拆改通道 ───
 
 /**
  * 检查房间是否处于拆改冷却期（1000t 内已启动过拆改）。

@@ -133,7 +133,7 @@ function makeOpportunity(over?: Partial<RemoteOpportunity>): RemoteOpportunity {
 }
 
 // ═════════════════════════════════════════════════════════
-// §1  remote-source.ts
+// remote-source.ts
 // ═════════════════════════════════════════════════════════
 
 describe("remote-source.ts", () => {
@@ -393,7 +393,7 @@ describe("remote-source.ts", () => {
 });
 
 // ═════════════════════════════════════════════════════════
-// §2  remote-value.ts
+// remote-value.ts
 // ═════════════════════════════════════════════════════════
 
 describe("remote-value.ts", () => {
@@ -509,7 +509,7 @@ describe("remote-value.ts", () => {
 });
 
 // ═════════════════════════════════════════════════════════
-// §3  remote-opportunity.ts
+// remote-opportunity.ts
 // ═════════════════════════════════════════════════════════
 
 describe("remote-opportunity.ts", () => {
@@ -636,5 +636,5 @@ describe("remote-opportunity.ts", () => {
 });
 
 // ═════════════════════════════════════════════════════════
-// §4  opportunity-ranking.ts
+// opportunity-ranking.ts
 // ═════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
 /**
- * 候选池落盘投影的两条不变量 —— 立案过程见 roadmap 补210/补211（commit 760260b4／285d0d12）。
+ * 候选池落盘投影的两条不变量。
  *
  * `Memory.kernel.expansionCandidates` 落盘的是 `allCandidates` 按数组尾截断的前缀
  * （`CANDIDATE_PERSIST_CAP`）。这个前缀同时是 `evaluateExpansionPressure` 的

@@ -1,4 +1,4 @@
-/** R688：扩张推进房 CPU 升级闸 — 满仓强制放行。 */
+/** 扩张推进房 CPU 升级闸 — 满仓强制放行。 */
 import { describe, expect, it } from "vitest";
 import { cpuGateAllowsUpgrade } from "../../../src/creeps/roles/upgrader";
 
@@ -10,7 +10,7 @@ describe("cpuGateAllowsUpgrade", () => {
     expect(cpuGateAllowsUpgrade(undefined, true)).toBe(true);
   });
 
-  it("未满仓时 tight/constrained 仍停（R632 原语义）", () => {
+  it("未满仓时 tight/constrained 仍停（原语义）", () => {
     expect(cpuGateAllowsUpgrade("tight", false)).toBe(false);
     expect(cpuGateAllowsUpgrade("constrained", false)).toBe(false);
   });

@@ -273,9 +273,9 @@ describe("RCL7 Defense — 防御系统", () => {
   });
 });
 
-// ── P2-4: 多威胁同时入侵 ──────────────────────────────────
+// ── 多威胁同时入侵 ──────────────────────────────────
 
-describe("RCL7 Defense — 多威胁同时入侵 (P2-4)", () => {
+describe("RCL7 Defense — 多威胁同时入侵", () => {
   it("多组敌方 creep 同时入侵：tower 不崩溃、creep 进入 flee、系统存活", () => {
     // 3 tower + 5 组敌人（模拟多房受袭在单房中的等效压力）
     const world = rcl7World({ towers: 3, towerEnergy: 1000, hostiles: 0 });

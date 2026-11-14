@@ -1,4 +1,4 @@
-/** A4.5 Empire Autonomous Stability — E2E 场景测试。 */
+/** Empire Autonomous Stability — E2E 场景测试。 */
 import { describe, it, expect } from "vitest";
 import {
   evaluateEmpireHealth,
@@ -100,7 +100,7 @@ function makeFailureNode(
 
 // ─── E2E-001: Empire Health 8 维度评估 ───────────────────
 
-describe("A4.5-E2E-001: Empire Health 8 维度评估", () => {
+describe("Empire Health 8 维度评估", () => {
   it("全健康维度 → HEALTHY", () => {
     const result = evaluateEmpireHealth(makeHealthyInput());
     expect(result.level).toBe("healthy");
@@ -144,7 +144,7 @@ describe("A4.5-E2E-001: Empire Health 8 维度评估", () => {
 
 // ─── E2E-002: Health 等级降级立即生效 ───────────────────
 
-describe("A4.5-E2E-002: Health 降级立即生效", () => {
+describe("Health 降级立即生效", () => {
   it("从 HEALTHY 降级到 DEGRADED 不需阈值确认", () => {
     // 上次 healthy，这次分数很低 → 立即降级
     const input = makeHealthyInput("healthy");
@@ -174,7 +174,7 @@ describe("A4.5-E2E-002: Health 降级立即生效", () => {
 
 // ─── E2E-003: Health 恢复需超阈值（滞回）───────────────
 
-describe("A4.5-E2E-003: Health 恢复滞回", () => {
+describe("Health 恢复滞回", () => {
   it("从 CRITICAL 恢复需要分数 > 0.55", () => {
     // 上次 critical，这次分数刚到 0.5 → 仍然 critical
     const input: EmpireHealthInput = {
@@ -230,7 +230,7 @@ describe("A4.5-E2E-003: Health 恢复滞回", () => {
 
 // ─── E2E-004: Failure Propagation 根因检测 ───────────────
 
-describe("A4.5-E2E-004: Failure Propagation 根因检测", () => {
+describe("Failure Propagation 根因检测", () => {
   it("从症状回溯到根因", () => {
     const failures = [
       makeFailureNode("f1", "spawn", "critical", "W1N1"),
@@ -267,7 +267,7 @@ describe("A4.5-E2E-004: Failure Propagation 根因检测", () => {
 
 // ─── E2E-005: Failure 影响范围分析 ───────────────────────
 
-describe("A4.5-E2E-005: Failure 影响范围分析", () => {
+describe("Failure 影响范围分析", () => {
   it("从根因正向传播到所有受影响节点", () => {
     const failures = [
       makeFailureNode("f1", "spawn", "critical", "W1N1"),
@@ -299,7 +299,7 @@ describe("A4.5-E2E-005: Failure 影响范围分析", () => {
 
 // ─── E2E-006: Recovery Priority 排序 + ROI ───────────────
 
-describe("A4.5-E2E-006: Recovery Priority 排序 + ROI", () => {
+describe("Recovery Priority 排序 + ROI", () => {
   it("critical 失败优先于 error", () => {
     const failures = [
       makeFailureNode("f1", "mineral", "warning"),
@@ -354,7 +354,7 @@ describe("A4.5-E2E-006: Recovery Priority 排序 + ROI", () => {
 
 // ─── E2E-007: Recovery Cooldown 机制 ─────────────────────
 
-describe("A4.5-E2E-007: Recovery Cooldown 机制", () => {
+describe("Recovery Cooldown 机制", () => {
   it("记录恢复尝试后进入冷却", () => {
     let cooldowns = new Map() as CooldownTable;
 
@@ -390,7 +390,7 @@ describe("A4.5-E2E-007: Recovery Cooldown 机制", () => {
 
 // ─── E2E-008: Autonomy Score 计算 ────────────────────────
 
-describe("A4.5-E2E-008: Autonomy Score 计算", () => {
+describe("Autonomy Score 计算", () => {
   it("全自治场景 → 高分", () => {
     const result = computeAutonomyScore({
       economicLoopActive: true,
@@ -455,7 +455,7 @@ describe("A4.5-E2E-008: Autonomy Score 计算", () => {
 
 // ─── E2E-009: No-Progress 检测 ───────────────────────────
 
-describe("A4.5-E2E-009: No-Progress 检测", () => {
+describe("No-Progress 检测", () => {
   it("经济指标连续无增长 → 检测到 No-Progress", () => {
     const result = detectNoProgress({
       netFlowHistory: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
@@ -491,7 +491,7 @@ describe("A4.5-E2E-009: No-Progress 检测", () => {
 
 // ─── E2E-010: Thrashing 检测 ─────────────────────────────
 
-describe("A4.5-E2E-010: Thrashing 检测", () => {
+describe("Thrashing 检测", () => {
   it("健康度频繁跳动 → 检测到 Thrashing", () => {
     const result = detectThrashing({
       healthLevelHistory: ["healthy", "degraded", "healthy", "degraded", "healthy", "degraded"],
@@ -544,7 +544,7 @@ describe("A4.5-E2E-010: Thrashing 检测", () => {
 
 // ─── E2E-011: 综合自治状态判定 ───────────────────────────
 
-describe("A4.5-E2E-011: 综合自治状态判定", () => {
+describe("综合自治状态判定", () => {
   it("高分 + 无 No-Progress + 无 Thrashing → 自治", () => {
     const score = computeAutonomyScore({
       economicLoopActive: true,

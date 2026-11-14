@@ -1,4 +1,4 @@
-/** P1-4 受限拆改通道生命周期测试（staged link 拆改生命周期）。 */
+/** 受限拆改通道生命周期测试（staged link 拆改生命周期）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   isDismantleOnCooldown as isDismantleOnCooldownDomain,
@@ -33,7 +33,7 @@ beforeEach(() => {
 
 // ─── 冷却测试 ─────────────────────────────────────────────
 
-describe("P1-4 拆改冷却（DISMANTLE_COOLDOWN）", () => {
+describe("拆改冷却（DISMANTLE_COOLDOWN）", () => {
   it("未记录过冷却 → isDismantleOnCooldown 返回 false", () => {
     expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 1000)).toBe(false);
   });
@@ -69,7 +69,7 @@ describe("P1-4 拆改冷却（DISMANTLE_COOLDOWN）", () => {
 
 // ─── 拆改计划创建与查询 ─────────────────────────────────────
 
-describe("P1-4 createDismantlePlan — 计划创建", () => {
+describe("createDismantlePlan — 计划创建", () => {
   it("创建计划后写入 dismantlePlans", () => {
     createDismantlePlan("link1", "W7N4", "logistics.link.source.src1", { x: 10, y: 11 }, 1000);
     const plans = getDismantlePlans();
@@ -110,7 +110,7 @@ describe("P1-4 createDismantlePlan — 计划创建", () => {
 
 // ─── clearDismantlePlan ─────────────────────────────────────
 
-describe("P1-4 clearDismantlePlan — 计划清除", () => {
+describe("clearDismantlePlan — 计划清除", () => {
   it("清除存在的计划 → getDismantlePlans 不再返回", () => {
     createDismantlePlan("link1", "W7N4", "key1", { x: 10, y: 11 }, 1000);
     createDismantlePlan("link2", "W7N4", "key2", { x: 20, y: 21 }, 1000);
@@ -133,7 +133,7 @@ describe("P1-4 clearDismantlePlan — 计划清除", () => {
 
 // ─── transitionDismantlePlan 状态转移纯函数 ─────────────────
 
-describe("P1-4 transitionDismantlePlan — 状态转移纯函数", () => {
+describe("transitionDismantlePlan — 状态转移纯函数", () => {
   it("waiting → validating：设置 state 和 validatingSince", () => {
     const plan: DismantlePlan = {
       deadLinkId: "link1",
@@ -183,7 +183,7 @@ describe("P1-4 transitionDismantlePlan — 状态转移纯函数", () => {
 
 // ─── isRoomInDefense 战时判定 ───────────────────────────────
 
-describe("P1-4 isRoomInDefense — 战时判定", () => {
+describe("isRoomInDefense — 战时判定", () => {
   it("colonyState 未设置 → false（peace）", () => {
     expect(isRoomInDefenseDomain(Memory.rooms["W7N4"]?.colonyState)).toBe(false);
   });
@@ -210,7 +210,7 @@ describe("P1-4 isRoomInDefense — 战时判定", () => {
 
 // ─── Plan 契约常量验证 ─────────────────────────────────────
 
-describe("P1-4 Plan 契约常量", () => {
+describe("Plan 契约常量", () => {
   it("DISMANTLE_COOLDOWN = 1000", () => {
     expect(DISMANTLE_COOLDOWN).toBe(1000);
   });
@@ -234,7 +234,7 @@ describe("P1-4 Plan 契约常量", () => {
 
 // ─── 集成场景：完整生命周期模拟 ─────────────────────────────
 
-describe("P1-4 完整生命周期场景模拟", () => {
+describe("完整生命周期场景模拟", () => {
   it("场景1：waiting → validating → success（替代 link 灌能）", () => {
     // 1. 创建拆改计划
     createDismantlePlan("deadLink1", "W7N4", "replacement.key", { x: 15, y: 16 }, 1000);
@@ -331,7 +331,7 @@ describe("P1-4 完整生命周期场景模拟", () => {
 
 // ─── 边界条件 ─────────────────────────────────────────────
 
-describe("P1-4 边界条件", () => {
+describe("边界条件", () => {
   it("getDismantlePlans 空时返回空 Map", () => {
     const plans = getDismantlePlans();
     expect(plans.size).toBe(0);
@@ -365,7 +365,7 @@ describe("P1-4 边界条件", () => {
   });
 });
 
-// ─── P1-1 回归：ttl 到期 abort 必须标记 linkConstrained 防 churn ─────
+// ─── 回归：ttl 到期 abort 必须标记 linkConstrained 防 churn ─────
 //
 // 背景：DISMANTLE_COOLDOWN(1000) < DISMANTLE_TTL(1500)。若 ttl 到期 abort
 // 不 markLinkConstrained，cooldown 过期后 layout-planner 会为同一死资产
@@ -374,7 +374,7 @@ describe("P1-4 边界条件", () => {
 // 完整状态机执行由 construction-manager.processSinglePlan 负责，此处
 // 通过模拟其调用链验证 globalCache 副作用一致性。
 
-describe("P1-1 回归：ttl 到期 abort 防 churn", () => {
+describe("回归：ttl 到期 abort 防 churn", () => {
   /**
    * 模拟 construction-manager.processSinglePlan 的 ttl 到期路径
    *（实际函数未导出，此处复刻其副作用链以验证 link-system API 契约）。
@@ -447,7 +447,7 @@ describe("P1-1 回归：ttl 到期 abort 防 churn", () => {
   });
 
   it("重开稳定性：global reset 后 linkConstrained 标记丢失 → 不影响死资产重新评估", () => {
-    // 修复 P1-1 后 linkConstrained 是 heap 字段，global reset 后丢失。
+    // 修复后 linkConstrained 是 heap 字段，global reset 后丢失。
     // 但 deadAssetSince 也丢失 → 不会立即触发新拆改。需重新积累 500t 检测窗口。
     createDismantlePlan("deadLink1", "W7N4", "key1", { x: 15, y: 16 }, 1000);
     const plan = getDismantlePlans().get("deadLink1")!;

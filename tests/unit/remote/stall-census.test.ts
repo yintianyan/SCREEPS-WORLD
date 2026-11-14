@@ -205,9 +205,9 @@ describe("v33 远矿空转止损", () => {
   });
 });
 
-// ─── v33-R11：op.sources 现场视野校正 ──────────────────────────
+// ─── op.sources 现场视野校正 ──────────────────────────
 
-describe("v33-R11 op.sources 视野校正", () => {
+describe("op.sources 视野校正", () => {
   function seedWithVision(roomFind: (t: number) => any[]): RoomSnapshot {
     const glob = g();
     glob.Game.creeps = {};

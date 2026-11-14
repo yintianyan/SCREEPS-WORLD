@@ -1,4 +1,4 @@
-/** R647：RCL<4 早期房允许 upgrader 从 source container 取能（mature 房不变）。 */
+/** RCL<4 早期房允许 upgrader 从 source container 取能（mature 房不变）。 */
 import { describe, expect, it } from "vitest";
 import { withdrawRichestContainerEarly } from "../../../src/creeps/engine/actions/withdraw";
 
@@ -10,7 +10,7 @@ function makeAc(rcl: number, energies: number[]): any {
   return { snapshot: { rcl, containers } } as any;
 }
 
-describe("withdrawRichestContainerEarly — RCL<4 兜底（R647）", () => {
+describe("withdrawRichestContainerEarly — RCL<4 兜底", () => {
   it("RCL2 + 有能量的 source container ⇒ 取最满那只", () => {
     const ac = makeAc(2, [500, 1800]);
     const best = withdrawRichestContainerEarly().resolve!(ac);

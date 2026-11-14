@@ -1,4 +1,4 @@
-/** R675 房间任务账本 — 指标/价值/TTL/缓存。 */
+/** 房间任务账本 — 指标/价值/TTL/缓存。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { getRoomTaskLedger, ledgerValue } from "../../../src/creeps/support/task-ledger";
 import { globalCache } from "../../../src/kernel/global-cache";
@@ -49,7 +49,7 @@ describe("task-ledger — 指标与任务价值", () => {
     expect(ledgerValue(ledger, "store-energy")).toBe(95);
   });
 
-  it("R687：核心接近满(<25% free)且 CC 低于半满 ⇒ CC 抬到 96，压过 storage(95)", () => {
+  it("核心接近满(<25% free)且 CC 低于半满 ⇒ CC 抬到 96，压过 storage(95)", () => {
     // 线上 W39S55 的形状：核心 1200/1300、CC 224/2000。CC 的 90 低于 storage 95，
     // hauler 的效用仲裁永远选 storage，getHaulFillTarget 内部的 CC 半满优先档得不到调用。
     const spawn = mockStructure("spawn", { id: "sp1", energy: 320, capacity: 350 });
@@ -66,7 +66,7 @@ describe("task-ledger — 指标与任务价值", () => {
     expect(ledgerValue(ledger, "fill-cc")!).toBeGreaterThan(ledgerValue(ledger, "store-energy")!);
   });
 
-  it("R687 控制组：核心不接近满时 CC 维持 90（升级不抢 spawn 的能量）", () => {
+  it("控制组：核心不接近满时 CC 维持 90（升级不抢 spawn 的能量）", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 350 });
     const cc = mockStructure("container", { id: "cc1", energy: 200, capacity: 2000 });
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 100000 });
@@ -79,7 +79,7 @@ describe("task-ledger — 指标与任务价值", () => {
     expect(ledgerValue(getRoomTaskLedger(snap), "fill-cc")).toBe(90);
   });
 
-  it("施工期 CC 自动降档到 50（R672 教训：不锁死 hauler）", () => {
+  it("施工期 CC 自动降档到 50（教训：不锁死 hauler）", () => {
     const cc = mockStructure("container", { id: "cc1", energy: 100, capacity: 2000 });
     const site = mockConstructionSite("extension", { id: "s1" });
     const snap = mockSnapshot({
@@ -92,7 +92,7 @@ describe("task-ledger — 指标与任务价值", () => {
     expect(ledgerValue(ledger, "feed-construction")).toBe(75);
   });
 
-  it("R680：crisis/recovery/bootstrap 期 CC 同样降档（核心优先）", () => {
+  it("crisis/recovery/bootstrap 期 CC 同样降档（核心优先）", () => {
     const cc = mockStructure("container", { id: "cc1", energy: 100, capacity: 2000 });
     const snap = mockSnapshot({ controllerContainer: cc, fillTargets: [cc] });
     (Memory.rooms.W7N4 as any).phase = { phase: "crisis" };

@@ -1,4 +1,4 @@
-/** A5.3.1 GAP-2 Architecture Test — 阻止新代码进入 Legacy Decision 路径。 */
+/** 架构护栏 — 阻止新代码进入 Legacy Decision 路径。 */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -42,7 +42,7 @@ function importsOf(file: string): string[] {
 
 // ─── 规则 1: selectWarTarget / decideSquadSize 只能在 war-planner.ts 中使用 ───
 
-describe("A5.3.1 GAP-2: Legacy import 限制", () => {
+describe("Legacy import 限制", () => {
   it("selectWarTarget 只能被 war-planner.ts import", () => {
     const allowed = ["systems/military/war-planner.ts"];
     const bad: string[] = [];
@@ -116,7 +116,7 @@ describe("A5.3.1 GAP-2: Legacy import 限制", () => {
 
 // ─── 规则 2: 新增 system 文件禁止 import domain/war/planning.ts ───
 
-describe("A5.3.1 GAP-2: 新 system 禁止 Legacy 路径", () => {
+describe("新 system 禁止 Legacy 路径", () => {
   it("systems/ 下只有 war-planner.ts 可以 import domain/war/planning", () => {
     // power-farm-manager.ts import decideHealerCount from domain/war/planning —
     // 这是已有复用，标记为 LEGACY_COMPATIBILITY_ONLY 允许
@@ -137,7 +137,7 @@ describe("A5.3.1 GAP-2: 新 system 禁止 Legacy 路径", () => {
 
 // ─── 规则 3: domain/military/ 纯度 ───
 
-describe("A5.3.1 GAP-2: domain/military/ Domain Purity", () => {
+describe("domain/military/ Domain Purity", () => {
   const militaryDomainFiles = ALL_FILES.filter(f =>
     relative(SRC, f).startsWith("domain/military/"),
   );
@@ -173,7 +173,7 @@ describe("A5.3.1 GAP-2: domain/military/ Domain Purity", () => {
 
 // ─── 规则 4: recovery-execution-system 是唯一消费 warAbortSignals 的系统 ───
 
-describe("A5.3.1 GAP-1: warAbortSignals 消费边界", () => {
+describe("warAbortSignals 消费边界", () => {
   it("只有 recovery-execution-system.ts 在 systems/ 中读取 warAbortSignals", () => {
     const bad: string[] = [];
     for (const f of ALL_FILES) {
@@ -192,7 +192,7 @@ describe("A5.3.1 GAP-1: warAbortSignals 消费边界", () => {
 
 // ─── 规则 5: spawnCreep 只在 spawn-manager 中 ───
 
-describe("A5.3.1: spawnCreep 边界", () => {
+describe("spawnCreep 边界", () => {
   it("spawnCreep 只在 spawn-manager.ts 中", () => {
     const bad: string[] = [];
     for (const f of ALL_FILES) {
@@ -209,7 +209,7 @@ describe("A5.3.1: spawnCreep 边界", () => {
 
 // ─── 规则 6: Legacy 标记验证 ───
 
-describe("A5.3.1 GAP-2: LEGACY_COMPATIBILITY_ONLY 标记", () => {
+describe("LEGACY_COMPATIBILITY_ONLY 标记", () => {
   it("war-planner.ts 中 selectWarTarget 调用处有 LEGACY 标记", () => {
     const f = resolve(SRC, "systems/military/war-planner.ts");
     const src = readFileSync(f, "utf8");

@@ -1,5 +1,5 @@
 /**
- * B6-㉔ Squad 级战术状态的归属（systems/military/squad-state）。
+ * Squad 级战术状态的归属（systems/military/squad-state）。
  *
  * 修前：三个 stage runtime 各有一份 `deriveTacticalStateFromPhase(plan.phase)`，
  * 每 tick 从 warPlan 的**波次相位**现推战术状态 —— 而转换表里 FORMING 只允许

@@ -1,5 +1,5 @@
 /**
- * 共享地形网格工具（FREEZE R20①）— 纯 50×50 网格，0=plain / 1=wall / 2=swamp。
+ * 共享地形网格工具 — 纯 50×50 网格，0=plain / 1=wall / 2=swamp。
  * 全仓唯一实现；integration TestWorld（网格语义）直接消费。
  * e2e 侧引擎绑定的 TerrainMatrix 构造（WorldBuilder.emptyTerrain 等）依赖
  * screeps-server-mockup 类，不属本层——只消灭纯网格版的同名重复。

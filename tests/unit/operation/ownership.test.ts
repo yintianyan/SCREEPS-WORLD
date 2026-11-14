@@ -1,4 +1,4 @@
-/** A3-002: Room Economic Profile → Transferable 计算 */
+/** Room Economic Profile → Transferable 计算 */
 import { describe, expect, it } from "vitest";
 import {
   computeTransferable,
@@ -44,7 +44,7 @@ function makeProfile(overrides: Partial<RoomEconomicProfile> = {}): RoomEconomic
   } as RoomEconomicProfile;
 }
 
-describe("A3-002: computeTransferable", () => {
+describe("computeTransferable", () => {
   it("正常 core 房间有正 transferable", () => {
     // 抬到 100000：原 fixture 的 50000 低于安全储备(60000)，这条顶着「有正
     // transferable」的标题断的是 0 —— 标题与断言相反，扣减口径写错也永远测不到。
@@ -100,7 +100,7 @@ describe("A3-002: computeTransferable", () => {
   });
 });
 
-describe("A3-016: Safety Reserve Protection", () => {
+describe("Safety Reserve Protection", () => {
   it("computeSafetyReserve 使用比例", () => {
     const result = computeSafetyReserve(300000, 0.2);
     expect(result).toBe(60000);

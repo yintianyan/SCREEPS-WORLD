@@ -1,4 +1,4 @@
-/** Economy 系统 — 能量收支核算（模块 1.5，SYSTEM_BOUNDARIES §1.5 合同）。 */
+/** Economy 系统 — 能量收支核算。 */
 import { recordTyped } from "../../kernel/event-log";
 import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
@@ -121,7 +121,7 @@ function roomHash(name: string): number {
   return Math.abs(h);
 }
 
-/** 从快照组装池划分（ENERGY_ACCOUNTING_MODEL §3 口径）。 */
+/** 从快照组装池划分。 */
 function collectPools(s: RoomSnapshot): EnergyPools {
   let containers = 0;
   for (const c of s.containers) containers += c.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -197,7 +197,7 @@ export function queryEconomy(roomName: string): EconomyQuery | undefined {
 }
 
 /**
- * Phase A：用相邻两窗的库存快照差评估资源流状态，写入 `Memory.rooms[room].resourceFlow`。
+ * 用相邻两窗的库存快照差评估资源流状态，写入 `Memory.rooms[room].resourceFlow`。
  *
  * 基线住 heap（换码即清）：首窗只播种、不结算；跳窗超过 3 个窗口按断档重播种 ——
  * 跨断口算出来的「流入」是部署期间累积的库存跳变，不是真实流量。
@@ -253,12 +253,12 @@ export const economySystem: System = {
     sampleRoomFlows(ctx);
     for (const snapshot of ctx.snapshots()) {
       const roomName = snapshot.roomName;
-      // 房间错峰：windowTicks 内稳定散列，避免同 tick 全房重算（ECONOMY §3 刷新合同）。
+      // 房间错峰：windowTicks 内稳定散列，避免同 tick 全房重算。
       if ((ctx.tick + roomHash(roomName)) % acc.windowTicks !== 0) continue;
       const roomMem = Memory.rooms[roomName];
       if (!roomMem) continue;
 
-      // Phase A：资源流状态与 economy 共用同一条 50 拍窗口（房间错峰）。
+      // 资源流状态与 economy 共用同一条 50 拍窗口（房间错峰）。
       // 放在账本结算之前：即使本窗 economy 因断档只播种，流量基线也要照常滚动。
       updateResourceFlowStatus(snapshot, roomMem, ctx.tick, acc.windowTicks);
 
@@ -269,7 +269,7 @@ export const economySystem: System = {
       // 无基线或断档（reset/跳窗）→ 只播种窗口起点，不结算（防跨断口假漂移）。
       // 基线必须是**拷贝**：cum 是全局累计账的活引用，别名会让窗口差值恒为 0。
       if (st.lastTick === undefined || ctx.tick - st.lastTick !== acc.windowTicks) {
-        // 断档时留一个拒因计数（#142）：丢掉一个结算窗**此前完全无痕**。
+        // 断档时留一个拒因计数：丢掉一个结算窗**此前完全无痕**。
         // 净流 EMA 是 G4/G6 的输入，而 CPU 挤满时对齐拍会被 canStart 拒 ⇒ 该房整窗被扔;
         // 没有这一列，"扩张被 CPU 档卡住"与"扩张被一个被饿着的仪器卡住"在读数上完全同形。
         // 首见播种（lastTick undefined）不算丢窗。
@@ -289,7 +289,7 @@ export const economySystem: System = {
       }
 
       // 合同初值语义：效率系数从 0.7 起点由实测 EMA 校准，而非首窗实测直取
-      // （首窗可能尚无采集发生，测得 0 不代表产能为零——ECONOMY §2.1-1）。
+      // （首窗可能尚无采集发生，测得 0 不代表产能为零）。
       if (st.effFactor === undefined) st.effFactor = INITIAL_EFFICIENCY_FACTOR;
 
       const w = rollupWindow(st.lastTick, ctx.tick, st.lastLedger, cum, st.lastPools, pools);

@@ -1,7 +1,7 @@
 /**
  * 载体绑定的有效性维护（纯函数，零 Game/Memory 引用）。
  *
- * 立案＝roadmap 补329／补331（#181，线上实证：`supply:*` op 恒 `deliveredAmount=0` 直到 deadline）。
+ * 立案（线上实证：`supply:*` op 恒 `deliveredAmount=0` 直到 deadline）。
  * 现场形状＝op 上挂着一个**解析不到活体**的 `carrierName`：
  *   - `hasCarrierForOp` 的三个或项里，"队名匹配到任意在册 carrier"这一项为真，于是既不补孵也不提前 return；
  *   - 而两段兜底绑定都 gate 在 `!op.carrierName`（`agenda-manager.ts:584/:593`），字符串还在 ⇒ 永不重绑；
@@ -12,7 +12,7 @@
  * 调用它），把判定写进 domain 才能被直接钉住——判定本身可测，调用点只是把它接上。
  * ⚠️不要用 `stability.hasMinimumCommitment` 代替本判定：那条政策的 :56 只看 `carrierName` 这个
  *   字符串在不在（不看解析到什么），悬挂名在它那里得到的是"保护、不取消"＝另一个语义
- *   （补330／`plan-stability-policy.test.ts` 第 10 例已把这个反直觉钉成断言）。
+ *   （`plan-stability-policy.test.ts` 第 10 例已把这个反直觉钉成断言）。
  */
 
 import type { OperationContext } from "./agenda-item";

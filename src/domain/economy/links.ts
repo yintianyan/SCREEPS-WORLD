@@ -111,7 +111,7 @@ export interface LinkTransfer {
  * 规划本 tick 的 link 间能量传输。约束：每源 link 每 tick 至多参与一次传输、
  * 不超源可用能量与目标空闲容量、冷却中的 link 不能发起（引擎限制）。
 
- * P1-4 minTransfer：source 攒够阈值或快满才发，避免小额传输白占冷却导致
+ * minTransfer：source 攒够阈值或快满才发，避免小额传输白占冷却导致
  * 源 link 装不下新能量而溢出；controller「急需」（能量低于阈值）时豁免。
  * minTransfer 默认 0（无阈值，向后兼容），生产调用由 link-system 传 CONFIG 值。
  */
@@ -140,7 +140,7 @@ export function planLinkTransfers(
   const transfers: LinkTransfer[] = [];
   const sent = new Set<string>();
 
-  // P0-B：按能量降序排列 source link —— 旧的固定遍历顺序会让数组里第一条永远先发，
+  // 按能量降序排列 source link —— 旧的固定遍历顺序会让数组里第一条永远先发，
   // 第二条长期 800 满仓（W8N3 的 (30,20) 就是这样被饿成死水的）。满的先发，先解背压。
   const sourceLinks = links
     .filter(l => l.role === "source" && l.energy > 0 && l.cooldown === 0)
@@ -215,7 +215,7 @@ export function planLinkTransfers(
 
   // 3. source → storage（溢出回收）
   // storage 回收不追求精确补偿损耗：溢出回收场景下多传少传均可，下 tick 会重新评估。
-  // P0-B：目标空闲不足 minFree 时整段不发 —— 用一次 source link 的传输冷却换
+  // 目标空闲不足 minFree 时整段不发 —— 用一次 source link 的传输冷却换
   // 1-2 单位到账是纯亏损（storage link 常年 798/799 的放大器）。
   if (storageLink) {
     const minFree = opts.storageSinkMinFree ?? 0;

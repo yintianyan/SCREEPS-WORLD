@@ -132,14 +132,14 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
       if (!storage) return undefined;
 
       const demands = globalCache().labDemands;
-      // R675：lab-manager 每 10 拍发布一次，原先要求同拍 ⇒ 供料 9/10 拍不可达。
+      // lab-manager 每 10 拍发布一次，原先要求同拍 ⇒ 供料 9/10 拍不可达。
       // 允许 TTL 内的旧表；执行侧按 lab 当前容量 clamp。
       const table =
         demands && Game.time - demands.tick <= CONFIG.economy.labDemandTtl
           ? demands.byRoom[ac.snapshot.roomName]
           : undefined;
       if (!table) return undefined;
-      // R678：同一 lab+资源 每 tick 只派一人（execute 占用，其他 creep 在这里跳过）。
+      // 同一 lab+资源 每 tick 只派一人（execute 占用，其他 creep 在这里跳过）。
       const labClaimed = (labId: string, resource: ResourceConstant): boolean =>
         taskTargetClaimedByOther("lab", `${labId}:${resource}`, ac.creep.name);
 

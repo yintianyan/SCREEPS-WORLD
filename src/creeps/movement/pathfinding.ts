@@ -21,7 +21,7 @@ interface StructureCacheEntry {
   count: number;
   positions: number[];
   checkedTick: number;
-  /** MV-2：路网 revision — 结构布局指纹变化时递增（plan §5.7.5 原设计）。
+  /** 路网 revision — 结构布局指纹变化时递增。
    * 持久化路径按 revision 失效而非「结构总数」：总数键的缺陷是「一拆一建总数不变 →
    * 路径穿新墙不失效」；指纹 = 位置数组的轻量散列，捕捉布局变化而非数量变化。 */
   revision: number;
@@ -92,7 +92,7 @@ export function buildStructurePositions(
 /**
  * 预热结构缓存 — 由 room-snapshot 调用，利用已采集的数据避免冗余 room.find。
  * movement 模块拥有自己的缓存结构（__structCache），外部通过此函数写入，
- * 不再直接操作 globalCache as any（P1-2：消除隐式耦合）。
+ * 不再直接操作 globalCache as any（消除隐式耦合）。
  */
 export function preloadStructureCache(
   roomName: string,
@@ -102,7 +102,7 @@ export function preloadStructureCache(
   const g = globalCache() as any;
   if (!g.__structCache) g.__structCache = {};
   const { count, positions } = buildStructurePositions(structures, sites);
-  // MV-2：布局指纹变化才 bump revision — 持久化路径按 revision 失效。
+  // 布局指纹变化才 bump revision — 持久化路径按 revision 失效。
   const fp = fingerprintPositions(positions);
   const prev: StructureCacheEntry | undefined = g.__structCache[roomName];
   const revision =
@@ -201,7 +201,7 @@ function ensureStructureCache(roomName: string): StructureCacheEntry | undefined
   const structures = room.find(FIND_STRUCTURES);
   const sites = room.find(FIND_MY_CONSTRUCTION_SITES);
 
-  // 审查修正（MV-2）：删除旧的「count 相等即续期」短路 — 一拆一建总数不变正是 revision
+  // 审查修正：删除旧的「count 相等即续期」短路 — 一拆一建总数不变正是 revision
   // 机制要捕捉的场景，短路会让指纹/revision 永不更新；且部署前残留条目缺 revision 字段，
   // 短路续期会返回畸形条目。回退路径与 preload 走完全相同的指纹/revision 计算。
   const built = buildStructurePositions(structures, sites);
@@ -414,7 +414,7 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
   );
 
   if (result.path.length > 0) {
-    // P1-D 修复：incomplete 部分路径也写入 per-tick 共享缓存 — 旧实现 `!result.incomplete`
+    // 修复：incomplete 部分路径也写入 per-tick 共享缓存 — 旧实现 `!result.incomplete`
     // 条件导致同 tick 内后续每个走向同走廊的 creep 都重跑一次 PathFinder.search（N-1 次重复
     // 无任何自愈收益；跨 tick 不重算才是自愈设计）。部分路径推进语义与引擎 moveTo 一致
     // （controller 唯一落点被静态阻挡时，upgrader 沿部分路径走近到 range3 即可开工）。
@@ -435,7 +435,7 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
 
 interface CreepPathEntry {
   targetKey: number;
-  /** MV-2：路网 revision — 布局变化时失效（替代旧 structCount 总数键）。 */
+  /** 路网 revision — 布局变化时失效（替代旧 structCount 总数键）。 */
   structRevision: number;
   path: RoomPosition[];
 }
@@ -448,8 +448,8 @@ function getCreepPathCache(): Record<string, CreepPathEntry> {
 
 /**
  * 清理 __creepPathCache 中已死亡 creep 的残留条目，返回清理数。
- * P2-L：creep 死亡时其 path cache 不会被自动回收（global 状态无析构），长期运行会积累
- * stale entry 占内存。kernel 每 100 tick 调用本函数兜底回收（R9 登记的维护钩子）。
+ * creep 死亡时其 path cache 不会被自动回收（global 状态无析构），长期运行会积累
+ * stale entry 占内存。kernel 每 100 tick 调用本函数兜底回收。
  * 设计权衡：清理逻辑放在 pathfinding（cache 属主）而非 memory.ts — memory.ts 不应感知
  * movement 的实现细节（__creepPathCache 字段名）。
  * @internal 业务代码不直接调用，唯一入口是 kernel 的低频维护循环。
@@ -574,9 +574,9 @@ export function acquirePathBudget(roomName: string, max: number): boolean {
  * Traffic 开启时的统一单步出口：持久化路径缓存 → PathFinder 重算 → 意图登记。
  * 引擎 moveTo 的意图化替身 — reusePath 语义由持久化缓存（目标 + 路网 revision 不变即复用）
  * 等价实现，forceRepath 对应 reusePath: 0。保证所有移动都经过 tick 末集中解算。
- * P1-E 三档限频（仅作用于 cache miss 的重算路径，缓存命中不受影响）：
+ * 三档限频（仅作用于 cache miss 的重算路径，缓存命中不受影响）：
  *   档 1 quantizeDynamicTarget：缓存 key 用 3×3 区块，动态目标区块内移动不 miss
- *     （R4 注：字段名含 "Dynamic" 但实现不区分动静态目标 — 见 config/index.ts 同名字段注释）。
+ *     （注：字段名含 "Dynamic" 但实现不区分动静态目标 — 见 config/index.ts 同名字段注释）。
  *   档 2 dynamicRepathInterval：冷却内不调 PathFinder.search，沿旧路径/直走降级；
  *     forceRepath（卡位）豁免 — 卡位 creep 必须拿到新路径。
  *   档 3 maxSearchesPerRoomPerTick：每房每 tick search 上限，超预算降级让行；
@@ -595,7 +595,7 @@ function registerStepViaPathfinder(
     return registerMove(creep, creep.pos.getDirectionTo(pos), priority);
   }
 
-  // P1-E 档 1：目标驻留量化 — 3×3 区块 key 替代精确格。动态目标在区块内移动不触发重寻路，
+  // 档 1：目标驻留量化 — 3×3 区块 key 替代精确格。动态目标在区块内移动不触发重寻路，
   // 沿旧路径走。search 仍用精确 pos。
   const exactPacked = packPos(pos);
   const targetPacked = CONFIG.movement.quantizeDynamicTarget
@@ -617,7 +617,7 @@ function registerStepViaPathfinder(
     return ERR_NO_PATH;
   }
 
-  // cache miss — 需要重算。先过 P1-E 档 2/3 限频门。
+  // cache miss — 需要重算。先过档 2/3 限频门。
   // 档 2：重寻路冷却。forceRepath（卡位）豁免 — 卡位 creep 必须拿到新路径。
   const interval = CONFIG.movement.dynamicRepathInterval;
   const inCooldown =
@@ -682,12 +682,12 @@ export function stepToward(
 interface InterRoomCacheEntry {
   exitDir: ExitConstant;
   exitPos: { x: number; y: number };
-  /** MV-4：缓存写入 tick — 出口缓存加 TTL，避免出口格被新结构/敌方封堵后永不刷新
+  /** 缓存写入 tick — 出口缓存加 TTL，避免出口格被新结构/敌方封堵后永不刷新
    * （原实现仅严重卡位才清）。 */
   cachedAt: number;
 }
 
-/** MV-4：跨房出口缓存 TTL。房间地形静态，但出口最近格随 creep 位置/封堵变化 —
+/** 跨房出口缓存 TTL。房间地形静态，但出口最近格随 creep 位置/封堵变化 —
  * 中等窗口平衡「避免每 tick findExitTo」与「不长期用陈旧出口」。 */
 const INTER_ROOM_CACHE_TTL = 100;
 
@@ -711,7 +711,7 @@ function cacheInterRoomExit(
   };
 }
 
-/** 查询缓存的跨房间出口信息（MV-4：TTL 过期视为未命中）。 */
+/** 查询缓存的跨房间出口信息（TTL 过期视为未命中）。 */
 function getCachedInterRoomExit(fromRoom: string, toRoom: string): InterRoomCacheEntry | undefined {
   const entry = getInterRoomCache()[`${fromRoom}:${toRoom}`];
   if (!entry) return undefined;
@@ -732,7 +732,7 @@ function clearInterRoomExit(fromRoom: string, toRoom: string): void {
 /**
  * 向目标房间方向移动（通过最近出口），带道路优先 + 跨房间缓存 + 卡位脱困。
  * 卡位脱困（与 moveToTarget 对齐但精简）：L0 正常 reusePath:5（ignoreCreeps 引擎默认 false —
- * 跨房长途把 creep 当障碍更稳妥，MV-4 修正原注释「ignoreCreeps:true」的漂移）；
+ * 跨房长途把 creep 当障碍更稳妥，修正原注释「ignoreCreeps:true」的漂移）；
  * L1（stuck≥threshold）reusePath:0 强制重算路径；L2（≥threshold+repathLimit）清出口缓存 + 换出口位置。
  */
 export function moveTowardRoom(creep: Creep, targetRoom: string): void {
@@ -823,7 +823,7 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
     const result = creep.moveTo(exit, {
       reusePath,
       plainCost: 2,
-      // MV-4：与 moveToTarget 一致用疲劳感知 swamp 成本 — 重载跨房 creep
+      // 与 moveToTarget 一致用疲劳感知 swamp 成本 — 重载跨房 creep
       // （remote-hauler 满载回家）不再被固定 10 引进沼泽泥潭。
       swampCost: fatigueSwampCost(creep),
       costCallback: structureCostCallback,
@@ -835,7 +835,7 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
 }
 
 /**
- * MV-4：到达目标房但站在边界格（exit tile）— 内移一步防引擎弹回。
+ * 到达目标房但站在边界格（exit tile）— 内移一步防引擎弹回。
  * 停在 exit tile 上的 creep 下 tick 会被引擎弹回邻房，若当 tick idle 则形成
  * 「进房 → 弹回 → 再进房」横跳。返回 true 表示已处理（本 tick 内移）。
  * 审查修正：不盲移向 (25,25) — 内侧恰为地形墙时 move 静默失败、卡边界 + 角色管线被抑制；
@@ -914,7 +914,7 @@ export function ensureHome(creep: Creep): boolean {
     // 无事可做）时不导航回 home，留在目标房等待条件恢复；否则 home↔remoteTarget 振荡
     // （idle→goHome→acquire→导航回 remoteTarget→又 idle…）至寿终（remoteHarvester 在
     // InvaderCore 压制房正是此症状；被 recycle 标记的 creep 由 recyclePass 接管移动，不受此影响）。
-    // carrier（A3.0 跨房调拨）：acquire/idle/flee → home（source room 取能），
+    // carrier（跨房调拨）：acquire/idle/flee → home（source room 取能），
     // work → remoteTarget（target room 卸能）。与 remoteHauler 方向对偶。
     //
     // 半载回程修复：remoteHauler 在 remoteTarget 房内 idle 且携带量 > 50% 容量时，
@@ -939,7 +939,7 @@ export function ensureHome(creep: Creep): boolean {
       (isCarrier && (mode === "acquire" || mode === "idle"));
     const dest = goHome ? home : remoteTarget;
     if (creep.room.name === dest) {
-      // MV-4：边界格防弹回 — 先内移一步再交还角色管线。
+      // 边界格防弹回 — 先内移一步再交还角色管线。
       if (stepOffEdge(creep)) return false;
       return true;
     }

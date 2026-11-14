@@ -1,4 +1,4 @@
-/** v25 → v26 迁移独立测试（R3 战时闭环 / KernelMemory.warPlan 建档）。 */
+/** v25 → v26 迁移独立测试（战时闭环 / KernelMemory.warPlan 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

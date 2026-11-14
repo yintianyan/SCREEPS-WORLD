@@ -8,7 +8,7 @@ import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-co
 import { isTowerCovered, towerCoverageRatio } from "../../../src/domain/defense/fortification";
 
 /**
- * P1-2 min-cut 割集位置可建造性预校验单元测试。
+ * min-cut 割集位置可建造性预校验单元测试。
 
  * 覆盖：
  *   - 出口格及紧邻出口格过滤（x/y ≤1 或 ≥48）
@@ -16,7 +16,7 @@ import { isTowerCovered, towerCoverageRatio } from "../../../src/domain/defense/
  *   - 正常位置通过校验
 
  * 根因：min-cut 算法只看地形不验证可建造性，11 个 wall 站点因位置不可建造
- * 永久阻塞 22 万 tick。P1-2 在入队前预校验，避免注定 blocked 的任务入队。
+ * 永久阻塞 22 万 tick。该预校验在入队前进行，避免注定 blocked 的任务入队。
  */
 describe("isMinCutPositionBuildable — min-cut 割集位置可建造性预校验", () => {
   it("x=0（出口格）不可建造", () => {
@@ -99,7 +99,7 @@ describe("未来蓝图 footprint 防护", () => {
   });
 });
 
-describe("R682 min-cut 规划门槛", () => {
+describe("min-cut 规划门槛", () => {
   it("RCL4 无玩家威胁不规划 min-cut；RCL4+玩家威胁 / RCL5+ 规划", () => {
     expect(shouldPlanMinCut(3)).toBe(false);
     expect(shouldPlanMinCut(4)).toBe(false);
@@ -107,7 +107,7 @@ describe("R682 min-cut 规划门槛", () => {
   });
 });
 
-describe("R683 塔覆盖判定", () => {
+describe("塔覆盖判定", () => {
   const tower = { pos: { x: 25, y: 20 } };
   it("Chebyshev ≤20 覆盖，>20 不覆盖", () => {
     expect(isTowerCovered({ x: 45, y: 20 }, [tower])).toBe(true);

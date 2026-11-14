@@ -1,4 +1,4 @@
-/** 统一 Logger 门面 —— 业务/内核代码禁止直接 console.log（plan §7）。 */
+/** 统一 Logger 门面 —— 业务/内核代码禁止直接 console.log。 */
 
 import { CONFIG } from "../config";
 

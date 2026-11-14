@@ -70,5 +70,5 @@ export class Assertions {
   // assertPopulationBalanced / assertRclAtLeast / assertProgressGrowing / assertEnergyAbove /
   // assertRoleExists / assertRoleAbsent / assertHarvestRate / assertUpgradeRate /
   // assertRecoveryWithin / assert / 工厂 createAssertions 已删除
-  //（R20⑤：审计确认零调用；需要时走 support/assertions 或本类新增）。
+  //（审计确认零调用；需要时走 support/assertions 或本类新增）。
 }

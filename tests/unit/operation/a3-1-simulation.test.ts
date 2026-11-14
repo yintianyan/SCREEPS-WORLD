@@ -1,4 +1,4 @@
-/** A3.1 Simulation Tests — Multi-Room Resource Network Stability */
+/** Simulation Tests — Multi-Room Resource Network Stability */
 import { describe, expect, it } from "vitest";
 import { type SupplyNode } from "../../../src/domain/operation/supply-node";
 import {
@@ -58,7 +58,7 @@ function makeDemand(
   };
 }
 
-describe("A3.1 Simulation — 4 Room (2 surplus + 2 deficit)", () => {
+describe("Simulation — 4 Room (2 surplus + 2 deficit)", () => {
   it("distributes from 2 sources to 2 targets correctly", () => {
     const supply = [makeSupply("A", 50000), makeSupply("B", 30000)];
     const demand = [makeDemand("C", 20000, "critical"), makeDemand("D", 15000, "high")];
@@ -92,7 +92,7 @@ describe("A3.1 Simulation — 4 Room (2 surplus + 2 deficit)", () => {
   });
 });
 
-describe("A3.1 Scale Test — 10+ demand nodes", () => {
+describe("Scale Test — 10+ demand nodes", () => {
   it("Operation Storm: caps at MAX_GLOBAL_OPERATIONS", () => {
     const supply = [makeSupply("A", 999999)];
     const demand: DemandNode[] = [];
@@ -121,7 +121,7 @@ describe("A3.1 Scale Test — 10+ demand nodes", () => {
   });
 });
 
-describe("A3.1 Stability — 10k tick simulation", () => {
+describe("Stability — 10k tick simulation", () => {
   it("rebalance state respects debounce + cooldown across ticks", () => {
     const state = new RebalanceState();
     // Set lastRebalance to 1000 so cooldown applies
@@ -186,7 +186,7 @@ describe("A3.1 Stability — 10k tick simulation", () => {
   });
 });
 
-describe("A3.1 Network Health — end-to-end", () => {
+describe("Network Health — end-to-end", () => {
   it("healthy network when supply >= demand", () => {
     const supply = [makeSupply("A", 50000)];
     const demand = [makeDemand("C", 20000, "normal")];

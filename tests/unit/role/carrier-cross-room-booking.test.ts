@@ -1,5 +1,5 @@
 /**
- * 债单 #42 下半场（= 并行债单 #59）：carrier 是帝国里唯一绕过 `terminal.send` 的跨房通道
+ * carrier 是帝国里唯一绕过 `terminal.send` 的跨房通道
  * （幼房没有 terminal，走不到 terminal-selfaid 那条已补过的路），而它的装载/卸载原本都是裸调用
  * ⇒ 能量真的离开帝国一侧的池时，两侧都没有计数器接住，两间房的 drift 各自关不上。
  * 判据：**在"卸能成功"的同一拍成对入账** —— 收端按目标池所在房记 `imported`，发端按背包出发的房记 `exported`。
@@ -64,7 +64,7 @@ function runRole(creep: any): void {
   carrierRole.run(creep, mockContext(mockSnapshot({ roomName: creep.room.name })));
 }
 
-describe("carrier — 跨房输送在卸能那一拍两侧成对入账（#42 下半场 / #59）", () => {
+describe("carrier — 跨房输送在卸能那一拍两侧成对入账", () => {
   it("在 home 取能成功 → 两侧都不入账（storage→carry 是房内搬运）", () => {
     const storage = mockStructure("storage", { energy: 5000, capacity: 20000 });
     const creep = makeCarrier(HOME, 0, 1200, "acquire", storage);

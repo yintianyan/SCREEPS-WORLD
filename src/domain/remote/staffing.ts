@@ -90,7 +90,7 @@ export function remoteReplacementThreshold(
   return (bodyLength ?? 3) * 3 + CONFIG.spawn.replaceBuffer + remoteTravelBuffer(pathCost);
 }
 
-// ─── A4.1 扩展：基于实际生产的 Hauler Sizing ──────────────
+// ─── 基于实际生产的 Hauler Sizing ──────────────
 
 /**
  * Hauler Sizing 输入参数 — 基于实际生产、距离、运力的动态编制。
@@ -198,7 +198,7 @@ export function computePerHaulerThroughput(
  * Transport Capacity ≥ Expected Production
  * requiredHaulers = ceil(production / perHaulerThroughput)
 
- * A4.1 扩展：基于实际 Production 而非理论 Production 收缩：
+ * 基于实际 Production 而非理论 Production 收缩：
  * if actualProduction < expectedProduction × 0.5:
  *   haulerTarget = max(1, ceil(haulerNeed × (actualProduction / expectedProduction)))
 
@@ -264,7 +264,7 @@ export function validateTransportCapacity(
 }
 
 /**
- * R626：新开远矿的 CPU 预算闸（纯函数）。
+ * 新开远矿的 CPU 预算闸（纯函数）。
  *
  * 扩张推进态（存在 EVALUATED/… 计划）时，G6 要求 `capacity.tier ≤ comfortable`。
  * 新开一条远矿线会常驻 ~4–7 只编制、约 0.5–0.9 CPU；若此时 tier 已差于 comfortable，

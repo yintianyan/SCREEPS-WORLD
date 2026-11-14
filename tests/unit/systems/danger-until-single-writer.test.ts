@@ -1,4 +1,4 @@
-/** P1-G 静态守卫 — dangerUntil 写入点仅存在于 remote-mining-manager。 */
+/** 静态守卫 — dangerUntil 写入点仅存在于 remote-mining-manager。 */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -36,7 +36,7 @@ function stripComments(source: string): string {
     .join("\n");
 }
 
-describe("P1-G 静态守卫 — dangerUntil 写入点仅存在于 remote-mining-manager", () => {
+describe("静态守卫 — dangerUntil 写入点仅存在于 remote-mining-manager", () => {
   it("src 全域非注释代码中 .dangerUntil = 赋值仅出现在 remote-mining-manager.ts", () => {
     const files = collectTsFiles(SRC_DIR);
     const violations: string[] = [];

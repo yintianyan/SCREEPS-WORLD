@@ -19,12 +19,12 @@ export interface ActionCandidate<T = unknown> {
   /** 调试标识（telemetry / 日志用）。 */
   readonly name: string;
   /** 解析目标。返回 undefined 表示此行为不触发。
-   * EN-3：必填 — 可选时「无 resolve 的候选」永远返回 undefined、静默死亡（EN-1 唯一放行闸门）。 */
+   * 必填 — 可选时「无 resolve 的候选」永远返回 undefined、静默死亡（唯一放行闸门）。 */
   readonly resolve: (ac: ActionContext) => T | undefined;
   /** 执行行为。target 为 resolve 返回值，类型由泛型 T 保证。 */
   execute(ac: ActionContext, target: T): void;
   /**
-   * R674 效用仲裁：该候选在当前上下文的价值（>0，越大越优先）。
+   * 效用仲裁：该候选在当前上下文的价值（>0，越大越优先）。
    * 仅当 RolePolicy.arbitration === "utility" 且工作在 work 模式时读取；
    * 未声明时按 1 计（仍参与评分，但不会凭空压过有明确价值的候选）。
    * 返回 0/负数 = 当前不值得做（等价于 resolve 返回 undefined）。
@@ -46,14 +46,14 @@ export interface RolePolicy {
   /** work 模式候选（消耗能量）。异构列表，使用 any 宽化。 */
   work: readonly ActionCandidate<any>[];
   /**
-   * R674：work 模式的选择方式。
+   * work 模式的选择方式。
    * - "chain"（默认）：按列表顺序，第一个 resolve 成功者执行（旧行为）。
    * - "utility"：所有候选参与评分，按价值 × 老化选最高者；承诺窗/切换余量见 CONFIG.arbitration。
    * acquire 永远走 chain —— 取能的安全次序不允许被分数改写。
    */
   arbitration?: "chain" | "utility";
   /**
-   * R676：该角色 utility 模式下的完整决策间隔（tick）。缺省用 CONFIG.arbitration.decisionInterval。
+   * 该角色 utility 模式下的完整决策间隔（tick）。缺省用 CONFIG.arbitration.decisionInterval。
    * 物流角色（hauler/distributor）任务稳定，10 拍决策一次可显著降低全量评分开销；
    * 施工角色（builder/worker）保持默认 5 拍以尽快响应急救/feed。
    */
@@ -61,7 +61,7 @@ export interface RolePolicy {
   /**
    * flee 钩子：威胁检测后、通用 flee 移动之前调用。
    * 返回 true=角色已自行处理（如 hauler 防御圈内安全充能），false=需要通用 flee 接管。
-   * 职责分离（P0-2）：flee 期间的安全区行为由角色层决定，不在引擎层硬编码角色判断。
+   * 职责分离：flee 期间的安全区行为由角色层决定，不在引擎层硬编码角色判断。
    */
   onFlee?(ac: ActionContext): boolean;
   /** idle 归位：无匹配候选（即将 idle）时是否主动离开关键格/道路到安全格待命。
@@ -79,9 +79,9 @@ export interface RolePolicy {
    * avoidRooms（绕开已知 hostile 房）使用，scout 正常走安全路径、仅在路径被封时才 push through。
    */
   pushThrough?: boolean;
-  /** Recovery 豁免自报（R3a）：透传到 CreepRole.recoveryEligible，recovery 时仍执行（P1 等效预算）。 */
+  /** Recovery 豁免自报：透传到 CreepRole.recoveryEligible，recovery 时仍执行（P1 等效预算）。 */
   recoveryEligible?: boolean;
-  /** R649：仅年轻房（RCL<4）recovery/bootstrap 下豁免冻结；透传到 CreepRole.recoveryEligibleYoungRoom。 */
+  /** 仅年轻房（RCL<4）recovery/bootstrap 下豁免冻结；透传到 CreepRole.recoveryEligibleYoungRoom。 */
   recoveryEligibleYoungRoom?: boolean;
   /** 2026-11-08：不参与 idle-cadence 节流（透传到 CreepRole.noIdleCadence）。
    *  upgrader 这类「link 一有能量就能立刻工作」的角色必须每 tick 检查。 */
@@ -99,7 +99,7 @@ export interface RolePolicy {
   /** 执行顺序自报：透传到 CreepRole.executionOrder。 */
   executionOrder?: number;
   /**
-   * 无候选时是否切 idle 的额外条件（P2-M）。
+   * 无候选时是否切 idle 的额外条件。
    * 默认：本地角色（无 remoteTarget）或到达 remoteTarget 房时切 idle；通勤中保持原 mode
    * （避免 idle→ensureHome→home 振荡）。此钩子声明"前两个通用条件未命中时是否仍切 idle"的特例
    * （如 remoteHauler work 在 home 房切 idle，acquire 不切）。
@@ -107,7 +107,7 @@ export interface RolePolicy {
    */
   shouldIdleWhenNoCandidate?(ac: ActionContext): boolean;
   /**
-   * 战备集结（R4）：威胁检测之后、ensureHome 导航之前调用；返回 true 表示接管本 tick，
+   * 战备集结：威胁检测之后、ensureHome 导航之前调用；返回 true 表示接管本 tick，
    * 跳过导航与任务管线直接结束。必须在导航之前执行：否则集结中的角色会被 ensureHome
    * 直接导航进目标房（attacker 在 war build 阶段的「添油战术」正是此路径）。
    * 典型用例：attacker 在 warPlan.phase === "build" 时归建待命，满编（advance）才整波推进。

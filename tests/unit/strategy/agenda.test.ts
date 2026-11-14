@@ -1,4 +1,4 @@
-/** 帝国议程纯函数测试（R6a 主动自治）。 */
+/** 帝国议程纯函数测试（主动自治）。 */
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_AGENDA_OPTIONS,

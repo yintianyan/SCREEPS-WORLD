@@ -322,7 +322,7 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     expect(gaps).toEqual({ source: 0, controller: 0, storage: 1, hub: 0 });
   });
 
-  it("P2-A W8N3 现场：4 link 坐标分类正确 ⇒ 全部缺口为 0（linkStorage 误报回归）", () => {
+  it("W8N3 现场：4 link 坐标分类正确 ⇒ 全部缺口为 0（linkStorage 误报回归）", () => {
     // 现场：sources (34,20)/(30,21)、controller (23,42)、storage (21,15)；
     // links (33,20)/(30,20) 贴两个 source，(22,42) 贴 controller，(22,18) 距 storage 3 格。
     const src1 = mockSource("src1");

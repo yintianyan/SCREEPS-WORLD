@@ -1,4 +1,4 @@
-/** v15 → v16 迁移独立测试（P1-G：dangerUntil 从 intel 搬到 remoteOps）。 */
+/** v15 → v16 迁移独立测试（dangerUntil 从 intel 搬到 remoteOps）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

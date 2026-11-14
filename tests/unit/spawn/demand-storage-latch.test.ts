@@ -1,4 +1,4 @@
-/** Phase 2.5：低储闩锁贯穿 demand —— 关闭时停升级/工业孵化、builder 收编到 1。 */
+/** 低储闩锁贯穿 demand —— 关闭时停升级/工业孵化、builder 收编到 1。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { evaluateDemand, type RoomDemandContext } from "../../../src/domain/spawn/demand";
 import {

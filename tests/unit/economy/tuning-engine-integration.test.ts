@@ -21,7 +21,7 @@ beforeEach(() => {
   delete (globalThis as any).__segStore;
   // Mock RawMemory for segment-store migration checks.
   (globalThis as any).RawMemory = { segments: {}, setActiveSegments: () => {} };
-  // ISSUE-008: 清理 creepRefs，防跨用例污染（setupCreeps 会写入）。
+  // 清理 creepRefs，防跨用例污染（setupCreeps 会写入）。
   globalCache().creepRefs = undefined;
 });
 
@@ -86,7 +86,7 @@ function setupTimeseries(econ: RingBuffer<EconomySample>, cpu: RingBuffer<CpuSam
 }
 
 /** 向 Game.creeps 追加指定角色的 creep（多次调用可累积多房 creep）。
- *  ISSUE-008: 同步写入 globalCache().creepRefs，因为 tuning-engine
+ *  同步写入 globalCache().creepRefs，因为 tuning-engine
  *  不再直接遍历 Game.creeps 而是消费共享快照总线。 */
 function setupCreeps(roomName: string, roles: Record<string, number>): void {
   const existing = (globalThis as any).Game.creeps ?? {};
@@ -422,9 +422,9 @@ describe("tuning-engine integration — run() 完整链路", () => {
 // ─── 边界场景测试（CTO 全面审查后补充）─────────────────────────
 
 describe("tuning-engine 边界场景 — 消费端饱和度", () => {
-  it("container满 + 消费端真饱和（storage 盈余+储备在涨）→ 不加 hauler（改进 B 验证）", () => {
+  it("container满 + 消费端真饱和（storage 盈余+储备在涨）→ 不加 hauler", () => {
     const roomName = "W7N4";
-    // 改进 B：consumerSaturated = container 满 + storage > surplus + 储备在涨
+    // consumerSaturated = container 满 + storage > surplus + 储备在涨
     // RCL4 early surplus=20000，se=30000 > 20000 → 消费端真饱和
     const econ = buildEconomyRing(roomName, 15, { ea: 7000, ec: 8000, se: 30000 });
     const cpu = buildCpuRing(15);
@@ -443,7 +443,7 @@ describe("tuning-engine 边界场景 — 消费端饱和度", () => {
     expect(tuning.rooms[roomName].roleBounds.hauler?.maxCount).toBeUndefined();
   });
 
-  it("container满 + 消费端未饱和（storage 低于 surplus）→ 加 hauler（改进 B 正向验证）", () => {
+  it("container满 + 消费端未饱和（storage 低于 surplus）→ 加 hauler", () => {
     const roomName = "W7N4";
     // RCL4 early surplus=20000，se=10000 < 20000 → consumerSaturated=false
     const econ = buildEconomyRing(roomName, 15, { ea: 4000, ec: 8000, se: 10000 });
@@ -612,7 +612,7 @@ describe("tuning-engine 边界场景 — 钳制边界", () => {
     (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
 
     // 预设 hauler.maxCount 已达 ceiling
-    // P1-I：预置 baselineVersion 与 CONFIG 对齐，否则会触发清零。
+    // 预置 baselineVersion 与 CONFIG 对齐，否则会触发清零。
     (globalThis as any).Memory.kernel.tuning = {
       lastTuned: 0,
       baselineVersion: CONFIG.tuning.baselineVersion,
@@ -798,9 +798,9 @@ describe("tuning-engine 边界场景 — 慢振荡验证", () => {
   });
 });
 
-// ─── P1-I：baselineVersion 版本戳清零 ───────────────────────
+// ─── baselineVersion 版本戳清零 ───────────────────────
 
-describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
+describe("tuning-engine — baselineVersion 版本戳", () => {
   it("首次运行（无 baselineVersion）→ 清空 rooms 并写入当前版本", () => {
     const roomName = "W7N4";
     const econ = buildEconomyRing(roomName, 15);
@@ -932,7 +932,7 @@ describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
   });
 });
 
-// ─── P3：verify pass 继承全局门禁（附录 E.2 修复）──────────────
+// ─── P3：verify pass 继承全局门禁 ──────────────
 
 describe("tuning-engine — P3 verify 全局门禁", () => {
   it("危机期（crisisRatio > 0.3）verify 跳过，pending 保留，参数仍被 pending-lock 排除", () => {

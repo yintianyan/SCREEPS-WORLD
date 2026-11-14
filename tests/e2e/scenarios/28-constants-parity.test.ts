@@ -1,5 +1,5 @@
 /**
- * E2E-028 常量 parity 哨兵（FREEZE R20② / T1）。
+ * E2E-028 常量 parity 哨兵。
  *
  * 防漂移机制：support/constants（SSOT = @screeps/driver constants + 补充表）
  * 注入 unit/integration 全局的值，必须与真实引擎运行时暴露的全局常量逐键一致。
@@ -188,9 +188,7 @@ describe("E2E-028 常量 parity 哨兵 — support/constants ↔ 真实引擎运
     }
     expect(
       mismatches,
-      `常量漂移（R20② 哨兵命中）— 修 support/constants，禁止改本哨兵放行:\n${mismatches.join(
-        "\n",
-      )}`,
+      `常量漂移（哨兵命中）— 修 support/constants，禁止改本哨兵放行:\n${mismatches.join("\n")}`,
     ).toEqual([]);
   }, 60000);
 });

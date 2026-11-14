@@ -26,7 +26,7 @@ import { updateNetFlowEma, brakeGateSum, nextUpgradeBrake } from "../../domain/e
 import { computeTieredBudget } from "../../domain/expansion/budget";
 import { evaluateSafetyMargin } from "../../domain/strategy/safety-margin";
 import { buildEmpirePlannerInput } from "../../domain/strategy/planner-input";
-// A4.2 多资源链路
+// 多资源链路
 import { getAllMineralTypes } from "../../domain/economy/resource-definition";
 import {
   createResourceLedger,
@@ -49,7 +49,7 @@ const READINESS_CODES: Record<string, number> = {
   STRONGLY_READY: 2,
 };
 
-/** A4.2 多资源健康度编码（与 Energy 健康度编码对齐，供快照用）。 */
+/** 多资源健康度编码（与 Energy 健康度编码对齐，供快照用）。 */
 const MULTI_HEALTH_CODES: Record<ResourceHealthStatus, number> = {
   critical: 0,
   deficit: 1,
@@ -59,7 +59,7 @@ const MULTI_HEALTH_CODES: Record<ResourceHealthStatus, number> = {
 };
 
 /**
- * A4.2：从 RoomSnapshot 采集矿物库存快照。
+	 * 从 RoomSnapshot 采集矿物库存快照。
 
  * 只采集矿物（非 energy），energy 由现有 EnergyLedger 链路处理。
  * 遍历 storage / terminal / container / lab / factory 中的矿物存量。
@@ -104,7 +104,7 @@ function collectMineralStock(
 }
 
 /**
- * A4.2：从各房矿物库存聚合为帝国级 ResourceLedger。
+ * 从各房矿物库存聚合为帝国级 ResourceLedger。
  */
 function buildEmpireResourceLedger(
   snapshots: readonly import("../../kernel/contracts").RoomSnapshot[],
@@ -127,7 +127,7 @@ function buildEmpireResourceLedger(
 }
 
 /**
- * A4.2：将 Energy-only EconomicHealth 映射到 ResourceHealthStatus。
+ * 将 Energy-only EconomicHealth 映射到 ResourceHealthStatus。
 
  * EmpireEconomicHealth（critical/deficit/stable/growing/healthy）
  * → ResourceHealthStatus（critical/deficit/degraded/stable/healthy）。
@@ -316,7 +316,7 @@ export const empireEconomySystem: System = {
     // ── 写入 heap 缓存（供同 tick 内其他系统只读消费）──
     cachedPlannerInput = { tick: ctx.tick, input: plannerInput };
 
-    // ── A4.2 步 11：多资源链路 ──
+    // ── 步 11：多资源链路 ──
     // 从 RoomSnapshot 采集矿物库存 → 帝国级 ResourceLedger → 多资源健康度 + 瓶颈
     const allSnapshots = Array.from(ctx.snapshots());
     const empireLedger = buildEmpireResourceLedger(allSnapshots);
@@ -366,7 +366,7 @@ export const empireEconomySystem: System = {
       eb: budget.expansion,
       fb: budget.free,
       rr: budget.reserve,
-      // A4.2 多资源维度
+      // 多资源维度
       mh: MULTI_HEALTH_CODES[multiHealth.health] ?? 0,
       md: multiHealth.hasMineralDeficit ? 1 : 0,
       bn: bottleneckCode,

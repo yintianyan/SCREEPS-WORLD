@@ -1,4 +1,4 @@
-/** Pipeline Runtime Tests — Phase 6 验证 pipeline 顺序和错误隔离。 */
+/** Pipeline Runtime Tests — 验证 pipeline 顺序和错误隔离。 */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { tacticalRuntimePipelineSystem } from "../../../src/systems/military/tactical-runtime-pipeline";
 

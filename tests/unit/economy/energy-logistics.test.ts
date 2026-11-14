@@ -1,4 +1,4 @@
-/** 帝国能量互济与能量市场 — 纯函数测试（R5 经济主线）。 */
+/** 帝国能量互济与能量市场 — 纯函数测试（经济主线）。 */
 import { describe, expect, it } from "vitest";
 import {
   energyBuyAmount,

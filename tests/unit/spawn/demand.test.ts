@@ -1,4 +1,4 @@
-/** Spawn 需求评估测试（A2 升级功率 + A4 替换路程项）。 */
+/** Spawn 需求评估测试（升级功率 + 替换路程项）。 */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   evaluateDemand,
@@ -67,7 +67,7 @@ function stationSnapshot(overrides: Parameters<typeof mockSnapshot>[0]) {
   });
 }
 
-describe("A2 — storage 水位驱动升级功率", () => {
+describe("storage 水位驱动升级功率", () => {
   it("冲刺：storage ≥ 50k 且健康 → 3 个大 body upgrader（烧库存换 RCL，RCL<8 不限速）", () => {
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
@@ -82,12 +82,12 @@ describe("A2 — storage 水位驱动升级功率", () => {
     );
 
     const upgraders = requests.filter(r => r.role === "upgrader");
-    // P1-A：RCL<8 解除自限速，冲刺 3 个 40W 大 body = 120/tick（CPU 有余量）。
+    // RCL<8 解除自限速，冲刺 3 个 40W 大 body = 120/tick（CPU 有余量）。
     expect(upgraders).toHaveLength(3);
     expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(40);
   });
 
-  it("P1-C：临死 upgrader（ttl < 400）不计入编制 ⇒ 提前补员", () => {
+  it("临死 upgrader（ttl < 400）不计入编制 ⇒ 提前补员", () => {
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
     const creeps = [
@@ -157,7 +157,7 @@ describe("A2 — storage 水位驱动升级功率", () => {
     expect(bodyCost(upgraders[0]!.body)).toBeLessThanOrEqual(1300);
     // 封顶后落到 8W 档（模板自己的注释：「RCL4(1300) 主力档」），不是把需求静默归零。
     expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(8);
-    // R692：生产 demand 路径也要带上 2C（只测 selectBody 会漏掉请求装配层）。
+    // 生产 demand 路径也要带上 2C（只测 selectBody 会漏掉请求装配层）。
     expect(upgraders[0]!.body.filter(p => p === "carry")).toHaveLength(2);
     expect(bodyCost(upgraders[0]!.body)).toBe(1000);
   });
@@ -249,7 +249,7 @@ describe("A2 — storage 水位驱动升级功率", () => {
   });
 });
 
-describe("A4 — 替换阈值计入通勤路程", () => {
+describe("替换阈值计入通勤路程", () => {
   it("needsReplacement：阈值 = bodyLength*3 + buffer + travelTicks", () => {
     // body 7 部件 → 孵化 21 tick；buffer 15；travel 30 → 阈值 66。
     expect(needsReplacement(66, 7, 30)).toBe(true);
@@ -512,7 +512,7 @@ describe("TD-016 — Builder pressure 迟滞带", () => {
     });
   }
 
-  // P1-J：迟滞状态通过 prevHysteresis 注入、nextHysteresis 断言 — 不再直读写 Memory。
+  // 迟滞状态通过 prevHysteresis 注入、nextHysteresis 断言 — 不再直读写 Memory。
 
   it("初始状态默认 full — pressure 0.2 时 builder 满目标", () => {
     const snap = builderSnapshot();
@@ -970,7 +970,7 @@ describe("Body 感知配额 — 数量按单体能力折算，防大 body 时代
   });
 });
 
-describe("B1 — link 覆盖的 source container 不计入 hauler 积压信号", () => {
+describe("link 覆盖的 source container 不计入 hauler 积压信号", () => {
   it("有 source link 的满容器跳过；无 link 的满容器照常计入（对照 2 vs 4）", () => {
     const storage = mockStructure("storage", { id: "st", energy: 5000, capacity: 1000000 });
     const src1 = mockSource("s1");
@@ -1023,7 +1023,7 @@ describe("B1 — link 覆盖的 source container 不计入 hauler 积压信号",
 });
 
 describe("Distributor 升编趋势确认 — 防孵化尖峰催生过量编制", () => {
-  // P1-J：计时器通过 prevHysteresis 注入、nextHysteresis 断言 — 不再直读写 Memory。
+  // 计时器通过 prevHysteresis 注入、nextHysteresis 断言 — 不再直读写 Memory。
 
   /** 6 个 fillTarget 尖峰快照（容量 600 → 6C=300 运力 → 每头承接 2 个 → want=3）。 */
   function spikeSnapshot(fillCount = 6) {
@@ -1215,7 +1215,7 @@ describe("矿位分配 — 专职矿工口径（防 worker 挂名误导 + 平局
   });
 });
 
-describe("SP-11 — 降级回退守卫（RECOVERY_BODY 兜底不得铸出缺必需部件的废件）", () => {
+describe("降级回退守卫（RECOVERY_BODY 兜底不得铸出缺必需部件的废件）", () => {
   it("团灭现场 + 能量 < 130：P0 defender 拿最低档 [ATTACK,MOVE]，而非无攻击的 [W,C,M]", () => {
     // 修复前：degradeBody 失败 → selectBody(100) 无档可选 → RECOVERY_BODY —
     // 能量回升到 200 时孵出一只不能攻击的"防御者"，紧急时刻白烧 200 能量。
@@ -1370,7 +1370,7 @@ describe("hauler 积压信号接收端可达性闸门（无 storage 防移动仓
   });
 
   /**
-   * 线上回归（2026-09-30 巡检 #47）：这个闸门原本只是「别多孵」的刹车（安全、自愈），
+   * 线上回归（2026-09-30）：这个闸门原本只是「别多孵」的刹车（安全、自愈），
    * 但同一个 `haulerTarget` 被喂给回收通道当「销毁」的触发器 ⇒ sink 一满 keep 就变小，
    * recyclePass 按 ttl 升序吃掉最年轻的 hauler（实测 W38S56 1225 拍内 25 次）。
    * ⇒ demand 必须另外报一个**事实**：源侧 container 压着能量（`sourceBacklog`），
@@ -1417,7 +1417,7 @@ describe("hauler 积压信号接收端可达性闸门（无 storage 防移动仓
 describe("labTender 孵化门禁（反应链最后一公里的执行人）", () => {
   const terminal = mockStructure("terminal", { id: "term1", energy: 10000, capacity: 300000 });
   const labs = [1, 2, 3, 4].map(i => mockStructure("lab", { id: `lab${i}` }));
-  // R595：只有 ≥2 个带矿物的 lab 才可能反应，才补孵 labTender。
+  // 只有 ≥2 个带矿物的 lab 才可能反应，才补孵 labTender。
   const richLabs = [1, 2, 3, 4].map(i =>
     Object.assign(mockStructure("lab", { id: `lab${i}` }), {
       mineralAmount: 100,
@@ -1460,22 +1460,22 @@ describe("labTender 孵化门禁（反应链最后一公里的执行人）", () 
     );
   });
 
-  it("lab≥3 但无带矿物 lab（无法反应）→ 不孵化（R595）", () => {
+  it("lab≥3 但无带矿物 lab（无法反应）→ 不孵化", () => {
     expect(reqsFor("normal", labSnap())).toHaveLength(0);
   });
 
-  it("P0-A：lab 全空但有工业供料需求 ⇒ 孵 labTender（旧门禁自锁）", () => {
+  it("lab 全空但有工业供料需求 ⇒ 孵 labTender（旧门禁自锁）", () => {
     // 线上 W8N3：6 座 lab 数小时全空、terminal 里 O/X/H 躺着 —— 旧门禁
     // 「≥2 lab 已有矿物」恒假，而搬矿的正是 labTender ⇒ 结构性自锁。
     // 2026-11-08 提到 maxCount=2：两只并行覆盖两个反应 trio。
     expect(reqsFor("normal", labSnap(), { labSupplyNeeded: true })).toHaveLength(2);
   });
 
-  it("P0-A：无供料需求且 lab 全空 ⇒ 仍不孵（保留 R595 成本约束）", () => {
+  it("无供料需求且 lab 全空 ⇒ 仍不孵（保留成本约束）", () => {
     expect(reqsFor("normal", labSnap(), { labSupplyNeeded: false })).toHaveLength(0);
   });
 
-  it("P0-A：供料需求注入不改变「有矿 lab」的旧路径", () => {
+  it("供料需求注入不改变「有矿 lab」的旧路径", () => {
     expect(
       reqsFor("normal", labSnap({ labs: richLabs as never }), { labSupplyNeeded: false }),
     ).toHaveLength(2);
@@ -1585,7 +1585,7 @@ describe("mineralMiner 孵化门禁（工业链第一环激活）", () => {
     expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
   });
 
-  it("recovery 态 → 保底孵化 1 个（R3a 收入路径豁免：矿物收入是脱困路径）", () => {
+  it("recovery 态 → 保底孵化 1 个（收入路径豁免：矿物收入是脱困路径）", () => {
     const snap = industrySnap();
     const { requests } = evaluateDemand(
       snap,
@@ -1614,8 +1614,8 @@ describe("mineralMiner 孵化门禁（工业链第一环激活）", () => {
   });
 });
 
-// ── P2-2：tuning pending 期间 hauler 主动收敛 ──
-describe("P2-2 haulerPendingTarget — tuning pending 期间主动收敛 haulerTarget", () => {
+// ── tuning pending 期间 hauler 主动收敛 ──
+describe("haulerPendingTarget — tuning pending 期间主动收敛 haulerTarget", () => {
   it("haulerPendingTarget=4 时 haulerTarget=4（normal 态主动扩编）", () => {
     const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
     const snap = stationSnapshot({ storage, rcl: 6, energyCapacityAvailable: 2300 });
@@ -1655,8 +1655,8 @@ describe("P2-2 haulerPendingTarget — tuning pending 期间主动收敛 haulerT
     expect(result.haulerTarget).toBe(3);
   });
 
-  // P2-2 crisis 短路优先级测试（2026-08-03 加固）：
-  // demand.ts:558 短路 `!(inCrisis && !liquidityDriven)` 是 P2-2 的关键安全闸。
+  // crisis 短路优先级测试（2026-08-03 加固）：
+  // demand.ts:558 短路 `!(inCrisis && !liquidityDriven)` 是该收敛逻辑的关键安全闸。
   // - 偿付危机（drainScore 主导，liquidityDriven=false）时 pending 被忽略 → 收缩到 minCount
   // - 流动性危机（liquidityScore 主导，liquidityDriven=true）时 pending 生效 → 满量孵化打破死锁
   // 若该短路被未来重构破坏，pending 会在偿付危机时强行扩编 hauler，
@@ -1784,7 +1784,7 @@ describe("无 storage 的早期房：economyPressure 不得清零升级道", () 
   });
 });
 
-describe("#85 — upgraderClamp：需求阶梯当前把编制压在哪个结构上限", () => {
+describe("upgraderClamp：需求阶梯当前把编制压在哪个结构上限", () => {
   /** 只关心钳位字段，队列/存活态用最小可信场景（一台存活 harvester 避开 P0 短路）。 */
   function clampOf(
     storageEnergy: number,
@@ -1866,7 +1866,7 @@ describe("#85 — upgraderClamp：需求阶梯当前把编制压在哪个结构�
   });
 });
 
-describe("R684 — R632 的 CPU 门只应作用于 expansionPush 房", () => {
+describe("CPU 门只应作用于 expansionPush 房", () => {
   function staged() {
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = stationSnapshot({ storage, rcl: 4, energyCapacityAvailable: 1300 });
@@ -1890,7 +1890,7 @@ describe("R684 — R632 的 CPU 门只应作用于 expansionPush 房", () => {
     expect(requests.some(r => r.role === "upgrader")).toBe(true);
   });
 
-  it("扩张推进房 + CPU tight：R632 仍停升级", () => {
+  it("扩张推进房 + CPU tight：仍停升级", () => {
     const { snap, creeps } = staged();
     const { requests } = evaluateDemand(
       snap,
@@ -1907,7 +1907,7 @@ describe("R684 — R632 的 CPU 门只应作用于 expansionPush 房", () => {
     expect(requests.some(r => r.role === "upgrader")).toBe(false);
   });
 
-  it("R688：扩张推进房 + CPU tight + storage 满仓 ⇒ 满仓让位，仍补 upgrader", () => {
+  it("扩张推进房 + CPU tight + storage 满仓 ⇒ 满仓让位，仍补 upgrader", () => {
     // 满仓时盈余无处可放；停升级只会把能量白扔。升级器本来已存活，工作只增加动作开销。
     const { snap, creeps } = staged();
     const { requests } = evaluateDemand(

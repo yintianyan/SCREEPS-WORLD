@@ -1,4 +1,4 @@
-/** A3.1 Contract Tests — Empire Resource Network */
+/** Contract Tests — Empire Resource Network */
 import { describe, expect, it } from "vitest";
 import {
   buildSupplyNode,
@@ -60,7 +60,7 @@ function makeEntry(overrides: Partial<RoomRegistryEntry> = {}): RoomRegistryEntr
 
 // ── Supply Node Tests ──────────────────────────────────
 
-describe("A3.1-001: Supply Node — buildSupplyNode basic", () => {
+describe("Supply Node — buildSupplyNode basic", () => {
   it("creates supply node from surplus entry", () => {
     const entry = makeEntry({ roomName: "A", transferable: 50000 });
     const node = buildSupplyNode(entry, 5000, TICK);
@@ -84,7 +84,7 @@ describe("A3.1-001: Supply Node — buildSupplyNode basic", () => {
   });
 });
 
-describe("A3.1-002: Supply Node — buildSupplyNodes batch", () => {
+describe("Supply Node — buildSupplyNodes batch", () => {
   it("builds multiple nodes sorted by transferable desc", () => {
     const entries = [
       makeEntry({ roomName: "A", transferable: 30000 }),
@@ -101,7 +101,7 @@ describe("A3.1-002: Supply Node — buildSupplyNodes batch", () => {
   });
 });
 
-describe("A3.1-003: Supply Node — sumSupplyTransferable", () => {
+describe("Supply Node — sumSupplyTransferable", () => {
   it("sums all transferable", () => {
     const nodes: SupplyNode[] = [
       {
@@ -133,7 +133,7 @@ describe("A3.1-003: Supply Node — sumSupplyTransferable", () => {
   });
 });
 
-describe("A3.1-004: Supply Node — health computation", () => {
+describe("Supply Node — health computation", () => {
   it("high health for rich room", () => {
     const entry = makeEntry({ riskBuffer: 3000, storageRatio: 0.8, netFlow: 20 });
     const node = buildSupplyNode(entry, 0, TICK);
@@ -147,7 +147,7 @@ describe("A3.1-004: Supply Node — health computation", () => {
   });
 });
 
-describe("A3.1-005: Supply Node — priority derivation", () => {
+describe("Supply Node — priority derivation", () => {
   it("P3 for very safe room", () => {
     const entry = makeEntry({ riskBuffer: 3000 });
     const node = buildSupplyNode(entry, 0, TICK);
@@ -163,7 +163,7 @@ describe("A3.1-005: Supply Node — priority derivation", () => {
 
 // ── Demand Node Tests ──────────────────────────────────
 
-describe("A3.1-006: Demand Node — buildDemandNode basic", () => {
+describe("Demand Node — buildDemandNode basic", () => {
   it("creates demand node from deficit entry", () => {
     const entry = makeEntry({
       roomName: "C",
@@ -186,7 +186,7 @@ describe("A3.1-006: Demand Node — buildDemandNode basic", () => {
   });
 });
 
-describe("A3.1-007: Demand Node — criticality levels", () => {
+describe("Demand Node — criticality levels", () => {
   it("critical for struggling room", () => {
     const entry = makeEntry({
       needsAid: true,
@@ -234,7 +234,7 @@ describe("A3.1-007: Demand Node — criticality levels", () => {
   });
 });
 
-describe("A3.1-008: Demand Node — fulfillment tracking", () => {
+describe("Demand Node — fulfillment tracking", () => {
   it("updateFulfillment increases fulfilled, decreases remaining", () => {
     const entry = makeEntry({
       needsAid: true,
@@ -261,7 +261,7 @@ describe("A3.1-008: Demand Node — fulfillment tracking", () => {
   });
 });
 
-describe("A3.1-009: Demand Node — starvation + aging", () => {
+describe("Demand Node — starvation + aging", () => {
   it("isStarving returns true after threshold", () => {
     const entry = makeEntry({
       needsAid: true,
@@ -287,7 +287,7 @@ describe("A3.1-009: Demand Node — starvation + aging", () => {
   });
 });
 
-describe("A3.1-010: Demand Node — batch build sorted by criticality", () => {
+describe("Demand Node — batch build sorted by criticality", () => {
   it("critical before low", () => {
     const entries = [
       makeEntry({
@@ -313,7 +313,7 @@ describe("A3.1-010: Demand Node — batch build sorted by criticality", () => {
 
 // ── Network Snapshot Tests ──────────────────────────────
 
-describe("A3.1-011: Network Snapshot — buildNetworkSnapshot", () => {
+describe("Network Snapshot — buildNetworkSnapshot", () => {
   it("computes totals correctly", () => {
     const supply: SupplyNode[] = [
       {
@@ -354,7 +354,7 @@ describe("A3.1-011: Network Snapshot — buildNetworkSnapshot", () => {
   });
 });
 
-describe("A3.1-012: Network Snapshot — needsRebalance", () => {
+describe("Network Snapshot — needsRebalance", () => {
   it("returns true for first snapshot", () => {
     const snap = {
       tick: TICK,
@@ -403,7 +403,7 @@ describe("A3.1-012: Network Snapshot — needsRebalance", () => {
   });
 });
 
-describe("A3.1-013: Network Snapshot — gap sign reversal triggers rebalance", () => {
+describe("Network Snapshot — gap sign reversal triggers rebalance", () => {
   it("gap sign reversal triggers rebalance", () => {
     const snap1 = {
       tick: TICK,
@@ -437,7 +437,7 @@ describe("A3.1-013: Network Snapshot — gap sign reversal triggers rebalance", 
 
 // ── Allocation Policy v2 Tests ──────────────────────────
 
-describe("A3.1-014: Allocation Policy v2 — TOCTOU prevention", () => {
+describe("Allocation Policy v2 — TOCTOU prevention", () => {
   it("does not double-allocate from same source", () => {
     const supply: SupplyNode[] = [
       {
@@ -486,7 +486,7 @@ describe("A3.1-014: Allocation Policy v2 — TOCTOU prevention", () => {
   });
 });
 
-describe("A3.1-015: Allocation Policy v2 — Multi-Source Fulfillment", () => {
+describe("Allocation Policy v2 — Multi-Source Fulfillment", () => {
   it("multiple sources satisfy one demand", () => {
     const supply: SupplyNode[] = [
       {
@@ -537,7 +537,7 @@ describe("A3.1-015: Allocation Policy v2 — Multi-Source Fulfillment", () => {
   });
 });
 
-describe("A3.1-016: Allocation Policy v2 — Operation Storm prevention", () => {
+describe("Allocation Policy v2 — Operation Storm prevention", () => {
   it("respects MAX_GLOBAL_OPERATIONS", () => {
     // Create more demands than MAX_GLOBAL_OPERATIONS
     const supply: SupplyNode[] = [
@@ -611,7 +611,7 @@ describe("A3.1-016: Allocation Policy v2 — Operation Storm prevention", () => 
   });
 });
 
-describe("A3.1-017: Allocation Policy v2 — explainable reasons", () => {
+describe("Allocation Policy v2 — explainable reasons", () => {
   it("generates reason for each plan", () => {
     const supply: SupplyNode[] = [
       {
@@ -656,7 +656,7 @@ describe("A3.1-017: Allocation Policy v2 — explainable reasons", () => {
 
 // ── Rebalance State Tests ───────────────────────────────
 
-describe("A3.1-020b: Rebalance — event-driven debounce", () => {
+describe("Rebalance — event-driven debounce", () => {
   it("no events = no rebalance", () => {
     const state = new RebalanceState();
     const decision = decideRebalance(state, TICK);

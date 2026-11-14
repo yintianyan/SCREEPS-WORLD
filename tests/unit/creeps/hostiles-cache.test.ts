@@ -1,4 +1,4 @@
-/** getHostilesCached — per-tick per-room hostile 缓存测试（P1-C）。 */
+/** getHostilesCached — per-tick per-room hostile 缓存测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getHostilesCached } from "../../../src/creeps/support/targeting";
 import { resetGlobals } from "../../support/factories";

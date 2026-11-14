@@ -39,16 +39,16 @@ const CONTAINER_VERY_LOW = 0.15;
 /** Build queue 积压阈值。 */
 const BUILD_BACKLOG = 3;
 
-// ─── 改进 A：闭环验证常量（附录 D）────────────────────────────
+// ─── 闭环验证常量 ────────────────────────────
 
-/** 容差双门限 max(5% 相对, 0.05 绝对)（附录 9.2-1），防低基数失效（container=0.1 时 5%=0.005）。 */
+/** 容差双门限 max(5% 相对, 0.05 绝对)，防低基数失效（container=0.1 时 5%=0.005）。 */
 const TOLERANCE_RELATIVE = 0.05;
 const TOLERANCE_ABSOLUTE = 0.05;
 
-/** D.4 下调护栏：spawn 填充率 < 0.5 视为「spawn 饿死」（半空 = 搬运塌方证据），即使主信号改善也回滚。 */
+/** 下调护栏：spawn 填充率 < 0.5 视为「spawn 饿死」（半空 = 搬运塌方证据），即使主信号改善也回滚。 */
 const SPAWN_FILL_GUARDRAIL = 0.5;
 
-/** D.4 下调护栏：avgReserveDelta 转负视为「储备恶化」，即使主信号改善也回滚。 */
+/** 下调护栏：avgReserveDelta 转负视为「储备恶化」，即使主信号改善也回滚。 */
 const RESERVE_DELTA_GUARDRAIL = 0;
 
 // ─── 单参数评估结果 ───────────────────────────────────────────
@@ -59,7 +59,7 @@ interface ParamEvaluation {
   adjustment?: TuningAdjustment;
   /** 本次评估为该参数记录的最新方向（写回 RoomTuningState.lastTrend）。 */
   newDirection: TrendDirection;
-  /** 改进 A：触发调整时返回的 pendingValidation 写入指令（adjustTick 由调用方填入）。 */
+  /** 触发调整时返回的 pendingValidation 写入指令（adjustTick 由调用方填入）。 */
   pendingValidation?: Omit<PendingValidation, "adjustTick">;
 }
 
@@ -67,7 +67,7 @@ interface ParamEvaluation {
 
 /**
  * 评估所有可调参数，返回调整列表。
- * currentBounds 为 CONFIG + override 合并后的值；excludedParams（pending-lock D.2 +
+ * currentBounds 为 CONFIG + override 合并后的值；excludedParams（pending-lock +
  * frozen P3 的参数）从 evals 整体排除（含 trend 记录）。
  */
 export function evaluateTuning(
@@ -156,7 +156,7 @@ export function evaluateTuning(
   ];
 
   for (const [param, evalResult] of allEvals) {
-    // 排除参数（D.2 pending-lock + P3 frozen）trend 置 none，验证完成后从 none 重新积累
+    // 排除参数（pending-lock + P3 frozen）trend 置 none，验证完成后从 none 重新积累
     if (excludedParams?.has(param)) {
       newTrend[param] = "none";
       continue;
@@ -216,7 +216,7 @@ function evaluateHaulerMaxCount(
   const boundsDef = TUNING_BOUNDS[param]!;
   const economyHealthy = s.avgPressure < PRESSURE_HEALTHY;
 
-  // 改进 B：消费端真实无去处 = container 满 + storage 盈余 + 储备在涨，替代旧
+  // 消费端真实无去处 = container 满 + storage 盈余 + 储备在涨，替代旧
   // spawnFillRatio < 0.8 门禁（distributor 正常工作时该门禁永久不满足）。
   const storageSurplus = getStorageThresholds(s.rcl).surplus;
   const consumerSaturated =
@@ -267,7 +267,7 @@ function evaluateHaulerMinCount(
   const boundsDef = TUNING_BOUNDS[param]!;
   const economyHealthy = s.avgPressure < PRESSURE_HEALTHY;
 
-  // 改进 B 一致性同步：minCount 与 maxCount 共享消费端约束，
+  // 一致性同步：minCount 与 maxCount 共享消费端约束，
   // 防止「min 上调 → max 不上调 → 死锁」。
   const storageSurplus = getStorageThresholds(s.rcl).surplus;
   const consumerSaturated =
@@ -366,16 +366,16 @@ function evaluateUpgraderMaxCount(
   const economyHealthy = s.avgPressure < PRESSURE_HEALTHY;
   const economyStressed = s.avgPressure > PRESSURE_STRESSED;
 
-  // 改进 C：storage 阈值按 RCL 分级，不同发展阶段用不同标准。
+  // storage 阈值按 RCL 分级，不同发展阶段用不同标准。
   const { surplus: storageSurplus, low: storageLow } = getStorageThresholds(s.rcl);
 
   let desired: TrendDirection = "none";
   let reason = "";
 
   // ↑ 增加：storage 持续高位 + 经济健康 + upgrader 已达上限
-  // ⚠️#85 的事前绑定判据：需求阶梯若正被结构钳位压着（非满仓冲刺=2、维持与低水位=1、无站桩 container=minCount），
+  // ⚠️事前绑定判据：需求阶梯若正被结构钳位压着（非满仓冲刺=2、维持与低水位=1、无站桩 container=minCount），
   // 那么把 maxCount 抬到钳位之上**不改变任何需求** —— 在场数永远到不了 preAdjustValue+1，
-  // 验证时 D.3 必判未达成 ⇒ 这次 ↑ 只是被撤之前的一次空转。宁可不提，也不提注定落不了地的。
+  // 验证时人口合同必判未达成 ⇒ 这次 ↑ 只是被撤之前的一次空转。宁可不提，也不提注定落不了地的。
   // 钳位缺省（undefined）= 没有东西在压 maxCount ⇒ 照常放行（不把正常通路焊死）。
   // 注意 RCL8 满级是"阶梯整条关掉 ⇒ 留空"那一型，它由下面的 `upgraderCount >= current` 拦，不靠钳位。
   if (
@@ -457,10 +457,10 @@ function evaluateBuilderMaxCount(
 // ─── 趋势确认核心 ────────────────────────────────────────────
 
 /**
- * 趋势确认逻辑（P1-1）+ 改进 A 闭环验证快照构造。
+ * 趋势确认逻辑 + 闭环验证快照构造。
  * 机制：desired=none → 清趋势；desired 与 prevDirection 相同（连续 2 次同方向）→
  * 触发调整并重置趋势；不同 → 首次观察，只记录方向不调整。
- * 改进 A：触发调整时同步构造 PendingValidation 写入指令（preAdjustSignals 快照 +
+ * 触发调整时同步构造 PendingValidation 写入指令（preAdjustSignals 快照 +
  * expectedDirection + adjustDirection），由调用方（tuning-engine）落 Memory。
  */
 function confirmAndBuild(
@@ -486,7 +486,7 @@ function confirmAndBuild(
     return {
       adjustment: { param, oldValue: currentValue, newValue, reason },
       newDirection: "none", // 调整后重置，下次需重新积累 2 次确认
-      // 改进 A：构造 pendingValidation 快照（adjustTick 由 evaluateTuning 填入 currentTick）
+      // 构造 pendingValidation 快照（adjustTick 由 evaluateTuning 填入 currentTick）
       pendingValidation: {
         preAdjustSignals: capturePreAdjustSignals(param, signals),
         expectedDirection: getExpectedDirection(param, desired),
@@ -522,7 +522,7 @@ function toSignalRecord(s: TuningSignals): Record<string, number> {
   };
 }
 
-// ─── 改进 A：闭环验证辅助函数 ──────────────────────────────
+// ─── 闭环验证辅助函数 ──────────────────────────────
 
 /**
  * 从当前 signals 捕获参数相关的快照子集（控 Memory 体积）。
@@ -533,7 +533,7 @@ function capturePreAdjustSignals(param: string, s: TuningSignals): AdjustSignals
   if (param.startsWith("hauler.")) {
     snapshot.containerFillRatio = s.containerFillRatio;
     snapshot.spawnFillRatio = s.spawnFillRatio;
-    // P2 修复（附录 E.2）：补 avgReserveDelta 到快照，否则 isGuardrailTriggered
+    // P2 修复：补 avgReserveDelta 到快照，否则 isGuardrailTriggered
     // 的 reserveDelta 护栏分支恒读取 undefined → 永不触发（死代码）。
     // hauler 下调可能引发储备恶化（搬运产能下降 → source 满溢 → 储备赤字），
     // 护栏需在「主信号改善但储备转负」时触发回滚。
@@ -551,7 +551,7 @@ function capturePreAdjustSignals(param: string, s: TuningSignals): AdjustSignals
 
 /**
  * 获取参数对应角色的当前存活数。
- * 用于 D.3 人口合同前置验证。
+ * 用于人口合同前置验证。
  */
 function getRoleCount(param: string, s: TuningSignals): number {
   if (param.startsWith("hauler.")) return s.haulerCount;
@@ -562,7 +562,7 @@ function getRoleCount(param: string, s: TuningSignals): number {
 }
 
 /**
- * 参数在指定调整方向下的期望信号方向（improve/worsen，§3.1.2）：
+ * 参数在指定调整方向下的期望信号方向（improve/worsen）：
  * hauler → improve；harvester up=improve（恢复储备）/down=worsen（主动节能）；
  * upgrader up=worsen（烧库存）/down=improve（攒库存）；
  * builder up=improve（消除积压）/down=worsen（主动降产）。
@@ -587,7 +587,7 @@ function computeTolerance(baseValue: number): number {
 }
 
 /**
- * D.3 人口合同前置：roleCount 是否达到新边界（up → preAdjustValue+1，down →
+ * 人口合同前置：roleCount 是否达到新边界（up → preAdjustValue+1，down →
  * preAdjustValue-1）。未达 → 标 pending-blocked，不判失败不计回滚，下周期复验。
  */
 function isContractMet(pv: PendingValidation, currentRoleCount: number): boolean {
@@ -598,9 +598,9 @@ function isContractMet(pv: PendingValidation, currentRoleCount: number): boolean
 }
 
 /**
- * P2 多信号验证 + D.4 下调护栏：判断调整后效果是否改善。
- * 多信号 OR（§3.1.7）：每参数「改善证据集」任一满足即算改善，避免单瞬态信号
- * （如 backlog 归零）误回滚。D.4 下调护栏：下调验证 = 主信号方向 AND 护栏
+ * P2 多信号验证 + 下调护栏：判断调整后效果是否改善。
+ * 多信号 OR：每参数「改善证据集」任一满足即算改善，避免单瞬态信号
+ * （如 backlog 归零）误回滚。下调护栏：下调验证 = 主信号方向 AND 护栏
  * （spawnFillRatio 不跌破阈值、avgReserveDelta 不转负；upgrader 下调查 avgPressure），
  * 护栏触发即回滚（防假阳性 — 把伤害当改善接受）。
  * 返回 true = 改善或无显著变化（不回滚）；false = 未改善（回滚）。
@@ -613,7 +613,7 @@ function isImprovedMultiSignal(
   const before = pv.preAdjustSignals;
   const isUp = pv.adjustDirection === "up";
 
-  // ── D.4 下调护栏：仅下调方向检查 ──
+  // ── 下调护栏：仅下调方向检查 ──
   if (!isUp && isGuardrailTriggered(param, before, currentSignals)) {
     return false; // 护栏触发 → 回滚
   }
@@ -658,8 +658,8 @@ function isImprovedMultiSignal(
   }
 
   if (param.startsWith("upgrader.")) {
-    // #68/#79：人口到位（D.3 合同）是**必要条件但不是充分证据**。
-    // ⚠️这里原本写的是"人口到位 ⇒ 直接接受"，而该谓词与 D.3 `isContractMet` 逐字相同、且 D.3 先行，
+    // 人口合同到位是**必要条件但不是充分证据**。
+    // ⚠️这里原本写的是"人口到位 ⇒ 直接接受"，而该谓词与 `isContractMet` 逐字相同、且人口合同先行，
     //   于是凡能走到本行的 ↑ 必然为真 ⇒ 效果检验被折叠，↑ 再也无法被证据否决（单向棘轮）。
     //   现改成：人口到位后仍要过**上行护栏**——只有"这次抬高确实被用掉、且没把经济压坏"才留下。
     if (isUp) {
@@ -697,17 +697,17 @@ function isImprovedMultiSignal(
 }
 
 /**
- * #79 上行护栏（D.4 的上行对偶）：抬高编制上限且**新编制确实到位**之后，仍要能回答
+ * 上行护栏：抬高编制上限且**新编制确实到位**之后，仍要能回答
  * "这次抬高有没有把经济压坏"。缺失这条时，↑ 一旦被人头合同放行就再也无法被证据否决
  * （线上指纹：`upgrader.maxCount` 1→2→3、`rollbackCount=0`）。
  *
  * 判据只用**既有字段与既有容差**，不新增阈值：
  *   储备增量转负（多出来的编制在抽干储备）**且**比调整前更坏（超出 `computeTolerance`）
- *   ⇒ 判有害。"且更坏"沿用 D.4 的形状，避免把"调整前就已经坏"算成这次调整的账。
+ *   ⇒ 判有害。"且更坏"沿用下调护栏的形状，避免把"调整前就已经坏"算成这次调整的账。
  *
  * ⚠️刻意不用的东西：`avgPressure` 不在 `AdjustSignalsSnapshot` 里（要用就得给持久化的
  *   preAdjustSignals 加键，那是另一批该做的事）；`avgStorageEnergy` 的方向也不能当有害证据——
- *   #68 的原始病灶正是"盈余房多养一只也不可能让库存下跌"，方向信号在这类房里按构造失效。
+ *   原始病灶正是"盈余房多养一只也不可能让库存下跌"，方向信号在这类房里按构造失效。
  */
 function isUpwardHarmful(before: AdjustSignalsSnapshot, current: TuningSignals): boolean {
   const rBefore = before.avgReserveDelta;
@@ -718,7 +718,7 @@ function isUpwardHarmful(before: AdjustSignalsSnapshot, current: TuningSignals):
 }
 
 /**
- * D.4 下调护栏（仅下调方向）：hauler 下调 spawnFillRatio 跌破阈值或 avgReserveDelta
+ * 下调护栏（仅下调方向）：hauler 下调 spawnFillRatio 跌破阈值或 avgReserveDelta
  * 转负且比调整前恶化、upgrader 下调 avgPressure 超阈值且恶化 → 回滚。
  * 「比调整前恶化」要求信号不仅越过危险阈值还要朝坏方向移动 — 防「调整前就在
  * 危险区」误触发护栏。
@@ -770,13 +770,13 @@ function isGuardrailTriggered(
   return false;
 }
 
-// ─── 改进 A：验证 pass 主函数 ───────────────────────────────
+// ─── 验证 pass 主函数 ───────────────────────────────
 
 /**
  * 验证 pass：检查所有 pendingValidation 中到期参数的调整效果。
  * 集成点：tuning-engine.ts:safeRunTuning 内、evaluateTuning 调用之前。
- * 流程（§3.1.10 步骤 3-3.6）：verifyDelay 未到期跳过；D.3 人口合同未达 → blocked
- * （P1：连续 2 个 verifyDelay 窗口未恢复 → 回滚 + 计 1 次回滚）；D.4+P2 信号未改善
+ * 流程：verifyDelay 未到期跳过；人口合同未达 → blocked
+ * （P1：连续 2 个 verifyDelay 窗口未恢复 → 回滚 + 计 1 次回滚）；护栏 + P2 信号未改善
  * → 回滚；验证完成清空 pending。
  * 副作用说明（P1）：本函数写入/清空 pv.blockedSinceTick + pv.contractBlocked（pending
  * 生命周期本由本函数驱动 — clearedParams 触发外部 delete），故非纯函数。
@@ -807,10 +807,10 @@ export function verifyPendingAdjustments(
     // 1. verifyDelay 未到期 — 跳过验证，保留 pending
     if (currentTick - pv.adjustTick < bounds.verifyDelay) continue;
 
-    // 2. D.3 人口合同前置：roleCount 未达新边界
+    // 2. 人口合同前置：roleCount 未达新边界
     const currentRoleCount = getRoleCount(param, signals);
     if (!isContractMet(pv, currentRoleCount)) {
-      // P1 修复（附录 E.2）：blocked TTL 机制
+      // P1 修复：blocked TTL 机制
       // 首次 blocked：记录 blockedSinceTick
       if (pv.blockedSinceTick === undefined) {
         pv.blockedSinceTick = currentTick;
@@ -842,7 +842,7 @@ export function verifyPendingAdjustments(
       delete pv.blockedSinceTick;
     }
 
-    // 3. D.4 + P2 多信号验证
+    // 3. 下调护栏 + P2 多信号验证
     const improved = isImprovedMultiSignal(param, pv, signals);
 
     if (!improved) {
@@ -991,9 +991,9 @@ export function resetExplorationStableCount(): void {
 
 /**
  * 应用冻结策略：回滚次数达阈值则冻结参数。
- * 评审修正（附录 D.5）：冻结只停评估不停值 — 冻结时参数复位到 CONFIG 基线
+ * 评审修正：冻结只停评估不停值 — 冻结时参数复位到 CONFIG 基线
  * （避免钉死错误值）；冻结事件写 event-log（由调用方 recordEvent）；rollbackCount
- * 解冻后清零（P4 修复，附录 E.2）— 原实现保留导致一次回滚即再冻结，对「冻结期
+ * 解冻后清零（P4 修复）— 原实现保留导致一次回滚即再冻结，对「冻结期
  * 世界已变」过于粘滞；解冻后重新累积，复发确认交给阈值 3。
  */
 export function applyFreezePolicy(
@@ -1006,7 +1006,7 @@ export function applyFreezePolicy(
   const newlyFrozen: Array<{ param: string; reason: string }> = [];
   const unfrozenParams: string[] = [];
 
-  // P4 修复（附录 E.2）：解冻扫描 — 冻结期满的参数从 frozenParams 移除。
+  // P4 修复：解冻扫描 — 冻结期满的参数从 frozenParams 移除。
   // 原实现解冻后 frozenUntil=0 但 rollbackCount 保留 → 一次回滚即再冻结 10000 tick，
   // 对「冻结期世界已变」的场景过于粘滞。解冻后 rollbackCount 清零重新累积，
   // 复发确认重新交给 ROLLBACK_FREEZE_THRESHOLD(3) 阈值。
@@ -1038,7 +1038,7 @@ export function applyFreezePolicy(
     const newCount = (existing?.rollbackCount ?? 0) + 1;
 
     if (newCount >= ROLLBACK_FREEZE_THRESHOLD) {
-      // D.5 冻结复位到 CONFIG 基线
+      // 冻结复位到 CONFIG 基线
       const baseline = configBaselines[rb.param];
       if (baseline !== undefined) {
         rb.newValue = baseline;

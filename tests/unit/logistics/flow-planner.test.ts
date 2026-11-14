@@ -1,4 +1,4 @@
-/** FlowPlanner Phase 0 纯函数测试 — 能量流分配、link 容量、现金口径与 unmet。 */
+/** FlowPlanner 纯函数测试 — 能量流分配、link 容量、现金口径与 unmet。 */
 import { describe, expect, it } from "vitest";
 import {
   computeCarrierCount,

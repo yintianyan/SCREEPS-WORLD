@@ -76,7 +76,7 @@ class ExpansionEventProducer {
   constructor(
     readonly operationId: OpId,
     private readonly channel: OutcomeChannel,
-    /** 决策时刻冻结的 before 观测（A4 前端点）。 */
+    /** 决策时刻冻结的 before 观测。 */
     private readonly before?: number,
   ) {}
   open(tick: number): void {
@@ -243,9 +243,9 @@ describe("UOEM × TMP-1: Duration 谎报", () => {
   });
 });
 
-// ═══════════════ 消解证明 · A6-R ═══════════════
+// ═══════════════ 消解证明 · recoveryStats 累计污染 ═══════════════
 
-describe("UOEM × A6-R: recoveryStats 累计污染", () => {
+describe("recoveryStats 累计污染", () => {
   it("delta.sinceOpen 由 producer 差分冻结，分类基于增量而非帝国累计", () => {
     // 生产缺陷对照：recoveryStats.succeededCount=98/total=100（历史平均 98%）
     // 本决策期间实际：成功 0 次失败 2 次 → 应判 FAILURE 而非继承 98%
@@ -262,9 +262,9 @@ describe("UOEM × A6-R: recoveryStats 累计污染", () => {
   });
 });
 
-// ═══════════════ 消解证明 · A6-SL ═══════════════
+// ═══════════════ 消解证明 · BEFORE/AFTER 错位 ═══════════════
 
-describe("UOEM × A6-SL: BEFORE/AFTER 错位", () => {
+describe("BEFORE/AFTER 错位", () => {
   it("observation 双端点由 producer 冻结：决策时空队列≠终局仍空", () => {
     const ch = new OutcomeChannel();
     // 决策时刻队列长度=3（生产缺陷下会被当 AFTER → 恒 FAILURE）
@@ -294,7 +294,7 @@ describe("UOEM × A6-SL: BEFORE/AFTER 错位", () => {
 // ═══════════════ 模型整体不变量 ═══════════════
 
 describe("UOEM 不变量", () => {
-  it("A1: N 次 close 尝试 → 通道内至多 1 条 OUTCOME（终态唯一）", () => {
+  it("N 次 close 尝试 → 通道内至多 1 条 OUTCOME（终态唯一）", () => {
     const ch = new OutcomeChannel();
     const producers = [1, 2, 3].map(() => {
       const p = new ExpansionEventProducer(makeOpId("W6N4", 1000), ch);
@@ -307,7 +307,7 @@ describe("UOEM 不变量", () => {
     expect(ch.drain()).toHaveLength(1);
   });
 
-  it("A4: 无 before 冻结时不产生 observation（宁可缺不可造）", () => {
+  it("无 before 冻结时不产生 observation（宁可缺不可造）", () => {
     const ch = new OutcomeChannel();
     const producer = new ExpansionEventProducer(makeOpId("W8N8", 1000), ch /*无 before*/);
     producer.open(1000);

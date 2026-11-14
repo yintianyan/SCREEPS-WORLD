@@ -46,7 +46,7 @@ interface StationaryMineTarget {
  * 关键（[Facts]）：harvest 与 transfer 是独立 intent，可同 tick 执行——站 source container 上
  * 或 source 与 sink 均 range<=1，1 CARRY 维持满吞吐 10/tick，消除「采满停一 tick 倒能」的 ~17% 损失。
  * 触发条件：source 旁 range<=1 有 container/link 站桩点，无则回退 harvestSource。
- * 同时置于 acquire[0] 与 work[0]：绕开「单 tick 只跑一条链」限制；作为 work[0] 拦截站桩矿工不离岗（P2-7）。
+ * 同时置于 acquire[0] 与 work[0]：绕开「单 tick 只跑一条链」限制；作为 work[0] 拦截站桩矿工不离岗。
  */
 export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
   return {
@@ -84,7 +84,7 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
 
       // 站桩维护：站立的 source container 血量 < 80%（与 repairNearbyContainer 阈值一致）先修再采。
       // harvest 与 repair 互斥（不能同 tick），空手时先采一 tick 攒能量、本 tick 不倒，下一 tick 即修；
-      // 防止 source container 坍塌断链（P0 物流 / P2-7 不离岗）。
+      // 防止 source container 坍塌断链。
       if (
         container &&
         ac.creep.pos.getRangeTo(container) <= 1 &&
@@ -98,7 +98,7 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         return;
       }
 
-      // 无下游出口时不把背包倒在地上（债单 #41）。drop 只在「背包满 且 身边 sink 全满」时触发，
+      // 无下游出口时不把背包倒在地上。drop 只在「背包满 且 身边 sink 全满」时触发，
       // 而那正是本房消化不了这度电的时候：落地即衰减，再被 hauler 捡回来走一趟（实测 W38S56
       // 地上 1179、150 拍里 pickedUp=1250）。抱着不动既不衰减也不产生往返签发，container 一被
       // 消费侧排空，同一判据自动放行。只封「无 storage」的房（RCL<4）——有库的房 container 满
@@ -114,7 +114,7 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         return;
       }
 
-      // R643：背压时跳过注定失败的 harvest。身边 sink 全满且背包满 ⇒ harvest 必返 ERR_FULL，
+      // 背压时跳过注定失败的 harvest。身边 sink 全满且背包满 ⇒ harvest 必返 ERR_FULL，
       // 白付一次 intent（线上实证 10-27：幼房 4 个 container 2000/2000、link 全满，2 只满载
       // harvester 每拍仍付 harvest+drop ≈0.8 CPU）。其余分支（倒能/drop/站位）保持原样，
       // 世界状态与 HEAD 逐字一致，只少一次失败 API 调用。
@@ -159,7 +159,7 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         if (sink) {
           countedIntent("transfer", () => ac.creep.transfer(sink, RESOURCE_ENERGY));
         } else if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-          // 采集空间耗尽且身边 sink 均满 → 原地 drop 保持在位继续采（P2-7），
+          // 采集空间耗尽且身边 sink 均满 → 原地 drop 保持在位继续采，
           // 掉落能量由 hauler 的 pickupDroppedEnergy 回收，绝不离岗去 fill/build/upgrade。
           countedIntent("drop", () => ac.creep.drop(RESOURCE_ENERGY));
         }

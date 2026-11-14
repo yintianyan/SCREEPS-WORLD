@@ -1,5 +1,5 @@
 /**
- * JS 致命错误判定唯一实现（FREEZE R20① / T3）。
+ * JS 致命错误判定唯一实现。
  * 归并 e2e 层 26 处重复：helpers/assertions.ts 1 份 + 16 个场景本地
  * `function isJsError` + 9 处内联 includes 匹配。模式取两派已知变体的并集；
  * 模式扩展必须走本文件，禁止场景内再写 includes("TypeError") 一类判定。

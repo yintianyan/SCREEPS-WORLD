@@ -1,4 +1,4 @@
-/** A3-020: Carrier Full Chain — 完整链路集成测试 */
+/** Carrier Full Chain — 完整链路集成测试 */
 import { describe, expect, it } from "vitest";
 import { createOperation, isTerminalStatus } from "../../../src/domain/operation/agenda-item";
 import {
@@ -67,7 +67,7 @@ function makeProfile(overrides: Partial<RoomEconomicProfile> = {}): RoomEconomic
   } as RoomEconomicProfile;
 }
 
-describe("A3-020: Carrier Full Chain — 完整链路", () => {
+describe("Carrier Full Chain — 完整链路", () => {
   describe("成功链路: Operation → Spawn → Carrier → Deliver → Verify → Complete", () => {
     it("完整成功链路", () => {
       // 1. 创建 Operation

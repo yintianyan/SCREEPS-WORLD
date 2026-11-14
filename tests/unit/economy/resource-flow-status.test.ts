@@ -1,4 +1,4 @@
-/** Phase A：资源流量状态机（critical/deficit/healthy/surplus/stuck）。 */
+/** 资源流量状态机（critical/deficit/healthy/surplus/stuck）。 */
 import { describe, expect, it } from "vitest";
 import {
   evaluateResourceFlow,

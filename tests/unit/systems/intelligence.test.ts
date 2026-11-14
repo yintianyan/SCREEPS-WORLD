@@ -13,7 +13,7 @@ import {
 } from "../../../src/systems/intelligence";
 import { ROOM_DYNAMIC_TTL, ROOM_THREAT_TTL, type RoomIntel } from "../../../src/domain/intel";
 
-/** 本系统的运行节拍（#115 后老化门不再对齐固定相位，测试按 interval 前进找开门拍）。 */
+/** 本系统的运行节拍（换门后老化门不再对齐固定相位，测试按 interval 前进找开门拍）。 */
 const SYS_INTERVAL = 10;
 
 /** 观察交接播种：向 globalCache.intelHandoff 推一条观测（home = 归属房）。 */
@@ -101,7 +101,7 @@ describe("Intelligence — 低频老化与容量", () => {
     submitObs("W7N4", "W3N3", { lastSeen: adoptedAt });
     intelligenceSystem.run(mockContext(mockSnapshot()));
     expect(getRoomIntel("W3N3")).toBeDefined(); // 采用即写入（虽已超期）
-    // #115 换门后的契约：老化批在"上一次运行 + 100 拍"后开门；到期拍被跳过则下一个可用拍必开
+    // 换门后的契约：老化批在"上一次运行 + 100 拍"后开门；到期拍被跳过则下一个可用拍必开
     // ⇒ 延后上界 110 拍。测试不再猜固定相位拍，而是按 interval 前进直到条目真被清掉。
     let atAging = base;
     for (let i = 0; i < 12; i++) {

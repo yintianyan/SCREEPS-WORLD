@@ -49,7 +49,7 @@ beforeEach(() => {
   });
 });
 
-describe("segment-store — P1-2 可用性守卫", () => {
+describe("segment-store — 可用性守卫", () => {
   it("reset 首 tick：segment 未加载时写入不 flush，历史不被空数据覆盖", () => {
     // 首 tick：requestSegments 与读写同 tick 发生，raw 为 undefined。
     requestSegments();

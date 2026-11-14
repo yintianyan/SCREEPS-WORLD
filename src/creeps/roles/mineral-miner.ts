@@ -9,7 +9,7 @@ import {
 import { defineRole } from "../engine/role-runner";
 
 const policy: RolePolicy = {
-  // R3a：recovery 收入路径豁免 — 矿物收入不消耗能量（矿工自采、容器→terminal），
+  // recovery 收入路径豁免 — 矿物收入不消耗能量（矿工自采、容器→terminal），
   // 是 W7 贫困陷阱的脱困路径；recovery 时保底 1 个矿工继续采。
   recoveryEligible: true,
   acquire: [

@@ -34,18 +34,18 @@ export interface TuningSignals {
   /** 当前 upgrader 存活数。 */
   upgraderCount: number;
   /**
-   * #85：需求阶梯当前对 upgrader 生效的**结构钳位**（undefined = 没有钳位在压 `maxCount`）。
+   * 需求阶梯当前对 upgrader 生效的**结构钳位**（undefined = 没有钳位在压 `maxCount`）。
    * 来源 = `Memory.kernel.demandClamps[room]`（spawn-manager 每拍从 `evaluateDemand` 抄进来）。
-   * 用途只有一个：让 ↑ 的**提案**门槛别提出"物理上落不了地"的扩容 —— 那些 ↑ 在 D.3 的
+   * 用途只有一个：让 ↑ 的**提案**门槛别提出"物理上落不了地"的扩容 —— 那些 ↑ 在人口合同的
    * `roleCount >= preAdjustValue+1` 上必假，于是每轮都被撤销，调优器把自己的抖动当效果。
-   * ⚠️任何判据都不许反过来读它做回滚/冻结决策（观测不参与决策，见 §5 边界）。
+   * ⚠️任何判据都不许反过来读它做回滚/冻结决策（观测不参与决策）。
    */
   upgraderClamp?: number;
   /** 当前 builder 存活数。 */
   builderCount: number;
   /** 当前 buildQueue 中 queued 状态的任务数。 */
   buildQueueBacklog: number;
-  /** P1-2：最满 source 的填充率 — 持续 >0.9 = source 满载但采不动（采集塌方信号），配合 RoomMemory.phase.srcStallTicks 判断强制解冻。 */
+  /** 最满 source 的填充率 — 持续 >0.9 = source 满载但采不动（采集塌方信号），配合 RoomMemory.phase.srcStallTicks 判断强制解冻。 */
   srcRatio: number;
 
   // ── CPU 信号（来自 CPU ring buffer，全局聚合）──
@@ -73,17 +73,17 @@ export interface RoomTuningState {
   roleBounds: Record<string, RoleBoundsOverride>;
   /** 每个参数路径上次调整的 tick。key = "hauler.maxCount" 等。 */
   lastAdjusted: Record<string, number>;
-  /** 上次评估的期望方向（P1-1 趋势确认）：连续 2 次同方向才触发调整；调整后置 none 重新积累。 */
+  /** 上次评估的期望方向（趋势确认）：连续 2 次同方向才触发调整；调整后置 none 重新积累。 */
   lastTrend?: Record<string, TrendDirection>;
   /**
-   * 调整效果验证闭环（改进 A）：触发调整时写入信号快照 + 期望方向，verifyDelay
+   * 调整效果验证闭环：触发调整时写入信号快照 + 期望方向，verifyDelay
    * 到期后信号未按期望改善 → 回滚，闭环结束清空。pending 存在期间该参数整体排除
-   * 评估（D.2 pending-lock，防「反向调整早于验证触发」竞态）。
+   * 评估（pending-lock，防「反向调整早于验证触发」竞态）。
    */
   pendingValidation?: Record<string, PendingValidation>;
   /**
    * P3 冻结：连续 ROLLBACK_FREEZE_THRESHOLD(3) 次回滚 → 冻结 FROZEN_DURATION(10000)
-   * tick 跳过评估。D.5 评审修正：冻结只停评估不停值 — 复位 CONFIG 基线避免钉死错误值；
+   * tick 跳过评估。评审修正：冻结只停评估不停值 — 复位 CONFIG 基线避免钉死错误值；
    * 解冻后 rollbackCount 清零（P4）重新累积；frozenUntil=0 = 未冻结仅计数。
    */
   frozenParams?: Record<string, FrozenParamState>;
@@ -101,9 +101,9 @@ export interface AdjustSignalsSnapshot {
   buildQueueBacklog?: number;
   /** 改进 P2：hauler 验证 spawn 填充率（能量再分配证据）。 */
   spawnFillRatio?: number;
-  /** 改进 P2/D.3：人口合同前置 — 调整时角色的存活数。 */
+  /** 人口合同前置 — 调整时角色的存活数。 */
   roleCount?: number;
-  /** 改进 D.4：upgrader 下调护栏 — 经济压力。 */
+  /** upgrader 下调护栏 — 经济压力。 */
   avgPressure?: number;
 }
 
@@ -119,10 +119,10 @@ export interface PendingValidation {
   adjustTick: number;
   /** 调整前的值（用于回滚）。 */
   preAdjustValue: number;
-  /** D.3 人口合同前置：true=人口未到位（下周期复验，不计回滚）；false/undefined=正常验证。 */
+  /** 人口合同前置：true=人口未到位（下周期复验，不计回滚）；false/undefined=正常验证。 */
   contractBlocked?: boolean;
   /**
-   * P1（附录 E.2）blocked TTL 基准 tick：首次 blocked 写入 currentTick、后续保留、
+   * P1 blocked TTL 基准 tick：首次 blocked 写入 currentTick、后续保留、
    * 人口满足时 delete；连续 2 个 verifyDelay 窗口未达人口 → 回滚 + 计次 + 写 TuningBlocked 事件。
    * 依据：tuning 触发阈值（containerFill>0.7）与 demand 孵化阈值（0.4/0.8 分档）口径不同
    * + 能量饥饿排队，合同可能长期不满足 — TTL 防参数被 pending-lock 永久排除且零告警。
@@ -140,7 +140,7 @@ export interface FrozenParamState {
   frozenUntil: number;
   /** 冻结原因（人类可读，供诊断）。 */
   reason: string;
-  /** 累计回滚次数。P4 修复（附录 E.2）：解冻后从 frozenParams 移除，rollbackCount 清零重新累积。 */
+  /** 累计回滚次数。P4 修复：解冻后从 frozenParams 移除，rollbackCount 清零重新累积。 */
   rollbackCount: number;
 }
 
@@ -160,13 +160,13 @@ export interface TuningAdjustment {
   /** 人类可读的调整原因（供控制台日志和诊断）。 */
   reason: string;
   /**
-   * #83：仅回滚用。验证那一拍的**在场角色数**（`getRoleCount` 的瞬时值）。
+   * 仅回滚用。验证那一拍的**在场角色数**（`getRoleCount` 的瞬时值）。
    * 为什么必须落盘而不是靠采样：调优的 verifyDelay = 1,500 拍，而段 2 的事件环只留 ~755 拍
    * ⇒ 一次验证的因与果不可能同时在环里；在场数又是瞬时值，5 分钟级采样只能夹紧区间、取不到那一拍。
    * 有了它，同一类回滚的两种成因才分得开：
-   * `roleCount >= preAdjustValue+1` 却仍被撤 ⇒ 只可能是效果判据或 #79 的上行护栏（旧码在编制到位时直接放行）；
+   * `roleCount >= preAdjustValue+1` 却仍被撤 ⇒ 只可能是效果判据或上行护栏（旧码在编制到位时直接放行）；
    * `roleCount < preAdjustValue+1` ⇒ 走的是人口合同那条路。
-   * ⚠️**纯诊断字段，任何判据都不许读它**（读它 = 把观测变成决策，见 §5 边界）。
+   * ⚠️**纯诊断字段，任何判据都不许读它**（读它 = 把观测变成决策）。
    */
   roleCountAtVerify?: number;
 }

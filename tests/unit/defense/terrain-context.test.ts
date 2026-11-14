@@ -1,4 +1,4 @@
-/** A5.2 G3 — TerrainContext 纯函数测试。 */
+/** G3 — TerrainContext 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   buildTerrainContext,

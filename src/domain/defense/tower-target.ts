@@ -1,4 +1,4 @@
-/** Tower 目标选择 — 纯函数（P1-3）。 */
+/** Tower 目标选择 — 纯函数。 */
 
 /** 单个威胁 creep 的塔目标摘要（不持有 Creep 对象，便于测试）。 */
 export interface TowerThreat {

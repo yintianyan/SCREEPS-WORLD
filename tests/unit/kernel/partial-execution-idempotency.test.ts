@@ -1,5 +1,5 @@
 /**
- * D-FINDING-02: 部分执行失败（tick 中途 CPU 耗尽）幂等性测试。
+ * 部分执行失败（tick 中途 CPU 耗尽）幂等性测试。
  *
  * 场景：tick 执行中途 CPU 耗尽 → 部分系统执行、部分跳过。
  * 下一 tick 恢复后验证：
@@ -16,7 +16,7 @@ import type { Budget, TickContext } from "../../../src/kernel/contracts";
 
 const g = (): any => globalThis as any;
 
-describe("D-FINDING-02: 部分执行幂等性", () => {
+describe("部分执行幂等性", () => {
   beforeEach(() => {
     resetGlobals();
   });

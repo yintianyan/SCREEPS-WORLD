@@ -127,7 +127,7 @@ describe("Live Anomaly: Hauler 不足死锁", () => {
     expect(haulers.length).toBeGreaterThanOrEqual(1);
   });
 
-  // B4 重写（P3）：断言改为「经济不停滞」不变量——recycleCreep 引擎语义修复后，
+  // 重写（P3）：断言改为「经济不停滞」不变量——recycleCreep 引擎语义修复后，
   // 旧「hauler 头数」代理不再成立（解药可以不是多孵 hauler：单 hauler 循环 + P2 消费
   // 同样消化积压）。不变量：无运行时错误 ∧ 帝国存活 ∧ 采集量可观 ∧ 积压被消化。
   it("container 能量积压但 spawn 饥饿时经济不应停滞", () => {
@@ -203,7 +203,7 @@ describe("Live Anomaly: Hauler 不足死锁", () => {
     assertions.assertNoRuntimeError("container energy trap");
     assertions.assertEmpireAlive("container energy trap");
 
-    // 核心不变量（B4 重写）：能量困在 container 的死锁不再存在。
+    // 核心不变量（重写后）：能量困在 container 的死锁不再存在。
     // 不以 hauler 头数为代理——解药形式不限（多孵 hauler 或单 hauler 循环 + P2 消费）。
     expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(2000);
     const maxContainerFill = Math.max(
@@ -413,7 +413,7 @@ describe("Live Anomaly: Phase 振荡（Flip-Flop）", () => {
     assertions.assertNoRuntimeError("pulse drain");
     assertions.assertEmpireAlive("pulse drain");
 
-    // 核心不变量（B4 重写）：脉冲消耗后系统恢复——窗口末段任一采样点出现存活
+    // 核心不变量（重写后）：脉冲消耗后系统恢复——窗口末段任一采样点出现存活
     // harvester 即算恢复（瞬时端点受 TTL 相位影响，不作硬断言）。
     const recovered = result.records.some(
       r => r.tick > 900 && (r.creepsByRole.harvester ?? 0) >= 1,
@@ -608,7 +608,7 @@ describe("Live Anomaly: Harvester 计数振荡", () => {
     assertions.assertNoRuntimeError("harvester oscillation");
     assertions.assertEmpireAlive("harvester oscillation");
 
-    // 核心不变量（B4 重写）：全窗口采样——并发 harvester 峰值 ≤3（sourceOccupancy 上限
+    // 核心不变量（重写后）：全窗口采样——并发 harvester 峰值 ≤3（sourceOccupancy 上限
     // + 替换重叠容差）；归零 tick 占比 <20%（短 TTL 缺口允许，长期断供不允许）；
     // 采集持续。
     let maxHarvesters = 0;

@@ -1,4 +1,4 @@
-/** R651：terrainFit 因子与 center 加成进入候选总分。 */
+/** terrainFit 因子与 center 加成进入候选总分。 */
 import { describe, expect, it } from "vitest";
 import { buildCandidate } from "../../../src/domain/expansion/candidate";
 import { scoreCandidate } from "../../../src/domain/expansion/scoring";
@@ -20,7 +20,7 @@ function score(over: Partial<RoomIntel>, kind?: "normal" | "center") {
   return scoreCandidate({ candidate: c });
 }
 
-describe("scoreCandidate — R651 地形因子", () => {
+describe("scoreCandidate — 地形因子", () => {
   it("好地形 > 差地形（其它条件相同）", () => {
     const good = score({ wallRatio: 0.05, anchorToController: 6, bestAnchorScore: 25 });
     const bad = score({ wallRatio: 0.39, anchorToController: 24, bestAnchorScore: 1 });

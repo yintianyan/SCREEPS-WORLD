@@ -80,7 +80,7 @@ export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
       // 携非能量 cargo 但无能量时放行后续候选先卸货（同 distributorFillTarget）：
       // execute 只 transfer(RESOURCE_ENERGY)，携矿物会静默失败并终止候选链 →
-      // 配 updateMode 总量口径 hauler 永久冻结（EN-1 公理：资格检查前置 resolve）。
+      // 配 updateMode 总量口径 hauler 永久冻结（资格检查前置 resolve 是唯一放行闸门）。
       if (
         ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
         ac.creep.store.getUsedCapacity() > 0
@@ -114,7 +114,7 @@ export function distributorFillTarget(): ActionCandidate<AnyOwnedStructure> {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
       // 携非能量 cargo（如 lab unload 化合物）但无能量时放行后续候选先卸货：
       // execute 只 transfer energy，携化合物静默失败并终止候选链 →
-      // distributor 永久冻结（EN-1 公理：资格检查前置 resolve）。
+      // distributor 永久冻结（资格检查前置 resolve 是唯一放行闸门）。
       if (
         ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
         ac.creep.store.getUsedCapacity() > 0
@@ -235,7 +235,7 @@ export function returnEnergyToStorage(): ActionCandidate<StructureStorage> {
 }
 
 /**
- * R672：优先填「非 controller container」的 fill 目标（spawn/extension/tower）。
+ * 优先填「非 controller container」的 fill 目标（spawn/extension/tower）。
  *
  * 为什么单独一只：controller container 在 fillTargets 里且被 upgrader 持续抽走，
  * `haulFillTarget` 会让 hauler 每拍"追着补"，把运力从建造/spawn 上吸走（线上观察：
@@ -248,7 +248,7 @@ export function haulFillTargetExcludingControllerContainer(): ActionCandidate<An
     resolve: ac => {
       // 只在施工期启用；用原 getHaulFillTarget（保留 fill 预约去重，防两 hauler 抢同一目标），
       // 仅跳过「CC 低于半满时的优先档」——CC 仍由后续普通 haulFillTarget 兜底。
-      // R680：危机/恢复期也启用 —— 线上 W39S55 无工地但 CC 低半满锁住 hauler，
+      // 危机/恢复期也启用 —— 线上 W39S55 无工地但 CC 低半满锁住 hauler，
       // spawn 饿死、源容器积压、harvester idle（人口 11→4）。此时核心填充必须优先。
       const phase = Memory.rooms[ac.snapshot.roomName]?.phase?.phase;
       const crisisLike = phase === "crisis" || phase === "recovery" || phase === "bootstrap";

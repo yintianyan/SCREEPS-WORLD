@@ -1,4 +1,4 @@
-/** 塔防侦察兵修复测试（R7c）— 满能量塔对贴身侦察兵不开火的根因与修复。 */
+/** 塔防侦察兵修复测试 — 满能量塔对贴身侦察兵不开火的根因与修复。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { towerDefenseSystem } from "../../../src/systems/military/tower-defense";
 import {
@@ -46,7 +46,7 @@ beforeEach(() => {
   resetGlobals();
 });
 
-describe("tower-defense — 无害敌对在场（R7c 修复）", () => {
+describe("tower-defense — 无害敌对在场（修复）", () => {
   it("侦察兵在场 + 满能量塔 + 维修目标 → 塔不接维修（放空让引擎自动攻击）", () => {
     (globalThis as any).Memory.rooms.W7N4 = {
       spawnQueue: [],

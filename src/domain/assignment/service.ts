@@ -14,7 +14,7 @@ export interface AssignmentTaskEntry {
   priority: number;
   maxWorkers: number;
   assignedCreeps: string[];
-  /** 任务代表位置（P2-4 距离感知选择用）：build=工地、haul=取能点、upgrade=controller；fill 无固定位置，为 undefined。 */
+  /** 任务代表位置（距离感知选择用）：build=工地、haul=取能点、upgrade=controller；fill 无固定位置，为 undefined。 */
   pos?: { x: number; y: number };
   /**
    * 剩余建造量（仅 build 任务）：progressTotal - progress。
@@ -26,7 +26,7 @@ export interface AssignmentTaskEntry {
 /**
  * 存在性阻塞结构：缺了它整间房无法自孵（spawn）/开火（tower）。
  * 与 build 任务的 priority=1 判定**同一来源**（`isPriorityContainerSite` 的同族口径：
- * 判据写两处就会漏一处，#115 的线上实证是"门禁认 spawn 为 P0、工时却永远轮不到它"）。
+ * 判据写两处就会漏一处，线上实证是"门禁认 spawn 为 P0、工时却永远轮不到它"）。
  */
 export function isBlockingStructureType(structureType: string | undefined): boolean {
   return structureType === STRUCTURE_SPAWN || structureType === STRUCTURE_TOWER;
@@ -72,7 +72,7 @@ export function isStoragePreemptionExemptSite(
 /** 各角色可接受的任务类型。
  * source 分配统一归 targeting.getSource()（sourceOccupancy 公平份额），不经过 assignment —
  * harvester/worker 采集均走 getSource，故无 "harvest" 任务类型，消除了旧实现
- * 「assignment harvest 槽位」与「targeting fairShare」的双轨制（P1-1）。
+ * 「assignment harvest 槽位」与「targeting fairShare」的双轨制。
  */
 const ROLE_TASK_KINDS: Readonly<Record<string, readonly string[]>> = {
   worker: ["fill"],
@@ -154,7 +154,7 @@ export function buildRoomTasks(
     });
   }
 
-  // 2. haul 任务 — P3 起由 logistics 请求池生成（REQUEST_POOL_DESIGN §1/§3）：
+  // 2. haul 任务 — P3 起由 logistics 请求池生成：
   // 搬运是 Demand 一等来源，归池统一管理（TTL/过期回执/防超卖/塔提级聚合）。
   // 本函数只保留工作任务（fill/build/upgrade）。TD-013 语义保持：hauler 永不从
   // storage 取能，storage → sink 由 distributor 负责。
@@ -170,7 +170,7 @@ export function buildRoomTasks(
     // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
     // 确保 builder 优先建造它而非远处的 extension。判定与抢占豁免共用同一函数。
     const isPriorityContainer = isPriorityContainerSite(site, snapshot);
-    // 产能门槛任务（#37）：幼房（rcl≤4）里 extension 是唯一抬 `energyCapacityAvailable` 的活，
+    // 产能门槛任务：幼房（rcl≤4）里 extension 是唯一抬 `energyCapacityAvailable` 的活，
     // 却与「可再生的最近小任务」（道路）同平 priority，而同档选择按曼哈顿距离取最近 ⇒ 被道路流
     // 压住几千拍（soak 实测：cap=300、pop 3~4、extension 进度恰好 0 持续 5k~13k 拍，道路流干才解套）。
     // 升成 priority=1 让容量先落地 — 与仓内既有口径同源：容量解锁更大 builder body，整体建造速率翻倍。
@@ -247,7 +247,7 @@ export function validateAssignmentRules(
 
 /**
  * 为角色从预排序任务列表中选择任务（纯函数）。列表按 priority 升序，优先级主导；
- * 同优先级内选曼哈顿距离最近者（P2-4，减少 50 creep 规模下穿房通勤）。无 pos 的
+ * 同优先级内选曼哈顿距离最近者（减少 50 creep 规模下穿房通勤）。无 pos 的
  * 任务（如 fill）距离视为 Infinity，仅当无更近的有位置任务时入选；不传 creepPos
  * 退化为原「首个匹配」行为（向后兼容）。
  * builder 特殊处理：道路任务与 extension 平 priority 时按数组序排在后面会被永久
@@ -305,7 +305,7 @@ export function chooseTaskForRole(
   // 半成品不产出任何功能：builder 稀缺时，"最快能完工的那个"比"离得最近的那个"更该先做。
   // 只有 build 任务带 remaining（builder 也只接 build），故本步不影响 fill/haul/upgrade。
   //
-  // #115 例外：**存在性阻塞结构（spawn/tower）不参与剩余量升序**，先接它们。
+  // 例外：**存在性阻塞结构（spawn/tower）不参与剩余量升序**，先接它们。
   // D1 的量级比较在这里是反的 —— 线上实证 W38S58（自主扩张的第三间房）：spawn 工地
   // 剩 15,000，源旁 container 剩 4,872，两者同 priority=1 且 container 也判 priority 1
   // （`isPriorityContainerSite`），于是 D1 恒选 container，而它 maxWorkers=2 恰好把
@@ -338,7 +338,7 @@ export function chooseTaskForRole(
 }
 
 /**
- * 在候选任务中选距离 creep 最近者（曼哈顿距离，P2-4）。
+ * 在候选任务中选距离 creep 最近者（曼哈顿距离）。
  * 无 creepPos 或仅一个候选时回退数组首个（保持确定性）。
  * 无 pos 的任务距离视为 Infinity —— 有位置任务优先，全无位置时回退首个。
  */

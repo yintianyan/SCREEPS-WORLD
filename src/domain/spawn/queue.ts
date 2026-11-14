@@ -176,12 +176,12 @@ export function hasSurvivalRequest(queue: readonly SpawnRequest[]): boolean {
 
 /** 移除过期请求（expiresAt 已过）和达到重试上限的请求。
 
- * SP-2：返回因重试上限被清除的 key — 调用方记入黑名单冷却，否则 demand 下一 tick 以同 key
+ * 返回因重试上限被清除的 key — 调用方记入黑名单冷却，否则 demand 下一 tick 以同 key
  * 重建（retries 归零），持久性配置错误（如 body 超容量）形成「5 失败→删→重建→再 5 次」
- * 无限翻炒，plan §5.4 的「隔离该请求」沦为日志噪音。TTL 过期不入黑名单 —
+ * 无限翻炒，「隔离该请求」沦为日志噪音。TTL 过期不入黑名单 —
  * 过期是正常生命周期，需求仍在时重建是设计行为。
 
- * P2-K：可选 onPurge 回调在两路删除点（retries 烧穿/TTL 过期）触发，供调用方转译为
+ * 可选 onPurge 回调在两路删除点（retries 烧穿/TTL 过期）触发，供调用方转译为
  * churn 遥测（如 recordSkip('spawn/churn/<role>/retries')）。回调参数注入而非在 domain
  * 直调 recordSkip — cleanQueue 保持纯函数，不传时行为等价。purgedKeys 只含 retries 路径
  * key（黑名单逻辑依赖此契约 — TTL 过期不该隔离）。

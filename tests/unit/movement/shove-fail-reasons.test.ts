@@ -1,5 +1,5 @@
 /**
- * #38 读数契约：推挤被拒必须带原因码。
+ * 读数契约：推挤被拒必须带原因码。
  * 线上实证（tmp/observe/pw3.log 12/12 拍）：一只 stuck 顶格优先级（pri=70）的跨房 creep
  * 被「无意图、站在 road 上的静止 creep」挡死 250+ 拍直到老死，而现场只读得到结果
  * （没签发），读不到「为什么没推走」⇒ 三种原因（不可动 / 锚定 / 无落格）在观测上是同一个形状，
@@ -32,7 +32,7 @@ function failsOf(over: Partial<ResolveInput> = {}): Partial<Record<ShoveFailReas
   return resolveTraffic(input(over)).shoveFails;
 }
 
-describe("traffic-resolver 推挤失败原因码（#38）", () => {
+describe("traffic-resolver 推挤失败原因码", () => {
   it("8 邻域无合法落格 ⇒ no-landing，且移动方不发指令", () => {
     const out = resolveTraffic(input());
     expect(out.moves.has("m")).toBe(false);

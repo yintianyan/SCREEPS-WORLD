@@ -209,7 +209,7 @@ const RECOVERY_RECOMMENDATIONS: Record<
   },
   // 不复用 colony→population_rebuild：它的实做请求的是 harvester（见 recovery-execution
   // submitPopulationRebuild），而发展停摆的典型病灶是"消费出口没了、能量在顶满溢出"
-  // （线上实测幼房 #54/#55）—— 给花不出去的房子再加采集能力是反向动作。
+  // （线上实测幼房）—— 给花不出去的房子再加采集能力是反向动作。
   development: {
     type: "development_resume",
     recommendation: "request upgrader capacity (+ builder when the room has queued sites)",

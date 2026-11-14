@@ -1,4 +1,4 @@
-/** #179 修法 A —— 调度环「预算尾丢」的聚合留痕。
+/** 调度环「预算尾丢」的聚合留痕。
  * 两层：纯函数 accumulateTailDrop 的算术；以及**调用点**（runSystems 的尾 break 真的记账了）。
  * 调用点那几例是本案的要点：光测纯函数测不到「出口忘了接」这个失效方式。 */
 import { beforeEach, describe, expect, it } from "vitest";

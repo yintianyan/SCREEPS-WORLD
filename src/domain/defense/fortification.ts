@@ -11,7 +11,7 @@ export const TOWER_COVERAGE_RANGE = 20;
 
 /**
  * 位置是否在任一塔的火力圈内（Chebyshev ≤ 20）。
- * R683：塔外的墙会把敌方挡在火力圈外——敌人打墙、塔打不到，反而不如放进来杀。
+ * 塔外的墙会把敌方挡在火力圈外——敌人打墙、塔打不到，反而不如放进来杀。
  */
 export function isTowerCovered(
   pos: { x: number; y: number },
@@ -95,7 +95,7 @@ export function classifyFortification(
 }
 
 /**
- * 受袭姿态判定（R3：战时闭环 — 帝国姿态 → 防御投资升档的统一口径）：
+ * 受袭姿态判定（战时闭环 — 帝国姿态 → 防御投资升档的统一口径）：
  * 本房真实受袭记忆（lastHostileAt 距今 < siegeMemoryTicks）恒触发升档 — 防御深度
  * 用真实威胁校准（既有行为不变）；帝国 war 姿态全局备战 — 本房未受袭也按受袭目标
  * 维护。fortify 不全局升档：单房一次 invader 目击不应烧全帝国墙血预算

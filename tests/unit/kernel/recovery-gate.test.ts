@@ -1,4 +1,4 @@
-/** Kernel recovery 门禁 — 角色级 recoveryEligible 钩子（R3a）。 */
+/** Kernel recovery 门禁 — 角色级 recoveryEligible 钩子。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Kernel } from "../../../src/kernel/kernel";
 import { Registry } from "../../../src/kernel/registry";
@@ -45,7 +45,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("Kernel recovery 门禁 — recoveryEligible 角色豁免（R3a）", () => {
+describe("Kernel recovery 门禁 — recoveryEligible 角色豁免", () => {
   it("recovery 房：mineralMiner/builder 豁免执行，upgrader 跳过", () => {
     const kernel = makeKernel();
     const mSpy = vi.spyOn(mineralMinerRole, "run").mockImplementation(() => {});

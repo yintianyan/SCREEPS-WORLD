@@ -169,7 +169,7 @@ export class CpuBudget implements Budget {
     if (priority > 0 && !(p3Escape && priority >= 3) && this.spent() >= this.softLimit) {
       return false;
     }
-    // P1-2 前馈预测：历史 CPU 持续高位时收紧非 P0 任务的通过率。
+    // 前馈预测：历史 CPU 持续高位时收紧非 P0 任务的通过率。
     // cpuAvg10/cpuMax10 是最近 10 个采样点（~100 tick）的均值/峰值，
     // 非 real-time 但能反映本 tick 的基线 CPU 消耗水平。
     // 守卫：cpuMax10/cpuAvg10 必须为正数才视为有效历史数据 —
@@ -212,7 +212,7 @@ export function createBudget(): Budget {
 
   // Emergency Survival Mode 状态机（Recovery 档内的再收缩层；进入 bucket<100、
   // 退出 bucket≥500，保命态不做恢复滞回）。
-  // FINDING-02 修复：状态持久化到 Memory.kernel（1 个布尔字段），
+  // 修复：状态持久化到 Memory.kernel（1 个布尔字段），
   // global reset 后首 tick 仍能正确判定滞回阈值——不再依赖 heap 中的
   // wasEmergency（reset 后丢失导致阈值回退到更严格的 <100 入口）。
   const wasEmergency = Memory.kernel?.emergencySurvival === true;

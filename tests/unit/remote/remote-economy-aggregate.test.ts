@@ -2,7 +2,7 @@
  * 远矿经济聚合的一条不变量：**快照里的每个数字都能由账本手算复现**，且 CPU 为 0 时
  * 不许除出 Infinity（`e/cpu` 写 `n/a`）。
  *
- * 立案＝roadmap 补218／补219（commit 059b4131／6e34a087）：`netRate` 与 `cpuPerTick`
+ * 立案：`netRate` 与 `cpuPerTick`
  * 此前只在 heap 与逐条日志里，读数人（包括我）要手工回代才能回答「这条线值多少 CPU」，
  * 而扩张闸的 CPU 缺口决策就卡在这个比值上。
  */
@@ -80,12 +80,12 @@ describe("远矿经济聚合：数字可复现、除零不造脏值", () => {
     expect(agg.cu).toBe(0.5);
     expect(agg.s).toContain("e/cpu(mgr-slice)=20");
     // 标签必须自带尺名：分母只是"本房 demand 评估 ÷ 线数"这一片，不含远矿 creep 实耗。
-    // 改回裸 `e/cpu` 时这两条断言会红（roadmap 补303③：同一个名字两种分母差 31.6×）。
+    // 改回裸 `e/cpu` 时这两条断言会红（同一个名字两种分母差 31.6×）。
     expect(agg.s).toContain("demand-eval-slice");
   });
 });
 
-describe("远矿道成本的分母：remote* 名字规则求和（#138 升档，roadmap 补324）", () => {
+describe("远矿道成本的分母：remote* 名字规则求和", () => {
   /** 线上角色榜形状（同拍现读 @83,634,465：板总 6.64，remoteHarvester 1.78／remoteHauler 0.57／reserver 0.68）。 */
   const LIVE_BOARD: Record<string, number> = {
     harvester: 1.87,

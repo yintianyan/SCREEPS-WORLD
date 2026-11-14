@@ -18,7 +18,7 @@ export type ColonyPhase = "bootstrap" | "growth" | "crisis" | "recovery" | "stea
  *
  * 为什么取平均而不是最满：source 数 > harvester 数时，没被分配的那颗**必然**满载，
  * max 口径于是恒 >0.9 —— 实测 5-source 房 srcStall 常驻 8730/9000 tick，把「编制不满」
- * 报成「采集塌方」，而 P0-1 通道是绕过迟滞直接进危机带的。真塌方（harvester 死绝、
+ * 报成「采集塌方」，而 srcRatio 强制 crisis 通道是绕过迟滞直接进危机带的。真塌方（harvester 死绝、
  * body 退化采不动）时所有 source 一起满，平均口径照样越过 0.9 抓到，灵敏度没被换掉。
  */
 export function averageSourceFillRatio(
@@ -58,20 +58,20 @@ export interface PhaseInput {
   rcl: number;
   /**
    * 最满 source 的填充率（0..1）。> srcRatioTrap 持续 = source 满载但采不动。
-   * P0-1 病灶 1：双维度分数看不到采集塌方（harvester 退化致采集塌方但 source
+   * 病灶：双维度分数看不到采集塌方（harvester 退化致采集塌方但 source
    * 持续满载、spawn 健康）— srcRatio + storageDrainRate 双条件强制 crisis 通道
    * 绕过迟滞。NaN（数据缺失）按 0 处理（保守不触发）。
    */
   srcRatio: number;
   /**
    * Storage 单 tick 净流出（E，负值=流失）；无 storage 时为 0。作为
-   * storageDrainAccum 的累积源（P0-1）：srcRatio>0.9 期间流失累加、回填抵消。
+   * storageDrainAccum 的累积源：srcRatio>0.9 期间流失累加、回填抵消。
    * 旧单 tick drainRate<-2 判定已弃 — 流失是稀疏大脉冲，单 tick 差分
    * 大部分=0 无法持续触发。
    */
   storageDrainRate: number;
   /**
-   * P2-3：Storage 水位（0..1）。满仓豁免：forceCrisis 在 storage 高水位
+   * Storage 水位（0..1）。满仓豁免：forceCrisis 在 storage 高水位
    * （> forceCrisisStorageHigh）时不触发 — 满仓时流失是正常消费（upgrader 取能），
    * 避免「满仓 → crisis → upgrader 冻结 → link 死锁」正反馈。无 storage 为 undefined。
    */
@@ -99,7 +99,7 @@ export interface PhaseState {
   liquidityTrapTicks?: number;
   /** 危机带（crisis/recovery）内已持续的评估次数 — 最短驻留时间用；进带从 1 起计，出带归 0。旧 Memory 无此字段按 0（v14 迁移回填）。 */
   bandTicks?: number;
-  /** P0-1：srcRatio 满载 + storage 流失双条件持续的评估次数；任一条件不满足立即归零，达 srcStallEnterTicks 后强制 crisis 绕过迟滞。 */
+  /** srcRatio 满载 + storage 流失双条件持续的评估次数；任一条件不满足立即归零，达 srcStallEnterTicks 后强制 crisis 绕过迟滞。 */
   srcStallTicks?: number;
   /**
    * 欠员（`harvesterCount < 编制下限`）连续成立的评估次数 —— {@link PhaseOptions.bootstrapEnterTicks}
@@ -109,7 +109,7 @@ export interface PhaseState {
    */
   bootstrapTicks?: number;
   /**
-   * P0-1：srcRatio>0.9 期间 storage 累积净流失量（正值=失血）。流失累加、
+   * srcRatio>0.9 期间 storage 累积净流失量（正值=失血）。流失累加、
    * 回填抵消（max(0) 不为负）、srcRatio≤0.9 归零。替代旧单 tick 判定 —
    * 流失是稀疏大脉冲（每~235tick 一次 -800），单 tick 差分大部分=0，
    * 累积量才能捕获间歇性失血。
@@ -130,7 +130,7 @@ export interface PhaseOptions {
   /** recovery 降到此值彻底脱离（进入 growth/bootstrap/steady）。 */
   recoveryClearScore: number;
   /**
-   * 流量口径：每累积多少**净流失能量**记 1 分（修法 A）。
+   * 流量口径：每累积多少**净流失能量**记 1 分。
    * 旧写法是「赤字 tick +15 / 其余 −40」的**次数计**，于是一间房的相位取决于赤字脉冲
    * 怎么排布，而不是它到底在不在失血：实测同一套 5-source 夹具连跑两次，一次
    * crisis+recovery 占 71.6%（reserve 2100）、一次 0%（reserve 6947），而那一局的
@@ -272,19 +272,19 @@ export interface PhaseOptions {
    * crisis 退出必经 recovery 带。
    */
   minBandTicks: number;
-  /** P0-1：srcRatio 强制 crisis 通道的填充率阈值（默认 0.9 — 略低于 1.0 给 harvester 通勤留余量，避免 source 短暂回血抖动）。 */
+  /** srcRatio 强制 crisis 通道的填充率阈值（默认 0.9 — 略低于 1.0 给 harvester 通勤留余量，避免 source 短暂回血抖动）。 */
   srcRatioTrap: number;
   /**
-   * P0-1：双条件持续多少次评估后强制 crisis。默认 50 tick — 私服快照显示失明路径
+   * 双条件持续多少次评估后强制 crisis。默认 50 tick — 私服快照显示失明路径
    * 持续 31000 tick，50 tick 内可观测真实失血而不误伤正常通勤/孵化脉冲。
    */
   srcStallEnterTicks: number;
   /**
-   * P0-1：storage 累积净流失触发阈值。默认 1000 — 实测 crisis 房每~235tick 一次
+   * storage 累积净流失触发阈值。默认 1000 — 实测 crisis 房每~235tick 一次
    * -800，1.2 次即达；正常房 srcRatio 不持续>0.9，accum 归零不误触发。
    */
   storageDrainAccumThreshold: number;
-  /** P2-3：forceCrisis 满仓豁免阈值 — storageRatio 超过此值不触发（满仓时流失是正常消费，不是采集失败）。默认 0.8。 */
+  /** forceCrisis 满仓豁免阈值 — storageRatio 超过此值不触发（满仓时流失是正常消费，不是采集失败）。默认 0.8。 */
   forceCrisisStorageHigh: number;
   /**
    * 欠员判据的最低编制（= 采集端"站住人"的人数），与 spawn 侧 `roles.harvester.minCount`
@@ -307,7 +307,7 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   drainEnterScore: 150,
   drainExitScore: 30,
   recoveryClearScore: 5,
-  // 流量口径（修法 A）：每 3 E 未抵销的净流失记 1 分 ⇒ 进危机带需要净亏 450 E。
+  // 流量口径：每 3 E 未抵销的净流失记 1 分 ⇒ 进危机带需要净亏 450 E。
   // 标定：开发房实测 |赤字| p50=3 / p90=10 / p99=20，战争房豁免后 p50=60。
   drainEnergyPerPoint: 3,
   // 沿用次数计时代的非对称比 40/15：盈余消分比赤字积分快，破临界振荡的设计不变。
@@ -341,12 +341,12 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   // 最短驻留 100 次评估（room-state 每 tick 评估 → 100 tick）：
   // 覆盖一轮 creep 孵化 + 通勤周期，让 recovery 期真正攒出缓冲，而非形式性过场。
   minBandTicks: 100,
-  // P0-1：srcRatio 强制 crisis 通道阈值（病灶 1 — 采集塌方失明）。
+  // srcRatio 强制 crisis 通道阈值（采集塌方失明）。
   // 私服快照显示 srcRatio=1.0 + storage 流失 12 E/tick 持续 31000 tick 仍判 normal。
   srcRatioTrap: 0.9,
   srcStallEnterTicks: 50,
   storageDrainAccumThreshold: 1000,
-  // P2-3：满仓豁免 — storage 80% 以上时 forceCrisis 不触发。
+  // 满仓豁免 — storage 80% 以上时 forceCrisis 不触发。
   // 满仓时 storage 流失是正常消费（upgrader 取能），不是采集失败。
   forceCrisisStorageHigh: 0.8,
   // 欠员判据的最低编制：与 spawn 侧的 harvester 下限同源（两处脱钩就会重新制造永久 bootstrap）。
@@ -372,7 +372,7 @@ export function evaluateColonyPhase(
   // 首次观测无基线，reserveDelta 记 0（不判为赤字）。
   const reserveDelta = prev.prevReserve === undefined ? 0 : input.reserve - prev.prevReserve;
 
-  // ── P0-1：srcRatio 强制 crisis 通道（病灶 1 — 采集塌方失明）──
+  // ── srcRatio 强制 crisis 通道（采集塌方失明）──
   // 累积净流失判定：srcRatio>0.9 期间累积 storage 流失量，超阈值视为采集塌方。
   // 替代旧单 tick drainRate<-2 判定 — 实测流失是稀疏大脉冲（每~235tick 一次
   // -800，大部分 tick 静止），单 tick 差分=0，srcStallTicks 反复归零到不了 50；
@@ -383,7 +383,7 @@ export function evaluateColonyPhase(
   const storageDrainAccum = srcRatioHigh
     ? Math.max(0, (prev.storageDrainAccum ?? 0) + drainAccumDelta)
     : 0;
-  // P2-3：满仓豁免 — storage 高水位时流失是正常消费，不是采集失败。
+  // 满仓豁免 — storage 高水位时流失是正常消费，不是采集失败。
   // 避免"满仓 → crisis → upgrader 冻结 → link 死锁"的正反馈循环。
   const storageHigh = (input.storageRatio ?? 0) > options.forceCrisisStorageHigh;
   const srcStalled =
@@ -400,7 +400,7 @@ export function evaluateColonyPhase(
   const investing = input.reserve >= options.investmentReserveFloor;
   const draining =
     reserveDelta < 0 && input.spendableRatio < options.drainSpendableFloor && !investing;
-  // 流量口径（修法 A）：分数按 |reserveDelta| 折算，而不是"赤字一次 +15 / 其余 −40"的
+  // 流量口径：分数按 |reserveDelta| 折算，而不是"赤字一次 +15 / 其余 −40"的
   // 次数计 —— 一间房该不该收缩，取决于它在不在真失血，不取决于脉冲怎么排布。
   // 非对称性保留（盈余消分效力 ×recoveryBias），只是两边都按能量折算。
   const points = Math.abs(reserveDelta) / options.drainEnergyPerPoint;
@@ -476,7 +476,7 @@ export function evaluateColonyPhase(
   // growth 2500/2500，而 5-source 房仍 bootstrap 2489/2500 —— 因为需求侧自然只保持 ~2 只，
   // 于是"资源更好的房反而拿不到正常相位"这个反常激励原封不动。
   // "采不动"（吞吐不足）这层含义不在这里判：那是 srcRatio(平均口径)+storage 流失的
-  // P0-1 通道，两者不重叠。
+  // 强制 crisis 通道，两者不重叠。
   const staffingFloor = Math.max(1, Math.min(options.harvesterMinStaffing, input.sourceCount));
   const understaffed = input.harvesterCount < staffingFloor;
   // 驻留闸（bootstrapEnterTicks）：欠员需**连续**成立够久才把房间标成 bootstrap，一断即归零。
@@ -491,7 +491,7 @@ export function evaluateColonyPhase(
   const bandTicksSoFar = inCrisisBand ? (prev.bandTicks ?? 0) : 0;
   const dwellSatisfied = bandTicksSoFar >= options.minBandTicks;
 
-  // P0-1：强制 crisis 通道优先（绕过迟滞），但只覆盖 phase 字段 —
+  // 强制 crisis 通道优先（绕过迟滞），但只覆盖 phase 字段 —
   // 保留 drainScore/liquidityScore 既有计算，让迟滞分数按真实信号自然演化。
   // 这样 srcRatio 通道恢复时（forceCrisis=false），若 drainScore 仍未清会自然过渡到
   // crisis/recovery，若已清则走 recovery 带（dwellSatisfied 兜底），不会秒退 normal。
@@ -552,7 +552,7 @@ export function evaluateColonyPhase(
 }
 
 /**
- * 将殖民相位映射为 ColonyState（plan §5.4 统一状态）：defense ← 有敌对单位
+ * 将殖民相位映射为 ColonyState：defense ← 有敌对单位
  * （优先级最高）；bootstrap ← 采集者不足；recovery ← crisis/recovery；
  * normal ← growth/steady。
  */

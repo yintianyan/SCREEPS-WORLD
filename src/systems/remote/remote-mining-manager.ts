@@ -105,7 +105,7 @@ export const remoteMiningManagerSystem: System = {
   interval: CONFIG.remote.managerInterval,
   run(ctx: TickContext): void {
     // 跨房去重：汇总全帝国已运营的远矿目标（非 abandoned）。
-    // FINDING-17 修复：只遍历自有房的 remoteOps（ctx.snapshots()），
+    // 修复：只遍历自有房的 remoteOps（ctx.snapshots()），
     // 不再遍历 Object.keys(Memory.rooms)——失守房 grace 期内残留的
     // remoteOps 会被错误计入 globalActiveTargets，排除兄弟房可用远矿。
     const globalActiveTargets = new Set<string>();
@@ -159,11 +159,11 @@ export const remoteMiningManagerSystem: System = {
       const newOpsAllowed = Memory.kernel?.strategy?.newRemoteOpsAllowed === true;
       // 上限 = 消化能力（storage 有无）与生产能力（spawn 数）取最小。
       const maxOps = effectiveMaxOperations(snapshot.storage !== undefined, snapshot.spawns.length);
-      // R7b：算力容量加码 — abundant 档（余量稳定充足）放宽 1 个远矿点，
+      // 算力容量加码 — abundant 档（余量稳定充足）放宽 1 个远矿点，
       // constrained/tight 不额外收紧（本地收缩已由 tier 看门狗与 posture 处理）。
       const capacityTier = Memory.kernel?.capacity?.tier;
       const maxOpsWithCapacity = capacityTier === "abundant" ? maxOps + 1 : maxOps;
-      // R626：扩张推进态下，CPU 档位差于 comfortable 时不再新开远矿 —— 新线常驻
+      // 扩张推进态下，CPU 档位差于 comfortable 时不再新开远矿 —— 新线常驻
       // 0.5–0.9 CPU，会把 G6（扩张门）自己顶死（线上实证：W38S58 重开后 34→43 只、
       // usage 11.6→13.0）。现役 op 的维护/替换不受影响。
       const expansionPush = (Memory.kernel?.expansionPlans ?? []).some(p =>
@@ -213,7 +213,7 @@ export const remoteMiningManagerSystem: System = {
       // 现役 op 周期重估：用当前 pathCost + 当前 body 运力重算 netScore/haulerNeed。
       // 一次性快照的反面 —— 开点时勉强达标、后续变差（路况恶化/source 被抢）的
       // 边际 op 若不重估会永续；body 变大后 haulerNeed 也需缩编避免过配。
-      // A4.4 决策权退休（2026-09 实测教训）：曾设计「Plan 的 scope="operation" 请求
+      // 决策权退休（2026-09 实测教训）：曾设计「Plan 的 scope="operation" 请求
       // 拥有 haulerNeed 决策权、重估降级为信号」，但 planLogistics 实际只产
       // "empire" scope（contracts/deficits 两源），operation 请求从未存在 ——
       // 消费端永不触发，而重估被 planActive（planner 每 100t 刷新 → plannedAt
@@ -329,7 +329,7 @@ export const remoteMiningManagerSystem: System = {
       // 检测集合空 → 经济孵化恢复 → 新 creep 抵达送死 — 循环送兵。
       // 规则：有视野见威胁 → 写/续期 threatUntil；有视野确认清空 → 清除；
       // 无视野 → 冷却未到期即维持威胁态（宁可少采一轮，不送一批兵）。
-      // A5.1：有视野确认有威胁时，额外调用 decideRemoteDefenseAction() 做结构化决策。
+      // 有视野确认有威胁时，额外调用 decideRemoteDefenseAction() 做结构化决策。
       // decideRemoteDefenseAction 是纯函数 (O(1))，仅在有威胁时调用，CPU 影响可忽略。
       // 决策结果写入 globalCache.remoteDefenseDecisions 供诊断观测。
       const gRemoteDecisions = (globalCache().remoteDefenseDecisions ??= new Map());
@@ -365,7 +365,7 @@ export const remoteMiningManagerSystem: System = {
           remoteThreats[rn] = true;
         }
 
-        // A5.1：对有视野且确认有威胁的远矿房做结构化防御决策。
+        // 对有视野且确认有威胁的远矿房做结构化防御决策。
         // 仅在有视野 (observed !== undefined) 且有威胁 (remoteThreats[rn] === true) 时调用。
         // 无视野时维持现有 threatUntil 逻辑（失明保持），不做决策（信息不足）。
         if (remoteThreats[rn] === true) {
@@ -433,8 +433,7 @@ export const remoteMiningManagerSystem: System = {
               op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
               log.info(
                 "remote-mining-manager",
-                `remote/A5.1: ${snapshot.roomName} → ${rn} ` +
-                  `${decision.action} (${decision.reason})`,
+                `remote: ${snapshot.roomName} → ${rn} ` + `${decision.action} (${decision.reason})`,
               );
             }
           }
@@ -539,7 +538,7 @@ export const remoteMiningManagerSystem: System = {
         planRemotePathRoads(snapshot.roomName, remoteOps, ctx);
       }
 
-      // 威胁写入 remoteOps（P1-G：从 intel.dangerUntil 迁移至此）：出现威胁的远矿房
+      // 威胁写入 remoteOps（从 intel.dangerUntil 迁移至此）：出现威胁的远矿房
       // 打危险冷却 — 冷却期内不作为新远矿/扩张候选（止损：不给对手送兵）；现役运营
       // 不因此暂停 — defender 已接通，先应战再评估。大要塞压制房同样打冷却。
       for (const [threatRoom, hasThreat] of Object.entries(remoteThreats)) {
@@ -568,7 +567,7 @@ export const remoteMiningManagerSystem: System = {
           : blockedOrClear;
       recycleBlockedRoomCreeps(snapshot.roomName, recycleRooms, blockedRooms);
 
-      // P0-A：远矿 container site 收编 — 消费 needContainer 申请标记。
+      // 远矿 container site 收编 — 消费 needContainer 申请标记。
       // siteCount 实测校正 + tick 配额仲裁（让位 emergency）+ 全局总量判定。
       fulfillContainerRequests(remoteOps, ctx, snapshot.roomName);
 
@@ -579,7 +578,7 @@ export const remoteMiningManagerSystem: System = {
         removeRequestsByTarget(queue, target, REMOTE_QUEUE_ROLES);
       }
 
-      // P0-2：主房 crisis 期暂停远矿 spawn 推送（病灶 2 根因）。
+      // 主房 crisis 期暂停远矿 spawn 推送（根因）。
       // 旧逻辑 colonyState 只挡「新开点」（roomReadyForNewRemote）+ demand 内部挡
       // bootstrap/reserver，不挡现役 op 的 remoteHarvester/remoteHauler 推送 — 主房
       // RCL5 危机期远矿持续与主房 harvester 竞争 spawn，吸血 54795 tick。
@@ -655,7 +654,7 @@ export const remoteMiningManagerSystem: System = {
       recycleExcessRemoteCreeps(snapshot.roomName, remoteOps, intel);
     }
 
-    // #167：帝国级远矿经济快照（纯观测，零决策输入 —— 与 E9 的「只记录不定价」同批）。
+    // 帝国级远矿经济快照（纯观测，零决策输入 —— 与 E9 的「只记录不定价」同批）。
     // 落它的理由见 domain/remote/op-ledger.aggregateRemoteEconomy：此前 netRate 与
     // cpuPerTick 只在 heap 与逐条日志里，读数人要手工回代才能算出 e/cpu 这个比值。
     // 只数 active 线：废弃 op 的账本是复盘数据，混进来会把死线的历史当现役收入。

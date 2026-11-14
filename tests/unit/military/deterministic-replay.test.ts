@@ -1,4 +1,4 @@
-/** A5.3 确定性验证 — warPlanHash 可重现性测试。 */
+/** 确定性验证 — warPlanHash 可重现性测试。 */
 import { describe, expect, it } from "vitest";
 import {
   planMilitaryOperation,
@@ -137,7 +137,7 @@ function makeInput(
 
 // ─── 确定性验证测试 ───────────────────────────────────────
 
-describe("A5.3 确定性验证 — 50 snapshot × 20 次重放", () => {
+describe("确定性验证 — 50 snapshot × 20 次重放", () => {
   it("相同输入产出相同 warPlanHash（50 组 × 20 次重放 = 1000 次）", () => {
     const snapshots: WarPlanningInput[] = [];
     const threatLevels: ThreatAssessment["level"][] = ["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"];

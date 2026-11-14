@@ -53,7 +53,7 @@ import { recordExecution } from "../../telemetry";
 import { submitRequest, hasRequest } from "../../domain/spawn/queue";
 import { selectBody } from "../../config/bodies";
 
-// A3.1 imports
+// imports
 import { buildSupplyNodes } from "../../domain/operation/supply-node";
 import { buildDemandNodes } from "../../domain/operation/demand-node";
 import { buildNetworkSnapshot } from "../../domain/operation/network-snapshot";
@@ -75,7 +75,7 @@ const DEFAULT_OPERATION_DEADLINE = 2000;
 const TERMINAL_RETENTION = 1000;
 
 /** 路由缓存（heap，跨 tick 不持久 — 失效后下次重算）。
- * A4.4 修复 DUPLICATE-005：添加 TTL 失效条件。
+ * 修复：添加 TTL 失效条件。
  * 旧逻辑：routeCache 永不失效（除非 global reset），与 logistics-planner 的 RouteCache（TTL=5000）不一致。
  * 修复后：routeCache 条目带 timestamp，超过 ROUTE_CACHE_TTL 后失效重算。 */
 const ROUTE_CACHE_TTL = 5000; // 与 logistics-planner RouteCache TTL 一致
@@ -90,7 +90,7 @@ const rebalanceState = new RebalanceState();
 /**
  * 执行 Game.map.findRoute 并缓存结果（带 TTL）。
  * 失败/不可达时返回 hops=-1。
- * A4.4 修复 DUPLICATE-005：添加 TTL 失效条件，与 logistics-planner RouteCache 一致。
+ * 修复：添加 TTL 失效条件，与 logistics-planner RouteCache 一致。
  */
 function computeRoute(
   from: string,
@@ -99,7 +99,7 @@ function computeRoute(
   const key = `${from}:${to}`;
   const tick = Game.time;
   const cached = routeCache.get(key);
-  // A4.4：TTL 检查 — 超过 ROUTE_CACHE_TTL 的条目失效重算
+  // TTL 检查 — 超过 ROUTE_CACHE_TTL 的条目失效重算
   if (cached && tick - cached.cachedAt < ROUTE_CACHE_TTL) {
     return { from: cached.from, to: cached.to, hops: cached.hops, reachable: cached.reachable };
   }
@@ -187,7 +187,7 @@ function submitCarrierSpawn(op: OperationContext, tick: number): void {
     home: op.sourceRoom,
     priority: op.priority as 0 | 1 | 2 | 3 | 4,
     // 跨房援运：急着要能量的是**别的房**。priority 沿用 op.priority 只表达排队顺序，
-    // 绝不能顺带拿到捐出方的停建/停孵否决权（A14 拆的就是这两件事）。
+    // 绝不能顺带拿到捐出方的停建/停孵否决权（拆的就是这两件事）。
     survival: false,
     body,
     memory: {
@@ -220,7 +220,7 @@ function isLostCarrier(creep: Creep, op: OperationContext): boolean {
   const dst = roomCoord(op.targetRoom);
   // 解析不了（测试房名/异形）⇒ 保守不判失联。
   if (!cur || !src || !dst) return false;
-  // 现场反证（R584）：W38S58 在 source→target 的邻域/绕路路径上，载体 idle 了 1,069 拍
+  // 现场反证：W38S58 在 source→target 的邻域/绕路路径上，载体 idle 了 1,069 拍
   // 后仍自行回程并交付 ⇒ 只有「距两端都 ≥2 房」才算失联，邻房与中间房一律豁免。
   const far = (a: { x: number; y: number }): boolean =>
     Math.max(Math.abs(cur.x - a.x), Math.abs(cur.y - a.y)) > 1;
@@ -255,7 +255,7 @@ function hasCarrierForOp(op: OperationContext): boolean {
   // 队列时，清租约后的在场 carrier 会「查无此人」→ 每 100t 重孵一只、满载旧 carrier
   // 原地堆积（线上实证：单 op 叠出 6 只 1200/1200 满载 carrier）。carrier 与 op 的
   // 稳定绑定是 spawn 时写入的 home/remoteTarget，租约清理不动它们。
-  // 在孵个体仍计入「已有载体」（补404 的既有契约），只排除失联个体。
+  // 在孵个体仍计入「已有载体」（既有契约），只排除失联个体。
   return querySquad({ role: "carrier", home: op.sourceRoom, remoteTarget: op.targetRoom }).some(
     e => {
       const c = Game.creeps[e.name];
@@ -302,7 +302,7 @@ function tryReactivateCarrier(op: OperationContext): boolean {
     c.memory.remoteTarget === op.targetRoom &&
     c.store.getUsedCapacity(RESOURCE_ENERGY) === 0;
   // 先走编队索引（O(k)）；索引缺项时回退全量扫（只在“op 缺载体”这趟发生，
-  // 频率 ~1/100 拍）。R611 现场：op 活跃、74-ay3 空载且 recycle=1 却未被复用，
+  // 频率 ~1/100 拍）。现场：op 活跃、74-ay3 空载且 recycle=1 却未被复用，
   // 时间线无法排除索引漏项 ⇒ 用这条兜底把“索引有没有这个人”从正确性前提里摘掉。
   let candidate = querySquad({
     role: "carrier",
@@ -439,7 +439,7 @@ export const agendaManagerSystem: System = {
       registry.set(profile.roomName, entry);
     }
 
-    // ── 9. 构建 Supply/Demand Nodes（A3.1 新增）──
+    // ── 9. 构建 Supply/Demand Nodes（新增）──
     const surplusRooms = getSurplusRooms(registry);
     const deficitRooms = getDeficitRooms(registry);
 
@@ -459,15 +459,15 @@ export const agendaManagerSystem: System = {
 
     // ── 10. 构建 Network Snapshot ──
 
-    // ── 11. Rebalance 判定（A3.1 新增）──
+    // ── 11. Rebalance 判定（新增）──
     const rebalanceDecision = decideRebalance(rebalanceState, ctx.tick);
     const shouldDoRebalance = rebalanceDecision.shouldRebalance;
 
-    // A4.4 修复 DUPLICATE-001：提前读取 logisticsPlan，供步 12 判断 Decision Authority。
+    // 修复：提前读取 logisticsPlan，供步 12 判断 Decision Authority。
     const logisticsPlan = globalCache().logisticsPlan?.plan;
 
-    // ── 12. 分配策略（A3.1 Allocation Policy v2）──
-    // A4.4 修复 DUPLICATE-001：Plan 存在时，allocateNetwork 降级为 DEGRADED MODE fallback。
+    // ── 12. 分配策略（Allocation Policy v2）──
+    // 修复：Plan 存在时，allocateNetwork 降级为 DEGRADED MODE fallback。
     // 旧逻辑：步 12 (allocateNetwork) 和步 13.5 (Plan 驱动) 并行运行，两个决策器可能同时创建 Operation。
     // 修复后：Plan 存在且有效时，allocateNetwork 不执行（Plan 拥有 Decision Authority）。
     // Plan 不存在时（非 100t tick），allocateNetwork 作为 DEGRADED MODE 执行。
@@ -587,11 +587,11 @@ export const agendaManagerSystem: System = {
       }
     }
 
-    // ── 13.5 A4.3：Plan 驱动的 Operation 创建 ──
+    // ── 13.5 Plan 驱动的 Operation 创建 ──
     // 从 logistics-planner 产出的 Transport Plan 中筛选 scope="empire" 的请求，
     // 为尚未有活跃 Operation 的 (source, target, resource) 三元组创建新 Operation。
     // 这补充了 allocation-policy 只处理 energy 的局限——Plan 可产出矿物等非能量资源的跨房请求。
-    // A4.4：logisticsPlan 已在步 11 提前读取，此处直接复用。
+    // logisticsPlan 已在步 11 提前读取，此处直接复用。
     if (logisticsPlan && logisticsPlan.plannedAt >= ctx.tick - 100) {
       // 仅消费最近 100 tick 内产出的 Plan（避免过期 Plan 创建僵尸 Operation）。
       const sourceTransferablePlan = new Map<string, number>();
@@ -681,14 +681,14 @@ export const agendaManagerSystem: System = {
       }
     }
 
-    // #181：本趟算一次"可用载体名"，供循环内清洗悬挂绑定。口径与 hasCarrierForOp 的或项①一致
+    // 本趟算一次"可用载体名"，供循环内清洗悬挂绑定。口径与 hasCarrierForOp 的或项①一致
     // （在场且 !spawning）——否则会抖成"这趟清掉、下趟又绑回一只还在孵的"。
     const liveCarrierNames = new Set<string>(
       querySquad({ role: "carrier" })
         .filter(e => {
           const c = Game.creeps[e.name];
           // 已标记回收的个体不再算“活体”：它正被引导回家消融，绑定它只会让 op
-          // 空等一趟（R597 退役规则引入后的配套口径）。
+          // 空等一趟（退役规则引入后的配套口径）。
           return c !== undefined && !c.spawning && !c.memory.recycle;
         })
         .map(e => e.name),
@@ -696,11 +696,10 @@ export const agendaManagerSystem: System = {
     // ── 15. 验证 running Operation（Baseline 污染修复）──
     for (const op of operations) {
       if (op.status !== "running") continue;
-      // 悬挂绑定清洗（#181）必须走在 hasCarrierForOp 之前：该判定的三个或项里，
+      // 悬挂绑定清洗必须走在 hasCarrierForOp 之前：该判定的三个或项里，
       // ①"名字解析到活体"与③"线上还有任意在册载体"在**整线载体都死光**时同时为假，
       // 于是走 `!inQueue && !op.carrierName` 的补孵分支——而悬挂名让 `!op.carrierName` 为假
-      // ⇒ 既不补孵也不重绑，直接 continue，任何在其后的清洗都轮不到（＝我在 补331 落点上的
-      // 一处自审缺口，roadmap 补341）。清在这里：悬挂名一摘，补孵分支与两段兜底绑定同趟可达。
+      // ⇒ 既不补孵也不重绑，直接 continue，任何在其后的清洗都轮不到。清在这里：悬挂名一摘，补孵分支与两段兜底绑定同趟可达。
       pruneStaleCarrierBinding(op, liveCarrierNames);
 
       // 失联载体：活着、空载 idle、却在 source/target 之外的房间连续两趟 —— 既不会交付
@@ -766,7 +765,7 @@ export const agendaManagerSystem: System = {
           }) ??
           bound.find(e => {
             const c = Game.creeps[e.name];
-            // 保留「无健康载体时绑在孵那只」的既有契约（补404），只排除失联个体。
+            // 保留「无健康载体时绑在孵那只」的既有契约，只排除失联个体。
             return c !== undefined && !c.memory.recycle && !isLostCarrier(c, op);
           });
         if (entry) {
@@ -815,7 +814,7 @@ export const agendaManagerSystem: System = {
             carrier.room.name === op.targetRoom &&
             carrier.store.getUsedCapacity(RESOURCE_ENERGY) === 0
           ) {
-            // A4.4 修复 BYPASS-003：接入 Delivery Validation。
+            // 修复：接入 Delivery Validation。
             // 旧逻辑：用 carrier 的 carry 容量作为送达量（行为证据），不验证 target 实际收到量。
             // 新逻辑：用 target storage 的实际增量验证送达量。
             //   1. 读取 target storage 在 carrier 卸载前的能量快照（从 creep memory）
@@ -828,7 +827,7 @@ export const agendaManagerSystem: System = {
             if (carrierCapacity > 0) {
               const idx = operations.indexOf(op);
               if (idx >= 0) {
-                // A4.4：尝试用 Delivery Validation 验证实际送达量。
+                // 尝试用 Delivery Validation 验证实际送达量。
                 const targetRoom = Game.rooms[op.targetRoom];
                 const targetStorage = targetRoom?.storage;
                 const storageBefore = (carrier.memory as { deliverySnapBefore?: number })
@@ -910,7 +909,7 @@ export const agendaManagerSystem: System = {
     const metrics = computeOperationMetrics(operations, ctx.tick);
     const g = globalCache();
 
-    // 存储 A3.1 可观测性数据
+    // 存储可观测性数据
     g.networkSnapshot = finalSnapshot;
     g.networkHealth = health;
 

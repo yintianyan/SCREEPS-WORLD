@@ -157,4 +157,4 @@ export class TickRunner {
   }
 }
 
-// 全局单例 tickRunner 已删除（R20⑤：零引用孤儿；消费方自建实例）。
+// 全局单例 tickRunner 已删除（零引用孤儿；消费方自建实例）。

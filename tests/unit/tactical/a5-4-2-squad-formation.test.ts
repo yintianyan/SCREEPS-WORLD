@@ -1,4 +1,4 @@
-/** A5.4.2 Squad Formation & Tactical Movement — Domain 纯函数测试。 */
+/** Squad Formation & Tactical Movement — Domain 纯函数测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

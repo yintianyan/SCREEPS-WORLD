@@ -1,4 +1,4 @@
-/** A5.3.1 GAP-1 E2E Tests — Recovery Chain Closure。 */
+/** Recovery Chain Closure 端到端测试。 */
 
 import { describe, expect, it } from "vitest";
 import {
@@ -53,7 +53,7 @@ function makeWorldSnapshot(overrides: Partial<RecoveryWorldSnapshot> = {}): Reco
 
 // ─── REC-001: 完整链路 ─────────────────────────────────────
 
-describe("A5.3.1-REC-001: WarPlan → Abort → warAbortSignals → Recovery Intent → Recovery Action", () => {
+describe("WarPlan → Abort → warAbortSignals → Recovery Intent → Recovery Action", () => {
   it("完整链路：信号 → 纯函数转换 → RecoveryAction → 幂等检查通过 → 可提交", () => {
     // 1. 模拟 war-planner demobilize 写入 warAbortSignals
     const signal = makeAbortSignal({
@@ -99,7 +99,7 @@ describe("A5.3.1-REC-001: WarPlan → Abort → warAbortSignals → Recovery Int
 
 // ─── REC-002: 重复 Abort 幂等 ───────────────────────────────
 
-describe("A5.3.1-REC-002: 重复 Abort → 不产生重复 Recovery 执行", () => {
+describe("重复 Abort → 不产生重复 Recovery 执行", () => {
   // 说明：idempotency key 生成、活跃 action 去重、cooldown 内不重试三个
   // 断言与 abort-recovery.test.ts 的"幂等性 + Cooldown"块逐条等价，仅保留
   // 批量入口独有的去重验证。
@@ -118,7 +118,7 @@ describe("A5.3.1-REC-002: 重复 Abort → 不产生重复 Recovery 执行", () 
 
 // ─── REC-003: Recovery unavailable → escalation ───────────
 
-describe("A5.3.1-REC-003: Recovery unavailable → escalation 而不是无限 retry", () => {
+describe("Recovery unavailable → escalation 而不是无限 retry", () => {
   // 说明：maxAttempts 烧穿 → terminal 的状态机断言由 abort-recovery.test.ts
   // 覆盖，此处保留本文件独有的 evaluateRecoveryUnviability / evaluateEscalation。
   it("terminal 状态 → evaluateRecoveryUnviability 标记不可恢复", () => {
@@ -174,7 +174,7 @@ describe("A5.3.1-REC-003: Recovery unavailable → escalation 而不是无限 re
 
 // ─── REC-004: Logistics failure → Recovery 路径 ────────────
 
-describe("A5.3.1-REC-004: Logistics failure → Recovery 路径正确触发", () => {
+describe("Logistics failure → Recovery 路径正确触发", () => {
   it("PLAN_TIMEOUT (可能涉及物流失败) → population_rebuild", () => {
     const signal = makeAbortSignal({ reason: "PLAN_TIMEOUT" });
     const action = mapAbortToRecoveryAction(signal)!;

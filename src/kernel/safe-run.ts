@@ -24,7 +24,7 @@ function formatError(error: unknown): string {
 // ──────────────────────────────────────────────
 
 /** 检查非关键 label 是否处于冷却期。
- * K-2a：冷却跳过必须记 skipReason（plan §3.2「不能静默丢失」）—
+ * 冷却跳过必须记 skipReason（「不能静默丢失」）—
  * 原实现静默 return，被冷却的 P1 系统在遥测中完全不可见。 */
 function isCoolingDown(label: string, critical: boolean): boolean {
   if (critical) return false;
@@ -59,13 +59,13 @@ function handleError(label: string, error: unknown, critical: boolean): void {
 
     if (count >= 3) {
       if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
-      // K-2b：计数不清零 — 冷却期满后再失败从上次计数继续递增，
-      // 冷却时长 80→90→…→200 真递增（plan §3.3「50 至 200 tick」）。
+      // 计数不清零 — 冷却期满后再失败从上次计数继续递增，
+      // 冷却时长 80→90→…→200 真递增（50 至 200 tick）。
       // 原实现进冷却即清零 → 每轮从 3 重新触发，时长恒为 80（死代码）。
       // 成功一次仍由 resetErrorCount 归零（自愈路径不变）。
       const cooldownTicks = Math.min(50 + count * 10, 200);
       g.pluginCooldowns.set(label, Game.time + cooldownTicks);
-      // K-2c：冷却是插件被禁用的帝国级事件 — 写入事件日志（此前
+      // 冷却是插件被禁用的帝国级事件 — 写入事件日志（此前
       // EventKind.PluginCooldown 枚举存在但从未被记录，观测链断）。
       recordTyped(EventKind.PluginCooldown, label, { cooldownTicks });
     }
@@ -192,7 +192,7 @@ function recordCpu(label: string, cost: number): void {
     const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
     cum.roles[role] = (cum.roles[role] ?? 0) + cost;
   } else if (label.startsWith("room/")) {
-    // 房间级账（#45）：system 榜只能说"traffic-manager 3.15/拍"，
+    // 房间级账：system 榜只能说"traffic-manager 3.15/拍"，
     // 而「要降哪间房、降完省多少」必须把同一份 getUsed 差按房拆开才答得出。
     const roomName = label.split("/")[1] ?? "unknown";
     const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
@@ -210,7 +210,7 @@ function recordCpu(label: string, cost: number): void {
 }
 
 /**
- * #173：按**已知跨度**记一笔相位账，用于 `recordCpu` 的时标闸结构上打不开的那一段。
+ * 按**已知跨度**记一笔相位账，用于 `recordCpu` 的时标闸结构上打不开的那一段。
  *
  * 为什么要有这个入口（不是 convenience wrapper）：`recordCpu` 第一行要 `g.telemetry.tick === Game.time`，
  * 而那个时标是在 `phase/pre` **内部**的 telemetry-init 才刷新的 ⇒ 早于它的语句（预算与上下文构造）

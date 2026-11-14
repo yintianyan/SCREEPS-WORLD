@@ -11,7 +11,7 @@ import { GAME_GLOBAL_CONSTANTS } from "./support/constants";
 (CONFIG.movement as { trafficManager: boolean }).trafficManager = false;
 
 /**
- * 官方常量注入（FREEZE R20②）— 值全部来自 support/constants 的
+ * 官方常量注入 — 值全部来自 support/constants 的
  * GAME_GLOBAL_CONSTANTS（@screeps/driver constants + 补充表）。
  * 禁止在本文件手写任何常量字面值表；integration 的 TestWorld.find() 与
  * 此处注入值同源（同一 SSOT），私有 FIND 编码已退役。

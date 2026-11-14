@@ -1,4 +1,4 @@
-/** moveTowardRoom 跨房路由测试（R6b 扩张修复 Fix #2）。 */
+/** moveTowardRoom 跨房路由测试（扩张修复 Fix #2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { moveTowardRoom } from "../../../src/creeps/movement/pathfinding";
 import { mockCreep, mockPos, resetGlobals } from "../../support/factories";

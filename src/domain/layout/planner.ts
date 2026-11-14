@@ -41,7 +41,7 @@ import type { Blueprint } from "./types";
 /**
  * 构建队列去重闭包：key + position + blacklist 三重检查。
  * stages 1-3 共用同一去重逻辑——纯函数，不触 Game/Memory。
- * R2 队列治理：maxBackgroundQueued 参数启用 admission control — 非终端队列中
+ * 队列治理：maxBackgroundQueued 参数启用 admission control — 非终端队列中
  * priority >= 2 的背景任务（道路/防御等）达到上限后拒绝新背景任务入队；
  * priority <= 1（生存 + 关键发展）不受限。返回值 false = 被去重/黑名单/上限拒绝。
  */
@@ -334,7 +334,7 @@ export interface CoreStageResult {
  * relocation 直接入队（与历史行为一致，不受背景上限约束）。
  * 纯函数——terrain/room 经参数注入，segment 覆盖写由调用方落地。
  */
-/** R663：按房解析布局引擎——房内显式 mode 优先，缺省回落到全局 CONFIG。 */
+/** 按房解析布局引擎——房内显式 mode 优先，缺省回落到全局 CONFIG。 */
 export function resolveLayoutMode(
   roomMode: "constraint" | "template" | undefined,
   globalMode: "constraint" | "template",
@@ -344,7 +344,7 @@ export function resolveLayoutMode(
 
 export function planCoreStage(input: {
   mode: "constraint" | "template";
-  /** R663：template 模式使用的蓝图（缺省 COMPACT_CORE_V2，保持旧行为）。 */
+  /** template 模式使用的蓝图（缺省 COMPACT_CORE_V2，保持旧行为）。 */
   blueprint?: Blueprint;
   snapshot: RoomSnapshot;
   room: Room;

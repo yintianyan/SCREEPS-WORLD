@@ -24,7 +24,7 @@ export interface Reservation {
   expiresAt: number;
   /** 上次心跳 tick。 */
   lastHeartbeat: number;
-  /** 资源类型（A4.2 泛化：支持 energy + mineral）。 */
+  /** 资源类型（泛化：支持 energy + mineral）。 */
   resource: ResourceType;
 }
 

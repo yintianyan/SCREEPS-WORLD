@@ -1,4 +1,4 @@
-/** R674 效用仲裁器 — 评分/老化/承诺窗/缓存隔离/有界饥饿。 */
+/** 效用仲裁器 — 评分/老化/承诺窗/缓存隔离/有界饥饿。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { runUtilityArbitration } from "../../../src/creeps/engine/arbiter";

@@ -13,7 +13,7 @@ export interface ParamBounds {
   /** 同一参数两次调整之间的最小间隔 tick。 */
   cooldownTicks: number;
   /**
-   * 效果显现最小 tick（改进 A/P1，附录 B-P1）：等孵化(~150) + 老 creep 死亡 +
+   * 效果显现最小 tick：等孵化(~150) + 老 creep 死亡 +
    * 遥测窗口(500) ≈ 1500 = 3 个评估周期，保证效果在 EVAL_WINDOW_SIZE(1000) 内显现。
    * 不变式：verifyDelay ≥ cooldownTicks，否则验证在冷却期内触发、无意义。
    */
@@ -73,10 +73,10 @@ export const TUNING_BOUNDS: Readonly<Record<string, ParamBounds>> = {
   },
 };
 
-// ─── 改进 A 冻结机制常量（附录 D.5）──────────────────────────
+// ─── 冻结机制常量 ──────────────────────────
 
 /**
- * 连续回滚达此阈值即冻结（附录 B-P3）：信号不稳定的参数会无限「上调→回滚」
+ * 连续回滚达此阈值即冻结：信号不稳定的参数会无限「上调→回滚」
  * 循环、每次耗 2000 tick 与 Memory 写入；3 次是区分偶发噪声与结构性问题的证据水位。
  */
 export const ROLLBACK_FREEZE_THRESHOLD = 3;
@@ -84,7 +84,7 @@ export const ROLLBACK_FREEZE_THRESHOLD = 3;
 /** 冻结时长：10000 tick ≈ 2 个完整振荡周期，信号稳定后自动解冻恢复评估。 */
 export const FROZEN_DURATION = 10000;
 
-// ─── Storage 阈值按 RCL 分档（改进 C）─────────────────────────
+// ─── Storage 阈值按 RCL 分档 ─────────────────────────
 
 /** [事实] 官方常量 — storage 最大能量容量。 */
 export const STORAGE_CAPACITY = 1_000_000;

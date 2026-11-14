@@ -1,4 +1,4 @@
-/** R674b：容器修复效用缩放 + 同 tick 目标占用。 */
+/** 容器修复效用缩放 + 同 tick 目标占用。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { builderRole } from "../../../src/creeps/roles/builder";
 import {
@@ -80,7 +80,7 @@ describe("builder 效用 — 同 tick 修复目标占用", () => {
   });
 });
 
-describe("builder 效用 — R681 storage 工地优先", () => {
+describe("builder 效用 — storage 工地优先", () => {
   it("无 storage 时，storage 工地（150）压过常规修路", () => {
     const site = mockConstructionSite("storage", { id: "st_site" });
     const road = mockStructure("road", { id: "r1", hits: 1000, hitsMax: 5000 }); // 20%

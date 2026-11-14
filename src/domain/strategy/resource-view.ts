@@ -70,7 +70,7 @@ export interface EmpireResourceView {
   // ── 派生 ──
   /**
    * 帝国净流健康度：totalNetFlow > 0 → true。
-   * ECONOMY §2.3：本土净流为正是一切对外援助/扩张的前置。
+   * 本土净流为正是一切对外援助/扩张的前置。
    */
   empireNetFlowPositive: boolean;
   /**

@@ -26,7 +26,7 @@ import { log } from "../../kernel/log";
 import { readSquadState, squadStateKey } from "./squad-state";
 
 // ═══════════════════════════════════════════════════════════
-// §1. GlobalCache 扩展 — Squad Movement Runtime 状态
+// 1. GlobalCache 扩展 — Squad Movement Runtime 状态
 // ═══════════════════════════════════════════════════════════
 
 /** Squad Movement Runtime 在 globalCache 上的扩展字段。 */
@@ -44,7 +44,7 @@ interface SquadMovementCache {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. 系统定义
+// 2. 系统定义
 // ═══════════════════════════════════════════════════════════
 
 export const squadMovementSystem: System = {
@@ -135,13 +135,13 @@ export const squadMovementSystem: System = {
 };
 
 // ═══════════════════════════════════════════════════════════
-// §3. 移动执行 — PathFinder Boundary
+// 3. 移动执行 — PathFinder Boundary
 // ═══════════════════════════════════════════════════════════
 
 /**
  * 执行编队移动 — 将 SquadMovementIntent 翻译为实际移动指令。
 
- * 核心策略（A5.4.2 §9-10）：
+ * 核心策略：
  *   1. Path Leader 走 PathFinder 共享路径（只算一次）
  *   2. 其他成员沿共享路径方向走 Formation Slot
  *   3. 跨房时 Path Leader 走 moveTowardRoom，其他成员跟随
@@ -265,7 +265,7 @@ function adjustMembersToSlots(slots: readonly FormationSlot[]): void {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. SquadPlan 构建（复用 tactical-runtime 逻辑）
+// 4. SquadPlan 构建（复用 tactical-runtime 逻辑）
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -385,7 +385,7 @@ function buildSquadPlanFromWarPlan(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. 运行时成员采集
+// 5. 运行时成员采集
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -437,7 +437,7 @@ function collectRuntimeMembers(squad: SquadPlan): SquadMemberRuntimeSnapshot[] {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. 默认地形上下文
+// 6. 默认地形上下文
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -462,7 +462,7 @@ function buildDefaultTerrain(roomName: string, tick: number): TerrainContext {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §7. 公共 API（供角色层查询）
+// 7. 公共 API（供角色层查询）
 // ═══════════════════════════════════════════════════════════
 
 /**

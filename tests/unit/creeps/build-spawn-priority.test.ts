@@ -1,4 +1,4 @@
-/** R669：在建 spawn 工地全局优先（否则新房 spawn 永远被 extension/container 抢工时）。 */
+/** 在建 spawn 工地全局优先（否则新房 spawn 永远被 extension/container 抢工时）。 */
 import { describe, expect, it } from "vitest";
 import { buildNearestSite } from "../../../src/creeps/engine/actions/build";
 
@@ -21,7 +21,7 @@ function makeAc(sites: any[], cached?: string): any {
   } as any;
 }
 
-describe("buildNearestSite — R669 spawn 优先", () => {
+describe("buildNearestSite — spawn 优先", () => {
   it("extension 更近时仍先建 spawn", () => {
     const ext = site("e1", STRUCTURE_EXTENSION, 11, 10);
     const spawn = site("s1", STRUCTURE_SPAWN, 30, 30);

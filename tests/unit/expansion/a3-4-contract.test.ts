@@ -1,4 +1,4 @@
-/** A3.4 Contract Tests — Colony Autonomy & Stability 合约测试。 */
+/** Contract Tests — Colony Autonomy & Stability 合约测试。 */
 
 import { describe, it, expect } from "vitest";
 import { evaluateAutonomyAge, AUTONOMY_MILESTONES } from "../../../src/domain/expansion/autonomy";
@@ -18,7 +18,7 @@ import {
 
 // ── 1. Autonomy Age ──────────────────────────────────────────
 
-describe("A3.4-001: Autonomy Age — 基本计算", () => {
+describe("Autonomy Age — 基本计算", () => {
   it("刚激活的 Colony 年龄为 0，等级为 new", () => {
     const result = evaluateAutonomyAge({
       activatedAtTick: 1000,
@@ -45,7 +45,7 @@ describe("A3.4-001: Autonomy Age — 基本计算", () => {
   });
 });
 
-describe("A3.4-002: Autonomy Age — 里程碑", () => {
+describe("Autonomy Age — 里程碑", () => {
   it("1000 tick 后达到 emerging", () => {
     const result = evaluateAutonomyAge({
       activatedAtTick: 1000,
@@ -82,7 +82,7 @@ describe("A3.4-002: Autonomy Age — 里程碑", () => {
   });
 });
 
-describe("A3.4-003: Autonomy Age — 中断检测", () => {
+describe("Autonomy Age — 中断检测", () => {
   it("有中断时 interrupted=true", () => {
     const result = evaluateAutonomyAge({
       activatedAtTick: 1000,
@@ -106,7 +106,7 @@ describe("A3.4-003: Autonomy Age — 中断检测", () => {
 
 // ── 2. Stability Score ───────────────────────────────────────
 
-describe("A3.4-004: Stability Score — Energy 维度", () => {
+describe("Stability Score — Energy 维度", () => {
   it("净流为正 + 连续 500+ + 无外部流入 → Energy 高分", () => {
     const input: StabilityScoreInput = makeStabilityInput({
       netEnergyFlow: 10,
@@ -132,7 +132,7 @@ describe("A3.4-004: Stability Score — Energy 维度", () => {
   });
 });
 
-describe("A3.4-005: Stability Score — Population 维度", () => {
+describe("Stability Score — Population 维度", () => {
   it("人口达标 → 高分", () => {
     const input: StabilityScoreInput = makeStabilityInput({
       currentPopulation: 10,
@@ -156,7 +156,7 @@ describe("A3.4-005: Stability Score — Population 维度", () => {
   });
 });
 
-describe("A3.4-006: Stability Score — Spawn 维度", () => {
+describe("Stability Score — Spawn 维度", () => {
   it("spawn 可用 + 无饥饿 → 满分", () => {
     const input: StabilityScoreInput = makeStabilityInput({
       spawnAvailable: true,
@@ -179,7 +179,7 @@ describe("A3.4-006: Stability Score — Spawn 维度", () => {
   });
 });
 
-describe("A3.4-007: Stability Score — Production 维度", () => {
+describe("Stability Score — Production 维度", () => {
   it("产能远超消耗 → 满分", () => {
     const input: StabilityScoreInput = makeStabilityInput({
       estimatedProduction: 30,
@@ -202,7 +202,7 @@ describe("A3.4-007: Stability Score — Production 维度", () => {
   });
 });
 
-describe("A3.4-008: Stability Score — Failure 维度", () => {
+describe("Stability Score — Failure 维度", () => {
   it("无失败 → 满分", () => {
     const input: StabilityScoreInput = makeStabilityInput({
       recentFailureCount: 0,
@@ -224,7 +224,7 @@ describe("A3.4-008: Stability Score — Failure 维度", () => {
   });
 });
 
-describe("A3.4-009: Stability Score — 等级映射", () => {
+describe("Stability Score — 等级映射", () => {
   it("所有维度满分 → EXCELLENT", () => {
     const input: StabilityScoreInput = makeStabilityInput({
       netEnergyFlow: 20,
@@ -266,7 +266,7 @@ describe("A3.4-009: Stability Score — 等级映射", () => {
 
 // ── 3. Colony Failure Detection ─────────────────────────────
 
-describe("A3.4-010: Colony Failure — Energy Deficit", () => {
+describe("Colony Failure — Energy Deficit", () => {
   it("连续负流 + storage 低 → energy_deficit", () => {
     const input: ColonyFailureInput = makeFailureInput({
       netEnergyFlow: -10,
@@ -292,7 +292,7 @@ describe("A3.4-010: Colony Failure — Energy Deficit", () => {
   });
 });
 
-describe("A3.4-011: Colony Failure — Population Collapse", () => {
+describe("Colony Failure — Population Collapse", () => {
   it("人口严重不足 + 持续 → population_collapse", () => {
     const input: ColonyFailureInput = makeFailureInput({
       currentPopulation: 1,
@@ -315,7 +315,7 @@ describe("A3.4-011: Colony Failure — Population Collapse", () => {
   });
 });
 
-describe("A3.4-012: Colony Failure — Spawn Starvation", () => {
+describe("Colony Failure — Spawn Starvation", () => {
   it("spawn 饥饿超阈值 → spawn_starvation", () => {
     const input: ColonyFailureInput = makeFailureInput({
       hasSpawn: true,
@@ -335,7 +335,7 @@ describe("A3.4-012: Colony Failure — Spawn Starvation", () => {
   });
 });
 
-describe("A3.4-013: Colony Failure — Logistics Failure", () => {
+describe("Colony Failure — Logistics Failure", () => {
   it("无物流 creep + 持续 → logistics_failure", () => {
     const input: ColonyFailureInput = makeFailureInput({
       hasLogisticsCreep: false,
@@ -355,7 +355,7 @@ describe("A3.4-013: Colony Failure — Logistics Failure", () => {
   });
 });
 
-describe("A3.4-014: Colony Failure — Re-bootstrap 禁止", () => {
+describe("Colony Failure — Re-bootstrap 禁止", () => {
   it("所有失败类型都不允许 rebootstrap", () => {
     const input: ColonyFailureInput = makeFailureInput({
       netEnergyFlow: -10,
@@ -379,7 +379,7 @@ describe("A3.4-014: Colony Failure — Re-bootstrap 禁止", () => {
   });
 });
 
-describe("A3.4-015: Colony Failure — Recovery Action", () => {
+describe("Colony Failure — Recovery Action", () => {
   it("energy_deficit 推荐 demand_adjustment", () => {
     const action = getRecoveryAction("energy_deficit");
     expect(action).toContain("demand_adjustment");
@@ -398,7 +398,7 @@ describe("A3.4-015: Colony Failure — Recovery Action", () => {
 
 // ── 4. Expansion Cooldown & Rate Limit ──────────────────────
 
-describe("A3.4-016: Cooldown — 冷却窗口内阻止", () => {
+describe("Cooldown — 冷却窗口内阻止", () => {
   it("刚完成不允新扩张", () => {
     const result = evaluateExpansionCooldown({
       lastCompletedTick: 5000,
@@ -423,7 +423,7 @@ describe("A3.4-016: Cooldown — 冷却窗口内阻止", () => {
   });
 });
 
-describe("A3.4-017: Cooldown — Rate Limit", () => {
+describe("Cooldown — Rate Limit", () => {
   it("活跃扩张达上限不允新扩张", () => {
     const result = evaluateExpansionCooldown({
       lastCompletedTick: undefined,
@@ -446,7 +446,7 @@ describe("A3.4-017: Cooldown — Rate Limit", () => {
   });
 });
 
-describe("A3.4-018: Cooldown — 默认配置", () => {
+describe("Cooldown — 默认配置", () => {
   it("默认冷却 10000 tick", () => {
     expect(DEFAULT_COOLDOWN_CONFIG.cooldownTicks).toBe(10000);
   });

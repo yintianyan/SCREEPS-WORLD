@@ -52,7 +52,7 @@ export const tuningEngineSystem: System = {
       Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
     }
 
-    // P1-I：基线版本戳比对 — CONFIG.tuning.baselineVersion 升级后（如 CONFIG.roles 调整
+    // 基线版本戳比对 — CONFIG.tuning.baselineVersion 升级后（如 CONFIG.roles 调整
     // 某角色 min/maxCount），存量 rooms 覆盖可能基于旧经济假设继续压制新基线。检测不匹配
     // 时清空 rooms 覆盖，自调优从新基线重新收敛（「清零重来」语义）。
     if (Memory.kernel.tuning.baselineVersion !== CONFIG.tuning.baselineVersion) {
@@ -71,7 +71,7 @@ export const tuningEngineSystem: System = {
     // applyAdjustment 写入 Memory 后污染房间 B 的 getRoleBounds 读取（读-写隔离：
     // 评估基于 tick 开头世界状态，调整在 tick 内缓冲）。
     //
-    // P1-I：快照循环从 TUNABLE_ROLES（与 CONFIG.roles 对齐的 13 角色）派生，不再硬编码
+    // 快照循环从 TUNABLE_ROLES（与 CONFIG.roles 对齐的 13 角色）派生，不再硬编码
     // 4 角色。evaluator 当前只对前 4 角色产出调整，其余快照项无规则消费即空转；
     // 补全集是为「未来 evaluator 加入新角色规则时无需改 tuning-engine」的前置准备。
     const snapshots = [...ctx.snapshots()];
@@ -119,15 +119,15 @@ function safeRunTuning(
     // 2. 获取当前调优状态
     const roomTuning = getOrCreateRoomTuning(roomName);
 
-    // 3. [A] pending-lock（附录 D.2）：构造 excludedParams。
+    // 3. pending-lock：构造 excludedParams。
     //    包含所有有 pendingValidation 的参数 + 冻结中的参数（frozenUntil > tick）。
     //    注意：excludedParams 在 verify 之前构造，本 tick 即将被 cleared 的参数
     //    仍在排除集内——这是有意的：刚验证完的参数本 tick 不评估，下 tick 从 none
     //    重新积累 trend，防「反向调整早于验证触发」竞态。
     const excludedParams = buildExcludedParams(roomTuning, ctx.tick);
 
-    // P1-2：srcStallTicks > 50 时强制解冻 harvester/hauler maxCount
-    // 配合 P0-1 的 srcStallTicks（srcRatio>0.9 AND storageDrainAccum>1000 持续计数）。
+    // srcStallTicks > 50 时强制解冻 harvester/hauler maxCount
+    // 配合 srcStallTicks（srcRatio>0.9 AND storageDrainAccum>1000 持续计数）。
     // 在 forceCrisis 触发前（srcStallEnterTicks=50）解冻，让 tuning 有机会上调采集/搬运能力。
     // 只解冻 maxCount 不解冻 minCount（保守，防振荡），且只解冻冻结参数不影响 pending。
     const roomMem = Memory.rooms[roomName];
@@ -153,7 +153,7 @@ function safeRunTuning(
     const pendingBefore = roomTuning.pendingValidation ?? {};
 
     // 4. [A] 验证 pass：检查到期 pending 的调整效果
-    // P3 修复（附录 E.2）：verify 前继承 evaluateTuning 的全局门禁 —
+    // P3 修复：verify 前继承 evaluateTuning 的全局门禁 —
     // 危机/低 bucket 期间 containerFill/storage 外生暴跌 → 误判未改善 → 误回滚 + 误冻结。
     // 门禁未通过时跳过 verify：pending 保留、excludedParams 仍含 pending、不计回滚，
     // 下周期复验。
@@ -188,7 +188,7 @@ function safeRunTuning(
       // 6. [A] 应用 rollbacks + 清空 cleared pending + 写事件日志
       applyRollbacksAndClearPending(ctx, roomName, roomTuning, verifyResult, pendingBefore);
 
-      // 写冻结事件（D.5）
+      // 写冻结事件
       writeFreezeEvents(ctx, roomName, freezeResult, roomTuning);
 
       // P1：写 TuningBlocked 事件 + 构造 blockedParams 诊断
@@ -203,7 +203,7 @@ function safeRunTuning(
       ctx.tick,
       roomTuning.lastTrend ?? {},
       excludedParams,
-      // #62：探索随机源走可复现通道 —— 没有 `Memory.kernel.testRandomSeed` 时它就是 Math.random，
+      // 探索随机源走可复现通道 —— 没有 `Memory.kernel.testRandomSeed` 时它就是 Math.random，
       // 生产行为不变；测试落种子才能拿到同一条探索序列（bot 在 isolate 里，替换不到 Math.random）。
       tuningRandom,
     );
@@ -224,7 +224,7 @@ function safeRunTuning(
 }
 
 /**
- * P3 修复（附录 E.2）：verify pass 全局门禁 — 与 evaluateTuning 的门禁一致：
+ * P3 修复：verify pass 全局门禁 — 与 evaluateTuning 的门禁一致：
  * tierRank < 2（healthy/guarded 才验证）；crisisRatio <= 0.3（危机比例超阈值时
  * 外生信号不可信）；rcl >= 2（RCL 过低时经济信号无意义）。门禁未通过返回
  * skippedReason，调用方据此跳过 verify 并记录诊断。
@@ -243,10 +243,10 @@ function checkVerifyGate(signals: TuningSignals): { passed: boolean; skippedReas
   return { passed: true };
 }
 
-// ─── 改进 A 辅助函数 ───────────────────────────────────────
+// ─── 闭环验证辅助函数 ───────────────────────────────────────
 
 /**
- * 构造 pending-lock + frozen 排除集（附录 D.2）。
+ * 构造 pending-lock + frozen 排除集。
  * 排除集中的参数在 evaluateTuning 中跳过评估，newTrend 置为 "none"。
  */
 function buildExcludedParams(roomTuning: RoomTuningState, currentTick: number): Set<string> {
@@ -270,7 +270,7 @@ function buildExcludedParams(roomTuning: RoomTuningState, currentTick: number): 
 }
 
 /**
- * 构建 CONFIG 基线值表（用于 D.5 冻结复位）。
+ * 构建 CONFIG 基线值表（用于冻结复位）。
  * key = "role.maxCount"/"role.minCount"，value = CONFIG 默认值。
  */
 function buildConfigBaselines(): Record<string, number> {
@@ -300,7 +300,7 @@ function applyRollbacksAndClearPending(
       oldValue: number;
       newValue: number;
       reason: string;
-      /** #83：诊断字段，见 TuningAdjustment.roleCountAtVerify —— 本函数只把它抄进事件，不参与决策。 */
+      /** 诊断字段，见 TuningAdjustment.roleCountAtVerify —— 本函数只把它抄进事件，不参与决策。 */
       roleCountAtVerify?: number;
     }>;
     clearedParams: string[];
@@ -314,7 +314,7 @@ function applyRollbacksAndClearPending(
     const preAdjustValue = pv?.preAdjustValue ?? rb.newValue;
     // TuningRollback: d=[paramCode, rolledBackValue, preAdjustValue, roleCountAtVerify]
     // rolledBackValue = 回滚到的值（冻结时为 CONFIG 基线，否则等于 preAdjustValue）
-    // #83：第 4 元素 = 验证那一拍的在场角色数（-1 = 旧记录或未知参数）。
+    // 第 4 元素 = 验证那一拍的在场角色数（-1 = 旧记录或未知参数）。
     // 为什么靠事件而不是靠采样器：verifyDelay=1,500 拍 > 事件环寿命(~755 拍)，且在场数是瞬时值
     // ⇒ 事后取证按构造取不到那一拍。**纯诊断，任何判据都不读它。**
     recordTyped(EventKind.TuningRollback, roomName, {
@@ -366,7 +366,7 @@ function writeFreezeEvents(
 }
 
 /**
- * P1 修复（附录 E.2）：写 TuningBlocked 事件 + 构造 blockedParams 诊断。
+ * P1 修复：写 TuningBlocked 事件 + 构造 blockedParams 诊断。
  * blockedDurationTicks = ctx.tick - pv.blockedSinceTick（「已 blocked 多久」可观测性）。
  * 注意：blocked 不清空 pending（保留，下周期继续验证）；仅 TTL 超时（verifyPending
  * Adjustments 内判定）才加入 rollbacks + clearedParams。
@@ -441,7 +441,7 @@ function applyEvaluationAdjustments(
 
 /**
  * 保存 lastEval 诊断快照（含 pending/frozen 精简状态，控体积不存完整快照）。
- * P3/P1 修复（附录 E.2）：diagnostics 参数注入 verifySkipped（危机期 verify 跳过原因）
+ * P3/P1 修复：diagnostics 参数注入 verifySkipped（危机期 verify 跳过原因）
  * 与 blockedParams（人口合同 blocked 诊断），避免修改 evaluation 数据结构。
  */
 function saveLastEval(
@@ -632,14 +632,14 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     ? roomMem.buildQueue.filter(t => t.state === "queued").length
     : 0;
 
-  // P1-2：srcRatio 信号（采集塌方检测）— **平均** source 填充率。
+  // srcRatio 信号（采集塌方检测）— **平均** source 填充率。
   // 与 room-state 同一个口径（averageSourceFillRatio）：这里原先另写一份「取最满」，
   // 于是 source 数 > harvester 数时恒 >0.9，FORCE_UNFREEZE 通道跟着 srcStallTicks 误触发。
   const srcRatio = averageSourceFillRatio(snapshot.sources);
 
   return {
     avgReserveDelta,
-    // #85：需求阶梯的结构钳位（缺键 = 没在压 maxCount）。观测值，只在 ↑ 提案门槛里用一次。
+    // 需求阶梯的结构钳位（缺键 = 没在压 maxCount）。观测值，只在 ↑ 提案门槛里用一次。
     upgraderClamp: Memory.kernel?.demandClamps?.[roomName],
     avgPressure,
     avgDrainScore,
@@ -708,7 +708,7 @@ function avg(values: number[]): number {
 }
 
 /** 统计指定 home 房间各角色的存活 creep 数。
- *  ISSUE-008: 消费共享快照总线 creepRefs，不再独立全量遍历 Game.creeps。 */
+ *  消费共享快照总线 creepRefs，不再独立全量遍历 Game.creeps。 */
 function countRolesByHome(roomName: string): Record<string, number> {
   const counts: Record<string, number> = {};
   const refs = globalCache().creepRefs;

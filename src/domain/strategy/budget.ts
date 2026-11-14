@@ -108,7 +108,7 @@ export function allocateEmpireBudget(
   if (health === "stable" || health === "growing" || health === "healthy") {
     expansion = Math.floor(totalEnergy * options.expansionReserveRatio);
   }
-  // Expansion 不得把 Core Room 经济抽干（ECONOMY §6 红线 1）
+  // Expansion 不得把 Core Room 经济抽干（红线）
   // 防护：expansion 不超过 available - survival
   const expansionCap = available - survival;
   if (expansion > expansionCap) expansion = Math.max(0, expansionCap);

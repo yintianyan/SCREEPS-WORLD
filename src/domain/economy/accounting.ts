@@ -24,7 +24,7 @@ export interface EnergyLedger {
   /** 塔 attack/heal/repair 耗能（每次 10）。 */
   towerSpent: number;
   /**
-   * #80 用途分桶（纯观测）：`towerSpent` 把开火、补被拆的结构、维护墙/盾混在一格，
+   * 用途分桶（纯观测）：`towerSpent` 把开火、补被拆的结构、维护墙/盾混在一格，
    * 而 `ledgerP0P1Consumption` 把整格当常供侧 ⇒ "防线外壳吃掉多少收入"读不出来。
    * 恒等式：`towerSpent === combat + structures + walls`（每桶各对应固定调用点）。
    * **不进** CONSUMPTION_FIELDS / ledgerP0P1Consumption ⇒ 净流与配给序口径不变。
@@ -172,7 +172,7 @@ export interface EnergyPools {
   /** 在途背包能量——计入受踪池，消除「采集/入仓跨窗错位」的假漂移。 */
   carry: number;
   /** 塔库存——塔是 tracked 池：注入（fill）为搬运、流出已由 towerSpent 计数；
-   * 若不入池，注入侧会呈系统性负 drift（实测 −9/tick 量级，B4 归因记录）。 */
+   * 若不入池，注入侧会呈系统性负 drift（实测 −9/tick 量级）。 */
   towers: number;
   /** 衰减性散落资产：dropped + tombstone + ruin 内能量。 */
   loose: number;
@@ -202,7 +202,7 @@ export function contractReserveOf(pools: EnergyPools): number {
 /**
  * 受踪池合计（恒等式左端库存项，仅 other/工业池除外）。含在途背包与散落资产：
  * 死亡携带→墓碑、掉落→捡拾全程在踪；自然衰减表现为 dLoose<0 的可解释漂移
- * （任务书 §14「差异必须能解释」），不再是无主黑洞。
+ * （「差异必须能解释」），不再是无主黑洞。
  */
 export function trackedPoolsOf(pools: EnergyPools): number {
   return (
@@ -342,7 +342,7 @@ export function updateNetFlowEma(
 
 /**
  * 失血闸的求和口径 —— 两个读者（`upgraderGate` 与 spawn-manager 的签发合取）必须走同一个函数：
- * 它们读的是同一个执行许可，分两处写就是两把尺（#68 那类折叠错误的教训）。
+ * 它们读的是同一个执行许可，分两处写就是两把尺（折叠错误的教训）。
  *
  * 回退规则写成一条：**`kernel.brakeNetFlow` 整体缺席时用 `gateNetFlow`**（换码后首趟经济跑
  * 之前的过渡期），两把都缺才当 0。
@@ -414,7 +414,7 @@ export function isUpgradeReserveActive(
   return rcl >= 7 && (plans ?? []).some(p => p.st !== undefined && isExpansionPushPlan(p.st));
 }
 
-/** 本房的刹车门槛：预留生效时抬到 `reserve`，否则 0（R617 语义）。 */
+/** 本房的刹车门槛：预留生效时抬到 `reserve`，否则 0。 */
 export function upgradeBrakeFloor(reserveActive: boolean, reserve: number): number {
   return reserveActive ? reserve : 0;
 }
@@ -448,12 +448,12 @@ export function riskBufferTicks(reserve: number, p0p1PerTick: number, epsilon = 
 /** 单 source 名义产能（引擎常量快照 3000/300 = 10 能量/tick）。 */
 export const NOMINAL_INCOME_PER_SOURCE = 10;
 
-/** 效率系数初值（社区数，research/10 §10.4：本地利用率初值 70%，按实测校准）。 */
+/** 效率系数初值（社区数：本地利用率初值 70%，按实测校准）。 */
 export const INITIAL_EFFICIENCY_FACTOR = 0.7;
 
 /**
  * 效率系数更新：实测收入速率 ÷ 名义产能，clamp 到 [0,1] 后 EMA 平滑。
- * 初值 0.7（社区数，research/10 §10.4）；实测校准义务由此履行（C7）。
+ * 初值 0.7（社区数）；实测校准义务由此履行。
  */
 export function updateEfficiencyFactor(
   prev: number | undefined,
@@ -477,7 +477,7 @@ export function estimateIncome(sourceCount: number, effFactor: number): number {
 /** 缩放键的缩放倒数表 — 写端乘数与读者除数的唯一真源；×1 字段（t/cr/dr/bk/pl/ce/ws）直读即真值。 */
 export const ECONOMY_SNAPSHOT_SCALE = { nf: 100, rb: 10, ei: 10, ef: 100, cx: 100 } as const;
 
-/** Memory.rooms[r].economy 瘦快照——整数化短字段（STATE_OWNERSHIP §2 白名单）。 */
+/** Memory.rooms[r].economy 瘦快照——整数化短字段（白名单）。 */
 export interface EconomyMemorySnapshot {
   /** 采样 tick。 */
   t: number;

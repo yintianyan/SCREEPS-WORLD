@@ -1,4 +1,4 @@
-/** v22 → v23 迁移独立测试（P0-3 spawn churn 熔断字段建档）。 */
+/** v22 → v23 迁移独立测试（spawn churn 熔断字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

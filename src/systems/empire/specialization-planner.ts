@@ -28,7 +28,7 @@ import {
   assessEconomicHealth,
   type RemoteEconomicHealthInput,
 } from "../../domain/remote/economic-health";
-// A4.4 修复 BYPASS-009：Supply Contract 系统层接入。
+// 修复：Supply Contract 系统层接入。
 import {
   createActiveSupplyContract,
   hasActiveContract,
@@ -99,7 +99,7 @@ export function runSpecializationPlanning(ctx: TickContext): void {
     }
   }
 
-  // A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对创建 Supply Contract。
+  // 修复：从 networkSnapshot 的 surplus/deficit 对创建 Supply Contract。
   // Supply Contract 是 logistics-planner 的 contract → request 链条的输入源。
   // 旧问题：createSupplyContract() 纯函数完整但从未被系统层调用 →
   //   Memory.kernel.supplyContracts 永远为空 → Planner 的 contract→request 链路不产出。
@@ -115,10 +115,10 @@ export function runSpecializationPlanning(ctx: TickContext): void {
 
 /**
  * 从 Memory 读取 Opportunities。
- * A4.1 阶段使用 heap 缓存——不写入 Memory schema（渐进迁移）。
+ * 使用 heap 缓存——不写入 Memory schema（渐进迁移）。
  */
 function getOpportunities(): RemoteOpportunity[] {
-  // A4.1 阶段：暂从 globalCache 读取
+  // 暂从 globalCache 读取
   const cache = global as unknown as { __remoteOpportunities?: RemoteOpportunity[] };
   return cache.__remoteOpportunities ?? [];
 }
@@ -165,7 +165,7 @@ function buildGateInput(
   if (!entry) return undefined;
   const intel = entry.payload;
 
-  // 从 CONFIG 获取参数（A4.1 新增参数后续在 Phase 5 扩展 CONFIG 时添加，先用常量）
+  // 从 CONFIG 获取参数（新增参数后续扩展 CONFIG 时添加，先用常量）
   const maxPathCost = 200;
   const maxTransportCost = 5;
   const minBudget = 500;
@@ -220,15 +220,15 @@ function buildHealthInput(
   _op: RemoteMiningOperationContext,
   _tick: number,
 ): RemoteEconomicHealthInput | undefined {
-  // A4.1 阶段简化实现——完整实现需要从 flow-accounting 和 economic-accounting 获取数据
-  // 暂返回 undefined，等 Phase 5 集成时完善
+  // 简化实现——完整实现需要从 flow-accounting 和 economic-accounting 获取数据
+  // 暂返回 undefined，等后续集成时完善
   return undefined;
 }
 
-// ─── A4.4: Supply Contract 维护 ──────────────────────────
+// ─── Supply Contract 维护 ──────────────────────────
 
 /**
- * A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对维护 Supply Contract。
+ * 修复：从 networkSnapshot 的 surplus/deficit 对维护 Supply Contract。
 
  * 逻辑：
  *   1. 读取 globalCache().networkSnapshot（由 agenda-manager 每 100t 写入）

@@ -4,7 +4,7 @@ import type { ThreatAssessment, ThreatLevel } from "./threat-assessment";
 import type { TerrainContext } from "./terrain-context";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 类型定义
+// 类型定义
 // ═══════════════════════════════════════════════════════════
 
 /** 远矿防御动作（五级决策）。 */
@@ -81,12 +81,12 @@ export interface RemoteDefenseInput {
   empireContext: EmpireContext;
   logisticsContext: LogisticsContext;
   militaryContext: MilitaryContext;
-  /** A5.2：地形上下文（可选，用于 Retreat/Escort/Reinforcement 难度评估）。 */
+  /** 地形上下文（可选，用于 Retreat/Escort/Reinforcement 难度评估）。 */
   terrainContext?: TerrainContext;
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. Expected Value 计算
+// Expected Value 计算
 // ═══════════════════════════════════════════════════════════
 
 /** 远矿运营的期望价值评估。 */
@@ -184,7 +184,7 @@ export function evaluateRemoteExpectedValue(input: RemoteDefenseInput): RemoteEx
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. 决策函数
+// 决策函数
 // ═══════════════════════════════════════════════════════════
 
 /** 决策结果。 */
@@ -219,13 +219,13 @@ export interface RemoteDefenseDecision {
 /**
  * 远矿防御决策——综合威胁级别、经济价值和风险。
 
- * 这是 A4（经济运营）→ A5（军事防御）的第一个真正桥梁：
+ * 这是经济运营 → 军事防御的第一个真正桥梁：
 
  *   Remote Mining → Threat Assessment → Remote Defense Decision
  *     → CONTINUE / PAUSE / ESCORT / RETREAT / ABORT
  *       → Military Intent → Spawn / Logistics
 
- * 权责边界（A4 体系不可绕过）：
+ * 权责边界（经济运营体系不可绕过）：
  * - 本函数是纯函数，只输出决策，不执行任何动作
  * - ESCORT 的 escortDemand 是需求标记，不触发 spawn
  * - RETREAT/ABORT 只输出决策，由 remote-mining-manager 修改 op.state
@@ -257,7 +257,7 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
 
   const rejected: { action: RemoteDefenseAction; reason: string }[] = [];
 
-  // A5.2: TerrainContext 影响 — retreatQuality 调整撤退安全性判定
+  // TerrainContext 影响 — retreatQuality 调整撤退安全性判定
   // POOR/CRITICAL retreat → 撤退更危险，可能需要 ESCORT 而非 RETREAT
   // VERY_GOOD/GOOD retreat → 撤退更安全，更倾向 RETREAT
   const retreatQuality = terrainContext?.retreatQuality ?? "UNKNOWN";
@@ -319,7 +319,7 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
   // HIGH/CRITICAL + 净价值为负 → RETREAT
   if ((threat.level === "HIGH" || threat.level === "CRITICAL") && ev.netValue < 0) {
     // 检查撤退安全性：如果 creep 距离太远可能无法安全返回
-    // A5.2: TerrainContext.retreatQuality 影响撤退安全性
+    // TerrainContext.retreatQuality 影响撤退安全性
     const canRetreatSafely = effectivePathCost <= 3; // 3 房以内可安全返回
     if (canRetreatSafely) {
       rejected.push({ action: "ESCORT", reason: `净价值${ev.netValue}<0，护航不划算` });
@@ -332,7 +332,7 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
       };
     } else {
       // 距离太远无法安全返回 → ABORT
-      // A5.2: 但如果 retreatQuality 好，可能仍然可以撤退
+      // 但如果 retreatQuality 好，可能仍然可以撤退
       if (retreatQuality === "VERY_GOOD" || retreatQuality === "GOOD") {
         rejected.push({
           action: "ABORT",

@@ -221,7 +221,7 @@ function commodityOutletState(roomName: string, resource: string): MarketOutletS
 function commodityCanProduce(snapshot: RoomSnapshot, resource: string): boolean {
   const contract = getResourceContract(resource);
   if (totalStoredResource(snapshot, resource) >= contract.highWater) return false;
-  // Phase A 接线：状态机判定「产物堆在高水位以上且连续无流出」→ 停止生产。
+  // 状态机判定「产物堆在高水位以上且连续无流出」→ 停止生产。
   // 只认 stuck：critical/deficit 是「库存太少」，停止生产只会让它更少。
   // 读数超龄（>150 拍）时 read 返回 undefined ⇒ 不拦（判不了 ≠ 该停）。
   if (
@@ -243,7 +243,7 @@ function batteryCompressionAllowed(snapshot: RoomSnapshot): boolean {
   const contract = getResourceContract(RESOURCE_BATTERY);
   const total = totalStoredResource(snapshot, RESOURCE_BATTERY);
   if (total >= contract.hardCap) return false;
-  // Phase A 接线：状态机的 stuck 是「高水位 + 连续 500 拍无流出」的累计证据，
+  // 状态机的 stuck 是「高水位 + 连续 500 拍无流出」的累计证据，
   // 比单窗水位更稳；只认 stuck，不动低库存侧（battery 少时压缩正是补库存）。
   if (
     readResourceFlowState(

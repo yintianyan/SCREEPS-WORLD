@@ -1,4 +1,4 @@
-/** Empire Strategy 系统测试（R6a/R7a 发布层 — 容量分档 + 议程归因）。 */
+/** Empire Strategy 系统测试（发布层 — 容量分档 + 议程归因）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { empireStrategySystem } from "../../../src/systems/empire/empire-strategy";
 import { EventKind } from "../../../src/kernel/event-log";
@@ -50,7 +50,7 @@ function events(kind: number): any[] {
   return ((globalThis as any).eventBuffer?.events ?? []).filter((e: any) => e.k === kind);
 }
 
-describe("empire-strategy — 容量发布（R7a）", () => {
+describe("empire-strategy — 容量发布", () => {
   it("按 cpuAvg10/limit 分档写入 Memory.kernel.capacity", () => {
     (globalThis as any).Memory.kernel = {};
     (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
@@ -112,7 +112,7 @@ describe("empire-strategy — 容量发布（R7a）", () => {
   });
 });
 
-describe("empire-strategy — 议程归因（R7a AgendaOutcome）", () => {
+describe("empire-strategy — 议程归因（AgendaOutcome）", () => {
   it("退出 rcl-push 时记录进度增量与窗口时长", () => {
     (globalThis as any).Memory.kernel = {};
     (globalThis as any).Memory.kernel.agenda = {
@@ -159,7 +159,7 @@ describe("empire-strategy — 议程归因（R7a AgendaOutcome）", () => {
 });
 
 /**
- * #94 — 决策那一拍的 `gclLevel` / `bucket` 必须随 `kernel.strategy` 落盘。
+ * 决策那一拍的 `gclLevel` / `bucket` 必须随 `kernel.strategy` 落盘。
  *
  * 立案依据（线上实测 2026-10-03）：`expansionAllowed=false` 之后没人能回答"当时是哪一合取项在挡" ——
  * 七个合取项里五项可从 Memory 复算（colonyState / economyPressure / rcl / storage / stats.cpuByHome），
@@ -168,7 +168,7 @@ describe("empire-strategy — 议程归因（R7a AgendaOutcome）", () => {
  *
  * 这三条锁的是**记录值必须等于判定值**（含缺失时的兜底），不是锁某个姿态结论。
  */
-describe("empire-strategy — #94 决策标量落盘", () => {
+describe("empire-strategy — 决策标量落盘", () => {
   function runWith(cpu: Record<string, unknown>, gcl: unknown): any {
     (globalThis as any).Memory.kernel = {};
     (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
@@ -208,7 +208,7 @@ describe("empire-strategy — #94 决策标量落盘", () => {
   });
 });
 
-describe("situation 的截断前留痕列（#142 同族）", () => {
+describe("situation 的截断前留痕列", () => {
   it("跑一轮就落 adversariesTotal／conditionsTotal，且条数 >= 榜宽内实际条目数", () => {
     setupRoom();
     empireStrategySystem.run(makeContext());
@@ -282,7 +282,7 @@ describe("situation 的截断前留痕列（#142 同族）", () => {
   });
 });
 
-describe("empire-strategy — #186 生效参数集落盘（params）", () => {
+describe("empire-strategy — 生效参数集落盘（params）", () => {
   function runOnce(envProfile?: Record<string, unknown>): any {
     (globalThis as any).Memory.kernel = {};
     (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
@@ -313,7 +313,7 @@ describe("empire-strategy — #186 生效参数集落盘（params）", () => {
     expect(CONFIG.posture.threatWindow).toBe(original);
   });
 
-  it("基线 low 档确实把威胁窗抬到 5000（R407 误判的反向守卫：读 CONFIG 会得 3000）", async () => {
+  it("基线 low 档确实把威胁窗抬到 5000（误判的反向守卫：读 CONFIG 会得 3000）", async () => {
     const { selectEnvBaseline } = await import("../../../src/domain/strategy/posture-baseline");
     const low = selectEnvBaseline({
       neighborPressure: "low",
@@ -327,10 +327,10 @@ describe("empire-strategy — #186 生效参数集落盘（params）", () => {
   });
 });
 
-describe("empire-strategy — #188 容量闸的输入落盘（capacity.inputs）", () => {
+describe("empire-strategy — 容量闸的输入落盘（capacity.inputs）", () => {
   function runWithStats(stats: Record<string, unknown>): any {
     (globalThis as any).Memory.kernel = {};
-    // #188 的用例都在测「窗长/漏采」这一维；新鲜度单独由 capacity 单测覆盖。
+    // 这里的用例都在测「窗长/漏采」这一维；新鲜度单独由 capacity 单测覆盖。
     // 这里统一把 at 盖成当前拍，避免每份夹具都重复一行（显式 at 优先）。
     const withFreshRate = stats.cpuRate
       ? {

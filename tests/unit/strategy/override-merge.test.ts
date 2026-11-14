@@ -1,5 +1,5 @@
 /**
- * #89 合并链末端：过期 override 不参与合并 ⇒ 有效值回落 CONFIG/DEFAULT。
+ * 合并链末端：过期 override 不参与合并 ⇒ 有效值回落 CONFIG/DEFAULT。
  *
  * 为什么测这一层而不是跑系统：`empire-strategy` 由 `safeRun` 包住，异常会被吞 ⇒
  * 集成用例可能"绿着什么也没断言"；而且若在用例里手拼合并链，测的就是夹具不是代码。
@@ -29,7 +29,7 @@ const mergedMinDwell = (overrides: Overrides | undefined) =>
   ({ ...DEFAULT_POSTURE_OPTIONS, ...CONFIG.posture, ...resolveStrategyOverrides(overrides, TICK) })
     .minDwell;
 
-describe("#89 — strategyOverrides 在合并链末端的生效/失效", () => {
+describe("strategyOverrides 在合并链末端的生效/失效", () => {
   it("控制组：新鲜 override 生效并剥掉 `posture.` 前缀（过滤没把活条目一起吃掉）", () => {
     expect(resolveStrategyOverrides({ "posture.minDwell": writtenAgo(999, 0) }, TICK)).toEqual({
       minDwell: 999,

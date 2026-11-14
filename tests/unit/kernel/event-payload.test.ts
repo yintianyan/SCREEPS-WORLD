@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { EventKind, packEventPayload } from "../../../src/kernel/event-log";
 
 describe("事件载荷 packer — 列序 = 历史 d 数组", () => {
-  it("CreepDeath 五列（#157 战斗黑匣子）", () => {
+  it("CreepDeath 五列（战斗黑匣子）", () => {
     expect(
       packEventPayload(EventKind.CreepDeath, { roleCode: 7, x: 20, y: 20, age: 335, natural: 0 }),
     ).toEqual([7, 20, 20, 335, 0]);
@@ -29,7 +29,7 @@ describe("事件载荷 packer — 列序 = 历史 d 数组", () => {
       }),
     ).toEqual([1, 0, 3, 2]);
   });
-  it("RecoveryEscalation 三列（#139 取列事故位）", () => {
+  it("RecoveryEscalation 三列", () => {
     expect(
       packEventPayload(EventKind.RecoveryEscalation, { attempts: 2, terminal: 1, repeats: 3 }),
     ).toEqual([2, 1, 3]);

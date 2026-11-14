@@ -67,12 +67,12 @@ const POSTURE_OSCILLATION_THRESHOLD = 3;
 const SUSTAINED_HEALTHY_SAMPLES = 20;
 
 /**
- * #89：一条 override 的**最长生效期** = 3 个复盘冷却。
+ * 一条 override 的**最长生效期** = 3 个复盘冷却。
  *
  * 为什么必须有这个：`reviewStrategy` 的建议里有一条是「No-Progress 且 netFlow 停滞 → 放宽
  * `expandMaxPressure`」——即自进化层**能改写扩张闸的输入**。而 override 的持久化条目只有
  * `{value, adjustedAt, reason}`，全仓唯一的删除是一次性迁移，消费方也不看时间 ⇒
- * 一次瞬时状态抬上去的值会永久留在合并链的顶层（同族的第三次单向棘轮：#60 产能、#68/#79 ↑、本条）。
+ * 一次瞬时状态抬上去的值会永久留在合并链的顶层（同族的第三次单向棘轮）。
  *
  * 不变式：**自改必须被持续重新争取**——若那个瞬时条件还在，复盘会按 ≥1 冷却的节奏重写它（自动续期）；
  * 条件消失后最多 3 个冷却就回落到 CONFIG/DEFAULT 基线。取 3 而不是 1：留出"条件间歇成立"的余量，

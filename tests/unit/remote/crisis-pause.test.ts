@@ -1,4 +1,4 @@
-/** P0-2 远矿 crisis 暂停测试 — 主房危机期停止远矿 spawn 推送。 */
+/** 远矿 crisis 暂停测试 — 主房危机期停止远矿 spawn 推送。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote/remote-mining-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
@@ -108,7 +108,7 @@ beforeEach(() => {
 
 // ─── 正常路径 ───────────────────────────────────────────────
 
-describe("P0-2 远矿 crisis 暂停 — 正常路径", () => {
+describe("远矿 crisis 暂停 — 正常路径", () => {
   it("colonyState=recovery → 不推送任何 remote* spawn 请求", () => {
     // 主房恢复期：远矿停止吸血，spawn 槽位让给 P0 角色
     const snap = seed({
@@ -145,7 +145,7 @@ describe("P0-2 远矿 crisis 暂停 — 正常路径", () => {
 
 // ─── 边界条件 ───────────────────────────────────────────────
 
-describe("P0-2 远矿 crisis 暂停 — 边界条件", () => {
+describe("远矿 crisis 暂停 — 边界条件", () => {
   it("colonyState 缺失（undefined）→ 默认 normal，正常推送（保守不误伤）", () => {
     // 字段缺失走 ?? "normal" 回退 — 不误判为 crisis 冻结远矿
     const snap = seed({
@@ -223,7 +223,7 @@ describe("P0-2 远矿 crisis 暂停 — 边界条件", () => {
 
 // ─── 异常情况 ───────────────────────────────────────────────
 
-describe("P0-2 远矿 crisis 暂停 — 异常情况", () => {
+describe("远矿 crisis 暂停 — 异常情况", () => {
   it("crisis 期现役 remoteHarvester 自然寿终不被强制召回（沉没成本已付）", () => {
     // 验证：crisis 暂停只跳过 spawn 推送，不召回现役 creep。
     // recycleBlockedRoomCreeps 仅对 InvaderCore/hostile 触发（止损），

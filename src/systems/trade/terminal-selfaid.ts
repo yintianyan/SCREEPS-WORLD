@@ -56,7 +56,7 @@ export function tryNukeSalvage(ctx: TickContext): void {
       plan.to,
     );
     if (salvageResult === OK) {
-      // 抢救也要记账：运费永远是本房 terminal 的能量（#43），货若是能量则记发出（#42 对偶项）。
+      // 抢救也要记账：运费永远是本房 terminal 的能量，货若是能量则记发出（对偶项）。
       if (typeof Game.market?.calcTransactionCost === "function") {
         bumpEnergyCounter(
           snapshot.roomName,
@@ -127,7 +127,7 @@ export function tryEmpireEnergyAid(ctx: TickContext): void {
 
   const result = terminal.send(RESOURCE_ENERGY, plan.amount, plan.to);
   if (result === OK) {
-    // 两端都记（债单 #42 的实情与最初登记不同，这里写清）：此前 terminal 互济**两侧都不记账**，
+    // 两端都记（实情与最初登记不同，这里写清）：此前 terminal 互济**两侧都不记账**，
     // 所以帝国净流并没有被加两次，而是两房各背一段无法解释的 drift（发房 −X、收房 +X）。
     // 只补发端会把误差翻到另一侧 ⇒ 同处补记收端 `imported`。到达要跨 cooldown，
     // 这里按"发给自己房必达"结算（极端情况：收端 terminal 在途中被拆 ⇒ 多记一笔收入，已知偏差）。
@@ -220,7 +220,7 @@ export function tryEmpireMineralAid(ctx: TickContext): void {
 
   const result = terminal.send(plan.mineral as ResourceConstant, plan.amount, plan.to);
   if (result === OK) {
-    // 货是矿物 ⇒ 不记 exported；但运费永远是**本房 terminal 的能量**（#43）。
+    // 货是矿物 ⇒ 不记 exported；但运费永远是**本房 terminal 的能量**。
     bumpEnergyCounter(plan.from, "tradeFee", fee);
     recordTyped(EventKind.MineralTransfer, plan.to, { amount: plan.amount });
     log.info(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getIntelConfidence } from "../../../src/domain/intel";
 
-describe("getIntelConfidence — 情报时效分级 (P1-1)", () => {
+describe("getIntelConfidence — 情报时效分级", () => {
   it("lastSeen 缺失返回 unknown", () => {
     expect(getIntelConfidence(undefined, 1000, 500, 2000)).toBe("unknown");
   });

@@ -84,7 +84,7 @@ export function collectRemoteBlockers(
       blockers[roomName] = { kind: "clear" };
       continue;
     }
-    // C1-FINDING-07: 复用 collectRemoteThreats 已采集的 hostile 信息，避免重复 FIND_HOSTILE_CREEPS
+    // 复用 collectRemoteThreats 已采集的 hostile 信息，避免重复 FIND_HOSTILE_CREEPS
     const hostileCreepCount =
       remoteThreats && remoteThreats[roomName] !== undefined
         ? remoteThreats[roomName]
@@ -101,7 +101,7 @@ export function collectRemoteBlockers(
 }
 
 /**
- * 为远矿房构建 ThreatAssessment（A5.1：decideRemoteDefenseAction 集成支持）。
+ * 为远矿房构建 ThreatAssessment（decideRemoteDefenseAction 集成支持）。
  * 系统层薄壳：从远矿房视野读取 hostile creeps，转换为 HostileSnapshot，
  * 委托给 assessThreat() 纯函数。无视野时返回 undefined。
  */

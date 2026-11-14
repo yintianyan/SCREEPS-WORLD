@@ -1,7 +1,7 @@
 /**
- * 房间资源库存聚合（Phase A）。
+ * 房间资源库存聚合。
  *
- * 口径与《资源流契约表》§1.4 一致：
+ * 口径如下：
  * stock = storage + terminal + factory + labs + containers。
  *
  * link/spawn/extension/tower 属于运营缓冲区，逐 tick 被消费或回填，

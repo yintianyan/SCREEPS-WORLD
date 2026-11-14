@@ -1,4 +1,4 @@
-/** A3.4 E2E Tests — Colony Autonomy & Stability 端到端测试。 */
+/** E2E Tests — Colony Autonomy & Stability 端到端测试。 */
 
 import { describe, it, expect } from "vitest";
 import {
@@ -14,7 +14,7 @@ import {
 
 // ── E2E-002: Colony Failure Recovery ───────────────────────
 
-describe("A3.4-E2E-002: Colony Failure → Normal Recovery", () => {
+describe("Colony Failure → Normal Recovery", () => {
   it("Energy Deficit 检测 → 不允许 Re-bootstrap → 推荐 Normal Recovery", () => {
     // Colony 进入经济衰退
     const failureResult = evaluateColonyFailure({
@@ -57,7 +57,7 @@ describe("A3.4-E2E-002: Colony Failure → Normal Recovery", () => {
 
 // ── E2E-003: Expansion Cooldown ────────────────────────────
 
-describe("A3.4-E2E-003: Expansion Cooldown 完整链路", () => {
+describe("Expansion Cooldown 完整链路", () => {
   it("完成后冷却窗口内阻止新扩张，窗口过后允许", () => {
     // 1. 扩张在 tick=5000 完成
     const completedTick = 5000;
@@ -99,7 +99,7 @@ describe("A3.4-E2E-003: Expansion Cooldown 完整链路", () => {
 
 // ── E2E-005: Bootstrap 防重门禁 ───────────────────────────
 
-describe("A3.4-E2E-005: Bootstrap 防重门禁逻辑验证", () => {
+describe("Bootstrap 防重门禁逻辑验证", () => {
   it("colonyState=normal 的房不进入 Bootstrap 逻辑验证", () => {
     // 模拟 Bootstrap Lane 的防重门禁逻辑：
     // 1. 房间有 spawn → 已建成，跳过 Bootstrap

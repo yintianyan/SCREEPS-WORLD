@@ -383,7 +383,7 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     },
     { parts: ["heal", "heal", "move", "move"], minCapacity: 600 },
   ],
-  // 侦察兵（R6b）：[MOVE] 即足 — 无疲劳全速穿行、50 能量可抛弃；
+  // 侦察兵：[MOVE] 即足 — 无疲劳全速穿行、50 能量可抛弃；
   // 使命是「到达目标房提供一 tick 视野」，不是战斗（敌意房由 flee 保全）。
   scout: [{ parts: ["move"], minCapacity: 50 }],
   // PB 捡运者（审计缺口 2）：纯 CARRY+MOVE 一次性 — 必须在 PB 击破前预置到目标房，
@@ -589,7 +589,7 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   worker: [
-    // R669：bootstrap 通勤载重档 —— 旧模板最大只有 1 CARRY（50 能量/趟），
+    // bootstrap 通勤载重档 —— 旧模板最大只有 1 CARRY（50 能量/趟），
     // 新房建造（spawn 5,000 + container/ext ~24k hits）被往返次数卡死。
     // 高容量 sponsor（RCL7/8，cap 5,600）应给满：3W6C3M（carry 300）/ 2W4C2M（carry 200）。
     {
@@ -892,10 +892,10 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
       minCapacity: 1650,
     },
     // [8W,2C,2M] @1000：RCL4(1300) 主力档。
-    // R690：原 1C(950) 只在贴着 CC 站桩（range 1，可同 tick withdraw+upgrade）时够用；
+    // 原 1C(950) 只在贴着 CC 站桩（range 1，可同 tick withdraw+upgrade）时够用；
     // 线上 W39S55 实测两只升级器在 controller range 2–3，50 能量只够 6 拍，随后花数拍
     // 走到 CC 再走回 ⇒ 占空比 ≈43%、controller 掉到 6/拍。2C 把工作窗拉到 12.5 拍，
-    // 同时减少 upgrader 的 move API 调用（traffic 是动作量成本，R691 已证）。
+    // 同时减少 upgrader 的 move API 调用（traffic 是动作量成本，已证）。
     {
       parts: [
         "work",
@@ -1277,7 +1277,7 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
-  // A3.0 跨房调拨搬运工：CARRY+MOVE 1:1 平原满速跨房。
+  // 跨房调拨搬运工：CARRY+MOVE 1:1 平原满速跨房。
   // 模板与 remoteHauler 同构——远距离大运力减少趟数。
   carrier: [
     // RCL8 极限档 [33C,17M] @2500（50 部件上限内的最大 2:1 档）：运力 1650/趟。

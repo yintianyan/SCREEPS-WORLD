@@ -1,5 +1,5 @@
 /**
- * #89：自进化 L1 的 strategyOverrides 有效期（读时过期）。
+ * 自进化 L1 的 strategyOverrides 有效期（读时过期）。
  *
  * 现场立案依据：线上 `Memory.kernel.tuning.strategyOverrides` 里一条
  * `posture.minDwell=1400 @82993339` 已在 ~397k 拍前写入并**至今仍在合并链顶层生效**
@@ -19,7 +19,7 @@ import {
 
 const TICK = 1_000_000;
 
-describe("#89 — strategyOverrides 读时过期", () => {
+describe("strategyOverrides 读时过期", () => {
   it("TTL 是复盘冷却的 3 倍（自改必须被持续重新争取，但允许条件间歇成立）", () => {
     // 冷却 = 5,000（reviewer 内的 STRATEGY_COOLDOWN_TICKS）⇒ TTL = 15,000
     expect(STRATEGY_OVERRIDE_TTL_TICKS).toBe(15_000);

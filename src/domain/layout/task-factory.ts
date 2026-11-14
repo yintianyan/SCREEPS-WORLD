@@ -163,7 +163,7 @@ export function extractBlockedCandidates(
 }
 
 /** 候选 → BuildTask（state 初始 "queued"，推入 BuildQueue）。
- *  queuedAt：入队 tick（R2 队列治理 — 年龄观测/超龄清除），由调用方传入
+ *  queuedAt：入队 tick（队列治理 — 年龄观测/超龄清除），由调用方传入
  *  （domain 纯函数禁读 Game.time）。 */
 export function candidateToBuildTask(candidate: BuildTaskCandidate, queuedAt = 0): BuildTask {
   return {
@@ -503,7 +503,7 @@ export function createControllerLinkTask(
  * 「已有」判定用运行时角色（classifyLinkRole）而非几何紧邻 —— 放置半径可以是 2，
  * 而旧的紧邻检查只看 range1，两者不同口径会让「已建成」漏认并反复重提任务
  * （单例 key 兜住了重复，但缺口账会一直红）。
- * P1-3 fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
+ * fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
  * 与「正常跳过」（已建成 / 槽位满 / RCL 不足）。
  */
 export function shouldHaveControllerLink(
@@ -574,7 +574,7 @@ export function createStorageLinkTask(
  * 是否应有 storage link（RCL5+ + 有 storage + 该角色尚无 link + 槽位未满）。
  * 「已有」判定用运行时角色而非几何紧邻：半径放宽到 3 之后，「建好了但仍不算相邻」
  * 会让这条缺口永远挂着（并把规划器钉在 gap-force 慢速重试上）。
- * P1-3 fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
+ * fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
  * 与「正常跳过」。
  */
 export function shouldHaveStorageLink(
@@ -878,7 +878,7 @@ export interface DefenseOptions {
 }
 
 export const DEFAULT_DEFENSE_OPTIONS: DefenseOptions = {
-  // P0-3：从 4 降为 3 — RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期。
+  // RCL 门禁从 4 降为 3 — RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期。
   minRcl: 3,
   defenseRadius: 7,
   // v3 增强：3→5 — 旧 3 格线在宽出口留缺口可绕行；5 格形成连续封锁面。

@@ -1,4 +1,4 @@
-/** P1-F 测试 — layout-planner 相位偏移 + 4-stage 分片 + recoveryEligible 钩子。 */
+/** layout-planner 相位偏移 + 4-stage 分片 + recoveryEligible 钩子的测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { roomPhase, systemPhase } from "../../../src/kernel/phase";
 import { assessEmergencyRebuild, isEmergencyTask } from "../../../src/domain/construction/queue";
@@ -26,7 +26,7 @@ beforeEach(() => {
 
 // ─── 1. roomPhase 纯函数测试 ─────────────────────────────────
 
-describe("P1-F.1 — roomPhase 相位偏移哈希", () => {
+describe("roomPhase 相位偏移哈希", () => {
   it("返回值在 [0, interval) 内", () => {
     for (const name of ["W7N4", "W1N1", "E5S3", "W10N10", "W23S45"]) {
       const phase = roomPhase(name, 50);
@@ -55,7 +55,7 @@ describe("P1-F.1 — roomPhase 相位偏移哈希", () => {
   });
 
   it("多房间相位充分分布（10 个房至少有 3 个不同相位）", () => {
-    // P1-F 目标：消除 N 个房每 50 tick 同 tick 扎堆规划。
+    // 目标：消除 N 个房每 50 tick 同 tick 扎堆规划。
     // 10 个房分散到 50 个槽位 — 至少 3 个不同值才算有效分散。
     const phases = new Set<number>();
     for (let i = 1; i <= 10; i++) {
@@ -64,7 +64,7 @@ describe("P1-F.1 — roomPhase 相位偏移哈希", () => {
     expect(phases.size).toBeGreaterThanOrEqual(3);
   });
 
-  it("两房 nextPlanTick 错开（P1-F 核心契约：消除同 tick 扎堆规划）", () => {
+  it("两房 nextPlanTick 错开（核心契约：消除同 tick 扎堆规划）", () => {
     // 模拟 planStage3RoadsAndFinalize 中设置 nextPlanTick 的逻辑：
     //   nextPlanTick = ctx.tick + planInterval + roomPhase(roomName, planInterval)
     const tick = 1000;
@@ -80,7 +80,7 @@ describe("P1-F.1 — roomPhase 相位偏移哈希", () => {
 
 // ─── 2. assessEmergencyRebuild 纯函数测试 ─────────────────────
 
-describe("P1-F.2 — assessEmergencyRebuild 关键基建缺失检测", () => {
+describe("assessEmergencyRebuild 关键基建缺失检测", () => {
   /** 构造一个全部满足的 snapshot（无紧急）。 */
   function healthySnapshot(rcl = 4): RoomSnapshot {
     const spawn = mockStructure("spawn", { id: "sp" });
@@ -275,7 +275,7 @@ describe("P1-F.2 — assessEmergencyRebuild 关键基建缺失检测", () => {
 
 // ─── 3. recoveryEligible 钩子集成测试 ─────────────────────────
 
-describe("P1-F.3 — layoutPlannerSystem.recoveryEligible 钩子", () => {
+describe("layoutPlannerSystem.recoveryEligible 钩子", () => {
   it("无紧急情况时返回 false（常规 50-tick 重规划不享受恢复档豁免）", () => {
     const spawn = mockStructure("spawn", { id: "sp" });
     const source = mockSource("src1");
@@ -361,7 +361,7 @@ describe("P1-F.3 — layoutPlannerSystem.recoveryEligible 钩子", () => {
 
 // ─── 4. planStage 状态机测试 ─────────────────────────────────
 
-describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
+describe("planStage 4-stage 分片状态机", () => {
   /**
    * 构造最小可用 room + Memory + snapshot 三元组。
 
@@ -541,7 +541,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     expect(layout.planStage).toBe(1); // 推进到 stage 1
     expect(layout.state).toBe("building"); // 进入 building 状态
 
-    // planStageData 写入 globalCache（不进 Memory — plan §7 大对象不持久化）
+    // planStageData 写入 globalCache（不进 Memory — 大对象不持久化）
     const stageData = (globalThis as any).__planStageData?.W7N4;
     expect(stageData).toBeDefined();
     expect(stageData.startTick).toBe(1000);
@@ -669,7 +669,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     expect(layout.planStage).toBe(0);
     expect((globalThis as any).__planStageData?.W7N4).toBeUndefined();
 
-    // nextPlanTick 更新为 ctx.tick + planInterval + roomPhase（P1-F 相位偏移）
+    // nextPlanTick 更新为 ctx.tick + planInterval + roomPhase（相位偏移）
     const expectedNext =
       ctx.tick + CONFIG.layout.planInterval + roomPhase("W7N4", CONFIG.layout.planInterval);
     expect(layout.nextPlanTick).toBe(expectedNext);
@@ -775,7 +775,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     const layout = (globalThis as any).Memory.rooms.W7N4.layout;
     expect(layout.planStage).toBe(0);
     expect((globalThis as any).__planStageData?.W7N4).toBeUndefined();
-    // nextPlanTick 包含 P1-F 相位偏移
+    // nextPlanTick 包含相位偏移
     expect(layout.nextPlanTick).toBe(
       1003 + CONFIG.layout.planInterval + roomPhase("W7N4", CONFIG.layout.planInterval),
     );
@@ -783,11 +783,11 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
   });
 });
 
-// ─── 5. R1: 4-stage 分片 vs 单 tick 等价性（Batch 4 前置）──
+// ─── 5. 4-stage 分片 vs 单 tick 等价性 ──
 
 /**
- * R1（4-stage 分片 vs 单 tick 等价性，Batch 4 前置）:
- * 验证 P1-F 核心契约「4-stage 分片不改变规划结果」。
+ * 4-stage 分片 vs 单 tick 等价性:
+ * 验证核心契约「4-stage 分片不改变规划结果」。
 
  * 既有 stage 单测只证明各 stage 转换正确（planStage 0→1→2→3→0），
  * 不证明「分片 vs 不分片产出等价」——本测试直接断言这一核心契约。
@@ -807,10 +807,10 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
  *   - globalCache 的 __planStageData 在路径 A 收尾时已由 clearPlanStageData 清除，
  *     路径 B 重新从 stage 0 开始，状态隔离
  */
-describe("P1-F.5 — R1: 4-stage 分片 vs 单 tick 等价性", () => {
+describe("4-stage 分片 vs 单 tick 等价性", () => {
   /**
-   * 构造最小可用 room + Memory + snapshot 三元组（与 P1-F.4 setupRoom 等价，
-   * 隔离定义避免改动既有测试；R1 场景只需 roomName/rcl/spawnPos 三个自由度）。
+   * 构造最小可用 room + Memory + snapshot 三元组（与 setupRoom 等价，
+   * 隔离定义避免改动既有测试；场景只需 roomName/rcl/spawnPos 三个自由度）。
    */
   function setupRoomForEquivalence(opts: {
     roomName: string;
@@ -910,7 +910,7 @@ describe("P1-F.5 — R1: 4-stage 分片 vs 单 tick 等价性", () => {
   it("buildQueue 内容等价（按 key 排序后 deep-equal）", () => {
     const a = runSharded4Ticks("W7N4");
     const b = runSingleTick("W8N4"); // 不同房名，避免 Memory 冲突
-    // R1 核心契约：分片不改变规划结果 — 两条路径 buildQueue 必须等价。
+    // 核心契约：分片不改变规划结果 — 两条路径 buildQueue 必须等价。
     expect(serializeQueue(a.buildQueue ?? [])).toBe(serializeQueue(b.buildQueue ?? []));
   });
 

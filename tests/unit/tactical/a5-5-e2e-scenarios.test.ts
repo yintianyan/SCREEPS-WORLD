@@ -1,4 +1,4 @@
-/** A5.5 E2E Scenario Declarations — ENVIRONMENT BLOCKED. */
+/** E2E Scenario Declarations — ENVIRONMENT BLOCKED. */
 
 import { describe, expect, it } from "vitest";
 import {

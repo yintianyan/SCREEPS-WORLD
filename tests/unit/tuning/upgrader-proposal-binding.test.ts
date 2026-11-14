@@ -1,9 +1,9 @@
 /**
- * #85 —— ↑ 的事前绑定判据：需求阶梯正在压着 maxCount 时，别提落不了地的扩容。
+ * ↑ 的事前绑定判据：需求阶梯正在压着 maxCount 时，别提落不了地的扩容。
  *
  * 现场病灶（2026-10-02 实测）：幼房 `upgrader.maxCount` 被抬到 3、而在场恒为 2 ——
  * 因为冲刺档写死 `min(maxCount, 2)`（`demand.ts`），那个"3"根本不参与计算。
- * 于是 D.3 的 `roleCount >= preAdjustValue+1` 必假 ⇒ 每 ~3×verifyDelay 被撤一次，
+ * 于是人口合同的 `roleCount >= preAdjustValue+1` 必假 ⇒ 每 ~3×verifyDelay 被撤一次，
  * 调优器把自己的空转当成"效果未达标"。**修法是让它别提出这种 ↑，不是放宽任何判据。**
  *
  * 关键控制组（缺这条就是"把正常通路焊死而不自知"）：钳位不存在时必须照常提 ↑。
@@ -58,7 +58,7 @@ beforeEach(() => {
   resetGlobals();
 });
 
-describe("#85 upgrader ↑ 的事前绑定判据", () => {
+describe("upgrader ↑ 的事前绑定判据", () => {
   it("(a) 冲刺档把需求压在 2 ⇒ 不再将 maxCount 提向 3（这发 ↑ 按构造落不了地）", () => {
     expect(proposedUp(signals({ upgraderClamp: 2 }))).toBe(false);
   });

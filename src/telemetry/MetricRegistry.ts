@@ -353,7 +353,7 @@ export function resetCounters(): void {
   }
 }
 
-/** 获取已注册指标数量（R6 上限审计用）。 */
+/** 获取已注册指标数量（上限审计用）。 */
 export function metricCount(): number {
   return store().descriptors.size;
 }

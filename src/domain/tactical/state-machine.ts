@@ -14,7 +14,7 @@ import type {
 import { validateAuthorization } from "./authorization";
 
 // ═══════════════════════════════════════════════════════════
-// §1. 合法状态转换表
+// 合法状态转换表
 // ═══════════════════════════════════════════════════════════
 
 const VALID_TACTICAL_TRANSITIONS: Record<TacticalState, readonly TacticalState[]> = {
@@ -38,7 +38,7 @@ export function canTransitionTactical(from: TacticalState, to: TacticalState): b
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. evaluateTacticalAction — 核心纯函数
+// evaluateTacticalAction — 核心纯函数
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -478,7 +478,7 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. 辅助检查函数
+// 辅助检查函数
 // ═══════════════════════════════════════════════════════════
 
 function isOffensiveState(state: TacticalState): boolean {
@@ -779,7 +779,7 @@ function selectFormation(snapshot: TacticalSnapshot, nextState: TacticalState): 
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. Decision Builder + Hash
+// Decision Builder + Hash
 // ═══════════════════════════════════════════════════════════
 
 function buildDecision(

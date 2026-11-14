@@ -1,4 +1,4 @@
-/** 扩张台账事件测试（R7a ExpansionOutcome）。 */
+/** 扩张台账事件测试（ExpansionOutcome）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { expansionManagerSystem } from "../../../src/systems/empire/expansion-manager";
 import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
@@ -139,7 +139,7 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
     expect(ev?.d).toEqual([1, 1, (globalThis as any).Game.time - 1100]); // [pioneer, stolen, duration]
   });
 
-  it("bootstrapping spawn 上线 + 可孵化 → 推进到 economic_startup (A3.3)", () => {
+  it("bootstrapping spawn 上线 + 可孵化 → 推进到 economic_startup", () => {
     (globalThis as any).Memory = {
       schemaVersion: 30,
       creeps: {},
@@ -183,7 +183,7 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
 
     expansionManagerSystem.run(makeContext());
 
-    // A3.3: spawn 存在 + 可孵化 → CP2 通过 → 推进到 economic_startup
+    // spawn 存在 + 可孵化 → CP2 通过 → 推进到 economic_startup
     // 不再直接完成（不降级为 spawn 建成=成功）
     const expansion = (globalThis as any).Memory.kernel.expansion;
     expect(expansion).toBeDefined();
@@ -192,7 +192,7 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
   });
 });
 
-describe("expansion-manager — R7b 节奏自适应接线", () => {
+describe("expansion-manager — 节奏自适应接线", () => {
   it("三连败 → 扩张暂停 + 黑名单 ×1.5 缩放", () => {
     (globalThis as any).Memory = {
       schemaVersion: 31,

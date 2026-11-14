@@ -66,7 +66,7 @@ function codeLines(src: string): string {
     .join(NL);
 }
 
-describe("R1 domain 纯度", () => {
+describe("domain 纯度", () => {
   const domainFiles = ALL_FILES.filter(f => layerOf(f) === "domain");
 
   it("不 import systems/* 或 creeps/*", () => {
@@ -105,7 +105,7 @@ describe("R1 domain 纯度", () => {
   });
 });
 
-describe("R3 creeps 不 import systems", () => {
+describe("creeps 不 import systems", () => {
   const creepFiles = ALL_FILES.filter(f => layerOf(f) === "creeps");
   it("零命中", () => {
     const bad: string[] = [];
@@ -118,7 +118,7 @@ describe("R3 creeps 不 import systems", () => {
   });
 });
 
-describe("R4 systems→creeps 仅限 movement/support", () => {
+describe("systems→creeps 仅限 movement/support", () => {
   const systemFiles = ALL_FILES.filter(f => layerOf(f) === "systems");
   it("禁 roles/engine", () => {
     const bad: string[] = [];
@@ -134,7 +134,7 @@ describe("R4 systems→creeps 仅限 movement/support", () => {
   });
 });
 
-describe("R5 strategy 状态唯一写者", () => {
+describe("strategy 状态唯一写者", () => {
   it("赋值写只在 empire-strategy.ts", () => {
     const bad: string[] = [];
     for (const f of ALL_FILES) {
@@ -148,7 +148,7 @@ describe("R5 strategy 状态唯一写者", () => {
   });
 });
 
-describe("R6 roles 动作红线", () => {
+describe("roles 动作红线", () => {
   const roleFiles = ALL_FILES.filter(f => relative(SRC, f).startsWith("creeps/roles"));
   it("禁 spawnCreep/createConstructionSite/PathFinder.search/Game.market", () => {
     const bad: string[] = [];
@@ -164,9 +164,9 @@ describe("R6 roles 动作红线", () => {
   });
 });
 
-describe("R8 roles 禁止 Room.find 和全局扫描", () => {
+describe("roles 禁止 Room.find 和全局扫描", () => {
   const roleFiles = ALL_FILES.filter(f => relative(SRC, f).startsWith("creeps/roles"));
-  // R8 已修复：所有角色文件的 room.find / Game.getObjectById / Object.values(Game.creeps)
+  // 已修复：所有角色文件的 room.find / Game.getObjectById / Object.values(Game.creeps)
   // 已收敛到 creeps/support/room-scans.ts 和 obj-cache.ts 的 per-tick per-room 共享缓存。
   // 豁免列表已清空。
   const R8_EXEMPTIONS = new Set<string>([]);
@@ -195,15 +195,15 @@ describe("R8 roles 禁止 Room.find 和全局扫描", () => {
   });
 });
 
-describe("R9 Kernel 禁止 import 业务模块", () => {
+describe("Kernel 禁止 import 业务模块", () => {
   const kernelFiles = ALL_FILES.filter(f => layerOf(f) === "kernel");
-  // 已登记白名单例外（ENGINEERING_BLUEPRINT §3.1 Dependencies 行）：
-  // - pruneDeadCreepCache from creeps/movement/pathfinding（R9 例外，KERNEL §8）
+  // 已登记白名单例外：
+  // - pruneDeadCreepCache from creeps/movement/pathfinding（值导入例外）
   // - getRoomThreatsCached from creeps/support/targeting（共享 body-aware 威胁查询，kernel 只读结果集合）
   // - type-only 导入豁免（全局类型共享，无运行时副作用）
   // - global-cache.ts 的 TaskPool type import 豁免
   // - outcome-channel.ts 的 uoem-types type import 豁免
-  // R9 已修复：buildRoomSnapshot 通过 Registry.registerWorldModelBuilder 注入，
+  // 已修复：buildRoomSnapshot 通过 Registry.registerWorldModelBuilder 注入，
   // classifyThreats 内联为 CONFIG.defense.threatParts 判定，
   // MINCUT_ALGO_VERSION 改为参数注入。豁免列表已清空。
   const R9_VALUE_EXEMPTIONS = new Set<string>([]);
@@ -233,7 +233,7 @@ describe("R9 Kernel 禁止 import 业务模块", () => {
   });
 });
 
-describe("R7 无循环依赖", () => {
+describe("无循环依赖", () => {
   it("src 相对导入图无环（忽略 type-only）", () => {
     const graph = new Map<string, Set<string>>();
     for (const f of ALL_FILES) {
@@ -271,7 +271,7 @@ describe("R7 无循环依赖", () => {
   });
 });
 
-describe("R10 bootstrap 注册集合一致性", () => {
+describe("bootstrap 注册集合一致性", () => {
   const bootstrapPath = resolve(SRC, "bootstrap.ts");
   const bootstrapSrc = readFileSync(bootstrapPath, "utf8");
 
@@ -333,7 +333,7 @@ describe("R10 bootstrap 注册集合一致性", () => {
   });
 });
 
-describe("R11 systems 间值导入审计", () => {
+describe("systems 间值导入审计", () => {
   const systemFiles = ALL_FILES.filter(f => relative(SRC, f).startsWith("systems/"));
 
   // 白名单：每条记录 "导入文件:被导入文件" 及其合法理由。
@@ -370,13 +370,13 @@ describe("R11 systems 间值导入审计", () => {
     // 合并进父系统的规划模块（父系统内部门控调用，同架构单元编排）
     "systems/room/logistics.ts:systems/room/logistics-planner.ts",
     "systems/empire/empire-strategy.ts:systems/empire/specialization-planner.ts",
-    // 收摊义务的唯一实现：warPlan 有两个写者（A5 兼容投影 / legacy 选目标），而
+    // 收摊义务的唯一实现：warPlan 有两个写者（兼容投影 / legacy 选目标），而
     // "换目标必须先清算旧编队（recycle + 撤请求 + 止损信号）"这条义务只有一份实现，
-    // 在 war-planner.demobilize。A5 换目标时调它，而不是抄第二份收摊。
-    // 出口条件：两写者合并为单一 Operation 生命周期属主（W06 三.3 的方案 B / B7 接线
-    // 裁决）后，此边应随 demobilize 一起迁进那个属主并从本表删除。
+    // 在 war-planner.demobilize。换目标时调它，而不是抄第二份收摊。
+    // 出口条件：两写者合并为单一 Operation 生命周期属主后，此边应随 demobilize
+    // 一起迁进那个属主并从本表删除。
     "systems/military/war-planning-system.ts:systems/military/war-planner.ts",
-    // Squad 级战术状态的归属模块（A9 修复）：战术状态必须有单一读写口，
+    // Squad 级战术状态的归属模块：战术状态必须有单一读写口，
     // 三个 stage runtime + combat-micro 原先各自从 warPlan.phase 现推（4 份副本）。
     // 同 systems/remote/op-lifecycle.ts 的形状：从宿主系统里抽出来的生命周期属主。
     "systems/military/tactical-runtime-system.ts:systems/military/squad-state.ts",
@@ -441,7 +441,7 @@ describe("R11 systems 间值导入审计", () => {
   });
 });
 
-describe("R13 同名导出唯一（定义权守卫）", () => {
+describe("同名导出唯一（定义权守卫）", () => {
   // 现存同名导出豁免台账——概念收编进统一 schema 后必须从表中移除，台账只许缩不许涨。
   // 语义分叉组（同名不同物）收编时必须改名或合并；同名同形组收编时保留一份。
   const EXEMPT = new Set([
@@ -500,6 +500,6 @@ describe("core 层纯度（定义权原语零依赖）", () => {
   });
 });
 
-// R12 production bundle parity 已收敛至 tests/integration/framework/bundle-parity.test.ts
-//（FREEZE R20③：dist 仅在 build 后存在，守卫必须在 build 之后运行——unit 层在
-// CI 中先于 build，恒走 skip 分支形同虚设；「已删模块不回流」检查一并迁移）。
+// production bundle parity 守卫已迁出 unit 层 —— dist 仅在 build 后存在，
+// 守卫必须在 build 之后运行（unit 层在 CI 中先于 build，恒走 skip 分支形同虚设；
+// 「已删模块不回流」检查一并迁移）。

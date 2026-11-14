@@ -1,4 +1,4 @@
-/** Prospect Manager 系统测试（R6b 主动情报 — 任务生命周期 + 止损链）。 */
+/** Prospect Manager 系统测试（主动情报 — 任务生命周期 + 止损链）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { prospectManagerSystem } from "../../../src/systems/empire/prospect-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
@@ -122,7 +122,7 @@ describe("prospect-manager — 任务开启", () => {
   });
 });
 
-describe("prospect-manager — 侦察任务的 CPU 闸（R641）", () => {
+describe("prospect-manager — 侦察任务的 CPU 闸", () => {
   function setup(expansionPlans: boolean, tier?: string): void {
     (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
@@ -416,7 +416,7 @@ describe("prospect-manager — 视野外扩（horizon）", () => {
   });
 });
 
-describe("prospect-manager — R653 选点侦察补位", () => {
+describe("prospect-manager — 选点侦察补位", () => {
   function setupVetting(wallRatio?: number): void {
     (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     (globalThis as any).Game.rooms = {

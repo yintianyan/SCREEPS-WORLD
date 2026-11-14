@@ -62,7 +62,7 @@ export function emitMilestone(expansion: ExpansionState, milestone: string, tick
 
 /**
  * 入队终态 OutcomeEvent — 唯一终态出口。
- * P2/P3/P4/P6/P8/P9/A1/B1 调用此函数。
+ * 由扩张状态机调用。
  * 同一 operationId 只接受第一条（幂等去重）。
  */
 export function enqueueTerminalOutcome(
@@ -82,7 +82,7 @@ export function enqueueTerminalOutcome(
   recordTyped(EventKind.ExpansionOutcome, expansion.target, {
     phaseCode,
     outcomeCode,
-    durationTicks: tick - openedAt, // UOEM: 使用 openedAt 而非 startedAt
+    durationTicks: tick - openedAt, // 使用 openedAt 而非 startedAt
   });
 
   // 构造 OutcomeEvent
@@ -123,7 +123,7 @@ export function enqueueTerminalOutcome(
   recordPlanningDecision("expansion", result === "COMPLETED" || result === "COMPLETED_FORCED");
 
   // 清理 globalCache().lastExpansionOutcome（兼容期：保留旧字段供未迁移消费者）
-  // Phase 6 后 experience-collector 从 channel drain 读取，不再依赖此字段
+  // 接入 OutcomeChannel 后 experience-collector 从 channel drain 读取，不再依赖此字段
   globalCache().lastExpansionOutcome = {
     target: expansion.target,
     outcomeCode,

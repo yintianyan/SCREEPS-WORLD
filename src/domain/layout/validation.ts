@@ -292,7 +292,7 @@ export function buildOccupiedPositionSet(
 }
 
 /**
- * 统一位置验证器 — planner/executor 共用避免逻辑不一致（检查顺序见 plan §5.6.4）：
+ * 统一位置验证器 — planner/executor 共用避免逻辑不一致：
  * 边界 → RCL 上限 → 地形 → 占用 → 依赖 → 全局 site 上限，返回 "ok" 或首个失败原因。
  * 传入预计算 structureCounts/occupiedSet 时 O(1)，否则回退全量扫描（向后兼容）。
  */

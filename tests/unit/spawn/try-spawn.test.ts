@@ -78,7 +78,7 @@ describe("trySpawn — 隔离名单在孵化口生效", () => {
   });
 });
 
-describe("trySpawn — SP-1 recovery 能量预留", () => {
+describe("trySpawn — recovery 能量预留", () => {
   it("采集者 ≤1 时非 P0 请求不得动用预留能量（cost > budget - reserve → 不孵化）", () => {
     // 能量 300，请求 200，预留 200 → 有效额度 100 < 200 → 排队等待。
     const spawn = mockSpawn(200 + CONFIG.spawn.recoveryEnergyReserve - 100);
@@ -152,13 +152,13 @@ describe("trySpawn — SP-1 recovery 能量预留", () => {
 });
 
 /**
- * R686：预留单独挡住的 P2 —— 线上 W39S55 的形状。
+ * 预留单独挡住的 P2 —— 线上 W39S55 的形状。
  * RCL4 容量 1300、hauler 道路优化档 16C8M=1200、预留 200 ⇒ 有效额度 1100。
  * economyPressure 在 storage 259K 的富房恒为 0，`starvedP2` 的 pressure>0.5 条件
  * 按构造不可达 ⇒ 请求只能 TTL 到期重建（累计 degradeGateClosed 18,000+）。
  * 正确行为不是等饥饿窗口，而是立刻降到「留住预留后的最大 body」。
  */
-describe("R686 预留单独挡住的 P2", () => {
+describe("预留单独挡住的 P2", () => {
   const fullHauler = [...Array(16).fill("carry"), ...Array(8).fill("move")] as BodyPartConstant[]; // 1200
   const rejects = () =>
     (Memory.rooms.W7N4 as (RoomMemory & { spawnRejects?: SpawnRejectStats }) | undefined)
@@ -324,7 +324,7 @@ describe("trySpawn — 管线本体基线（补测试债）", () => {
   });
 });
 
-describe("trySpawn — SP-10 饥饿降级成本地板", () => {
+describe("trySpawn — 饥饿降级成本地板", () => {
   // 满配 hauler 6C6M = 600 能量；createdAt 提前 500 tick，
   // 远超 P1 饥饿窗口（2 × 12 部件 × 3 = 72 tick）→ starvedP1 成立。
   function starvedHauler(): SpawnRequest {
@@ -457,7 +457,7 @@ describe("trySpawn — 泵断供降级（distributor 存活数 0）", () => {
   });
 });
 
-describe("trySpawn — ISSUE-007 reserve 不叠加", () => {
+describe("trySpawn — reserve 不叠加", () => {
   beforeEach(() => {
     resetGlobals();
     (globalThis as any).Memory.rooms.W7N4 = { colonyState: "normal", economyPressure: 0 };

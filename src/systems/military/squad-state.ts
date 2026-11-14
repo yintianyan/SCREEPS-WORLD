@@ -1,5 +1,5 @@
 /**
- * Squad 级战术状态的归属模块（B6-㉔ / A9）— 唯一读写口。
+ * Squad 级战术状态的归属模块 — 唯一读写口。
  *
  * 修前的样子：`tactical-runtime-system` / `tactical-engagement-runtime` /
  * `squad-movement-runtime` 各有一份 `deriveTacticalStateFromPhase(plan.phase)`，
@@ -45,7 +45,7 @@ export function readSquadState(key: string): TacticalState {
  * - 合法转换（转换表是唯一裁判）；
  * - 自持（to === from，即"这一轮维持现状" —— 表里没有自环，而维持不是转换）。
  * 非法转换一律不写：调用方的闸若判了非法，状态就留在原地，而不是被下游更激进的
- * 分支顺手改写成 ENGAGING（这正是 A9 的另一半）。
+ * 分支顺手改写成 ENGAGING。
  */
 export function commitSquadState(
   key: string,

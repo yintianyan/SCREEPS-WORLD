@@ -1,7 +1,7 @@
 /** Military Operation Model */
 
 // ═══════════════════════════════════════════════════════════
-// §1. OperationType — 12 种军事行动类型
+// OperationType — 12 种军事行动类型
 // ═══════════════════════════════════════════════════════════
 
 export type OperationType =
@@ -19,7 +19,7 @@ export type OperationType =
   | "ABORT"; // 终止行动
 
 // ═══════════════════════════════════════════════════════════
-// §2. WarObjective — 为什么打
+// WarObjective — 为什么打
 // ═══════════════════════════════════════════════════════════
 
 export type WarObjective =
@@ -35,7 +35,7 @@ export type WarObjective =
   | "RETREAT_AND_PRESERVE_FORCE"; // 撤退保存力量
 
 // ═══════════════════════════════════════════════════════════
-// §3. OperationStatus — 生命周期
+// OperationStatus — 生命周期
 // ═══════════════════════════════════════════════════════════
 
 export type OperationStatus =
@@ -51,7 +51,7 @@ export type OperationStatus =
   | "EXPIRED"; // 超时过期
 
 // ═══════════════════════════════════════════════════════════
-// §4. OperationPriority
+// OperationPriority
 // ═══════════════════════════════════════════════════════════
 
 export type OperationPriorityFactor =
@@ -72,7 +72,7 @@ export interface OperationPriority {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. OperationTarget
+// OperationTarget
 // ═══════════════════════════════════════════════════════════
 
 export interface OperationTarget {
@@ -89,7 +89,7 @@ export interface OperationTarget {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. OperationConstraints
+// OperationConstraints
 // ═══════════════════════════════════════════════════════════
 
 export interface OperationConstraints {
@@ -119,7 +119,7 @@ export type AbortCondition =
   | "CASUALTY_EXCEEDED"; // 伤亡超限
 
 // ═══════════════════════════════════════════════════════════
-// §7. MilitaryOperation
+// MilitaryOperation
 // ═══════════════════════════════════════════════════════════
 
 export interface MilitaryOperation {
@@ -154,7 +154,7 @@ export interface MilitaryOperation {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §8. Lifecycle 状态转换纯函数
+// Lifecycle 状态转换纯函数
 // ═══════════════════════════════════════════════════════════
 
 /** 合法状态转换表。 */
@@ -193,7 +193,7 @@ export function transition(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §9. Preparation Gate
+// Preparation Gate
 // ═══════════════════════════════════════════════════════════
 
 export interface PreparationGate {
@@ -220,7 +220,7 @@ export function checkPreparationGate(gate: PreparationGate): {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §10. Operation 确定性 Hash
+// Operation 确定性 Hash
 // ═══════════════════════════════════════════════════════════
 
 export function operationHash(op: MilitaryOperation): string {
@@ -248,7 +248,7 @@ function fnv1a32Hex(str: string): string {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §11. 便捷工厂
+// 便捷工厂
 // ═══════════════════════════════════════════════════════════
 
 export function makeOperationId(tick: number, seq: number): string {

@@ -151,7 +151,7 @@ export function evaluateColonyFailure(input: ColonyFailureInput): ColonyFailureR
   }
 
   // ── Re-bootstrap 禁止 ──
-  // A3.4 §20: Colony 出现 Energy Deficit 禁止重新 Bootstrap。
+  // Colony 出现 Energy Deficit 禁止重新 Bootstrap。
   // 只有 Room Lost（controller 丢失）才允许——这不在本模块检测范围。
   const allowRebootstrap = false;
 

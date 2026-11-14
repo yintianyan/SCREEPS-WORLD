@@ -1,4 +1,4 @@
-/** A4.6 Recovery Execution & Autonomous Recovery Loop — E2E 场景测试。 */
+/** Recovery Execution & Autonomous Recovery Loop — E2E 场景测试。 */
 import { describe, it, expect } from "vitest";
 import {
   recoveryIdempotencyKey,
@@ -96,7 +96,7 @@ function makeFailureNode(overrides: Partial<FailureNode> = {}): FailureNode {
 
 // ─── E2E-001: 生命周期状态转换 ──────────────────────────────
 
-describe("A4.6 E2E-001: RecoveryAction 生命周期状态转换", () => {
+describe("RecoveryAction 生命周期状态转换", () => {
   it("PROPOSED → SUBMITTED → EXECUTING → VERIFYING → SUCCEEDED", () => {
     const action = makeRecoveryAction();
     let record = createActionRecord(action, TICK, 3);
@@ -154,7 +154,7 @@ describe("A4.6 E2E-001: RecoveryAction 生命周期状态转换", () => {
 
 // ─── E2E-002~006: Idempotency ─────────────────────────────
 
-describe("A4.6 E2E-002: Idempotency Key 稳定性", () => {
+describe("Idempotency Key 稳定性", () => {
   it("相同 domain+type+room 产生相同 key", () => {
     const a1 = makeRecoveryAction();
     const a2 = makeRecoveryAction({ id: "action-002" });
@@ -199,7 +199,7 @@ describe("A4.6 E2E-002: Idempotency Key 稳定性", () => {
   });
 });
 
-describe("A4.6 E2E-002b: 活跃记录租约（防恢复预算死锁）", () => {
+describe("活跃记录租约（防恢复预算死锁）", () => {
   it("executing 长期无推进 → 落成 failed，可被清理并可重试", () => {
     const table: RecoveryActionTable = new Map();
     table.set(
@@ -253,7 +253,7 @@ describe("A4.6 E2E-002b: 活跃记录租约（防恢复预算死锁）", () => {
   });
 });
 
-describe("A4.6 E2E-003: Idempotency — 活跃状态阻止重复提交", () => {
+describe("Idempotency — 活跃状态阻止重复提交", () => {
   it("executing 状态不重复提交", () => {
     const action = makeRecoveryAction();
     const table: RecoveryActionTable = new Map();
@@ -276,7 +276,7 @@ describe("A4.6 E2E-003: Idempotency — 活跃状态阻止重复提交", () => {
   });
 });
 
-describe("A4.6 E2E-004: Idempotency — succeeded 状态阻止重新提交", () => {
+describe("Idempotency — succeeded 状态阻止重新提交", () => {
   it("succeeded 状态不重新提交", () => {
     const action = makeRecoveryAction();
     const table: RecoveryActionTable = new Map();
@@ -289,7 +289,7 @@ describe("A4.6 E2E-004: Idempotency — succeeded 状态阻止重新提交", () 
   });
 });
 
-describe("A4.6 E2E-005: Idempotency — retryable 冷却期到期后允许重试", () => {
+describe("Idempotency — retryable 冷却期到期后允许重试", () => {
   it("冷却期内不重试", () => {
     const action = makeRecoveryAction();
     const table: RecoveryActionTable = new Map();
@@ -314,7 +314,7 @@ describe("A4.6 E2E-005: Idempotency — retryable 冷却期到期后允许重试
   });
 });
 
-describe("A4.6 E2E-006: Idempotency — terminal 状态永久阻止重试", () => {
+describe("Idempotency — terminal 状态永久阻止重试", () => {
   it("terminal 状态不重试", () => {
     const action = makeRecoveryAction();
     const table: RecoveryActionTable = new Map();
@@ -329,7 +329,7 @@ describe("A4.6 E2E-006: Idempotency — terminal 状态永久阻止重试", () =
 
 // ─── E2E-007~010: Verification ────────────────────────────
 
-describe("A4.6 E2E-007: Verification — domainLevel 改善 → success", () => {
+describe("Verification — domainLevel 改善 → success", () => {
   it("domainLevel 从 degraded 升到 healthy → success", () => {
     const before = makeSnapshot({ domainLevel: "degraded", domainScore: 0.4 });
     const after = makeSnapshot({ domainLevel: "healthy", domainScore: 0.9 });
@@ -359,7 +359,7 @@ describe("A4.6 E2E-007: Verification — domainLevel 改善 → success", () => 
   });
 });
 
-describe("A4.6 E2E-008: Verification — domainScore 改善 → partial", () => {
+describe("Verification — domainScore 改善 → partial", () => {
   it("domainScore 改善 >0.1 但 level 不变 → partial", () => {
     const before = makeSnapshot({ domainLevel: "degraded", domainScore: 0.3 });
     const after = makeSnapshot({ domainLevel: "degraded", domainScore: 0.5 });
@@ -469,7 +469,7 @@ describe("A4.6 E2E-008: Verification — domainScore 改善 → partial", () => 
   });
 });
 
-describe("A4.6 E2E-009: Verification — 无改善 + 超时 → failed", () => {
+describe("Verification — 无改善 + 超时 → failed", () => {
   it("超过 2× estimatedRecoveryTime 仍无改善 → failed", () => {
     const before = makeSnapshot({
       domainLevel: "degraded",
@@ -495,7 +495,7 @@ describe("A4.6 E2E-009: Verification — 无改善 + 超时 → failed", () => {
   });
 });
 
-describe("A4.6 E2E-010: Verification — 未到恢复时间 → no_progress", () => {
+describe("Verification — 未到恢复时间 → no_progress", () => {
   it("提交成功但没改善且未超时 → no_progress", () => {
     const before = makeSnapshot({
       domainLevel: "degraded",
@@ -523,7 +523,7 @@ describe("A4.6 E2E-010: Verification — 未到恢复时间 → no_progress", ()
 
 // ─── E2E-011: Retry Policy ────────────────────────────────
 
-describe("A4.6 E2E-011: Retry Policy 配置", () => {
+describe("Retry Policy 配置", () => {
   it("spawn_recovery: 3 attempts, 100 cooldown, retryable", () => {
     const policy = getRetryPolicy("spawn_recovery");
     expect(policy.maxAttempts).toBe(3);
@@ -558,7 +558,7 @@ describe("A4.6 E2E-011: Retry Policy 配置", () => {
 
 // ─── E2E-012: Failure Classification ──────────────────────
 
-describe("A4.6 E2E-012: Failure Classification", () => {
+describe("Failure Classification", () => {
   it("threat 关键词 → threat_blocked", () => {
     expect(classifyFailure("threat detected in room", "spawn_recovery")).toBe("threat_blocked");
     expect(classifyFailure("hostile creep found", "logistics_fix")).toBe("threat_blocked");
@@ -595,7 +595,7 @@ describe("A4.6 E2E-012: Failure Classification", () => {
 
 // ─── E2E-013~015: Recovery Budget ─────────────────────────
 
-describe("A4.6 E2E-013: Recovery Budget — CPU bucket 不足", () => {
+describe("Recovery Budget — CPU bucket 不足", () => {
   it("CPU bucket < 1000 → 不允许任何 Recovery", () => {
     const result = evaluateRecoveryBudget({
       tick: TICK,
@@ -610,7 +610,7 @@ describe("A4.6 E2E-013: Recovery Budget — CPU bucket 不足", () => {
   });
 });
 
-describe("A4.6 E2E-014: Recovery Budget — 低能量只允许零成本", () => {
+describe("Recovery Budget — 低能量只允许零成本", () => {
   it("empireEnergyReserve < 500 → 只允许零成本 Recovery", () => {
     const result = evaluateRecoveryBudget({
       tick: TICK,
@@ -626,7 +626,7 @@ describe("A4.6 E2E-014: Recovery Budget — 低能量只允许零成本", () => 
   });
 });
 
-describe("A4.6 E2E-015: Recovery Budget — 并发上限", () => {
+describe("Recovery Budget — 并发上限", () => {
   it("活跃 Recovery ≥ maxConcurrent → 不允许新增", () => {
     const result = evaluateRecoveryBudget({
       tick: TICK,
@@ -657,7 +657,7 @@ describe("A4.6 E2E-015: Recovery Budget — 并发上限", () => {
 
 // ─── E2E-016: Recovery Unviability ────────────────────────
 
-describe("A4.6 E2E-016: Recovery Unviability", () => {
+describe("Recovery Unviability", () => {
   it("累计尝试 > 10 → unviable", () => {
     const result = evaluateRecoveryUnviability({
       room: "W1N1",
@@ -699,7 +699,7 @@ describe("A4.6 E2E-016: Recovery Unviability", () => {
 
 // ─── E2E-017~019: Escalation ──────────────────────────────
 
-describe("A4.6 E2E-017: Escalation — spawn 失败因能量不足", () => {
+describe("Escalation — spawn 失败因能量不足", () => {
   it("spawn_recovery 失败 + 能量原因 → 建议 energy_redirect", () => {
     const record = makeRecord({
       type: "spawn_recovery",
@@ -722,7 +722,7 @@ describe("A4.6 E2E-017: Escalation — spawn 失败因能量不足", () => {
   });
 });
 
-describe("A4.6 E2E-018: Escalation — logistics 失败因威胁", () => {
+describe("Escalation — logistics 失败因威胁", () => {
   it("logistics_fix 失败 + 威胁原因 → 建议 defense_response", () => {
     const record = makeRecord({
       type: "logistics_fix",
@@ -745,7 +745,7 @@ describe("A4.6 E2E-018: Escalation — logistics 失败因威胁", () => {
   });
 });
 
-describe("A4.6 E2E-019: Escalation — terminal 状态", () => {
+describe("Escalation — terminal 状态", () => {
   it("terminal 状态 → 必须找替代路径", () => {
     const record = makeRecord({
       type: "spawn_recovery",
@@ -789,7 +789,7 @@ describe("A4.6 E2E-019: Escalation — terminal 状态", () => {
 
 // ─── E2E-020: Cleanup ─────────────────────────────────────
 
-describe("A4.6 E2E-020: Cleanup 过期记录", () => {
+describe("Cleanup 过期记录", () => {
   it("succeeded 记录 500 tick 后清理", () => {
     const table: RecoveryActionTable = new Map();
     table.set("key1", makeRecord({ state: "succeeded", updatedAt: TICK }));
@@ -864,7 +864,7 @@ describe("A4.6 E2E-020: Cleanup 过期记录", () => {
 
 // ─── E2E-021: Stats ───────────────────────────────────────
 
-describe("A4.6 E2E-021: Recovery Stats 计算", () => {
+describe("Recovery Stats 计算", () => {
   it("正确统计各状态数量", () => {
     const table: RecoveryActionTable = new Map();
     table.set(
@@ -916,7 +916,7 @@ describe("A4.6 E2E-021: Recovery Stats 计算", () => {
 
 // ─── isActionActive ───────────────────────────────────────
 
-describe("A4.6 isActionActive", () => {
+describe("isActionActive", () => {
   it("活跃状态返回 true", () => {
     expect(isActionActive(makeRecord({ state: "proposed" }))).toBe(true);
     expect(isActionActive(makeRecord({ state: "validated" }))).toBe(true);

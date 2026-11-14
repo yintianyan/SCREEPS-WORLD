@@ -1,4 +1,4 @@
-/** v26 → v27 迁移独立测试（R4 战争自治升级 / warPlan 扩展 + warBlacklist + warPressureTicks）。 */
+/** v26 → v27 迁移独立测试（战争自治升级 / warPlan 扩展 + warBlacklist + warPressureTicks）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";
@@ -8,7 +8,7 @@ beforeEach(() => {
   resetGlobals();
 });
 
-describe("migration v26 → v27（R4 战争自治升级建档）", () => {
+describe("migration v26 → v27（战争自治升级建档）", () => {
   it("空 Memory（无新字段）不报错，版本升到当前", () => {
     (globalThis as any).Memory = {
       schemaVersion: 26,

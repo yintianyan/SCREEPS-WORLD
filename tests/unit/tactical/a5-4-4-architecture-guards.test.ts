@@ -58,7 +58,7 @@ const TACTICAL_DOMAIN_FILES = ALL_FILES.filter(f =>
 // Guards 1-5: Domain Purity — 不引用 Runtime / 不执行 Action
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Domain Purity (Guards 1-5)", () => {
+describe("Domain Purity (Guards 1-5)", () => {
   // Guard 1: Domain 禁止 Game
   it("1. domain/tactical/*.ts 不引用 Game", () => {
     const bad: string[] = [];
@@ -163,7 +163,7 @@ describe("A5.4.4: Domain Purity (Guards 1-5)", () => {
 // Guards 6-8: Tactical 禁止 spawn / logistics / recovery
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Tactical Runtime Boundary (Guards 6-8)", () => {
+describe("Tactical Runtime Boundary (Guards 6-8)", () => {
   // Guard 6: Tactical 禁止 spawn
   it("6. tactical-engagement-runtime.ts 不调用 spawnCreep", () => {
     const code = codeLines(readFileSync(ENGAGEMENT_RUNTIME_FILE, "utf8"));
@@ -213,7 +213,7 @@ describe("A5.4.4: Tactical Runtime Boundary (Guards 6-8)", () => {
 // Guards 9-10: Tactical 禁止修改 WarPosture / 创建 Operation
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Strategic Boundary (Guards 9-10)", () => {
+describe("Strategic Boundary (Guards 9-10)", () => {
   // Guard 9: Tactical 禁止修改 WarPosture
   it("9. tactical-engagement-runtime.ts 不修改 Memory.kernel.strategy / .posture", () => {
     const code = codeLines(readFileSync(ENGAGEMENT_RUNTIME_FILE, "utf8"));
@@ -250,7 +250,7 @@ describe("A5.4.4: Strategic Boundary (Guards 9-10)", () => {
 // Guard 11: Tactical 禁止创建 Strategic Target
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: No Strategic Target Creation (Guard 11)", () => {
+describe("No Strategic Target Creation (Guard 11)", () => {
   it("11. focus-fire.ts 不引用 WarPlan 修改 / 不创建 Strategic Target", () => {
     const code = codeLines(readFileSync(FOCUS_FIRE_FILE, "utf8"));
     expect(code).not.toMatch(/WarPlan\b/);
@@ -269,7 +269,7 @@ describe("A5.4.4: No Strategic Target Creation (Guard 11)", () => {
 // Guards 12-13: 不得创建第二套 Threat Assessment / CombatCapability
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: No Duplicate Systems (Guards 12-13)", () => {
+describe("No Duplicate Systems (Guards 12-13)", () => {
   // Guard 12: 不得创建第二套 Threat Assessment
   it("12. focus-fire.ts 不重新实现 assessThreat / ThreatAssessment", () => {
     const code = codeLines(readFileSync(FOCUS_FIRE_FILE, "utf8"));
@@ -306,7 +306,7 @@ describe("A5.4.4: No Duplicate Systems (Guards 12-13)", () => {
 // Guard 14: Role 禁止自行创建 Strategic Target
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Role Strategic Target Boundary (Guard 14)", () => {
+describe("Role Strategic Target Boundary (Guard 14)", () => {
   it("14. attacker.ts 不创建 WarPlan / 不修改 WarPosture", () => {
     const code = codeLines(readFileSync(ATTACKER_FILE, "utf8"));
     expect(code).not.toMatch(/Memory\.kernel\.warPlan\s*=/);
@@ -324,7 +324,7 @@ describe("A5.4.4: Role Strategic Target Boundary (Guard 14)", () => {
 // Guard 15: Role 禁止绕过 AttackIntent 系统
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Role AttackIntent Priority (Guard 15)", () => {
+describe("Role AttackIntent Priority (Guard 15)", () => {
   it("15. attacker.ts acquire 链中 attackByFocusFire 在首位", () => {
     const src = readFileSync(ATTACKER_FILE, "utf8");
     const acquireMatch = src.match(/acquire:\s*\[([^\]]+)\]/);
@@ -362,7 +362,7 @@ describe("A5.4.4: Role AttackIntent Priority (Guard 15)", () => {
 // 收编自 a5-4-2-architecture：Squad Movement Runtime 边界
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.2 收编: Squad Movement Runtime Boundary", () => {
+describe("Squad Movement Runtime Boundary", () => {
   it("squad-movement-runtime.ts 不引用 evaluateTacticalAction / state-machine 决策函数", () => {
     const src = readFileSync(SQUAD_MOVEMENT_RUNTIME_FILE, "utf8");
     // 系统层薄壳不应直接调用 evaluateTacticalAction（那是 tactical-runtime 的职责）
@@ -381,7 +381,7 @@ describe("A5.4.2 收编: Squad Movement Runtime Boundary", () => {
 
   it("squadMovementSystem 已通过 pipeline 注册到 bootstrap", () => {
     const bootstrapSrc = readFileSync(findFile("bootstrap.ts"), "utf8");
-    // R10 ADR 合并后：squadMovementSystem 通过 tacticalRuntimePipelineSystem 注册
+    // ADR 合并后：squadMovementSystem 通过 tacticalRuntimePipelineSystem 注册
     expect(bootstrapSrc).toContain("tacticalRuntimePipelineSystem");
     expect(bootstrapSrc).toContain("registerSystem(tacticalRuntimePipelineSystem)");
     expect(bootstrapSrc).toContain("tactical-runtime-pipeline");
@@ -392,7 +392,7 @@ describe("A5.4.2 收编: Squad Movement Runtime Boundary", () => {
 // Domain Import Boundary
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Domain Import Boundary", () => {
+describe("Domain Import Boundary", () => {
   it("domain/tactical/*.ts 不 import systems/ 或 creeps/ 或 kernel/", () => {
     const bad: string[] = [];
     for (const f of TACTICAL_DOMAIN_FILES) {
@@ -428,7 +428,7 @@ describe("A5.4.4: Domain Import Boundary", () => {
 // Runtime System Boundary
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Runtime System Boundary", () => {
+describe("Runtime System Boundary", () => {
   it("tactical-engagement-runtime.ts 不直接调用 attack() / heal() / rangedAttack()", () => {
     const code = codeLines(readFileSync(ENGAGEMENT_RUNTIME_FILE, "utf8"));
     expect(code).not.toMatch(/\.attack\s*\(/);
@@ -464,11 +464,11 @@ describe("A5.4.4: Runtime System Boundary", () => {
 // Bootstrap Registration
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Bootstrap Registration", () => {
+describe("Bootstrap Registration", () => {
   it("tacticalEngagementSystem 已通过 pipeline 注册到 bootstrap", () => {
     const bootstrapPath = join(SRC, "bootstrap.ts");
     const src = readFileSync(bootstrapPath, "utf8");
-    // R10 ADR 合并后：tacticalEngagementSystem 通过 tacticalRuntimePipelineSystem 注册
+    // ADR 合并后：tacticalEngagementSystem 通过 tacticalRuntimePipelineSystem 注册
     expect(src).toContain("tacticalRuntimePipelineSystem");
     expect(src).toContain("registerSystem(tacticalRuntimePipelineSystem)");
   });
@@ -476,7 +476,7 @@ describe("A5.4.4: Bootstrap Registration", () => {
   it("tacticalRuntimeSystem 已通过 pipeline 注册到 bootstrap", () => {
     const bootstrapPath = join(SRC, "bootstrap.ts");
     const src = readFileSync(bootstrapPath, "utf8");
-    // R10 ADR 合并后：tacticalRuntimeSystem 通过 tacticalRuntimePipelineSystem 注册
+    // ADR 合并后：tacticalRuntimeSystem 通过 tacticalRuntimePipelineSystem 注册
     expect(src).toContain("tacticalRuntimePipelineSystem");
     expect(src).toContain("registerSystem(tacticalRuntimePipelineSystem)");
   });
@@ -486,7 +486,7 @@ describe("A5.4.4: Bootstrap Registration", () => {
 // Barrel Export
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Barrel Export", () => {
+describe("Barrel Export", () => {
   it("domain/tactical/index.ts 导出所有子模块", () => {
     const src = readFileSync(INDEX_FILE, "utf8");
     expect(src).toContain("./types");
@@ -503,7 +503,7 @@ describe("A5.4.4: Barrel Export", () => {
 // Authorization Runtime Validation
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Authorization Runtime Validation", () => {
+describe("Authorization Runtime Validation", () => {
   it("attacker.ts 不包含 if hostile → attack() 的 legacy bypass", () => {
     const code = codeLines(readFileSync(ATTACKER_FILE, "utf8"));
     // The Legacy attack paths (attackEnemies, attackStructures) are fallback candidates
@@ -533,7 +533,7 @@ describe("A5.4.4: Authorization Runtime Validation", () => {
 // TargetScope Runtime Validation
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: TargetScope Runtime Validation", () => {
+describe("TargetScope Runtime Validation", () => {
   it("focus-fire.ts 拒绝 authorizedTargetRoom 之外的目标", () => {
     const code = codeLines(readFileSync(FOCUS_FIRE_FILE, "utf8"));
     expect(code).toContain("authorizedTargetRoom");
@@ -552,7 +552,7 @@ describe("A5.4.4: TargetScope Runtime Validation", () => {
 // Threat / CombatCapability Canonical Audit
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Threat / CombatCapability Canonical", () => {
+describe("Threat / CombatCapability Canonical", () => {
   it("focus-fire.ts 消费 CombatCapability（不重新计算 body parts）", () => {
     const src = readFileSync(FOCUS_FIRE_FILE, "utf8");
     expect(src).toContain("CombatCapability");
@@ -588,7 +588,7 @@ describe("A5.4.4: Threat / CombatCapability Canonical", () => {
 // Decision Trace Validation
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Decision Trace", () => {
+describe("Decision Trace", () => {
   it("focus-fire.ts 包含 decisionHash（确定性验证）", () => {
     const code = codeLines(readFileSync(FOCUS_FIRE_FILE, "utf8"));
     expect(code).toContain("decisionHash");
@@ -613,7 +613,7 @@ describe("A5.4.4: Decision Trace", () => {
 // Memory Boundedness
 // ═════════════════════════════════════════════════════════════
 
-describe("A5.4.4: Memory Boundedness", () => {
+describe("Memory Boundedness", () => {
   it("tactical-engagement-runtime.ts 每 tick 重置 per-tick 数据", () => {
     const code = codeLines(readFileSync(ENGAGEMENT_RUNTIME_FILE, "utf8"));
     expect(code).toMatch(/focusFirePlans\.clear|attackIntents\.clear/);

@@ -219,7 +219,7 @@ describe("SpawnQueue — cleanQueue", () => {
   });
 
   // ：达重试上限的 key 返回给调用方入黑名单 — 打破删除-重建翻炒。
-  it("SP-2：返回被隔离的 key 列表（TTL 过期不入列）", () => {
+  it("返回被隔离的 key 列表（TTL 过期不入列）", () => {
     const queue: SpawnRequest[] = [
       makeRequest("failed"),
       makeRequest("expired"),
@@ -247,9 +247,9 @@ describe("SpawnQueue — cleanQueue", () => {
   });
 });
 
-// P2-K：onPurge 回调覆盖两种 churn 路径 — 让调用方把删除事件转译为遥测指标。
+// onPurge 回调覆盖两种 churn 路径 — 让调用方把删除事件转译为遥测指标。
 // 纯函数契约：不传回调时行为完全等价于改动前（向后兼容）。
-describe("SpawnQueue — cleanQueue onPurge 回调 (P2-K)", () => {
+describe("SpawnQueue — cleanQueue onPurge 回调", () => {
   it("retries 烧穿时回调以 reason='retries' 触发", () => {
     const queue: SpawnRequest[] = [makeRequest("failed")];
     queue[0]!.retries = 5;
@@ -322,7 +322,7 @@ describe("SpawnQueue — cleanQueue onPurge 回调 (P2-K)", () => {
 });
 
 describe("SpawnQueue — cancelRequestsByHome", () => {
-  // P1-H：扩张 abort 时清掉 sponsor 队列中寄宿的拓荒请求，原本由
+  // 扩张 abort 时清掉 sponsor 队列中寄宿的拓荒请求，原本由
   // expansion-manager 直接 splice，现收敛为纯函数。语义必须严格匹配
   // 「按 home 整体清空」——同 home 不同角色（worker/builder/claimer）一并清掉。
 

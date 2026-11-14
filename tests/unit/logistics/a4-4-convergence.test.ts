@@ -1,4 +1,4 @@
-/** A4.4 Unified Logistics Network — 收敛验证测试。 */
+/** Unified Logistics Network — 收敛验证测试。 */
 import { describe, it, expect } from "vitest";
 import {
   createActiveSupplyContract,
@@ -89,7 +89,7 @@ function makeRouteCacheWithRoutes(): RouteCache {
 
 // ─── E2E-001: Double Transport 防护 ──────────────────────
 
-describe("A4.4-E2E-001: Double Transport 防护", () => {
+describe("Double Transport 防护", () => {
   it("同一 surplus/deficit 对只产出一个 TransportRequestV2", () => {
     const routeCache = makeRouteCacheWithRoutes();
     const supply = makeSupplyNode("W1N1", 5000);
@@ -144,7 +144,7 @@ describe("A4.4-E2E-001: Double Transport 防护", () => {
 
 // ─── E2E-002: Duplicate Assignment 约束 ──────────────────
 
-describe("A4.4-E2E-002: Duplicate Assignment 约束", () => {
+describe("Duplicate Assignment 约束", () => {
   it("同一 request 最多一个 Assignment（单源满足）", () => {
     const req = createRequest(
       "energy",
@@ -189,7 +189,7 @@ describe("A4.4-E2E-002: Duplicate Assignment 约束", () => {
 
 // ─── E2E-005: Accounting Truth ───────────────────────────
 
-describe("A4.4-E2E-005: Accounting Truth", () => {
+describe("Accounting Truth", () => {
   it("1000 Energy 从 A→B 的完整会计追踪", () => {
     const requestId = "tr:empire:W1N1:W2N1:energy:0";
     let acc = createAccounting(requestId, 1000);
@@ -237,7 +237,7 @@ describe("A4.4-E2E-005: Accounting Truth", () => {
 
 // ─── E2E-006: Failure Recovery ───────────────────────────
 
-describe("A4.4-E2E-006: Failure Recovery", () => {
+describe("Failure Recovery", () => {
   it("Hauler 死亡 → Cargo Loss 进入 Accounting → Demand 重新计算", () => {
     const requestId = "tr:empire:W1N1:W2N1:energy:0";
     let acc = createAccounting(requestId, 1000);
@@ -263,7 +263,7 @@ describe("A4.4-E2E-006: Failure Recovery", () => {
 
 // ─── E2E-007: Stale Plan 检测 ────────────────────────────
 
-describe("A4.4-E2E-007: Stale Plan 检测", () => {
+describe("Stale Plan 检测", () => {
   it("过期 Plan 不产出新 Request", () => {
     const routeCache = makeRouteCacheWithRoutes();
     const supply = makeSupplyNode("W1N1", 5000);
@@ -314,7 +314,7 @@ describe("A4.4-E2E-007: Stale Plan 检测", () => {
 
 // ─── E2E-008: Concurrent Plan 幂等性 ────────────────────
 
-describe("A4.4-E2E-008: Concurrent Plan 幂等性", () => {
+describe("Concurrent Plan 幂等性", () => {
   it("相同输入两次规划产出相同结果（确定性）", () => {
     const routeCache1 = makeRouteCacheWithRoutes();
     const routeCache2 = makeRouteCacheWithRoutes();
@@ -345,7 +345,7 @@ describe("A4.4-E2E-008: Concurrent Plan 幂等性", () => {
 
 // ─── E2E-009: Route Cache 失效 ───────────────────────────
 
-describe("A4.4-E2E-009: Route Cache 失效与重建", () => {
+describe("Route Cache 失效与重建", () => {
   it("Route Cache TTL 过期后重新评估", () => {
     const cache = new RouteCache();
     const route = createRoute("W1N1", "W2N1", 2, 100, 200, TICK, []);
@@ -370,7 +370,7 @@ describe("A4.4-E2E-009: Route Cache 失效与重建", () => {
 
 // ─── E2E-010: Supply Contract → Request 闭环 ─────────────
 
-describe("A4.4-E2E-010: Supply Contract → TransportRequestV2 闭环", () => {
+describe("Supply Contract → TransportRequestV2 闭环", () => {
   it("Contract 幂等：同一 (source, target, resource) 只有一个非终态 Contract", () => {
     const contract1 = createActiveSupplyContract("W1N1", "W2N1", "energy", 10, 5000, 2, TICK);
     const contracts = [contract1];
@@ -382,7 +382,7 @@ describe("A4.4-E2E-010: Supply Contract → TransportRequestV2 闭环", () => {
 
 // ─── E2E-012: V1/V2 兼容性 ───────────────────────────────
 
-describe("A4.4-E2E-012: V1/V2 兼容性", () => {
+describe("V1/V2 兼容性", () => {
   it("V2 Request 通过 adapter 可映射为 V1 TaskEntry", () => {
     const v2Req = createRequest(
       "energy",
@@ -422,7 +422,7 @@ describe("A4.4-E2E-012: V1/V2 兼容性", () => {
 
 // ─── E2E-013: Multi-Resource 支持 ────────────────────────
 
-describe("A4.4-E2E-013: Multi-Resource 支持", () => {
+describe("Multi-Resource 支持", () => {
   it("Energy 和 Mineral 分别生成不同的 TransportRequestV2", () => {
     const routeCache = makeRouteCacheWithRoutes();
 
@@ -497,7 +497,7 @@ describe("A4.4-E2E-013: Multi-Resource 支持", () => {
 
 // ─── E2E-014: Priority Conflict ──────────────────────────
 
-describe("A4.4-E2E-014: Priority Conflict", () => {
+describe("Priority Conflict", () => {
   it("CRITICAL 优先于 NORMAL 获得运输能力", () => {
     const supplyNodes = [
       makeSupplyNode("W1N1", 3000), // 只有 3000 可调拨
@@ -522,7 +522,7 @@ describe("A4.4-E2E-014: Priority Conflict", () => {
 
 // ─── E2E-015: Logistics Bottleneck 识别 ─────────────────
 
-describe("A4.4-E2E-015: Logistics Bottleneck 识别", () => {
+describe("Logistics Bottleneck 识别", () => {
   it("资源充足但运力不足时，识别为 LOGISTICS BOTTLENECK", () => {
     const supply = makeSupplyNode("W1N1", 10000);
     const deficit = makeDemandNode("W2N1", 1000);
@@ -547,7 +547,7 @@ describe("A4.4-E2E-015: Logistics Bottleneck 识别", () => {
 
 // ─── Convergence Score 验证 ──────────────────────────────
 
-describe("A4.4 Convergence Score 验证", () => {
+describe("Convergence Score 验证", () => {
   it("Supply Contract → Request 闭环完整", () => {
     const contract = createActiveSupplyContract("W1N1", "W2N1", "energy", 10, 5000, 2, TICK);
     const cycleAmount = computeCycleAmount(contract, 100);

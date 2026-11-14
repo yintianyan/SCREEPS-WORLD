@@ -1,4 +1,4 @@
-/** 侦察目标选择纯函数测试（R6b 主动情报）。 */
+/** 侦察目标选择纯函数测试（主动情报）。 */
 import { describe, expect, it } from "vitest";
 import {
   selectProspectTarget,

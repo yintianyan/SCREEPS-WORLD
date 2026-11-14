@@ -22,7 +22,7 @@ export const DIR_DELTA: Record<number, [number, number]> = {
 /**
  * 请求阻挡 creep 让路，存入 globalCache；目标 creep 在下次 moveToTarget/parkIdleCreep 时执行。
  * 同 tick 内低优请求高优让路时，因高优已执行过，请求下一 tick 生效。
- * MV-3：请求带 tick 戳 — 超过 2 tick 未执行即过期丢弃（否则 parked/静止 creep 恢复移动时突然
+ * 请求带 tick 戳 — 超过 2 tick 未执行即过期丢弃（否则 parked/静止 creep 恢复移动时突然
  * 执行「过期让路」，方向已无意义且无落点安全检查）。
 
  * 站桩矿工不应让位，绕行 creep 应靠 ignoreCreeps:false 自行绕路。
@@ -37,7 +37,7 @@ function requestYield(blockerName: string, dir: number): void {
 
 /**
  * 检查并执行让路请求。在 moveToTarget/parkIdleCreep 开头调用——被请求让路时立即移动并返回 true。
- * MV-3：parked idle creep 本就无任务、最该让路——parking 入口接通后让路机制对静止目标不再失效。
+ * parked idle creep 本就无任务、最该让路——parking 入口接通后让路机制对静止目标不再失效。
  */
 export function checkAndExecuteYield(creep: Creep): boolean {
   const g = globalCache() as any;
@@ -111,7 +111,7 @@ export function recordPathFailure(creep: Creep): void {
 
 /**
  * 更新卡位计数。仅在值变化时写 Memory，减少 Proxy 开销。返回当前 stuckTicks。
- * MV-1（G-MV-06/G-MEM-07 落地）：疲劳期不增不减 — ERR_TIRED 是正常疲劳机制不是卡位；
+ * 疲劳期不增不减 — ERR_TIRED 是正常疲劳机制不是卡位；
  * 无豁免则满载 creep 过沼泽疲劳 ~5 tick 即被误判卡死 → L3 弃目标携货转 idle（任务 churn + 重寻路）。
  */
 export function updateStuckTicks(creep: Creep): number {

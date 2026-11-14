@@ -1,4 +1,4 @@
-/** Attacker 角色行为测试（R3 战时闭环进攻执行端 + R4 波次集结）。 */
+/** Attacker 角色行为测试（战时闭环进攻执行端 + 波次集结）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { attackerHold, attackerRole, markRetreat } from "../../../src/creeps/roles/attacker";
 import {
@@ -19,7 +19,7 @@ function enemyCreep(name = "enemy_1"): any {
   return { id: name, name, pos: mockPos(10, 10), owner: { username: "Enemy" } };
 }
 
-/** 目标房 room mock：find 按官方常量分派（值来自 setup.ts 注入的 SSOT，R20②）。 */
+/** 目标房 room mock：find 按官方常量分派（值来自 setup.ts 注入的 SSOT）。 */
 function targetRoomMock(hostiles: any[], structs: any[]): any {
   return {
     name: "W6N4",
@@ -100,7 +100,7 @@ describe("attacker 角色", () => {
   });
 });
 
-describe("attackerHold — R4 战备集结决策矩阵", () => {
+describe("attackerHold — 战备集结决策矩阵", () => {
   function setPlan(plan: any): void {
     (globalThis as any).Memory.kernel.warPlan = plan;
   }

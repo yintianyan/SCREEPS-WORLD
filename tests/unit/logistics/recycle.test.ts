@@ -1,4 +1,4 @@
-/** B1 回收通道纯决策测试。 */
+/** 回收通道纯决策测试。 */
 import { describe, expect, it } from "vitest";
 import { selectRecycleCandidates } from "../../../src/domain/spawn/recycle";
 import type { CreepSummary } from "../../../src/domain/spawn/demand";
@@ -93,7 +93,7 @@ describe("recycle — selectRecycleCandidates", () => {
   });
 
   /**
-   * 线上回归（2026-09-30 巡检 #47，W38S56 RCL3 无 storage）：demand 的 `canDeliver` 闸门在
+   * 线上回归（2026-09-30，W38S56 RCL3 无 storage）：demand 的 `canDeliver` 闸门在
    * 「核心池刚好满 + 无 fillTargets」时关闭 ⇒ haulerTarget 回落 minCount ⇒ keep 变小 ⇒
    * 这一条按 ttl 升序吃掉**最年轻**的 hauler，而当时 3 个 source container 各压 2000 能量。
    * 1225 拍内 25 次 hauler 回收（age 中位 202、死亡位置全贴在 spawn 邻格）。

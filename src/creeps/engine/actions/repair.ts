@@ -131,7 +131,7 @@ export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
 }
 
 /**
- * 修复 wall/rampart 到分层目标血量（B3：维修权从塔移交给 creep）。
+ * 修复 wall/rampart 到分层目标血量（维修权从塔移交给 creep）。
  * 塔修墙是能量黑洞（10 能量/次+距离衰减+与开火争弹药），creep 维修 1 energy/100 hits/WORK。
  * 分层目标（消除统一目标的维护经济黑洞）：perimeter → RCL 全额；core → 全额×coreRampartFactor；
  * utility → 仅新生急救地板。
@@ -149,7 +149,7 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       // 受袭姿态：近期有敌对活动 → 墙体目标升档 + 盈余门槛放宽。
       const roomMemory = Memory.rooms[ac.snapshot.roomName];
       const lastHostileAt = roomMemory?.lastHostileAt;
-      // R3：帝国 war 姿态 → 全局备战 — 本房未受袭也按受袭目标维护墙体；
+      // 帝国 war 姿态 → 全局备战 — 本房未受袭也按受袭目标维护墙体；
       // fortify 不全局升档（单房一次 invader 目击不烧全帝国墙血预算）。
       const underSiege = resolveUnderSiege(
         Memory.kernel?.strategy?.posture,
@@ -210,7 +210,7 @@ export function repairFortifications(): ActionCandidate<Fortification> {
 
       // 分层分类上下文：min-cut 割集来自 Memory 持久化数据。
       const fortCtx = buildFortificationContext(ac.snapshot, roomMemory?.minCut?.positions);
-      // R683：位置评估——塔火圈外的 perimeter rampart 只维持 bootstrap 线。
+      // 位置评估——塔火圈外的 perimeter rampart 只维持 bootstrap 线。
       // 原因不是“没塔保护”这么简单：rampart 会阻挡敌方步行，塔外的墙会把敌人
       // 挡在火力圈外（敌人打墙、塔打不到），且 RCL4 的 100K 目标维护成本巨大。
       // 核心/utility 档不受影响；塔覆盖到的 perimeter 仍按正常目标维护。

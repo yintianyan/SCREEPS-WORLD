@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shouldPreemptAssignments } from "../../../src/systems/room/assignment-system";
 
-describe("assignment-service — shouldPreemptAssignments (P1-2 边沿触发)", () => {
+describe("assignment-service — shouldPreemptAssignments (边沿触发)", () => {
   it("正常 → 紧急（上升沿）：触发抢占（首次无冷却）", () => {
     expect(shouldPreemptAssignments(true, false, undefined, 100)).toBe(true);
   });
@@ -37,7 +37,7 @@ describe("assignment-service — shouldPreemptAssignments (P1-2 边沿触发)", 
   });
 });
 
-describe("assignment-service — shouldPreemptAssignments (TD-018 冷却机制)", () => {
+describe("assignment-service — shouldPreemptAssignments (冷却机制)", () => {
   it("首次抢占不受冷却影响（lastPreemptTick 为 undefined）", () => {
     // 上升沿 + 无历史记录 → 必须触发
     expect(shouldPreemptAssignments(true, false, undefined, 500)).toBe(true);

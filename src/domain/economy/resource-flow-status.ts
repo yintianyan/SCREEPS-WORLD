@@ -1,7 +1,7 @@
 /**
- * 资源流量状态评估（Phase A）。
+ * 资源流量状态评估。
  *
- * 输入是观测层采集的库存与净流量，输出是契约表 §6 的状态机结果：
+ * 输入是观测层采集的库存与净流量，输出是状态机结果：
  * critical / deficit / healthy / surplus / stuck / unknown。
  *
  * 只做判定，不触发任何停止阀或搬运动作；Phase B/C 再消费这些状态。
@@ -20,7 +20,7 @@ export type ResourceFlowState =
 export interface ResourceFlowSample {
   /** 资源常量（energy/battery/H/GH2O/…）。 */
   resource: string;
-  /** 当前长周期库存（契约表 §1.4 口径）。 */
+  /** 当前长周期库存。 */
   stock: number;
   /** 观测窗口内的流入速率（单位/tick）。 */
   inflowPerTick: number;

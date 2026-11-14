@@ -4,7 +4,7 @@ import type { TacticalState, TargetScope } from "./types";
 import type { CombatCapability } from "../combat/capability";
 
 // ═══════════════════════════════════════════════════════════
-// §1. TargetCandidate — 目标候选（消费 CombatCapability，不重新计算）
+// TargetCandidate — 目标候选（消费 CombatCapability，不重新计算）
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -89,7 +89,7 @@ export interface TacticalValueBreakdown {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. AttackIntent — 攻击意图（Domain 产出，Role 执行）
+// AttackIntent — 攻击意图（Domain 产出，Role 执行）
 // ═══════════════════════════════════════════════════════════
 
 /** 攻击类型 — 区分 Melee / Ranged。 */
@@ -139,7 +139,7 @@ export interface AttackIntent {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §3. HealCoverage — 治疗覆盖模型
+// HealCoverage — 治疗覆盖模型
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -168,7 +168,7 @@ export interface HealCoverage {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. EnemyHealSupport — 敌方治疗能力评估
+// EnemyHealSupport — 敌方治疗能力评估
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -193,7 +193,7 @@ export interface EnemyHealSupport {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §5. FocusFirePlan — 核心输出
+// FocusFirePlan — 核心输出
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -261,13 +261,13 @@ export interface RejectedTarget {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §6. EngagementState — 焦点射击状态机
+// EngagementState — 焦点射击状态机
 // ═══════════════════════════════════════════════════════════
 
 /**
  * EngagementState — Focus Fire 级别的状态机。
 
- * 复用 A5.4 TacticalState（Squad 级）作为上层状态。
+ * 复用 TacticalState（Squad 级）作为上层状态。
  * 本状态机是 TacticalState=ENGAGING 时的子状态。
 
  * 状态流：
@@ -302,7 +302,7 @@ export type EngagementState =
   | "REGROUP"; // 需要重新集结（不打）
 
 // ═══════════════════════════════════════════════════════════
-// §7. FocusFireSnapshot — 纯函数输入
+// FocusFireSnapshot — 纯函数输入
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -336,7 +336,7 @@ export interface FocusFireSnapshot {
   readonly members: readonly FocusFireMemberSnapshot[];
   /** 上 tick 的 FocusFirePlan（用于状态机连续性）。 */
   readonly prevPlan: FocusFirePlan | null;
-  /** 凝聚力状态（来自 A5.4.2 CohesionMetric.status）。 */
+  /** 凝聚力状态（来自 CohesionMetric.status）。 */
   readonly cohesionStatus: string;
   /** 是否在交战范围内（来自 Formation）。 */
   readonly inEngagementRange: boolean;
@@ -348,7 +348,7 @@ export interface FocusFireMemberSnapshot {
   readonly name: string;
   /** 角色。 */
   readonly role: string;
-  /** 战斗能力（来自 A5.1 G2 CombatCapability）。 */
+  /** 战斗能力（来自 CombatCapability）。 */
   readonly capability: CombatCapability;
   /** 当前位置 packed pos。 */
   readonly pos: number;
@@ -363,7 +363,7 @@ export interface FocusFireMemberSnapshot {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §8. 核心纯函数 — planFocusFire
+// 核心纯函数 — planFocusFire
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -643,7 +643,7 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §9. 辅助纯函数
+// 辅助纯函数
 // ═══════════════════════════════════════════════════════════
 
 /** 构建空 Plan（无目标时的 fallback）。 */
@@ -1015,7 +1015,7 @@ export function canTransitionEngagement(from: EngagementState, to: EngagementSta
 }
 
 // ═══════════════════════════════════════════════════════════
-// §10. 确定性 Hash
+// 确定性 Hash
 // ═══════════════════════════════════════════════════════════
 
 /**
@@ -1066,7 +1066,7 @@ function fnv1a32Hex(str: string): string {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §11. 构建辅助函数（供系统层薄壳使用）
+// 构建辅助函数（供系统层薄壳使用）
 // ═══════════════════════════════════════════════════════════
 
 /**

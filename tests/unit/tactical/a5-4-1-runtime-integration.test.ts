@@ -1,4 +1,4 @@
-/** A5.4.1 Runtime Integration Tests — Tactical Runtime 集成验证。 */
+/** Runtime Integration Tests — Tactical Runtime 集成验证。 */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -50,9 +50,9 @@ function layerOf(file: string | string): string {
   return "other";
 }
 
-// ─── TAC-R01: tacticalRuntimeSystem 导出与结构 ───
+// ─── tacticalRuntimeSystem 导出与结构 ───
 
-describe("A5.4.1 TAC-R01: tacticalRuntimeSystem 导出与结构", () => {
+describe("tacticalRuntimeSystem 导出与结构", () => {
   it("tactical-runtime-system.ts 导出 tacticalRuntimeSystem", () => {
     const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
@@ -73,9 +73,9 @@ describe("A5.4.1 TAC-R01: tacticalRuntimeSystem 导出与结构", () => {
   });
 });
 
-// ─── TAC-R02: TacticalRuntimeCache 字段定义 ───
+// ─── TacticalRuntimeCache 字段定义 ───
 
-describe("A5.4.1 TAC-R02: TacticalRuntimeCache 字段定义", () => {
+describe("TacticalRuntimeCache 字段定义", () => {
   it("TacticalRuntimeCache 接口包含所有必要字段", () => {
     const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
@@ -88,9 +88,9 @@ describe("A5.4.1 TAC-R02: TacticalRuntimeCache 字段定义", () => {
   });
 });
 
-// ─── TAC-R03: attacker.ts 不导入 systems 层（R3 守卫） ───
+// ─── attacker.ts 不导入 systems 层（守卫） ───
 
-describe("A5.4.1 TAC-R03: attacker.ts 不导入 systems 层", () => {
+describe("attacker.ts 不导入 systems 层", () => {
   it("attacker.ts 无 systems 导入", () => {
     const f = resolve(SRC, "creeps/roles/attacker.ts");
     const imports = importsOf(f);
@@ -111,9 +111,9 @@ describe("A5.4.1 TAC-R03: attacker.ts 不导入 systems 层", () => {
   });
 });
 
-// ─── TAC-R04: healer.ts 不导入 systems 层（R3 守卫） ───
+// ─── healer.ts 不导入 systems 层（守卫） ───
 
-describe("A5.4.1 TAC-R04: healer.ts 不导入 systems 层", () => {
+describe("healer.ts 不导入 systems 层", () => {
   it("healer.ts 无 systems 导入", () => {
     const f = resolve(SRC, "creeps/roles/healer.ts");
     const imports = importsOf(f);
@@ -134,9 +134,9 @@ describe("A5.4.1 TAC-R04: healer.ts 不导入 systems 层", () => {
   });
 });
 
-// ─── TAC-R05: tactical-runtime-system 不直接写 warAbortSignals ───
+// ─── tactical-runtime-system 不直接写 warAbortSignals ───
 
-describe("A5.4.1 TAC-R05: 不直接写 warAbortSignals", () => {
+describe("不直接写 warAbortSignals", () => {
   it("tactical-runtime-system.ts 不写 warAbortSignals（只写 tacticalAbortSignals）", () => {
     const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
@@ -149,9 +149,9 @@ describe("A5.4.1 TAC-R05: 不直接写 warAbortSignals", () => {
   });
 });
 
-// ─── TAC-R06: recovery-execution-system 消费 tacticalAbortSignals ───
+// ─── recovery-execution-system 消费 tacticalAbortSignals ───
 
-describe("A5.4.1 TAC-R06: recovery-execution-system 消费 tacticalAbortSignals", () => {
+describe("recovery-execution-system 消费 tacticalAbortSignals", () => {
   it("recovery-execution-system.ts 包含 consumeTacticalAbortSignals 函数", () => {
     const f = resolve(SRC, "systems/room/recovery-execution-system.ts");
     const src = readFileSync(f, "utf8");
@@ -166,9 +166,9 @@ describe("A5.4.1 TAC-R06: recovery-execution-system 消费 tacticalAbortSignals"
   });
 });
 
-// ─── TAC-R07: logistics-planner 消费 tacticalSupplyDemands ───
+// ─── logistics-planner 消费 tacticalSupplyDemands ───
 
-describe("A5.4.1 TAC-R07: logistics-planner 消费 tacticalSupplyDemands", () => {
+describe("logistics-planner 消费 tacticalSupplyDemands", () => {
   it("logistics-planner.ts 包含 tacticalSupplyDemands 消费逻辑", () => {
     const f = resolve(SRC, "systems/room/logistics-planner.ts");
     const src = readFileSync(f, "utf8");
@@ -177,9 +177,9 @@ describe("A5.4.1 TAC-R07: logistics-planner 消费 tacticalSupplyDemands", () =>
   });
 });
 
-// ─── TAC-R08: attacker.ts readTacticalIntent 从 globalCache 读取 ───
+// ─── attacker.ts readTacticalIntent 从 globalCache 读取 ───
 
-describe("A5.4.1 TAC-R08: attacker readTacticalIntent 从 globalCache 读取", () => {
+describe("attacker readTacticalIntent 从 globalCache 读取", () => {
   it("attacker.ts 的 readTacticalIntent 通过 globalCache 读取", () => {
     const f = resolve(SRC, "creeps/roles/attacker.ts");
     const src = readFileSync(f, "utf8");
@@ -195,9 +195,9 @@ describe("A5.4.1 TAC-R08: attacker readTacticalIntent 从 globalCache 读取", (
   });
 });
 
-// ─── TAC-R09: healer.ts readTacticalIntent 从 globalCache 读取 ───
+// ─── healer.ts readTacticalIntent 从 globalCache 读取 ───
 
-describe("A5.4.1 TAC-R09: healer readTacticalIntent 从 globalCache 读取", () => {
+describe("healer readTacticalIntent 从 globalCache 读取", () => {
   it("healer.ts 的 readTacticalIntent 通过 globalCache 读取", () => {
     const f = resolve(SRC, "creeps/roles/healer.ts");
     const src = readFileSync(f, "utf8");
@@ -213,13 +213,13 @@ describe("A5.4.1 TAC-R09: healer readTacticalIntent 从 globalCache 读取", () 
   });
 });
 
-// ─── TAC-R10: bootstrap.ts 注册了 tacticalRuntimeSystem ───
+// ─── bootstrap.ts 注册了 tacticalRuntimeSystem ───
 
-describe("A5.4.1 TAC-R10: bootstrap 注册 tacticalRuntime（通过 pipeline 合并）", () => {
+describe("bootstrap 注册 tacticalRuntime（通过 pipeline 合并）", () => {
   it("bootstrap.ts 导入并注册了 tacticalRuntimePipelineSystem", () => {
     const f = resolve(SRC, "bootstrap.ts");
     const src = readFileSync(f, "utf8");
-    // R10 ADR 合并后：tacticalRuntimeSystem 通过 tacticalRuntimePipelineSystem 注册
+    // ADR 合并后：tacticalRuntimeSystem 通过 tacticalRuntimePipelineSystem 注册
     expect(src).toContain("tacticalRuntimePipelineSystem");
     expect(src).toContain("registerSystem(tacticalRuntimePipelineSystem)");
     // pipeline 内部导入 tacticalRuntimeSystem
@@ -227,9 +227,9 @@ describe("A5.4.1 TAC-R10: bootstrap 注册 tacticalRuntime（通过 pipeline 合
   });
 });
 
-// ─── TAC-R11: 全局 R3 守卫 — creeps 不导入 systems ───
+// ─── 全局守卫 — creeps 不导入 systems ───
 
-describe("A5.4.1 TAC-R11: 全局 creeps 层不导入 systems 层", () => {
+describe("全局 creeps 层不导入 systems 层", () => {
   it("零命中", () => {
     const creepFiles = ALL_FILES.filter(f => layerOf(f) === "creeps");
     const bad: string[] = [];
@@ -244,9 +244,9 @@ describe("A5.4.1 TAC-R11: 全局 creeps 层不导入 systems 层", () => {
   });
 });
 
-// ─── TAC-R12: tactical-runtime-system 不直接调用 Game API 动作 ───
+// ─── tactical-runtime-system 不直接调用 Game API 动作 ───
 
-describe("A5.4.1 TAC-R12: tactical-runtime-system 不直接调用 Creep API", () => {
+describe("tactical-runtime-system 不直接调用 Creep API", () => {
   it("不调用 move() / attack() / heal() / spawnCreep()", () => {
     const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const code = codeLines(readFileSync(f, "utf8"));
@@ -258,9 +258,9 @@ describe("A5.4.1 TAC-R12: tactical-runtime-system 不直接调用 Creep API", ()
   });
 });
 
-// ─── TAC-R13: SupplyDemand 检测只在 advance 相位 ───
+// ─── SupplyDemand 检测只在 advance 相位 ───
 
-describe("A5.4.1 TAC-R13: SupplyDemand 检测只在 advance 相位", () => {
+describe("SupplyDemand 检测只在 advance 相位", () => {
   it("detectSupplyDemand 函数存在且有 phase 检查", () => {
     const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");

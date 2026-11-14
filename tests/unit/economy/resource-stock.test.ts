@@ -1,4 +1,4 @@
-/** Phase A：房间长周期资源库存聚合。 */
+/** 房间长周期资源库存聚合。 */
 import { describe, expect, it } from "vitest";
 import { collectRoomResourceStocks } from "../../../src/domain/economy/resource-stock";
 import { mockSnapshot } from "../../support/factories";

@@ -29,7 +29,7 @@ afterEach(() => {
 
 // ─── 档 1：quantizeBlockKey 纯函数 ──────────────────────────
 
-describe("P1-E 档 1 — quantizeBlockKey 3×3 区块量化", () => {
+describe("限频档 1 — quantizeBlockKey 3×3 区块量化", () => {
   /** 辅助：将 (x,y) 转 packed 再量化。 */
   const q = (x: number, y: number): number => quantizeBlockKey(x * 50 + y);
 
@@ -69,7 +69,7 @@ describe("P1-E 档 1 — quantizeBlockKey 3×3 区块量化", () => {
 
 // ─── 档 3：acquirePathBudget 纯函数 ─────────────────────────
 
-describe("P1-E 档 3 — acquirePathBudget 每房每 tick 计数", () => {
+describe("限频档 3 — acquirePathBudget 每房每 tick 计数", () => {
   beforeEach(() => {
     G().Game.time = 1000;
   });
@@ -168,7 +168,7 @@ function cfg(overrides: Record<string, unknown>): void {
   Object.assign(CONFIG.movement as any, overrides);
 }
 
-describe("P1-E 集成 — 档 1 目标驻留量化（stepToward）", () => {
+describe("三档限频集成 — 档 1 目标驻留量化（stepToward）", () => {
   beforeEach(() => {
     setupPathFinderMock();
     preloadEmptyStructures();
@@ -219,7 +219,7 @@ describe("P1-E 集成 — 档 1 目标驻留量化（stepToward）", () => {
   });
 });
 
-describe("P1-E 集成 — 档 2 重寻路冷却（stepToward）", () => {
+describe("三档限频集成 — 档 2 重寻路冷却（stepToward）", () => {
   beforeEach(() => {
     setupPathFinderMock();
     preloadEmptyStructures();
@@ -283,7 +283,7 @@ describe("P1-E 集成 — 档 2 重寻路冷却（stepToward）", () => {
   });
 });
 
-describe("P1-E 集成 — 档 3 每房每 tick 寻路预算（stepToward）", () => {
+describe("三档限频集成 — 档 3 每房每 tick 寻路预算（stepToward）", () => {
   beforeEach(() => {
     setupPathFinderMock();
     preloadEmptyStructures();
@@ -340,7 +340,7 @@ describe("P1-E 集成 — 档 3 每房每 tick 寻路预算（stepToward）", ()
 
 // ─── 三档叠加：默认配置（1+2 开、3 关）综合场景 ─────────────
 
-describe("P1-E 综合 — 默认配置（档 1+2 开、档 3 关）", () => {
+describe("三档限频综合 — 默认配置（档 1+2 开、档 3 关）", () => {
   beforeEach(() => {
     setupPathFinderMock();
     preloadEmptyStructures();

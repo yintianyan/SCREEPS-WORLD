@@ -1,4 +1,4 @@
-/** A5.5 CPU Benchmark & Memory Boundedness Audit. */
+/** CPU Benchmark & Memory Boundedness Audit. */
 
 import { describe, expect, it } from "vitest";
 import {
@@ -148,7 +148,7 @@ function makeSquadSnapshot(
 // CPU Benchmark
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.5 CPU Benchmark", () => {
+describe("CPU Benchmark", () => {
   const configs = [
     { squads: 1, members: 20, targets: 50 },
     { squads: 2, members: 20, targets: 50 },
@@ -222,7 +222,7 @@ describe("A5.5 CPU Benchmark", () => {
 // Memory Boundedness Audit
 // ═══════════════════════════════════════════════════════════
 
-describe("A5.5 Memory Boundedness", () => {
+describe("Memory Boundedness", () => {
   it("MicroPlan 的 decisions 数量 = alive members 数量（不无限增长）", () => {
     const members: MicroMemberSnapshot[] = [];
     for (let i = 0; i < 20; i++) {

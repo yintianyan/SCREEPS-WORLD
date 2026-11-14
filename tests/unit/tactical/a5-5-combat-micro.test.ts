@@ -1,4 +1,4 @@
-/** A5.5 Advanced Tactical Combat Micro — Domain 纯函数测试。 */
+/** Advanced Tactical Combat Micro — Domain 纯函数测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

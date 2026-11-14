@@ -61,7 +61,7 @@ vi.mock("../../../src/config", () => ({
   },
 }));
 
-// RawMemory mock（P0-1 Memory 体积监控测试需要）
+// RawMemory mock（Memory 体积监控测试需要）
 let mockRawMemory: string = "{}";
 (globalThis as Record<string, unknown>).RawMemory = {
   get: () => mockRawMemory,
@@ -271,9 +271,9 @@ describe("telemetry-collector — Storage 被毁事件检测 (TD-004)", () => {
   });
 });
 
-// ── P0-1: Memory 体积监控 ──────────────────────────────────
+// ── Memory 体积监控 ──────────────────────────────────
 
-describe("telemetry-collector — Memory 体积监控 (P0-1)", () => {
+describe("telemetry-collector — Memory 体积监控", () => {
   beforeEach(() => {
     capturedEvents.length = 0;
     delete mockGlobalCache.__telemetryPrevState;
@@ -367,7 +367,7 @@ describe("telemetry-collector — Memory 体积监控 (P0-1)", () => {
   });
 });
 
-// ── P2-1: 健康度告警已移除（由 TelemetryFlush 统一处理）─────────
+// ── 健康度告警已移除（由 TelemetryFlush 统一处理）─────────
 
 describe("telemetry-collector — 健康度告警已移除", () => {
   let logLines: string[] = [];
@@ -492,10 +492,10 @@ describe("telemetry-collector — 健康度告警已移除", () => {
   });
 });
 
-// ── #174 家族：房榜截断必须留痕（cpuPerTickByRoomCount）──────────────
+// ── 房榜截断必须留痕（cpuPerTickByRoomCount）──────────────
 const { ROOM_CPU_BOARD_CAP } = await import("../../../src/systems/telemetry-collector");
 
-describe("#174 家族 — 房榜截断留痕（cpuPerTickByRoomCount）", () => {
+describe("房榜截断留痕家族（cpuPerTickByRoomCount）", () => {
   const seed = (roomCount: number) => {
     capturedEvents.length = 0;
     mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
@@ -544,7 +544,7 @@ describe("#174 家族 — 房榜截断留痕（cpuPerTickByRoomCount）", () => 
   });
 });
 
-// ── #137：三张姊妹榜的截断留痕列（#142 同族）────────────────────────
+// ── 三张姊妹榜的截断留痕列 ────────────────────────
 // 钉的是「榜是不是全集」：`cpuBySystem`／`cpuPerTickBySystem`／`cpuPerTickByRole` 都只给前 10，
 // 而线上实测系统标签全集 38、角色 22 ⇒「某标签不在榜上」推不出「它没有写者」。
 // 这三张榜在 src 内**零读者**（唯一引用是 e2e 里一行 JSON.stringify 日志）⇒ 新增兄弟键不改既有形状。
@@ -618,7 +618,7 @@ describe("三张姊妹榜的 *Count 留痕列", () => {
   });
 });
 
-describe("telemetry-collector — #189 物流健康度整列镜像", () => {
+describe("telemetry-collector — 物流健康度整列镜像", () => {
   it("heap 有 logisticsHealth ⇒ 镜像带齐可归因的数值列，而不只 level", () => {
     (globalThis as any).Memory.kernel = { stats: {} };
     mockGlobalCache.logisticsHealth = {
@@ -655,7 +655,7 @@ describe("telemetry-collector — #189 物流健康度整列镜像", () => {
   });
 });
 
-// ── 镜像清单 + empire-health 出口（#57 收口）────────────────
+// ── 镜像清单 + empire-health 出口（收口）────────────────
 
 describe("telemetry-collector — 镜像清单与 empire-health 出口", () => {
   beforeEach(() => {
@@ -693,7 +693,7 @@ describe("telemetry-collector — 镜像清单与 empire-health 出口", () => {
     expect(kernel.stats.safeMode).toBeUndefined();
   });
 
-  it("empireHealth/autonomyStatus 全量拷贝带 tick（#57 判效通道）", () => {
+  it("empireHealth/autonomyStatus 全量拷贝带 tick（判效通道）", () => {
     mockGlobalCache.empireHealth = {
       level: "healthy",
       score: 0.86,

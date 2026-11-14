@@ -122,9 +122,9 @@ describe("Scheduler — 自愿放血宽限（generatePixel 后 recovery 地板�
   });
 });
 
-// ── P1-2: CPU 前馈预测 ──────────────────────────────────────
+// ── CPU 前馈预测 ──────────────────────────────────────
 
-describe("CpuBudget — 前馈预测 (P1-2)", () => {
+describe("CpuBudget — 前馈预测", () => {
   beforeEach(() => {
     // 重置 Game.cpu mock 和 Memory
     // bucket 刻意压在 CONFIG.cpu.borrow.fromBucket(7200) 之下：本 describe 判的是
@@ -296,7 +296,7 @@ describe("Emergency Survival Mode — Recovery 档内的紧急安全状态（非
   });
 });
 
-// ── bucket 借用（#16）──────────────────────────────────────
+// ── bucket 借用 ──────────────────────────────────────
 
 describe("CpuBudget — bucket 借用", () => {
   const setup = (bucket: number, tickLimit = 500): void => {

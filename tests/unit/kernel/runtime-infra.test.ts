@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { log, setLogSink } from "../../../src/kernel/log";
 import { resetGlobals } from "../../support/factories";
 
-// 【P1-A】G-F EventBus 已按冻结合同移除（RUNTIME_API §5 禁 publish/subscribe 形态、
-// 零消费系统）——原实现备份于会话 /tmp，重引入须走 ARCHITECTURE_FREEZE §15 ADR。
+// EventBus 已按冻结合同移除（禁 publish/subscribe 形态、
+// 零消费系统）——重引入须走 ADR。
 
 describe("G-I Logger", () => {
   beforeEach(() => {

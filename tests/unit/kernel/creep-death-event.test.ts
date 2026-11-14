@@ -135,16 +135,16 @@ describe("roleCode/roleName — 编码往返", () => {
 });
 
 /**
- * #96 — 跨部署存活的战损累计线 `Memory.kernel.stats.deathByCause`。
+ * 跨部署存活的战损累计线 `Memory.kernel.stats.deathByCause`。
  *
  * 立案依据（线上实测 2026-10-03）：想回答"那两次目击到底有没有造成战损"时才发现
  * `CreepDeath` 事件环按**事件总数** 500 计 ⇒ 实测只回溯 ~846 拍；M11 的
  * `globalCache().recentCombatDeaths` 只保留 2×fleetLossFuse.windowTicks = 400 拍且住 heap（换码清零）。
- * 两条都够不到 2,642/5,508 拍前的目击 ⇒ #90 判据的「持续战损」半边不可测。
+ * 两条都够不到 2,642/5,508 拍前的目击 ⇒ 「持续战损」那半边判据不可测。
  *
  * 这几条锁的是"累计线存在且分得清两类原因"，不参与任何判定。
  */
-describe("recordCreepDeath — #96 deathByCause 累计线", () => {
+describe("recordCreepDeath — deathByCause 累计线", () => {
   const combatName = (offset: number): string =>
     `hauler-W37S58-2-${(globalThis as any).Game.time - offset}-ab3x`;
   const naturalName = (): string =>
@@ -169,7 +169,7 @@ describe("recordCreepDeath — #96 deathByCause 累计线", () => {
   /**
    * 这一条是本键拆成三桶的**唯一理由**：`natural` 的判据是"没活到寿终"，而 recyclePass
    * （spawn-manager:333 / creep-recycle.ts:74）消融掉的 creep 同样"早逝"。
-   * 两桶合一 ⇒ #90 的"持续战损"判据会把自家主动回收读成敌方杀伤，凭空多出受害者。
+   * 两桶合一 ⇒ "持续战损"判据会把自家主动回收读成敌方杀伤，凭空多出受害者。
    */
   it("早逝但被标记回收 ⇒ 记 recycled 不记 combat（控制组见上一条：未标记仍进 combat）", () => {
     const name = combatName(400);

@@ -20,7 +20,7 @@ import { CONFIG } from "../../config";
 const EMPTY_REFS: readonly CreepAssignmentRef[] = [];
 
 /**
- * 任务分配服务 — P1 系统，在所有角色之前运行（plan §5.7.2）。
+ * 任务分配服务 — P1 系统，在所有角色之前运行。
 
  * 建造任务带 maxWorkers 与 lease）；紧急抢占由系统完成（P0 fill / flee 使普通
  * assignment 失效）。领域层 buildRoomTasks 是纯函数，TaskPool 封装索引与原子操作；
@@ -33,7 +33,7 @@ export const assignmentSystem: System = {
   run(ctx: TickContext): void {
     const pool = initAssignmentCache(ctx.tick);
 
-    // P1-1：在循环外预构建全量 creep 分配摘要，避免 O(rooms × creeps) 重复遍历。
+    // 在循环外预构建全量 creep 分配摘要，避免 O(rooms × creeps) 重复遍历。
     // 原先 generateRoomTasks 在每房间循环内遍历全部 Game.creeps，N 房间 × M creep = O(N×M)。
     const allCreepRefs = collectAllCreepRefs();
     // 按 home 预分组：房间循环内直接取本房切片，避免每房再次过滤全量列表并新建对象。
@@ -48,10 +48,10 @@ export const assignmentSystem: System = {
 
     for (const snapshot of ctx.snapshots()) {
       const roomRefs = refsByHome.get(snapshot.roomName) ?? EMPTY_REFS;
-      // 紧急抢占（plan §5.7.2 规则 5）：能量低于 fill 阈值或有敌对单位时，
+      // 紧急抢占：能量低于 fill 阈值或有敌对单位时，
       // 释放 priority >= 1 的普通任务，强制 creep 重新请求 P0 fill 或进入 flee。
       //
-      // P1-2 边沿触发：仅在「正常 → 紧急」上升沿失效一次。持续紧急期间不重复失效——
+      // 边沿触发：仅在「正常 → 紧急」上升沿失效一次。持续紧急期间不重复失效——
       // 旧实现每 tick 清空所有 assignment 并写 memory.assignment=undefined，
       // 使 lease 机制在持续敌袭/低能量期间形同虚设，且产生大量 Memory 写入抖动。
       // flee 由 role-runner 每 tick 独立处理（shouldFlee），不依赖 assignment 失效。
@@ -73,7 +73,7 @@ export const assignmentSystem: System = {
       // 抢占必须在 generateRoomTasks 之后执行 — TaskPool 每 tick 重建为空，
       // 任务写入前调用 invalidate 只会读到空列表、返回空 creep 名单，
       // 整个抢占退化为 no-op（曾因此静默失效）。
-      // TD-018 冷却：传入 lastPreemptTick，防房间在紧急/正常间快速交替时每个上升沿都触发。
+      // 抢占冷却：传入 lastPreemptTick，防房间在紧急/正常间快速交替时每个上升沿都触发。
       if (shouldPreemptAssignments(emergency, wasEmergency, roomMem?.lastPreemptTick, ctx.tick)) {
         invalidateAssignments(pool, snapshot.roomName, 1);
         if (roomMem) roomMem.lastPreemptTick = ctx.tick;
@@ -99,7 +99,7 @@ function initAssignmentCache(tick: number): TaskPool {
 
 /**
  * 适配：遍历全部 Game.creeps 一次，收集 creep 分配摘要。
- * P1-1：从 generateRoomTasks 提取到循环外，避免每房间重复遍历。
+ * 从 generateRoomTasks 提取到循环外，避免每房间重复遍历。
  */
 function collectAllCreepRefs(): CreepAssignmentRef[] {
   // 消费共享快照总线 — 不再独立遍历 Game.creeps。
@@ -278,10 +278,10 @@ function isEmergencyState(snapshot: RoomSnapshot): boolean {
 }
 
 /**
- * 判断是否应触发任务抢占（纯函数，P1-2 边沿触发 + TD-018 冷却机制）。
+ * 判断是否应触发任务抢占（纯函数，边沿触发 + 冷却机制）。
  * 仅在「正常 → 紧急」上升沿返回 true；持续紧急/持续正常/紧急缓解均返回 false，
  * 保证一次紧急事件只失效一次 assignment，避免持续期间每 tick 抖动。
- * TD-018：上升沿触发后距上次抢占至少 20 tick，防房间在紧急/正常间快速交替时
+ * 上升沿触发后距上次抢占至少 20 tick，防房间在紧急/正常间快速交替时
  * 频繁 invalidate 导致 creep 丢失任务；首次抢占不受冷却限制。
  */
 export function shouldPreemptAssignments(

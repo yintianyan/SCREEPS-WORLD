@@ -69,7 +69,7 @@ function makeHaulerBody(over?: Partial<HaulerBodyConfig>): HaulerBodyConfig {
 }
 
 // ═════════════════════════════════════════════════════════
-// §1  supply-contract.ts
+// supply-contract.ts
 // ═════════════════════════════════════════════════════════
 
 describe("supply-contract.ts", () => {
@@ -300,11 +300,11 @@ describe("supply-contract.ts", () => {
 });
 
 // ═════════════════════════════════════════════════════════
-// §2  contract-lifecycle.ts
+// contract-lifecycle.ts
 // ═════════════════════════════════════════════════════════
 
 // ═════════════════════════════════════════════════════════
-// §3  transport-cost.ts
+// transport-cost.ts
 // ═════════════════════════════════════════════════════════
 
 describe("transport-cost.ts", () => {
@@ -387,9 +387,9 @@ describe("transport-cost.ts", () => {
 });
 
 // ═════════════════════════════════════════════════════════
-// §4  route-efficiency.ts
+// route-efficiency.ts
 // ═════════════════════════════════════════════════════════
 
 // ═════════════════════════════════════════════════════════
-// §5  contract-node-bridge.ts
+// contract-node-bridge.ts
 // ═════════════════════════════════════════════════════════

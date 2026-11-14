@@ -154,7 +154,7 @@ function getCachedExits(room: Room, roomName: string): { x: number; y: number }[
 }
 
 /**
- * P1-2：min-cut 割集位置可建造性预校验（纯函数，便于单元测试）。
+ * min-cut 割集位置可建造性预校验（纯函数，便于单元测试）。
  * 1. 出口格及紧邻出口格不可建 wall/rampart（Screeps 出口格 x/y=0|49，紧邻格 x/y=1|48
  *    可建但防御价值为零且 min-cut 常误选）；2. 已有 construction site 的位置跳过
  *    （避免重复入队 → 创建失败 → blocked）。
@@ -169,7 +169,7 @@ export function isMinCutPositionBuildable(
 }
 
 /**
- * P2-1：构建不可放置割集顶点的位置集合（出口格及紧邻出口格）。
+构建不可放置割集顶点的位置集合（出口格及紧邻出口格）。
 
  * 这些位置在 min-cut 算法中拆点边容量设为 INF（不可切割），
  * 算法自然选其他位置作为割集，保证生成的割集全部可建造。
@@ -190,7 +190,7 @@ function buildBlockedPositions(): Set<number> {
 }
 
 /**
- * R682/R683：min-cut 整房墙的规划门槛。
+ * min-cut 整房墙的规划门槛。
  * RCL4 单塔时割集在塔火圈外（W39S55 实测 22–27 格）：rampart 会挡住敌方步行，
  * 反而把敌人挡在塔射程之外——敌人打墙、塔打不到；且 50 个 rampart 的维护成本巨大。
  * 因此 RCL4 只做核心 rampart 覆盖；RCL5+ 才规划 min-cut，且割集覆盖率必须 ≥
@@ -204,7 +204,7 @@ function planDefense(
   snapshot: import("../../kernel/contracts").RoomSnapshot,
   globalSiteCount: number,
 ): void {
-  // P0-3 修复：RCL 门禁从 4 降为 3。
+  // 修复：RCL 门禁从 4 降为 3。
   // RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期 — 一波突袭就破。
   // RCL3 时跳过昂贵的 min-cut，走扇区防御 fallback（少量 rampart 包围核心）。
   if (snapshot.rcl < 3) return;
@@ -227,7 +227,7 @@ function planDefense(
   // 使敌方必须先拆 rampart 才能攻击建筑。独立于 min-cut/扇区路径封锁逻辑。
   added = addCoreRampartCoverage(queue, snapshot, existingKeys) || added;
 
-  // R682/R683：RCL4 不规划新的 min-cut 整房墙，并清掉尚未落地的
+  // RCL4 不规划新的 min-cut 整房墙，并清掉尚未落地的
   // queued/blocked mincut 任务（已建 rampart 与已建 site 保留）。
   const minCutAllowed = shouldPlanMinCut(snapshot.rcl);
   if (snapshot.rcl >= 4 && !minCutAllowed) {
@@ -276,9 +276,9 @@ function planDefense(
   for (const s of snapshot.towers) corePositions.push({ x: s.pos.x, y: s.pos.y });
 
   // ── 策略 1：Min-Cut（最少 rampart 完全封锁）──
-  // P0-3：RCL3 跳过 min-cut — 核心结构少，扇区防御更快且够用。
+  // RCL3 跳过 min-cut — 核心结构少，扇区防御更快且够用。
   // min-cut 计算昂贵（图论算法），RCL3 的简单布局不值得这个成本。
-  // R682：RCL4 仅在近期玩家威胁时启用；RCL5+ 默认启用。
+  // RCL4 仅在近期玩家威胁时启用；RCL5+ 默认启用。
   if (minCutAllowed) {
     // 仅在缓存 miss 时执行昂贵的 min-cut 计算。
     let cutResult: { rampartPositions: { x: number; y: number }[]; complete: boolean };
@@ -290,9 +290,9 @@ function planDefense(
       // 缓存 miss 或核心结构已变 — 执行 min-cut 计算。
       const terrain = room.getTerrain();
       const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
-      // P2-1：构建不可放置割集顶点的位置集合（出口格及紧邻出口格）。
+      // 构建不可放置割集顶点的位置集合（出口格及紧邻出口格）。
       // 这些位置 min-cut 会设为不可切割，算法选其他位置作为割集，
-      // 保证生成的割集全部可建造（与 P1-2 入队预校验双重保险）。
+      // 保证生成的割集全部可建造（与入队预校验双重保险）。
       const blockedPositions = buildBlockedPositions();
       for (const packed of protectedLayoutPositions) blockedPositions.add(packed);
       const computed = computeMinCutDefense(
@@ -315,7 +315,7 @@ function planDefense(
     }
 
     if (cutResult.complete) {
-      // R683：位置评估——整房墙只有被塔火力覆盖才有意义。覆盖不足时，
+      // 位置评估——整房墙只有被塔火力覆盖才有意义。覆盖不足时，
       // 墙会把敌人挡在塔外（敌人打墙、塔打不到），不如只留核心 bunker。
       const coverage = towerCoverageRatio(cutResult.rampartPositions, snapshot.towers);
       if (coverage < CONFIG.defense.minCutCoverageFloor) {
@@ -345,7 +345,7 @@ function planDefense(
         // 已建 rampart 或 wall 的位置跳过
         if (builtRamparts.has(packed) || builtWalls.has(packed)) continue;
 
-        // P1-2：可建造性预校验 — 避免入队注定 blocked 的任务。
+        // 可建造性预校验 — 避免入队注定 blocked 的任务。
         const sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, pos.x, pos.y);
         if (!isMinCutPositionBuildable(pos, sites.length > 0)) continue;
 
@@ -447,7 +447,7 @@ function addCoreRampartCoverage(
   const maxBackgroundQueued = CONFIG.construction.maxBackgroundQueuedPerRoom;
   let added = false;
   for (const pos of corePositions) {
-    // R683：RCL4 单塔只覆盖核心圈；塔外的 container/link 盾（如远端 source container）
+    // RCL4 单塔只覆盖核心圈；塔外的 container/link 盾（如远端 source container）
     // 既不进塔火力、又要维护，暂不建。RCL5+ 恢复全量 core coverage。
     if (snapshot.rcl === 4 && snapshot.towers.length > 0 && !isTowerCovered(pos, snapshot.towers)) {
       continue;

@@ -1,4 +1,4 @@
-/** A3-001: AgendaItem 类型 + Operation 创建 + 幂等键 */
+/** AgendaItem 类型 + Operation 创建 + 幂等键 */
 import { describe, expect, it } from "vitest";
 import {
   createOperation,
@@ -11,7 +11,7 @@ import {
 
 const TICK = 1000;
 
-describe("A3-001: AgendaItem 创建 + 幂等键", () => {
+describe("AgendaItem 创建 + 幂等键", () => {
   it("makeOperationId 生成确定性幂等键", () => {
     const id1 = makeOperationId("W1N1", "W2N1", "energy");
     const id2 = makeOperationId("W1N1", "W2N1", "energy");
@@ -38,7 +38,7 @@ describe("A3-001: AgendaItem 创建 + 幂等键", () => {
   });
 });
 
-describe("A3-005: 幂等键去重", () => {
+describe("幂等键去重", () => {
   it("同 (from, to, resource) 的 id 相同", () => {
     const op1 = createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 1000, TICK);
     const op2 = createOperation("W1N1", "W2N1", "energy", 2000, 2, TICK + 2000, TICK);
@@ -46,7 +46,7 @@ describe("A3-005: 幂等键去重", () => {
   });
 });
 
-describe("A3-012: 超时检测", () => {
+describe("超时检测", () => {
   it("tick > deadline → isExpired true", () => {
     const op = createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 100, TICK);
     expect(isExpired(op, TICK + 50)).toBe(false);

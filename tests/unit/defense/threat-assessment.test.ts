@@ -1,4 +1,4 @@
-/** A5.1 G1 — Threat Assessment 纯函数测试。 */
+/** G1 — Threat Assessment 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   assessThreat,

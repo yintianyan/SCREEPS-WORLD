@@ -107,7 +107,7 @@ function makeView(over?: Partial<EmpireResourceView>): EmpireResourceView {
   };
 }
 
-/** A2B 扩张就绪度预算 mock —— 原 A2B-007 / A2B-S2 两个 describe 内的孪生定义上提（R20①/T4 批①）。 */
+/** 扩张就绪度预算 mock —— 原先两个 describe 内的孪生定义上提。 */
 function makeBudget(over?: Partial<ReturnType<typeof allocateEmpireBudget>>) {
   const base = allocateEmpireBudget(makeView(), "growing", 1000);
   return { ...base, ...over };
@@ -737,10 +737,10 @@ describe("A2B-011: Empire Resource View Aggregation", () => {
   });
 });
 
-// ─── R418：G2 必须报出「是哪间房」而不是只报一个计数 ─────────────
+// ─── G2 必须报出「是哪间房」而不是只报一个计数 ─────────────
 // G2/G3/G5 同出一枚 economicClass 分类位（room-profile.ts:202-217），线上抓到"门集多
 // 了三把"时，只有计数就得回源码重算才知道肇事房 —— 本会话就是这么绕了一整轮。
-describe("R418: struggling 房名单", () => {
+describe("struggling 房名单", () => {
   it("两间困难房 ⇒ 名单按 profiles 顺序给全，计数与名单等长", () => {
     const view = buildEmpireResourceView(
       [

@@ -1,4 +1,4 @@
-/** R8 回归测试：shouldIdleWhenNoCandidate 钩子等价性锁住。 */
+/** 回归测试：shouldIdleWhenNoCandidate 钩子等价性锁住。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHaulerRole } from "../../../src/creeps/roles/remote-hauler";
 import { defineRole } from "../../../src/creeps/engine/role-runner";
@@ -48,7 +48,7 @@ function emptySinkSnapshot() {
   });
 }
 
-describe("R8 — shouldIdleWhenNoCandidate 钩子等价性", () => {
+describe("shouldIdleWhenNoCandidate 钩子等价性", () => {
   it("① remoteHauler work 在 home 房无候选 → 切 idle", () => {
     // work 模式 + 在 home 房（W7N4）+ 背包有能量（used=50）
     // ensureHome: work+remoteHauler → goHome=true → 在 home → 返回 true（继续候选评估）

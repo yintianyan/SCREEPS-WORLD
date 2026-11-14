@@ -1,5 +1,5 @@
 /**
- * E2E-019 多房 terminal 决策权 — Plan 活跃时自主互济压制（A4.4 契约回归）。
+ * E2E-019 多房 terminal 决策权 — Plan 活跃时自主互济压制（契约回归）。
  *
  * 双自有房（各 RCL6 + storage + terminal），捐助房富余、受助房匮乏——
  * 该状态满足 tryEmpireEnergyAid 的全部前置。但 logistics-planner 每 100t
@@ -7,7 +7,7 @@
  * Authority：自主互济（self-aid）被压制，不产出 energy-aid 发送。
  * 本测试锁定该决策权语义：窗口内不得出现 self-aid 发送（防未来回归）。
  * Plan 驱动的互济证据（planner 产出 terminal 请求 → tryPlanDrivenSend）
- * 需 planner 输入构造，登记为 CANARY §5.2 继续项。
+ * 需 planner 输入构造。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { CONFIG } from "../../../src/config";
@@ -64,7 +64,7 @@ describe("E2E-019 多房 energy 互济 — terminal 调拨", () => {
     await runner.teardown();
   });
 
-  it("Plan 活跃窗口内 self-aid 被压制（A4.4 决策权语义回归锁定）", async () => {
+  it("Plan 活跃窗口内 self-aid 被压制（决策权语义回归锁定）", async () => {
     let aidLog: string | undefined;
     let probeBefore: string | undefined;
     const totalStages = 8;
@@ -89,7 +89,7 @@ describe("E2E-019 多房 energy 互济 — terminal 调拨", () => {
       aidLog = logs.find(l => l.includes("energy-aid:"));
     }
 
-    // A4.4 决策权语义：Plan 活跃（常态恒真）→ self-aid 压制，无 energy-aid 发送。
+    // 决策权语义：Plan 活跃（常态恒真）→ self-aid 压制，无 energy-aid 发送。
     expect(
       aidLog,
       "Plan 活跃窗口内不应出现 self-aid 发送（决策权在 Plan；若出现说明决策权回归被破坏）",

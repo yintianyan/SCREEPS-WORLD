@@ -201,7 +201,7 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
   });
 });
 
-describe("spawn-manager — SP-2 黑名单闭环（隔离 → 冷却拒重建 → 到期放行）", () => {
+describe("spawn-manager — 黑名单闭环（隔离 → 冷却拒重建 → 到期放行）", () => {
   /** 存活 harvester 防 P0 短路（P0 分支只出 worker/defender）。 */
   function addLivingHarvester(): void {
     (globalThis as any).Game.creeps.h_1 = {

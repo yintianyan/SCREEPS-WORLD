@@ -38,7 +38,7 @@ describe("colonyStateFreezesRole — recovery/bootstrap 冻结", () => {
     expect(colonyStateFreezesRole("bootstrap", p2Civilian, "develop", false)).toBe(true);
   });
 
-  it("recovery 下 recoveryEligible 角色豁免（R3a）", () => {
+  it("recovery 下 recoveryEligible 角色豁免", () => {
     expect(colonyStateFreezesRole("recovery", p2CollectorExempt, "develop", false)).toBe(false);
   });
 
@@ -84,7 +84,7 @@ describe("colonyStateFreezesRole — reserver/claimer 远矿豁免", () => {
   });
 });
 
-describe("colonyStateFreezesRole — R649 年轻房 upgrader 豁免", () => {
+describe("colonyStateFreezesRole — 年轻房 upgrader 豁免", () => {
   const p2YoungUpgrader: RoleLike = { priority: 2, recoveryEligibleYoungRoom: true };
 
   it("recovery + 年轻房（RCL<4）⇒ 不冻结（升级是脱困唯一路径）", () => {

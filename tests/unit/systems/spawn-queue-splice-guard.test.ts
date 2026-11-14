@@ -1,4 +1,4 @@
-/** P1-H 静态守卫 — spawnQueue 直接 splice 仅允许在队列属主 spawn-manager。 */
+/** 静态守卫 — spawnQueue 直接 splice 仅允许在队列属主 spawn-manager。 */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -47,7 +47,7 @@ function stripComments(source: string): string {
  */
 const ALLOWED_COMBINATION_FILES = new Set<string>(["systems/room/spawn-manager.ts"]);
 
-describe("P1-H 静态守卫 — spawnQueue 直 splice 仅在 spawn-manager", () => {
+describe("静态守卫 — spawnQueue 直 splice 仅在 spawn-manager", () => {
   it("src 全域无外模块同时引用 .spawnQueue 与调用 .splice(", () => {
     const files = collectTsFiles(SRC_DIR);
     const violations: string[] = [];

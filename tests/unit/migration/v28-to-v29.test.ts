@@ -1,4 +1,4 @@
-/** v28 → v29 迁移独立测试（R6b 主动情报 / prospect + prospectCooldown 建档）。 */
+/** v28 → v29 迁移独立测试（主动情报 / prospect + prospectCooldown 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

@@ -1,5 +1,5 @@
 /**
- * #93 — `controller.progressTotal` 必须与 progress 同处落盘。
+ * `controller.progressTotal` 必须与 progress 同处落盘。
  *
  * 立案依据（线上实测 2026-10-03，W38S56 RCL4）：`room-state` 原先只存 `controllerProgressSeen`
  * 与 `controllerProgressChangedAt`，于是现场**只能报速率、报不出「还有多久」**：同一份读数下
@@ -65,7 +65,7 @@ function run(snapshot: RoomSnapshot, tick: number): void {
   roomStateSystem.run(mockRoomStateCtx([snapshot], tick));
 }
 
-describe("#93 controller.progressTotal 与 progress 同处落盘", () => {
+describe("controller.progressTotal 与 progress 同处落盘", () => {
   let savedMemory: typeof Memory | undefined;
 
   beforeEach(() => {

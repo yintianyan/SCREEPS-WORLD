@@ -1,7 +1,7 @@
 /**
  * home mineral 停采闩锁（Phase C）。
  *
- * 契约 §9 决策 4：home mineral 总库存 ≥10K 且无 ticket 时停采；<5K 或有新 ticket 时恢复。
+ * home mineral 总库存 ≥10K 且无 ticket 时停采；<5K 或有新 ticket 时恢复。
  * 回差避免在单阈值附近反复启停；ticket 优先保证有真实下游需求时不被库存闸饿死。
  */
 

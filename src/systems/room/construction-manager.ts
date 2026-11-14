@@ -40,7 +40,7 @@ export const constructionManagerSystem: System = {
   priority: 2 as Priority,
   interval: 1,
   /**
-   * P1-F：recoveryEligible 钩子 — buildQueue 有 P0 queued 关键基建时
+   * recoveryEligible 钩子 — buildQueue 有 P0 queued 关键基建时
    * 自报 true，让 kernel 将本系统提升为 P1 等效优先级通过 budget 拦截。
 
    * 关键基建 = storage / tower / spawn（经济链路断裂三件套）。
@@ -49,7 +49,7 @@ export const constructionManagerSystem: System = {
    */
   recoveryEligible: (): boolean => hasCriticalStructureGap(Memory.rooms),
   run(ctx: TickContext): void {
-    // P0-A：tick 配额计数器提升到 globalCache，与 remote-mining-manager 共享。
+    // tick 配额计数器提升到 globalCache，与 remote-mining-manager 共享。
     // normal 与 emergency 两个独立槽位（每 tick 各 1 个），先到先得。
     const counters = getTickSiteCounters();
 
@@ -64,8 +64,8 @@ export const constructionManagerSystem: System = {
 
       const queue = roomMem.buildQueue ?? [];
 
-      // R603：常态建造按 normalInterval 降频；紧急重建（spawn/storage/tower/source
-      // container 缺失）仍每拍跑 —— R583 的回归教训（interval 5 让 RCL2 紧急通道
+      // 常态建造按 normalInterval 降频；紧急重建（spawn/storage/tower/source
+      // container 缺失）仍每拍跑 —— 回归教训（interval 5 让 RCL2 紧急通道
       // 500 拍内建不出 site）只适用于“把紧急也降频”，不是降常态。
       const emergency = assessEmergencyRebuild(snapshot);
       const g = globalCache() as { __constructionLastRun?: Record<string, number> };
@@ -88,7 +88,7 @@ export const constructionManagerSystem: System = {
       // 2. 清理完成 / 阻塞 / 超龄的任务（纯函数 — domain/construction/queue）。
       //    永久冲突（3 次 ERR_INVALID_TARGET）被清除的 key 记入 segment 黑名单，
       //    layout-planner 在冷却期内不会按同 key 重新入队。超龄 queued 任务
-      //    （R2 队列治理）仅清除 + 计数观测，不进黑名单。
+      //    （队列治理）仅清除 + 计数观测，不进黑名单。
       const cleaned = cleanTasks(queue, ctx.tick, {
         maxQueuedAge: CONFIG.construction.maxQueuedTaskAge,
       });
@@ -109,7 +109,7 @@ export const constructionManagerSystem: System = {
 
       // 3. 紧急重建状态 — 已在循环顶部算过（降频闸需要它），此处复用。
 
-      // 4. 开发门禁（结构化原因码 — R2 可观测性）。
+      // 4. 开发门禁（结构化原因码 — 可观测性）。
       //    注意：normal 槽位永远按「发展规则」严格判定（emergencyAny=false）—
       //    emergency 豁免只属于 emergency 槽位。否则 emergency 长期激活的房
       //    （2 source 房 container 配额排队）会借豁免把普通任务也绕过能量地板。
@@ -128,9 +128,9 @@ export const constructionManagerSystem: System = {
         ...strictGateInputs,
         emergencyAny: false,
       });
-      // 5. site 创建 — emergency 与 normal 是两个独立槽位（蓝图 §3：每 tick
+      // 5. site 创建 — emergency 与 normal 是两个独立槽位（每 tick
       //    各 1 个，先到先得），不是 if/else 互斥分支。
-      //    R2 根因修复：旧结构 `if (emergency && canEmergency) else if (canNormal)`
+      //    根因修复：旧结构 `if (emergency && canEmergency) else if (canNormal)`
       //    在 emergency 长期激活的房（如 2 source 房第二处 container 在 critical
       //    配额=1 下排队 → needsSourceContainerRebuild 恒真）永久饿死 normal 槽位
       //    — extension 永远建不出来，直到 RCL3 tower emergency 才自愈。
@@ -142,7 +142,7 @@ export const constructionManagerSystem: System = {
         }
       }
 
-      // 5b. Normal 槽位 — 严格发展门禁通过时全队列可竞争；被拒时走 R2 关键
+      // 5b. Normal 槽位 — 严格发展门禁通过时全队列可竞争；被拒时走关键
       //     发展通道（extension / controller container）。
       if (counters.canCreateNormal) {
         if (normalGateReason === "ok") {
@@ -150,7 +150,7 @@ export const constructionManagerSystem: System = {
             counters.markNormal();
           }
         } else {
-          // R2 关键发展通道：严格门禁拒绝但生存前提齐备时，extension /
+          // 关键发展通道：严格门禁拒绝但生存前提齐备时，extension /
           // controller container 仍可创建 site（修复 RCL2 停摆闭环）。通道不绕过
           // 每房/全局配额与 Game API — tryCreateSite 内部照常执行；创建消耗
           // normal tick 槽位（每 tick 全局 1 个，即「每 tick 只允许有限数量」）。
@@ -199,7 +199,7 @@ export const constructionManagerSystem: System = {
 
       roomMem.buildQueue = queue;
 
-      // 6. P1-4 拆改执行：
+      // 6. 拆改执行：
       //    处理本房的活跃拆改计划 — 替代 link 建成后 destroy 死资产 link。
       //    战时暂停（colonyState=defense）保留计划待恢复。
       processDismantlePlans(snapshot, ctx.tick, queue);
@@ -257,7 +257,7 @@ export function cleanOrphanConstructionSites(): void {
  * 开发门禁 — 创建任何新 site 前必须满足。
  * 返回 true 表示允许建造。
 
- * 逻辑已下沉到 domain 层纯函数 evaluateDevelopmentGate（R2 可观测性：
+ * 逻辑已下沉到 domain 层纯函数 evaluateDevelopmentGate（可观测性：
  * 每个拒绝都携带原因码）；本函数保留布尔签名供既有调用方与测试使用。
 
  * 紧急重建（source container / tower / spawn / storage 缺失）豁免 economyPressure / budget /
@@ -285,12 +285,12 @@ export function developmentGate(
   );
 }
 
-// ─── R2：skip reason 结构化观测 ─────────────────────────────
+// ─── skip reason 结构化观测 ─────────────────────────────
 
 /**
  * construction-manager 跳过原因全集 — 开发门禁原因码 + site 创建阶段原因。
  * heap L1 计数（global reset 丢失可接受），每 CONFIG.construction.skipReportInterval
- * tick 输出一条结构化日志后清零（STATE_OWNERSHIP §3.10：观测计数不上 Memory）。
+ * tick 输出一条结构化日志后清零（观测计数不上 Memory）。
  */
 export type ConstructionSkipReason =
   | Exclude<DevelopmentGateReason, "ok">
@@ -348,9 +348,9 @@ export function isRuntimeDefenseWallTask(task: BuildTask): boolean {
 }
 
 /** 尝试从队列创建一个建造 site。成功创建返回 true。
- *  roomName：跳过原因计数归属房间（R2 可观测性）。
+ *  roomName：跳过原因计数归属房间（可观测性）。
  *  mode："emergency" — 仅紧急重建任务（emergency 槽位语义：事件式签发，
- *  禁止普通任务搭车绕过能量/门禁）；"lane" — 仅关键发展任务（R2 发展通道，
+ *  禁止普通任务搭车绕过能量/门禁）；"lane" — 仅关键发展任务（发展通道，
  *  已通过 evaluateDevelopmentLane 全部生存前提检查）；undefined — 全部队列。 */
 export function tryCreateSite(
   queue: BuildTask[],
@@ -365,7 +365,7 @@ export function tryCreateSite(
     .filter(t => {
       if (mode === "emergency") return isEmergencyTask(t, snapshot, emergency);
       if (mode === "lane") {
-        // R2 验收加固：lane 任务必须是当前 RCL 已解锁的结构（防 controller
+        // 验收加固：lane 任务必须是当前 RCL 已解锁的结构（防 controller
         // 降级后残留的过期任务借通道提前签发——降级场景由 ERR_RCL_NOT_ENOUGH
         // 瞬态重试链路处理，不归 lane）。
         if (!isCriticalDevelopmentTask(t, snapshot)) return false;
@@ -458,7 +458,7 @@ export function tryCreateSite(
     }
     if (quotaBlocked) {
       if (roomName) {
-        // R2 诊断：按「结构类型 × 拒绝原因」计数，定位哪类任务在持续吃配额拒绝。
+        // 诊断：按「结构类型 × 拒绝原因」计数，定位哪类任务在持续吃配额拒绝。
         recordConstructionSkip(
           roomName,
           `per-room-site-cap:${task.structureType}`,
@@ -513,7 +513,7 @@ export function tryCreateSite(
   return false;
 }
 
-// ─── P1-4 拆改执行 ───
+// ─── 拆改执行 ───
 
 /**
  * 处理本房的活跃拆改计划。

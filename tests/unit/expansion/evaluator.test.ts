@@ -132,7 +132,7 @@ describe("expansion — selectExpansionTarget", () => {
   });
 });
 
-describe("selectExpansionTarget — R7b minSources 门禁", () => {
+describe("selectExpansionTarget — minSources 门禁", () => {
   it("minSources=2 时单源房被排除（节奏收紧）", () => {
     const input = baseInput({
       minSources: 2,

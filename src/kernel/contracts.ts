@@ -48,12 +48,12 @@ export interface System {
    * 代价是它会在已耗尽的 tick 上再花自己那一份（观测单价 ≪ 1 CPU / interval），
    * 因此必须是低频、无副作用、只写的活。 */
   readonly budgetExempt?: boolean;
-  /** 【F1/G-B】单次调用 CPU 预算上限（EMA 平滑值，单位 CPU）。定义时生效：
+  /** 单次调用 CPU 预算上限（EMA 平滑值，单位 CPU）。定义时生效：
    * 连续超支的系统被跳过并记 skipReason=budget-cap——局部截断不连坐整 tick。
    * 缺省 undefined = 不启用（零行为变更）。 */
   readonly budgetCap?: number;
   /**
-   * Recovery / 关键基建缺失豁免自报钩子（P1-F）。
+   * Recovery / 关键基建缺失豁免自报钩子。
    * 返回 true 时，kernel 在 budget 拦截前将其优先级等效提升为 P1，确保紧急重建
    * 路径在任何 CPU 档位下都能运行。kernel 只读此钩子，不硬编码系统名
    * （内核不感知具体业务）。
@@ -68,14 +68,14 @@ export interface CreepRole {
   readonly name: string;
   readonly priority: Priority;
   /**
-   * 生存豁免自报（R3a）：recovery/bootstrap 时 P2+ 角色默认被 colony-state 门禁跳过；
+   * 生存豁免自报：recovery/bootstrap 时 P2+ 角色默认被 colony-state 门禁跳过；
    * 声明 true 的角色视为「生存/脱困路径」，recovery/bootstrap 时仍执行并以 P1 等效优先级
    * 通过 CPU budget。kernel 只读此标志，不感知具体角色名。
    * 典型实现：builder（重建/建造关键基建）/ mineralMiner（矿物收入不耗能量）。
    */
   readonly recoveryEligible?: boolean;
   /**
-   * R649：仅「年轻房」（RCL<4）的 recovery/bootstrap 下豁免冻结的自报标志（与
+   * 仅「年轻房」（RCL<4）的 recovery/bootstrap 下豁免冻结的自报标志（与
    * recoveryEligible 正交）。upgrader 用：升级是 RCL1-3 房脱离危机的唯一路径
    * （RCL3 落 tower、容量抬升），成熟房在恢复态仍冻结以保能量链。
    */
@@ -195,7 +195,7 @@ export interface RoomSnapshot {
    * harvesterCount 使用，避免替换期间的假 bootstrap。 */
   readonly pendingHarvesters: number;
   /** 本房 creep 身上携带的能量总和（memory.home 归属本房）。
-   * room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动（P1-5 ①）。
+   * room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动。
    * Kernel 复用 Game.creeps 遍历预构建；缺省视为 0。 */
   readonly creepEnergy?: number;
   /** 房间内的 mineral（供布局验证使用）。 */
@@ -236,7 +236,7 @@ export interface RoomSnapshot {
   readonly creepPositions?: ReadonlyMap<number, { name: string; my: boolean; fatigue: number }>;
 }
 
-/** 【G-G/R2-3】状态族版本（Intent 分层指纹数据源；实现见 kernel/state-store）。 */
+/** 状态族版本（Intent 分层指纹数据源；实现见 kernel/state-store）。 */
 export interface StateStore {
   /** 当前族版本（未触碰=0）。 */
   version(family: string): number;

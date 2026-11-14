@@ -22,7 +22,7 @@ import { getSquadMovementIntent } from "./squad-movement-runtime";
 import { readSquadState, squadStateKey } from "./squad-state";
 
 // ═══════════════════════════════════════════════════════════
-// §1. GlobalCache 扩展 — Combat Micro Runtime 状态
+// 1. GlobalCache 扩展 — Combat Micro Runtime 状态
 // ═══════════════════════════════════════════════════════════
 
 interface CombatMicroCache {
@@ -39,7 +39,7 @@ interface CombatMicroCache {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2. 系统定义
+// 2. 系统定义
 // ═══════════════════════════════════════════════════════════
 
 export const combatMicroSystem: System = {
@@ -106,7 +106,7 @@ export const combatMicroSystem: System = {
 };
 
 // ═══════════════════════════════════════════════════════════
-// §3. MicroSnapshot 构建
+// 3. MicroSnapshot 构建
 // ═══════════════════════════════════════════════════════════
 
 function buildMicroSnapshot(
@@ -211,7 +211,7 @@ function buildMicroSnapshot(
 }
 
 // ═══════════════════════════════════════════════════════════
-// §4. 辅助函数
+// 4. 辅助函数
 // ═══════════════════════════════════════════════════════════
 
 function emptyCapability(): CombatCapability {

@@ -1,4 +1,4 @@
-/** A5.3.1 GAP-1 Unit Tests — AbortReason → RecoveryAction 映射 + 幂等 + 确定性。 */
+/** AbortReason → RecoveryAction 映射 + 幂等 + 确定性的单测。 */
 
 import { describe, expect, it } from "vitest";
 import {
@@ -35,7 +35,7 @@ function makeSignal(overrides: Partial<WarAbortSignal> = {}): WarAbortSignal {
 
 // ─── AbortReason → RecoveryAction 映射 ──────────────────────
 
-describe("A5.3.1 AbortReason → RecoveryAction 映射", () => {
+describe("AbortReason → RecoveryAction 映射", () => {
   it("ATTRITION → population_rebuild", () => {
     const signal = makeSignal({ reason: "ATTRITION" });
     const action = mapAbortToRecoveryAction(signal);
@@ -99,7 +99,7 @@ describe("A5.3.1 AbortReason → RecoveryAction 映射", () => {
 
 // ─── 批量转换 ──────────────────────────────────────────────
 
-describe("A5.3.1 批量转换", () => {
+describe("批量转换", () => {
   it("多个信号批量转换保持顺序", () => {
     const signals = [
       makeSignal({ reason: "POSTURE", sponsor: "W11N10" }),
@@ -121,7 +121,7 @@ describe("A5.3.1 批量转换", () => {
 
 // ─── 幂等性 / Cooldown ─────────────────────────────────────
 
-describe("A5.3.1 幂等性 + Cooldown", () => {
+describe("幂等性 + Cooldown", () => {
   it("相同 sponsor+reason 产出相同 idempotency key", () => {
     const signal = makeSignal({ reason: "ATTRITION", sponsor: "W11N10" });
     const action = mapAbortToRecoveryAction(signal)!;
@@ -205,7 +205,7 @@ describe("A5.3.1 幂等性 + Cooldown", () => {
 
 // ─── Escalation / RecoveryUnavailable ─────────────────────
 
-describe("A5.3.1 Escalation + RecoveryUnavailable", () => {
+describe("Escalation + RecoveryUnavailable", () => {
   it("RecoveryUnavailable: maxAttempts=0 → terminal", () => {
     // auto_resolve 的 RetryPolicy: maxAttempts=1, non_retryable
     const signal = makeSignal({ reason: "NO_TARGET" });
@@ -229,7 +229,7 @@ describe("A5.3.1 Escalation + RecoveryUnavailable", () => {
 
 // ─── 确定性 ────────────────────────────────────────────────
 
-describe("A5.3.1 确定性", () => {
+describe("确定性", () => {
   it("相同 input → 相同 output", () => {
     const signal = makeSignal();
     const action1 = mapAbortToRecoveryAction(signal)!;
@@ -267,7 +267,7 @@ describe("A5.3.1 确定性", () => {
 
 // ─── Domain Purity ─────────────────────────────────────────
 
-describe("A5.3.1 Domain Purity — abort-recovery.ts", () => {
+describe("Domain Purity — abort-recovery.ts", () => {
   it("不引用 Game / Memory / RawMemory", async () => {
     const source = await import("node:fs").then(fs =>
       fs.readFileSync(

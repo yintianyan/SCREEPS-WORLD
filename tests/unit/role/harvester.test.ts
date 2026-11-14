@@ -277,7 +277,7 @@ describe("harvester — flee 与恢复", () => {
     expect(creep.transfer).not.toHaveBeenCalled();
   });
 
-  it("远端威胁不触发 flee（P1-1 距离分级）", () => {
+  it("远端威胁不触发 flee（距离分级）", () => {
     // 远端坐标 → 距离 > fleeRange(10)；source 保持相邻，采集照常。
     const hostile = mockHostile("hostile_far", 5, 5);
     const snap = mockSnapshot({ hostileCreeps: [hostile] });

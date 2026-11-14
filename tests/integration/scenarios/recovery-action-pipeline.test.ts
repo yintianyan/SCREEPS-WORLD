@@ -1,7 +1,7 @@
 /**
  * 恢复动作链的端到端证明：FailureNode → prioritizeRecovery → recovery-execution → 孵化请求落地。
  *
- * 为什么要这条测试：#57 要把「发展停摆」接进失败图，而接线之前必须先证明
+ * 为什么要这条测试：要把「发展停摆」接进失败图，而接线之前必须先证明
  * **被接的那条管道真的会执行** —— 现状是 `population_rebuild` 一类的动作只有 unit 层覆盖
  * （abort-recovery / a4-6-recovery-lifecycle / recovery-record-room-source）与一条执行序守卫
  * （execution-order.test.ts:36），没有任何测试跑过真实 kernel 走完 失败→动作→提交→追踪 四步。
@@ -98,7 +98,7 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
         for (const a of acts) {
           if (!actionTypes.includes(a.type)) actionTypes.push(a.type);
           // 房级 colony 节点（colonyState=recovery 才有）与 colony 维度节点（人口/健康度）
-          // 是两个生产者；#57 要接的是前者，故按 targetFailureId 的形状区分来源。
+          // 是两个生产者；要接的是前者，故按 targetFailureId 的形状区分来源。
           if (a.targetFailureId?.startsWith("failure:colony:W1N1:")) {
             if (!roomScopedColonyActions.includes(a.type)) roomScopedColonyActions.push(a.type);
           }
@@ -127,10 +127,9 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
 
     // ① 注入的症状确实进了失败图，并**按房**产出动作
     //    （colony 维度那条路只给 `failure:colony:<tick>`，不带房名；带房名的才是 recovery 带节点）。
-    expect(
-      roomScopedColonyActions,
-      `recovery 带应产出房级 colony 动作（#57 要接的就是这条路）；${diag}`,
-    ).toContain("population_rebuild");
+    expect(roomScopedColonyActions, `recovery 带应产出房级 colony 动作；${diag}`).toContain(
+      "population_rebuild",
+    );
 
     // ② 动作被执行层翻译成孵化请求 —— 这才是"响应真的发生"。
     expect(
@@ -147,7 +146,7 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
     // （人口/健康度）本来就会报故障 —— 上一次跑就是 spawn_recovery+energy_redirect+
     // terminal_trade+population_rebuild 四条齐全。因此控制组**不能**断言"零动作"，
     // 只能断言"没有**房级** colony 节点"（`failure:colony:<room>:<tick>`），
-    // 那才是 #57 要接的生产者；维度节点是 `failure:<dim>:<tick>`，不带房名。
+    // 那才是要接的生产者；维度节点是 `failure:<dim>:<tick>`，不带房名。
     const world = buildRoom();
     const runner = new TickRunner();
     runner.setLoop(loop);
@@ -186,7 +185,7 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
   });
 
   it("发展停摆（锚点陈旧 + 不在 recovery 带）→ development_resume → 请求的是 upgrader 而非 harvester", () => {
-    // 这一例钉的是 #57 的全部主张：信号源是**跨部署的停滞锚点**（不是相位带抽样），
+    // 这一例钉的是接线要证的全部主张：信号源是**跨部署的停滞锚点**（不是相位带抽样），
     // 响应方向是**加消费出口**（升级/建造），而不是给花不出去的房子再加采集。
     const world = buildRoom();
     const runner = new TickRunner();
@@ -240,7 +239,7 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
     ).toBeLessThanOrEqual(2);
   });
 
-  it("恢复动作烧穿重试预算 → 清单进 Memory 且事件不逐拍重复（#59）", () => {
+  it("恢复动作烧穿重试预算 → 清单进 Memory 且事件不逐拍重复", () => {
     // 为什么跑这么久：升级烧穿要走完 提交 → 执行 → 验证（no_progress→failed）→ 第二次尝试 → terminal
     // → escalation 这条完整时间线，短窗口只能测到前半段。
     const world = buildRoom();
@@ -282,7 +281,7 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
     ).toBeGreaterThan(0);
     // ⚠️这里原先断言 `escalations[0].room === "W1N1"`，CI 上稳定失败（实测 'global' ≠ 'W1N1'），
     //   而本地"整目录跑"是绿的、"单跑这个文件"是红的 ⇒ **位置断言 + 顺序依赖**，测的是列表实现的偶然顺序，
-    //   不是 #59 的性质。清单本身不承诺顺序：同一次跑里既可能有房级案例（W1N1/colony）也可能有全局案例
+    //   不是这条测试要证的性质。清单本身不承诺顺序：同一次跑里既可能有房级案例（W1N1/colony）也可能有全局案例
     //   （GLOBAL_ROOM 域的动作），谁先入列取决于当时哪个先烧穿。
     //   改判成按**幂等键**取条目：要证的是"我注入的那间房的停摆确实留了痕"，那就去找它那一键的条目。
     const mine = escalations.filter(e => e.room === "W1N1");

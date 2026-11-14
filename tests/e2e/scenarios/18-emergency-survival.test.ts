@@ -1,5 +1,5 @@
 /**
- * E2E-018 Emergency Survival Mode — Recovery 档内的紧急安全状态实测（RELEASE_GATE §5.2）。
+ * E2E-018 Emergency Survival Mode — Recovery 档内的紧急安全状态实测。
  *
  * mockup driver 按每 tick 记账（cpuAvailable += cpu − used），cpu≈实际用量时
  * bucket 稳在注入值 —— 据此做确定性 ESM 注入：

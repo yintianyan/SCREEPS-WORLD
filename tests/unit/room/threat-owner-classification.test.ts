@@ -1,11 +1,11 @@
 /**
- * #152：把威胁按行凶者身份分类（NPC / 玩家）。
+ * 把威胁按行凶者身份分类（NPC / 玩家）。
  *
  * 立案理由（线上读数，本会话）：把 posture 钉在 `war` 的是**房级** `rooms.<r>.lastHostileAt`，
  * 而按人域（段 5）的 `lastHostileAt` 对 NPC 恒为 0 —— `intelligence.ts:83-91` 显式排除
  * `INVADER_USERNAME`。实测到 30 天尺度：`players=3`（其中一条是我们自己）、三条
  * `lastHostileAt` **全为 0**，第三方记录旧 840,753 / 213,257 拍，而进犯约每 3,000 拍一次。
- * ⇒ 恒战的成因是"NPC 骚扰与玩家宣战在同一把尺上同价"，而 #151 要谈"按来源降尾税"必须先有输入。
+ * ⇒ 恒战的成因是"NPC 骚扰与玩家宣战在同一把尺上同价"，而要谈"按来源降尾税"必须先有输入。
  *
  * 本文件只测分类本身：**这两把尺当前零消费者**，不参与任何决策，所以这些用例不背书行为变化。
  */
@@ -16,7 +16,7 @@ import { INVADER_USERNAME } from "../../../src/domain/intel";
 const by = (username: string | undefined): { owner?: { username?: string } } =>
   username === undefined ? {} : { owner: { username } };
 
-describe("#152 classifyThreatOwners", () => {
+describe("classifyThreatOwners", () => {
   it("全是 NPC ⇒ 只算 invader 一类，player 为假（这就是三十天里的真实形状）", () => {
     expect(classifyThreatOwners([by(INVADER_USERNAME), by(INVADER_USERNAME)])).toEqual({
       invader: true,

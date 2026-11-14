@@ -1,7 +1,7 @@
 /**
- * #169 逐请求留痕（`attempts`／`block`）单测 —— 验的是**两问分得开**，不是行为变了。
+ * 逐请求留痕（`attempts`／`block`）单测 —— 验的是**两问分得开**，不是行为变了。
  *
- * 立案缘由（roadmap §3.5 #169）：房间级 `spawnRejects` 每拍每请求计数，答「这一房被什么挡住了几拍」；
+ * 立案缘由：房间级 `spawnRejects` 每拍每请求计数，答「这一房被什么挡住了几拍」；
  * 但 builder 排产要的那个判别是**逐条**的——「这条请求是每次都去铸（等能量），还是从未被允许试铸
  * （被闸/隔离/编制挡在门外）」。老写法里这两种在 Memory 里长得一模一样：请求在场、`retries=0`、没孵出来。
  *
@@ -12,7 +12,7 @@
  *   二、`attempts` 只在真的调用 `spawnCreep` 那一行涨 ⇒ 缺席＝从未被允许试铸。
  *
  * 反向实验（写进锁）：删掉 cast 那行的 `req.attempts = ...` ⇒ 下面"试铸"三例转红、其余仍绿；
- * 把 `rejects()` 两档的三元写反 ⇒ 只有配对那两例转红（这条正是 #54 立案的论据，本文件守住它没被带跑）。
+ * 把 `rejects()` 两档的三元写反 ⇒ 只有配对那两例转红（这条正是当初立案的论据，本文件守住它没被带跑）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { trySpawn, type SpawnRejectStats } from "../../../src/systems/room/spawn-manager";
@@ -59,7 +59,7 @@ beforeEach(() => {
   Memory.rooms[ROOM] = { colonyState: "normal", economyPressure: 0 };
 });
 
-describe("#169 没走到孵化口 — attempts 缺席，block 指认止步处", () => {
+describe("没走到孵化口 — attempts 缺席，block 指认止步处", () => {
   it("隔离名单命中 ⇒ block=blacklisted，且从未试铸", () => {
     Memory.rooms[ROOM]!.spawnBlacklist = { "hauler:W7N4:0": (globalThis as any).Game.time + 100 };
     const req = makeRequest();
@@ -136,7 +136,7 @@ describe("#169 没走到孵化口 — attempts 缺席，block 指认止步处", 
   });
 });
 
-describe("#169 走到孵化口 — attempts 是唯一的判别列", () => {
+describe("走到孵化口 — attempts 是唯一的判别列", () => {
   it("成功发起孵化 ⇒ attempts=1、block=cast，请求出队", () => {
     const req = makeRequest();
     const spawn = mockSpawn(300);

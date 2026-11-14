@@ -590,7 +590,7 @@ describe("builder — flee", () => {
   });
 });
 
-describe("builder — B3 防御工事维修（维修权从塔移交 creep）", () => {
+describe("builder — 防御工事维修（维修权从塔移交 creep）", () => {
   it("盈余门禁满足时修复血量最低的 rampart", () => {
     const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
     // 独立坐标（不与 storage 同格）→ 无 min-cut 情报时按 perimeter 全额维护。

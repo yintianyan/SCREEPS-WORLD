@@ -372,8 +372,8 @@ describe("min-cut-defense — v3 对角线路径封锁", () => {
   });
 });
 
-// ── P2-1：blockedPositions 参数测试 ──
-describe("P2-1 min-cut blockedPositions — 不可放置割集顶点排除", () => {
+// ── blockedPositions 参数测试 ──
+describe("min-cut blockedPositions — 不可放置割集顶点排除", () => {
   it("blockedPositions 中的位置不出现在割集中", () => {
     // 走廊地形（宽 3），core 在右侧，出口在左侧
     const terrain = corridorTerrain(25, 1); // 走廊 y=24,25,26

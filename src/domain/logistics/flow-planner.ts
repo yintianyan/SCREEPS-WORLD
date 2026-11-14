@@ -1,5 +1,5 @@
 /**
- * FlowPlanner — 房间级能量流分配（Phase 0 纯函数）。
+ * FlowPlanner — 房间级能量流分配（纯函数）。
  *
  * 设计要点：
  * - link 可传同房间任意 link；cooldown = Chebyshev 距离，容量 ≈ capacity/(距离+1)。

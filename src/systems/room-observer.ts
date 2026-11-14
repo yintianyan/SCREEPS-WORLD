@@ -95,7 +95,7 @@ export const roomObserverSystem: System = {
 
       // Observer 视野调度：挑最陈旧的邻房请求视野，下一 tick 捕获。
       // ⚠️这里的顺序特意是「先判到点，再判有没有楼」：原先 `snapshot.observer &&` 挡在最外层，
-      // 于是 **#100 的三种形状在仪器上完全同形** —— 楼不存在 / 楼在但选不出目标 / 楼在但引擎
+      // 于是 **三种形状在仪器上完全同形** —— 楼不存在 / 楼在但选不出目标 / 楼在但引擎
       // 报错，全都表现为「什么都不发生」。到点判断只是取模，CPU 曲线不变（账本不许改曲线）。
       if (ctx.tick % OBSERVE_INTERVAL === 0) {
         const counters = observeCounters(snapshot.roomName);
@@ -263,7 +263,7 @@ function requestObservation(observer: StructureObserver, homeRoom: string, tick:
     pendingSlot().pending = { tick, targetRoom: target, homeRoom };
   } else {
     // 按原始返回码建直方图，不按名字枚举 —— 本服的码集合按记忆写会错。
-    // ERR_RCL_NOT_ENOUGH(-15) 与 ERR_NOT_IN_RANGE(-12) 是 #100 的两个候选答案（楼等级不够 vs 目标超出 10 房）。
+    // ERR_RCL_NOT_ENOUGH(-15) 与 ERR_NOT_IN_RANGE(-12) 是两个候选答案（楼等级不够 vs 目标超出 10 房）。
     counters.codes[String(code)] = (counters.codes[String(code)] ?? 0) + 1;
   }
 }
@@ -337,7 +337,7 @@ function refreshNeighborIntel(roomName: string, tick: number): void {
  * sealedExits（被墙完全封死的出口）。采集点三处（observer 捕获 / 邻房刷新 /
  * scout 视野）共用本函数，口径一致。 */
 interface RoomVisionIntel {
-  // R651：地形选点指标（normal 且非自有房才算；地形静态）。
+  // 地形选点指标（normal 且非自有房才算；地形静态）。
   wallRatio?: number;
   swampRatio?: number;
   bestAnchorScore?: number;
@@ -411,7 +411,7 @@ function collectRoomVision(room: Room): RoomVisionIntel {
       });
     }
   }
-  // R651：选点前置指标 —— 只对「可能被 claim 的 normal 非自有房」计算一次
+  // 选点前置指标 —— 只对「可能被 claim 的 normal 非自有房」计算一次
   // （地形静态，落 intel 后终身复用）；highway/sk/自有房不花这份 CPU。
   const terrainIntel = (() => {
     if (!room.name) return {};
@@ -430,7 +430,7 @@ function collectRoomVision(room: Room): RoomVisionIntel {
         : undefined,
       exits: (room.find(FIND_EXIT) ?? []).map(p => ({ x: p.x, y: p.y })),
       mineral: mineral ? { x: mineral.pos.x, y: mineral.pos.y } : undefined,
-      // R651b：回 claim 房布局校验 —— 房内任何 spawn（含无主遗迹）到最佳锚点的距离。
+      // 回 claim 房布局校验 —— 房内任何 spawn（含无主遗迹）到最佳锚点的距离。
       spawns: structures
         .filter(s => s.structureType === STRUCTURE_SPAWN)
         .map(s => ({ x: s.pos.x, y: s.pos.y })),

@@ -224,8 +224,8 @@ describe("constraint-placer — placeStructures", () => {
   });
 });
 
-// P2-N：增量外扩与全量重算的等价性验证 — 红线：placeStructures 输出不得因增量改变。
-describe("constraint-placer — P2-N 增量与全量等价", () => {
+// 增量外扩与全量重算的等价性验证 — 红线：placeStructures 输出不得因增量改变。
+describe("constraint-placer — 增量与全量等价", () => {
   it("无墙地形：增量 r=8 == 全量 r=8", () => {
     const field = computeDistanceField(noWalls);
     const anchor = { x: 25, y: 25 };
@@ -542,8 +542,8 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
   });
 });
 
-// P1-2：tower RCL5+ controller 分桶 + anchor 硬约束（设计文档 §3.7）
-describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
+// tower RCL5+ controller 分桶 + anchor 硬约束
+describe("constraint-placer — tower 分桶 + anchor 硬约束", () => {
   /** 计算 Chebyshev 距离。 */
   const chebyshev = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
     Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));

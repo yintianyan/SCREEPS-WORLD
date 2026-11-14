@@ -1,5 +1,5 @@
 /**
- * E2E-025 hostile/恢复长程统计 — CANARY §5.1（sv=43 当前版本证据）。
+ * E2E-025 hostile/恢复长程统计（sv=43 当前版本证据）。
  * 周期性 invader 注入（塔防击杀）→ 统计敌袭波次、恢复时间（编队回补）、Memory 有界。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";

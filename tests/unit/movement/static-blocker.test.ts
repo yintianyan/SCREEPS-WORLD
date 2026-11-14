@@ -1,4 +1,4 @@
-/** registerStaticBlocker 站桩占位自报测试（v33-R11）。 */
+/** registerStaticBlocker 站桩占位自报测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { preloadStaticBlockers, registerStaticBlocker } from "../../../src/creeps/movement";
 import { resetGlobals } from "../../support/factories";

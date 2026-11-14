@@ -236,7 +236,7 @@ describe("P3 Baseline — 经济基线采集", () => {
 
   it(`rcl4-storage RCL4 标准经济形态（${TICKS} ticks）`, () => {
     const world = new ScenarioBuilder("W1N1")
-      // B3 修正：progress 从 0 起——满值预置会压制 upgrade 观测（P3_BASELINE B3）
+      // 修正：progress 从 0 起——满值预置会压制 upgrade 观测（P3_BASELINE）
       .rcl(4, 0)
       .flat()
       .spawn("Spawn1", 25, 25)

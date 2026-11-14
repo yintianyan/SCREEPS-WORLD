@@ -47,7 +47,7 @@ export const empireStrategySystem: System = {
   run(ctx: TickContext): void {
     // 采集各房战略输入（room-state P0 已在本 tick 更新过这些字段）。
     const rooms: RoomStrategyInput[] = [];
-    // R7a：controller 进度合计（AgendaOutcome 归因 rcl-push 窗口的升级速率）。
+    // controller 进度合计（AgendaOutcome 归因 rcl-push 窗口的升级速率）。
     let totalProgress = 0;
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
@@ -57,7 +57,7 @@ export const empireStrategySystem: System = {
         colonyState: roomMem.colonyState ?? "normal",
         economyPressure: roomMem.economyPressure ?? 0,
         lastHostileAt: roomMem.lastHostileAt,
-        // #198-B：按行凶者身份分尺（room-state 同拍盖章）。战争态只在玩家敌意/
+        // 按行凶者身份分尺（room-state 同拍盖章）。战争态只在玩家敌意/
         // 来源不明时拦扩张，确认仅 NPC 骚扰时解禁；war 姿态与防御响应不变。
         lastInvaderHostileAt: roomMem.lastInvaderHostileAt,
         lastPlayerHostileAt: roomMem.lastPlayerHostileAt,
@@ -72,13 +72,13 @@ export const empireStrategySystem: System = {
     if (!Memory.kernel) Memory.kernel = {};
     const prev = Memory.kernel.strategy;
 
-    // #94：这两个标量就是 `gclHeadroom`（GCL > 房数）与 `bucket ≥ expandMinBucket` 两项的**实际输入**。
+    // 这两个标量就是 `gclHeadroom`（GCL > 房数）与 `bucket ≥ expandMinBucket` 两项的**实际输入**。
     // 取一次、既喂判定又落盘 ⇒ 事后能答出「当时到底是哪一合取项在挡」，而不是只看到 expansionAllowed=false。
     const gclLevel = Game.gcl?.level ?? 1;
     const cpuBucket = Game.cpu.bucket ?? 10000;
 
-    // #186 观测：环境档与合并后的姿态参数集。此前"生效窗到底是几千"只能靠行为反推
-    // （R407 就是这么算错过一次：读 `CONFIG.posture.threatWindow`=3000 而 low 档基线
+    // 观测：环境档与合并后的姿态参数集。此前"生效窗到底是几千"只能靠行为反推
+    // （就是这么算错过一次：读 `CONFIG.posture.threatWindow`=3000 而 low 档基线
     // 覆盖成 5000），所以把合并链最后一层的实际取值与所用档位一起落盘。
     const envInput = buildEnvBaselineInput(rooms);
     const postureOptions = {
@@ -95,9 +95,9 @@ export const empireStrategySystem: System = {
         gclLevel,
         bucket: cpuBucket,
         prev: prev ? { posture: prev.posture, since: prev.since } : undefined,
-        // R4：war 可持续性计数跨 tick 回传（pressure 滞回输入）。
+        // war 可持续性计数跨 tick 回传（pressure 滞回输入）。
         warPressureTicks: prev?.warPressureTicks,
-        // P2-2：per-room CPU 记账 → 扩张 ROI 门禁。从 stats.cpuByHome 汇总
+        // per-room CPU 记账 → 扩张 ROI 门禁。从 stats.cpuByHome 汇总
         // 各房归属 CPU 总量，与有效 CPU limit 对比。CPU 余量不足时拒绝扩张。
         totalCreepCpu: sumCpuByHome(),
         effectiveCpuLimit: Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20),
@@ -116,7 +116,7 @@ export const empireStrategySystem: System = {
           ` (rooms=${rooms.length}, gcl=${Game.gcl?.level ?? 1}, bucket=${Game.cpu.bucket ?? "?"})` +
           ` branch=${result.reason}`,
       );
-      // #140：转换那一拍落盘「从哪条分支走到的」。此前只有日志（人读），复盘时要么靠
+      // 转换那一拍落盘「从哪条分支走到的」。此前只有日志（人读），复盘时要么靠
       // 日志翻页、要么靠 console 现场考古（实测 2 发＋1 发环＋5 处读码仍留 ±5 拍）。
       Memory.kernel.postureChangedAt = Game.time;
       Memory.kernel.postureTransition = {
@@ -144,10 +144,10 @@ export const empireStrategySystem: System = {
       expansionAllowed: result.expansionAllowed,
       newRemoteOpsAllowed: result.newRemoteOpsAllowed,
       warPressureTicks: result.warPressureTicks,
-      // #94：判定实际用到的两个标量，随结果同拍落盘（零额外读盘；缺失时的兜底值=判定值）。
+      // 判定实际用到的两个标量，随结果同拍落盘（零额外读盘；缺失时的兜底值=判定值）。
       gclLevel,
       bucket: cpuBucket,
-      // #186：判定实际用到的参数集＋所用环境档（合并链最后一层，零额外计算）。
+      // 判定实际用到的参数集＋所用环境档（合并链最后一层，零额外计算）。
       params: {
         at: ctx.tick,
         threatWindow: postureOptions.threatWindow,
@@ -160,7 +160,7 @@ export const empireStrategySystem: System = {
       },
     };
 
-    // ── R6a：帝国议程 — 姿态回答状态，议程回答主动目标 ──
+    // ── 帝国议程 — 姿态回答状态，议程回答主动目标 ──
     const prevAgenda = Memory.kernel.agenda;
     const agenda = evaluateAgenda(
       {
@@ -178,7 +178,7 @@ export const empireStrategySystem: System = {
 
     let progressBase = prevAgenda?.progressBase;
     if (prevAgenda?.initiative !== agenda.initiative) {
-      // R7a：退出 rcl-push 时归因窗口收益（controller 进度增量 → 升级速率证据）。
+      // 退出 rcl-push 时归因窗口收益（controller 进度增量 → 升级速率证据）。
       if (prevAgenda?.initiative === "rcl-push" && progressBase !== undefined) {
         const gained = Math.max(0, totalProgress - progressBase);
         const duration = ctx.tick - (prevAgenda.since ?? ctx.tick);
@@ -204,9 +204,9 @@ export const empireStrategySystem: System = {
       progressBase,
     };
 
-    // ── R7a：算力容量 — 规模规划的前馈层（「养得起多大规模」）──
+    // ── 算力容量 — 规模规划的前馈层（「养得起多大规模」）──
     const cpuRate = Memory.kernel.stats?.cpuRate;
-    // #188：这两个值**先取一次再喂判定**，好让落盘的留痕与闸用的数是同一个数。
+    // 这两个值**先取一次再喂判定**，好让落盘的留痕与闸用的数是同一个数。
     // 这只对象**只构造一次**：既喂给判定，又给下面的留痕取信任位 ⇒ 落盘的与闸用的同源。
     // 少了 `rateWindowTicks`／`rateUnsampledTicks` 这两枚，读数人只能看到"usage 等于 avg10"，
     // 却分不出这是**设计上的保守退回**（窗未建立或窗内有漏采）还是选择器判错——线上就撞过一次：
@@ -222,7 +222,7 @@ export const empireStrategySystem: System = {
     };
     const cpuUsagePerTick = pickCpuUsagePerTick(cpuUsageMeasurement);
     const capacityLimit = Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20);
-    // R614：按真实间隔累加升档窗口（empire-strategy 是 5 拍 cadence，逐次 +1 会把
+    // 按真实间隔累加升档窗口（empire-strategy 是 5 拍 cadence，逐次 +1 会把
     // 300 拍窗口拉成 1,500 拍）。heap 记录上次评估拍，reset 后首趟按 1 计。
     const g = globalCache() as { __capacityLastEvalTick?: number };
     const lastEval = g.__capacityLastEvalTick;
@@ -275,8 +275,8 @@ export const empireStrategySystem: System = {
       activeExpansionTarget: Memory.kernel?.expansion?.target,
     });
     const prevSit = Memory.kernel.situation;
-    // 留痕列＝**截断前**的条数（#137/#142 同族）。没有它，「榜里没有他」会被读成「没有对手」，
-    // 「榜里只有 8 家」会被读成「总共 8 家」——而按人归因的敌意记忆（#108/#151）问的正是这个。
+    // 留痕列＝**截断前**的条数。没有它，「榜里没有他」会被读成「没有对手」，
+    // 「榜里只有 8 家」会被读成「总共 8 家」——而按人归因的敌意记忆问的正是这个。
     Memory.kernel.situation = {
       tick: situation.tick,
       adversariesTotal: situation.adversaries.length,
@@ -302,11 +302,11 @@ export const empireStrategySystem: System = {
           ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${capacityLimit})`,
       );
     }
-    // #140：原先这里有 `if (strategy?.posture !== undefined) postureChangedAt = Game.time`，
+    // 原先这里有 `if (strategy?.posture !== undefined) postureChangedAt = Game.time`，
     // 而 `strategy` 在本 tick 早已被覆写成当前姿态 ⇒ 该条件恒真、戳记每拍刷新，
     // 于是"变更发生在哪一拍"永久读不出来。变更戳与分支改到上面真正的转换分支里写。
-    // #188：G6 只读 `tier` 一个词，而"要削多少 CPU 才放行扩张"需要它的**输入**。这几枚标量
-    // 原先只活在决策那一拍的 heap（与 #94 的 gclLevel/bucket、#186 的 params 同族）。
+    // G6 只读 `tier` 一个词，而"要削多少 CPU 才放行扩张"需要它的**输入**。这几枚标量
+    // 原先只活在决策那一拍的 heap（与 gclLevel/bucket、params 同族）。
     // `usage` 与 (`avg10`,`rateTotal`) 并记 ⇒ 读者能看出走了哪条腿，但**不在这里复刻** pickCpuUsagePerTick
     // 的信任规则（同一规则写两处必然漂移）。
     Memory.kernel.capacity = {
@@ -330,7 +330,7 @@ export const empireStrategySystem: System = {
       },
     };
 
-    // ── P1-3：环境画像 — 低频采样（每 100 tick），getAllOrders 是 CPU 大户 ──
+    // ── 环境画像 — 低频采样（每 100 tick），getAllOrders 是 CPU 大户 ──
     if (ctx.tick % 100 === 0) {
       sampleEnvironment(ctx);
     }
@@ -344,7 +344,7 @@ export const empireStrategySystem: System = {
 };
 
 /**
- * P1-3：环境画像采样。采集市场可用性 + 邻居密度 + GCL 趋势，
+ * 环境画像采样。采集市场可用性 + 邻居密度 + GCL 趋势，
  * 写入 Memory.kernel.environment 供策略层消费。
  * 每 100 tick 调用一次（getAllOrders ~0.5-1 CPU，不可每 tick 调）。
  */
@@ -422,11 +422,11 @@ function sumCpuByHome(): number {
  * 展开为 PostureOptions 部分覆盖对象。
  * key 格式 "posture.<paramName>" → 取 paramName 作为覆盖 key。
  * 畸形数据（value 非数字）静默跳过。
- * #89：**过期条目也跳过** ⇒ 回落到 CONFIG/DEFAULT 基线。不撤销 Memory 里的条目本身——
+ * **过期条目也跳过** ⇒ 回落到 CONFIG/DEFAULT 基线。不撤销 Memory 里的条目本身——
  * 条件若仍在，复盘会按 ≥1 冷却重写并自动续期；条件消失则到点失效。
  * 必要性：复盘规则里有「No-Progress 且 netFlow 停滞 → 放宽 `expandMaxPressure`」，
  * 也就是自进化层能改写**扩张闸的输入**；没有有效期的话，一次瞬时状态就能永久压低标准。
- * （#89：导出只为让"过期即回落基线"这条消费侧行为落在单元测试里——系统级 e2e 里 `safeRun` 会吞错，
+ * （导出只为让"过期即回落基线"这条消费侧行为落在单元测试里——系统级 e2e 里 `safeRun` 会吞错，
  * 跑不出可比断言，别把那条路当覆盖。）
  */
 export function resolveStrategyOverrides(

@@ -1,4 +1,4 @@
-/** R590 贫困闸 + Phase 2.5 低储节流：远矿首孵/扩编需 storage ≥ expansionMinStorage(100K)；替换只受深贫困地板(4,000)约束。 */
+/** 贫困闸 + 低储节流：远矿首孵/扩编需 storage ≥ expansionMinStorage(100K)；替换只受深贫困地板(4,000)约束。 */
 import { describe, expect, it } from "vitest";
 import { remoteSpawnPovertyBlocked } from "../../../src/systems/room/spawn-manager";
 import { CONFIG } from "../../../src/config";

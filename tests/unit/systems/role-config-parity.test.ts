@@ -29,13 +29,13 @@ describe("bootstrap 注册角色与 CONFIG.roles 的一致性", () => {
 });
 
 /**
- * R6 守卫：TUNABLE_ROLES ↔ CONFIG.roles 双向一致。
+ * 守卫：TUNABLE_ROLES ↔ CONFIG.roles 双向一致。
 
- * 评审 R6（remediation-plan Batch 4 验收追加）发现：
+ * 评审发现：
  * tuned.ts 注释称对齐由 role-config-parity 断言，但该测试只覆盖
  * CONFIG.roles ↔ bootstrap 注册表。新增第 14 个角色时 TUNABLE_ROLES
  * 静默漏配 — 无钳制（ROLE_PARAM_MAP 缺项 → clampParam no-op）、
- * 无 bounds 快照，正是 P1-I 要消灭的漂移类别断在最后一环。
+ * 无 bounds 快照，正是版本戳机制要消灭的漂移类别断在最后一环。
 
  * 本组断言补齐闭环：CONFIG.roles 增减角色时 TUNABLE_ROLES 必须同步，
  * 否则 tuning-engine 接管该角色时无钳制可施加，evaluator 可写出离谱值。

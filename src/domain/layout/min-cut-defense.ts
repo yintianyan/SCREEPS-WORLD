@@ -49,7 +49,7 @@ export function computeMinCutDefense(
   exitPositions: readonly { x: number; y: number }[],
   maxRamparts = 30,
   /**
-   * P2-1：不可放置割集顶点的位置（packed x*50+y）— 其拆点边容量 INF（不可切割），
+   * 不可放置割集顶点的位置（packed x*50+y）— 其拆点边容量 INF（不可切割），
    * 算法自然选其他位置，保证割集全部可建造。典型：出口紧邻区域、已有 site。
    */
   blockedPositions?: ReadonlySet<number>,
@@ -92,7 +92,7 @@ export function computeMinCutDefense(
     const vIn = nodeId(x, y, false);
     const vOut = nodeId(x, y, true);
 
-    // 拆点边 v_in→v_out：Source/Sink/blocked（P2-1）容量 INF 不可切割，普通格容量 1。
+    // 拆点边 v_in→v_out：Source/Sink/blocked 容量 INF 不可切割，普通格容量 1。
     const isSource = exitSet.has(packed);
     const isSink = coreSet.has(packed);
     const isBlocked = blockedPositions?.has(packed) ?? false;
