@@ -1,5 +1,6 @@
 /** Economy Metrics — 经济指标-11）。 */
 
+import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import { registerMetricGauge } from "../Telemetry";
 import { setGauge } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
@@ -66,8 +67,8 @@ export function collectEconomyMetrics(snapshots: Iterable<RoomSnapshot>): void {
       const roomMem = Memory.rooms[snap.roomName];
       const econSnap = roomMem?.economy;
       if (econSnap) {
-        const income = econSnap.ei / 10;
-        const net = econSnap.nf / 100;
+        const income = econSnap.ei / ECONOMY_SNAPSHOT_SCALE.ei;
+        const net = econSnap.nf / ECONOMY_SNAPSHOT_SCALE.nf;
         const expense = income - net;
 
         setGauge("screeps_economy_energy_income", Math.round(income * 100) / 100, labels);

@@ -1,4 +1,5 @@
 /** Logistics 系统 */
+import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import type { System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { EventKind, recordEvent } from "../../kernel/event-log";
@@ -186,7 +187,9 @@ export const logisticsSystem: System = {
       // Economy → Logistics 的反馈闭环实例（任务书 §26）。
       const econSnap = Memory.rooms[roomName]?.economy;
       const shrink =
-        econSnap !== undefined && econSnap.cr > 0 && econSnap.rb / 10 < cfg.shrinkRiskBufferTicks;
+        econSnap !== undefined &&
+        econSnap.cr > 0 &&
+        econSnap.rb / ECONOMY_SNAPSHOT_SCALE.rb < cfg.shrinkRiskBufferTicks;
       const finalReqs = applyShrink(reqs, shrink);
 
       // 注册表对账：登记新 key / 过期回执（不静默丢单）/ 清失联项。

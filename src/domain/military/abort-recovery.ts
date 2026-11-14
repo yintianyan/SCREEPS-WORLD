@@ -1,5 +1,6 @@
 /** Abort Recovery Mapping */
 
+import type { WarOutcome } from "../war/planning";
 import type { RecoveryAction, RecoveryActionType } from "../strategy/recovery-priority";
 import type { FailureDomain } from "../strategy/failure-propagation";
 
@@ -16,8 +17,8 @@ export type WarAbortReason =
   | "INTEL_STALE" // 授权证据断供超窗 → 撤军（不判负）
   | "TARGET_SWITCH"; // A5 改判新目标 → 旧编队收摊（不判负）
 
-/** 战后核验结果。 */
-export type WarOutcome = "success" | "failure" | "unknown";
+/** 战后核验结果 — 唯一定义在 domain/war/planning（本模块 re-export 兼容既有读者）。 */
+export type { WarOutcome };
 
 // ═══════════════════════════════════════════════════════════
 // §2. WarAbortSignal（与 globalCache.warAbortSignals 结构一致）

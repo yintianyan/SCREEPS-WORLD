@@ -1,3 +1,4 @@
+import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import { CONFIG } from "../../config";
 import { bodyCost, degradeBody } from "../../config/bodies";
 import { getRoleBounds } from "../../config/tuned";
@@ -824,7 +825,7 @@ export function trySpawn(
   if (
     econSnap !== undefined &&
     econSnap.cr > 0 &&
-    econSnap.rb / 10 < CONFIG.spawn.lowRiskBufferTicks
+    econSnap.rb / ECONOMY_SNAPSHOT_SCALE.rb < CONFIG.spawn.lowRiskBufferTicks
   ) {
     reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }

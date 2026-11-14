@@ -1,4 +1,9 @@
 /** Empire Economy 系统 */
+import {
+  EMPIRE_ECONOMY_SCALE,
+  HEALTH_CODES,
+  type EmpireEconomySnapshot,
+} from "../../domain/economy/empire-snapshot";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
@@ -36,63 +41,6 @@ import { identifyBottlenecks } from "../../domain/economy/bottleneck";
 import type { ResourceHealthStatus } from "../../domain/economy/resource-health";
 import type { ResourceType } from "../../domain/operation/agenda-item";
 import { log } from "../../kernel/log";
-
-/**
- * Empire Economy 瘦快照（写入 Memory.kernel.empireEconomy）。
- * 只存必要 Summary——不复制完整 RoomState（MEMORY_ARCHITECTURE §4）。
- */
-interface EmpireEconomySnapshot {
-  /** 采样 tick。 */
-  t: number;
-  /** 帝国总能量。 */
-  te: number;
-  /** 帝国总生产 ×10。 */
-  tp: number;
-  /** 帝国总净流 ×100。 */
-  nf: number;
-  /** 帝国总储备。 */
-  tr: number;
-  /** 最差风险缓冲 ×10。 */
-  rb: number;
-  /** 平均效率 ×100。 */
-  ef: number;
-  /** 健康度枚举编码。 */
-  h: number;
-  /** deficit 房间数。 */
-  dr: number;
-  /** surplus 房间数。 */
-  sr: number;
-  /** 是否有 Imbalance。 */
-  im: number;
-  /** 扩张就绪度枚举编码。 */
-  er: number;
-  /** 安全边际分数 ×100。 */
-  sm: number;
-  /** 扩张预算。 */
-  eb: number;
-  /** 自由预算。 */
-  fb: number;
-  /** 储备预算。 */
-  rr: number;
-  // ── A4.2 多资源维度 ──
-  /** 多资源帝国健康度编码。 */
-  mh: number;
-  /** 是否有矿物缺口。 */
-  md: number;
-  /** 瓶颈资源编码（0 = energy, 1-7 = U/L/K/Z/O/H/X, 99 = none）。 */
-  bn: number;
-  /** 最差矿物健康度编码。 */
-  wmh: number;
-}
-
-/** 健康度编码（节省 Memory 字符）。 */
-const HEALTH_CODES: Record<string, number> = {
-  critical: 0,
-  deficit: 1,
-  stable: 2,
-  growing: 3,
-  healthy: 4,
-};
 
 /** 扩张就绪度编码。 */
 const READINESS_CODES: Record<string, number> = {
@@ -404,17 +352,17 @@ export const empireEconomySystem: System = {
     const snapshot: EmpireEconomySnapshot = {
       t: ctx.tick,
       te: resourceView.totalEnergy,
-      tp: Math.round(resourceView.totalProduction * 10),
-      nf: Math.round(resourceView.totalNetFlow * 100),
+      tp: Math.round(resourceView.totalProduction * EMPIRE_ECONOMY_SCALE.tp),
+      nf: Math.round(resourceView.totalNetFlow * EMPIRE_ECONOMY_SCALE.nf),
       tr: resourceView.totalReserve,
-      rb: Math.round(resourceView.minRiskBuffer * 10),
-      ef: Math.round(resourceView.avgEfficiency * 100),
+      rb: Math.round(resourceView.minRiskBuffer * EMPIRE_ECONOMY_SCALE.rb),
+      ef: Math.round(resourceView.avgEfficiency * EMPIRE_ECONOMY_SCALE.ef),
       h: HEALTH_CODES[health.health] ?? 0,
       dr: imbalance.deficitCount,
       sr: imbalance.surplusCount,
       im: imbalance.hasImbalance ? 1 : 0,
       er: READINESS_CODES[readiness.readiness] ?? 0,
-      sm: Math.round(safetyMargin.score * 100),
+      sm: Math.round(safetyMargin.score * EMPIRE_ECONOMY_SCALE.sm),
       eb: budget.expansion,
       fb: budget.free,
       rr: budget.reserve,

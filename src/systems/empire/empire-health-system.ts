@@ -1,4 +1,5 @@
 /** Empire Health System */
+import { EMPIRE_ECONOMY_SCALE, HEALTH_NAMES_BY_CODE } from "../../domain/economy/empire-snapshot";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import {
@@ -134,7 +135,7 @@ export const empireHealthSystem: System = {
     // 从 empireEconomy snapshot 获取经济数据
     const empireEcon = Memory.kernel?.empireEconomy;
     if (empireEcon) {
-      netFlowHistory.push(empireEcon.nf / 100); // 编码为 ×100
+      netFlowHistory.push(empireEcon.nf / EMPIRE_ECONOMY_SCALE.nf);
       reserveHistory.push(empireEcon.tr);
     }
 
@@ -291,9 +292,8 @@ function deriveEnergyHealth(_g: ReturnType<typeof globalCache>): DimensionResult
   if (!econ) {
     return { level: "stable", score: 0.75, evidence: "no-economy-data" };
   }
-  // econ.h 是 HEALTH_CODES 编码的 economic health
-  // 0=critical, 1=deficit, 2=stable, 3=growing, 4=healthy
-  const healthStr = ["critical", "deficit", "stable", "growing", "healthy"][econ.h] ?? "stable";
+  // econ.h 是 HEALTH_CODES 编码的 economic health（码表唯一真源=empire-snapshot）
+  const healthStr = HEALTH_NAMES_BY_CODE[econ.h] ?? "stable";
   const level = mapEconomicHealth(healthStr);
   return { level, score: dimensionScore(level), evidence: `economic=${healthStr}` };
 }

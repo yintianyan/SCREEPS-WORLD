@@ -1,3 +1,5 @@
+import type { EmpireEconomySnapshot } from "../domain/economy/empire-snapshot";
+import type { EconomyMemorySnapshot } from "../domain/economy/accounting";
 import type { CreepMode, ColonyState, TaskKind, CpuTier } from "../kernel/contracts";
 import type { ColonyPhase } from "../domain/economy/phase";
 import type { RoomTuningState } from "../domain/tuning/types";
@@ -194,39 +196,8 @@ declare global {
      * 字段镜像 domain/economy/accounting.EconomyMemorySnapshot（整数化短字段，
      * STATE_OWNERSHIP §2 Memory 白名单）。消费只经 queryEconomy() 公开接口。
      */
-    economy?: {
-      /** 采样 tick。 */
-      t: number;
-      /** 净流 EMA ×100（能量/tick）。 */
-      nf: number;
-      /** 合同储备（storage+terminal+link 水位）。 */
-      cr: number;
-      /** 风险缓冲 tick 数 ×10。 */
-      rb: number;
-      /** 最近一窗 drift。 */
-      dr: number;
-      /** 估计收入 ×10（能量/tick）。 */
-      ei: number;
-      /** 效率系数 ×100。 */
-      ef: number;
-      /**
-       * 资本支出 EMA ×100（能量/tick，自有+远矿工地的 `built` 桶）。
-       * 只喂失血闸（`kernel.brakeNetFlow`），不进 nf/G4。零值与缺列都不入账 ⇒
-       * 读侧 `?? 0`，语义是「本窗没有资本支出」，不是「没测到」。
-       */
-      cx?: number;
-      /** 最近一窗各桶增量（能量，零值不入账）—— drift 点名哪个记账项缺/多。 */
-      bk?: Record<string, number>;
-      /** 最近一窗池快照 [trackedStart, trackedEnd, otherStart, otherEnd, looseDelta]。 */
-      pl?: number[];
-      /** 最近一窗在途背包能量 [carryStart, carryEnd] —— 跨窗残差的判别量（见 #23(2)）。 */
-      ce?: number[];
-      /**
-       * 长视界 drift 累计 [Σdrift, ΣflowBalance, Σticks] —— 把"窗边界振荡"与"单向漏账"
-       * 分开的判别量，见 domain/economy/accounting.EconomyMemorySnapshot.ws。
-       */
-      ws?: number[];
-    };
+    /** 能量核算瘦快照（编码唯一真源=domain/economy/accounting.ECONOMY_SNAPSHOT_SCALE；消费经 queryEconomy）。 */
+    economy?: EconomyMemorySnapshot;
     /**
      * 资源流量状态（economy 每 50 拍窗口写，Phase A 观测 + 停止阀输入）：
      * 契约表 §6 的状态机结果按资源投影。消费方经
@@ -1194,33 +1165,8 @@ declare global {
      * 帝国级经济聚合指标——总能量/生产/净流/储备/健康度/扩张就绪度/预算。
      * 只存 Summary，不复制完整 RoomState（MEMORY_ARCHITECTURE §4）。
      */
-    empireEconomy?: {
-      t: number;
-      te: number;
-      tp: number;
-      nf: number;
-      tr: number;
-      rb: number;
-      ef: number;
-      h: number;
-      dr: number;
-      sr: number;
-      im: number;
-      er: number;
-      sm: number;
-      eb: number;
-      fb: number;
-      rr: number;
-      // ── A4.2 多资源维度 ──
-      /** 多资源帝国健康度编码（0=critical..4=healthy）。 */
-      mh: number;
-      /** 是否有矿物缺口（0/1）。 */
-      md: number;
-      /** 瓶颈资源编码（0=energy, 1-7=U/L/K/Z/O/H/X, 99=none）。 */
-      bn: number;
-      /** 最差矿物健康度编码（0=critical..4=healthy, 4=无矿物数据）。 */
-      wmh: number;
-    };
+    /** 帝国经济瘦快照（编码唯一真源=domain/economy/empire-snapshot）。 */
+    empireEconomy?: EmpireEconomySnapshot;
     /**
      * A3.0 帝国议程（agenda-manager 每 100t 写入）— 跨房调拨 Operation 生命周期。
      * 只存活跃 + 归档保留期内的终态 Operation；终态超 1000t 清理。

@@ -458,7 +458,6 @@ describe("R13 同名导出唯一（定义权守卫）", () => {
     "RiskResult",
     "TargetCandidate",
     "ThreatLevel",
-    "WarOutcome",
   ]);
 
   it("export 的 type/interface/enum/class/const 名全仓唯一（豁免台账外）", () => {

@@ -1,4 +1,5 @@
 /** Economy 系统 — 能量收支核算（模块 1.5，SYSTEM_BOUNDARIES §1.5 合同）。 */
+import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { globalCache, bumpEnergyCounter, type RoomEnergyCounters } from "../../kernel/global-cache";
 import { EventKind, recordEvent } from "../../kernel/event-log";
@@ -185,7 +186,7 @@ export function queryEconomy(roomName: string): EconomyQuery | undefined {
   return {
     tick: mem.t,
     netFlow: mem.nf / 100,
-    capexFlow: (mem.cx ?? 0) / 100,
+    capexFlow: (mem.cx ?? 0) / ECONOMY_SNAPSHOT_SCALE.cx,
     contractReserve: mem.cr,
     riskBuffer: mem.rb / 10,
     drift: mem.dr,
@@ -277,11 +278,11 @@ export const economySystem: System = {
         st.lastPools = { ...pools };
         // Memory 快照恢复平滑值（仅首见时；断档重播种保留既有 EMA）。
         if (st.netFlowEma === undefined && roomMem.economy) {
-          st.netFlowEma = roomMem.economy.nf / 100;
-          st.effFactor = roomMem.economy.ef / 100;
+          st.netFlowEma = roomMem.economy.nf / ECONOMY_SNAPSHOT_SCALE.nf;
+          st.effFactor = roomMem.economy.ef / ECONOMY_SNAPSHOT_SCALE.ef;
           // cx 是新列：换码后的旧快照里没有它 —— 缺键按 0 播种（不是回退到 nf，
           // 那会把「没测过」伪装成「测过且等于净流」）。
-          st.capexEma = (roomMem.economy.cx ?? 0) / 100;
+          st.capexEma = (roomMem.economy.cx ?? 0) / ECONOMY_SNAPSHOT_SCALE.cx;
         }
         continue;
       }

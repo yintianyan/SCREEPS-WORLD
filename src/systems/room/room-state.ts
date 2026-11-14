@@ -1,3 +1,4 @@
+import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import { flipLatch } from "../../core/scale";
 import { INVADER_USERNAME } from "../../domain/intel";
 import { CONFIG } from "../../config";
@@ -313,8 +314,8 @@ export const roomStateSystem: System = {
       // 基于 economy 系统核算的 netFlow EMA 和 estimatedIncome；未核算过时为中性 0.5。
       const econMem = roomMem.economy;
       if (econMem) {
-        const nf = econMem.nf / 100;
-        const ei = econMem.ei / 10;
+        const nf = econMem.nf / ECONOMY_SNAPSHOT_SCALE.nf;
+        const ei = econMem.ei / ECONOMY_SNAPSHOT_SCALE.ei;
         roomMem.energyPrice = computeEnergyPrice(nf, ei);
       } else {
         roomMem.energyPrice = 0.5;

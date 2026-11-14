@@ -474,6 +474,9 @@ export function estimateIncome(sourceCount: number, effFactor: number): number {
 
 // ─── Memory 瘦快照（schema v37）─────────────────────────────
 
+/** 缩放键的缩放倒数表 — 写端乘数与读者除数的唯一真源；×1 字段（t/cr/dr/bk/pl/ce/ws）直读即真值。 */
+export const ECONOMY_SNAPSHOT_SCALE = { nf: 100, rb: 10, ei: 10, ef: 100, cx: 100 } as const;
+
 /** Memory.rooms[r].economy 瘦快照——整数化短字段（STATE_OWNERSHIP §2 白名单）。 */
 export interface EconomyMemorySnapshot {
   /** 采样 tick。 */
@@ -548,16 +551,16 @@ export function toMemorySnapshot(
 ): EconomyMemorySnapshot {
   const snap: EconomyMemorySnapshot = {
     t: tick,
-    nf: Math.round((netFlowEma ?? 0) * 100),
+    nf: Math.round((netFlowEma ?? 0) * ECONOMY_SNAPSHOT_SCALE.nf),
     cr: Math.round(reserve),
-    rb: Math.round(riskBuffer * 10),
+    rb: Math.round(riskBuffer * ECONOMY_SNAPSHOT_SCALE.rb),
     dr: Math.round(drift),
-    ei: Math.round(estimatedIncome * 10),
-    ef: Math.round(effFactor * 100),
+    ei: Math.round(estimatedIncome * ECONOMY_SNAPSHOT_SCALE.ei),
+    ef: Math.round(effFactor * ECONOMY_SNAPSHOT_SCALE.ef),
   };
   // 零值不留痕（与 bk 同规矩）：读侧一律 `?? 0`，缺键＝「本窗无资本支出」，不是「指标坏了」。
-  if (capexEma !== undefined && Math.round(capexEma * 100) !== 0) {
-    snap.cx = Math.round(capexEma * 100);
+  if (capexEma !== undefined && Math.round(capexEma * ECONOMY_SNAPSHOT_SCALE.cx) !== 0) {
+    snap.cx = Math.round(capexEma * ECONOMY_SNAPSHOT_SCALE.cx);
   }
   if (w) {
     const buckets: Record<string, number> = {};
@@ -615,8 +618,8 @@ export function fromMemorySnapshot(s: Partial<EconomyMemorySnapshot> | undefined
 } {
   if (!s) return { netFlowEma: undefined, effFactor: undefined };
   return {
-    netFlowEma: typeof s.nf === "number" ? s.nf / 100 : undefined,
-    effFactor: typeof s.ef === "number" ? s.ef / 100 : undefined,
+    netFlowEma: typeof s.nf === "number" ? s.nf / ECONOMY_SNAPSHOT_SCALE.nf : undefined,
+    effFactor: typeof s.ef === "number" ? s.ef / ECONOMY_SNAPSHOT_SCALE.ef : undefined,
   };
 }
 
