@@ -77,18 +77,24 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
    阈值/账本前先搜全仓是否已有同语义定义；发现第二处立即收敛到一处，不并存。
 3. **镜像钉死**：需要 Memory 侧快照/镜像的数据，镜像值必须由源定义推导（内联进源
    定义或由源生成），禁止手工维护平行副本。
-4. **尺度原语**：迟滞（flipLatch）、EMA（emaSample）等复用共享原语实现；需要新尺度
-   行为时先立原语再使用，禁止就地重写第 N 份。
+4. **尺度原语**：迟滞（flipLatch）、EMA（emaSample）等复用 `src/core/scale.ts` 的
+   共享原语实现；需要新尺度行为时先立原语再使用，禁止就地重写第 N 份。
 5. **序列化边界**：数值进 Memory 前的单位/缩放换算只在序列化边界做一次，域内数值
    保持单一表单。
 
 ## 事件与类型纪律（强制）
 
-1. **判别联合收口**：事件定义在 `src/kernel/event-log.ts` 的 `GameEvent` 判别联合
-   （kind 为判别键）。新增事件必须新增 kind 并入联合、payload 字段入联合定义，
-   禁止绕过联合类型旁路发射。
-2. **消费端穷尽**：消费事件用 kind 判别；typecheck 必须能捕捉未处理的新 kind。
-3. **载荷 schema 化**：事件载荷进 Memory/持久化前走 schema 化字段，禁止随手挂自由字段。
+事件系统在 `src/kernel/event-log.ts`，形态是「数值枚举判别 + 映射类型约束 + 紧凑编码」：
+
+1. **kind 枚举判别**：`EventKind` 是数值枚举（每个成员的语义与载荷编码写在成员
+   注释里）；存储结构 `GameEvent` 是紧凑定形 `{t, k, r, d: number[]}`，`d` 按 kind
+   解释——禁在结构上随手挂自由字段。
+2. **映射类型约束发射面**：新增事件必须新增 `EventKind` 成员并在 `EventPayloadMap`
+   中给出 payload 类型，经唯一发射口 `recordTyped(kind, room, payload)` 发射——
+   payload 形状由 `EventPayloadMap[K]` 编译期强制。禁止绕过 `recordTyped`
+   直接调 `recordEvent`/`packEventPayload` 旁路发射。
+3. **消费端按 k 判别解包**：消费侧从 segment 读出事件后按 kind 分派；新增 kind
+   时同步补齐消费语义，不允许「发了没人读」的哑事件长期存在。
 
 ## Commit Message（强制）
 
@@ -109,16 +115,20 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
 ### 内核与调度（`src/kernel/`）
 
 - 内核只维护运行秩序，不感知具体角色或经济策略。
-- 四档 bucket 看门狗（Healthy/Guarded/Conserve/Recovery）：软/硬上限按
-  `Game.cpu.limit` 比例化；降级立即生效，恢复需滞回。
-- 所有系统与 creep 走 `safeRun`，单点错误不得中断整 tick；非关键连续失败 3 次进入
-  50–200 tick 冷却（P0 永不冷却）；相同错误每 25 tick 限流。
+- CPU 档位 `CpuTier` 四档（`healthy/guarded/conserve/recovery`）：档位阈值与软/硬
+  上限比例定义在 `CONFIG.cpu.tiers` / `CONFIG.cpu.limits`，软/硬上限按 `Game.cpu.limit`
+  比例化；降级立即生效，恢复需滞回（recoveryHysteresis + recoveryTicks）。
+- 所有系统与 creep 走 `safeRun`，单点错误不得中断整 tick；非关键插件连续失败 3 次
+  进入冷却，时长随计数真递增（80→90→…→200 tick 封顶，计数不清零，成功一次才归零）；
+  P0 只限流不冷却；相同错误每 label 每 25 tick 限流。
 
 ### 内存与迁移（`src/kernel/memory.ts`）
 
 - Memory 只存 ID、枚举、少量数字和短 key；禁止写入完整路径/历史/运行时索引。
-- **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；所有
-  步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。新增 Memory 字段须同时
+- **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段
+  （必要时用迁移的 `ready()` 前置门）。迁移链逐步推进 `Memory.schemaVersion`（每步
+  成功即写），并以 `Memory.kernel.migrationCheckpoint` 记录已到达版本——checkpoint
+  只前进不后退，配合幂等迁移保证回滚代码重跑不破坏状态。新增 Memory 字段须同时
   更新类型与迁移（以 `CONFIG.memory` 为单一真相源；数字仅为快照）。冷数据走
   RawMemory segment。
 
@@ -143,13 +153,15 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
 
 - Spawn Manager 是**唯一**能调用 `spawnCreep` 的模块，角色不得自行孵化。
 - 请求按稳定 key 幂等合并，`spawning` 与已提交请求须计入人口；P0 灾后恢复优先，
-  可用能量达 200 立即生成 `[WORK,CARRY,MOVE]`；队列带黑名单冷却、
-  请求撤销通道与 `recycle` 回收通道。
+  recovery 档 body 始终为 `[WORK,CARRY,MOVE]`（成本 200，见 `CONFIG` bodies 的
+  recovery 定义）；队列带黑名单冷却（按 TTL 窗口）、请求撤销通道（需求前提消失
+  立即出队）与 `recycle` 回收通道。
 
 ### 建造与布局（`src/systems/room/construction-manager.ts`、`src/systems/remote/remote-mining-manager.ts`、`src/domain/layout/`、`src/systems/room/layout-planner.ts`）
 
-- site 创建仅两个写者：construction-manager（自有房）+ remote-mining-manager
-  （远矿房）；角色层只写 `needContainer` 申请标记。
+- site 创建仅两个写者：construction-manager（自有房）+ road-planner（远矿 road 与
+  container）；角色层禁止调 `createConstructionSite`，远矿 container 需求只写
+  `needContainer` 申请标记。
 - `CONFIG.construction.maxNormalLaneSites`（7）是 normal / development 车道的名额，
   **不是帝国 site 总量**：critical / storage / container / road / wall / rampart 走每房
   配额，emergency 重建道不查此值（理由见 config 注释）。每房最多 3 normal + 2 road +
