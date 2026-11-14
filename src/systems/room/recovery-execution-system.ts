@@ -10,6 +10,7 @@ function getCreepCache(): Creep[] {
   }
   return __creepCache.creeps;
 }
+import { recordTyped } from "../../kernel/event-log";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
@@ -58,7 +59,7 @@ import {
   mapAbortSignalsToRecoveryActions,
   type WarAbortSignal,
 } from "../../domain/military/abort-recovery";
-import { recordEvent, EventKind } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import type { TacticalAbortSignal } from "../../domain/tactical";
 
@@ -1146,11 +1147,11 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
             });
             if (Memory.kernel) Memory.kernel.escalations = esc.list;
             if (esc.shouldEmit) {
-              recordEvent(EventKind.RecoveryEscalation, escRoom, [
-                newRecord.attempts,
-                newRecord.state === "terminal" ? 1 : 0,
-                esc.repeats,
-              ]);
+              recordTyped(EventKind.RecoveryEscalation, escRoom, {
+                attempts: newRecord.attempts,
+                terminal: newRecord.state === "terminal" ? 1 : 0,
+                repeats: esc.repeats,
+              });
             }
             log.info(
               "recovery",
@@ -1368,11 +1369,12 @@ function consumeWarAbortSignals(g: ReturnType<typeof globalCache>, tick: number)
   // 记录 Decision Trace 事件
   if (actions.length > 0) {
     const action = actions[0]!;
-    recordEvent(EventKind.WarOutcome, signal.targetRoom, [
-      -1, // 特殊编码：Recovery triggered
-      signal.spawned,
-      actions.length,
-    ]);
+    // outcomeCode=-1 是 Recovery 触发的特殊编码
+    recordTyped(EventKind.WarOutcome, signal.targetRoom, {
+      outcomeCode: -1,
+      spawned: signal.spawned,
+      reasonCode: actions.length,
+    });
     log.info(
       "recovery",
       `[${tick}] recovery: WAR_ABORT consumed` +

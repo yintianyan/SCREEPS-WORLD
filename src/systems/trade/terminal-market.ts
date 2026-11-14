@@ -1,7 +1,8 @@
 /** Terminal 市场交易 — 行情快照缓存、deal 执行与各资源通道的买卖动作。 */
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import type { RoomSnapshot, TickContext } from "../../kernel/contracts";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import { globalCache, bumpEnergyCounter } from "../../kernel/global-cache";
 import { energyBuyAmount, energySellAmount } from "../../domain/economy/energy-logistics";
@@ -596,7 +597,7 @@ export function trySellPixel(): void {
   // 账户交易：无 roomName（pixel 不从 terminal 出货、无能量运费）。
   const amount = Math.min(pixels, best.amount);
   if (Game.market.deal(best.id, amount) === OK) {
-    recordEvent(EventKind.EnergyTransfer, "", [amount]);
+    recordTyped(EventKind.EnergyTransfer, "", { amount });
     log.info("terminal", `[${Game.time}] pixel: 卖出 ${amount} pixel @ ${best.price}`);
   }
 }

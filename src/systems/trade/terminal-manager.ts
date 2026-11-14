@@ -1,7 +1,8 @@
 /** Terminal Manager — 候选调度与 Decision Authority；交易动作用于 terminal-market，互济用于 terminal-selfaid。 */
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import {
   planSellOrder,
@@ -521,7 +522,7 @@ function tryPlanDrivenSend(
     // 执行 send
     const result = terminal.send(resource, req.amount, req.destination.room);
     if (result === OK) {
-      recordEvent(EventKind.MineralTransfer, req.destination.room, [req.amount]);
+      recordTyped(EventKind.MineralTransfer, req.destination.room, { amount: req.amount });
       log.info(
         "terminal",
         `[${Game.time}] terminal/plan-driven: ${snapshot.roomName} → ${req.destination.room}` +

@@ -1,5 +1,6 @@
 /** Telemetry Collector */
 
+import { packEventPayload } from "../kernel/event-log";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { globalCache, type CpuRateSnapshot } from "../kernel/global-cache";
@@ -760,10 +761,18 @@ function detectAndFlushEvents(_tick: number, ctx: TickContext): void {
     const currRank = tierRank(currentTier);
     if (currRank > prevRank) {
       drainEventBuffer(); // 先 flush 显式事件
-      pushEventDirect(EventKind.TierDowngrade, "", [prevRank, currRank]);
+      pushEventDirect(
+        EventKind.TierDowngrade,
+        "",
+        packEventPayload(EventKind.TierDowngrade, { fromRank: prevRank, toRank: currRank }),
+      );
     } else {
       drainEventBuffer();
-      pushEventDirect(EventKind.TierUpgrade, "", [prevRank, currRank]);
+      pushEventDirect(
+        EventKind.TierUpgrade,
+        "",
+        packEventPayload(EventKind.TierUpgrade, { fromRank: prevRank, toRank: currRank }),
+      );
     }
   }
   prev.tier = currentTier;
@@ -786,10 +795,14 @@ function detectAndFlushEvents(_tick: number, ctx: TickContext): void {
       currentPhase !== undefined &&
       prevRoom.phase !== currentPhase
     ) {
-      pushEventDirect(EventKind.PhaseTransition, roomName, [
-        phaseRank(prevRoom.phase),
-        phaseRank(currentPhase),
-      ]);
+      pushEventDirect(
+        EventKind.PhaseTransition,
+        roomName,
+        packEventPayload(EventKind.PhaseTransition, {
+          fromCode: phaseRank(prevRoom.phase),
+          toCode: phaseRank(currentPhase),
+        }),
+      );
       // 进入 crisis 计数
       if (currentPhase === "crisis") {
         incrementCrisisCount();
@@ -804,17 +817,25 @@ function detectAndFlushEvents(_tick: number, ctx: TickContext): void {
       currentColony !== undefined &&
       prevRoom.colonyState !== currentColony
     ) {
-      pushEventDirect(EventKind.ColonyStateChange, roomName, [
-        colonyStateRank(prevRoom.colonyState),
-        colonyStateRank(currentColony),
-      ]);
+      pushEventDirect(
+        EventKind.ColonyStateChange,
+        roomName,
+        packEventPayload(EventKind.ColonyStateChange, {
+          fromCode: colonyStateRank(prevRoom.colonyState),
+          toCode: colonyStateRank(currentColony),
+        }),
+      );
     }
     prev.rooms[roomName].colonyState = currentColony;
 
     // RCL 变化
     const currentRcl = snapshot.rcl;
     if (prevRoom.rcl !== undefined && prevRoom.rcl !== currentRcl && currentRcl > prevRoom.rcl) {
-      pushEventDirect(EventKind.ControllerLevelUp, roomName, [prevRoom.rcl, currentRcl]);
+      pushEventDirect(
+        EventKind.ControllerLevelUp,
+        roomName,
+        packEventPayload(EventKind.ControllerLevelUp, { prevRcl: prevRoom.rcl, rcl: currentRcl }),
+      );
     }
     prev.rooms[roomName].rcl = currentRcl;
 
@@ -834,14 +855,22 @@ function detectAndFlushEvents(_tick: number, ctx: TickContext): void {
             else if (p.type === ATTACK) melee++;
           }
         }
-        pushEventDirect(EventKind.EnemyInvasion, roomName, [
-          snapshot.threatCreeps.length,
-          heals,
-          ranged,
-          melee,
-        ]);
+        pushEventDirect(
+          EventKind.EnemyInvasion,
+          roomName,
+          packEventPayload(EventKind.EnemyInvasion, {
+            count: snapshot.threatCreeps.length,
+            healParts: heals,
+            rangedParts: ranged,
+            meleeParts: melee,
+          }),
+        );
       } else if (!hasThreats && prevRoom.hadThreats) {
-        pushEventDirect(EventKind.EnemyCleared, roomName, []);
+        pushEventDirect(
+          EventKind.EnemyCleared,
+          roomName,
+          packEventPayload(EventKind.EnemyCleared, {}),
+        );
       }
     }
     prev.rooms[roomName].hadThreats = hasThreats;
@@ -851,7 +880,11 @@ function detectAndFlushEvents(_tick: number, ctx: TickContext): void {
     if (downgradeRisk && !prevRoom.downgradeRisk) {
       const ctrl = snapshot.controller;
       const ticks = ctrl?.ticksToDowngrade ?? 0;
-      pushEventDirect(EventKind.ControllerDowngradeRisk, roomName, [ticks]);
+      pushEventDirect(
+        EventKind.ControllerDowngradeRisk,
+        roomName,
+        packEventPayload(EventKind.ControllerDowngradeRisk, { ticksToDowngrade: ticks }),
+      );
     }
     prev.rooms[roomName].downgradeRisk = downgradeRisk;
 
@@ -865,32 +898,48 @@ function detectAndFlushEvents(_tick: number, ctx: TickContext): void {
     };
     if (prevRoom.structures) {
       if (currStructures.sp < prevRoom.structures.sp) {
-        pushEventDirect(EventKind.StructureDestroyed, roomName, [
-          0,
-          prevRoom.structures.sp,
-          currStructures.sp,
-        ]);
+        pushEventDirect(
+          EventKind.StructureDestroyed,
+          roomName,
+          packEventPayload(EventKind.StructureDestroyed, {
+            structureTypeCode: 0,
+            prevCount: prevRoom.structures.sp,
+            currCount: currStructures.sp,
+          }),
+        );
       }
       if (currStructures.tw < prevRoom.structures.tw) {
-        pushEventDirect(EventKind.StructureDestroyed, roomName, [
-          1,
-          prevRoom.structures.tw,
-          currStructures.tw,
-        ]);
+        pushEventDirect(
+          EventKind.StructureDestroyed,
+          roomName,
+          packEventPayload(EventKind.StructureDestroyed, {
+            structureTypeCode: 1,
+            prevCount: prevRoom.structures.tw,
+            currCount: currStructures.tw,
+          }),
+        );
       }
       if (currStructures.ct < prevRoom.structures.ct) {
-        pushEventDirect(EventKind.StructureDestroyed, roomName, [
-          2,
-          prevRoom.structures.ct,
-          currStructures.ct,
-        ]);
+        pushEventDirect(
+          EventKind.StructureDestroyed,
+          roomName,
+          packEventPayload(EventKind.StructureDestroyed, {
+            structureTypeCode: 2,
+            prevCount: prevRoom.structures.ct,
+            currCount: currStructures.ct,
+          }),
+        );
       }
       if (currStructures.st < prevRoom.structures.st) {
-        pushEventDirect(EventKind.StructureDestroyed, roomName, [
-          3,
-          prevRoom.structures.st,
-          currStructures.st,
-        ]);
+        pushEventDirect(
+          EventKind.StructureDestroyed,
+          roomName,
+          packEventPayload(EventKind.StructureDestroyed, {
+            structureTypeCode: 3,
+            prevCount: prevRoom.structures.st,
+            currCount: currStructures.st,
+          }),
+        );
       }
     }
     prev.rooms[roomName].structures = currStructures;

@@ -1,3 +1,4 @@
+import type { PostureTransitionPayload } from "../../kernel/event-log";
 /** 帝国姿态评估 — Strategy 层纯函数核心：把「何时扩张/收缩/备战」从各执行系统 */
 
 /** 单房间的战略输入摘要。 */
@@ -138,13 +139,17 @@ export const POSTURE_BRANCH_EVENT_CODE: Record<PostureBranch, number> = {
   peace: 7,
 };
 
-/** 姿态转换事件的 d 列：[fromCode, toCode, reasonCode]。 */
+/** 姿态转换事件载荷（packed 列序 [fromCode, toCode, reasonCode] 由 event-log packer 唯一定义）。 */
 export function postureTransitionEventData(
   from: EmpirePosture | "(none)",
   to: EmpirePosture,
   reason: PostureBranch,
-): number[] {
-  return [POSTURE_EVENT_CODE[from], POSTURE_EVENT_CODE[to], POSTURE_BRANCH_EVENT_CODE[reason]];
+): PostureTransitionPayload {
+  return {
+    fromCode: POSTURE_EVENT_CODE[from],
+    toCode: POSTURE_EVENT_CODE[to],
+    reasonCode: POSTURE_BRANCH_EVENT_CODE[reason],
+  };
 }
 
 export interface PostureResult {

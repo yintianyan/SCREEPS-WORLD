@@ -1,8 +1,9 @@
 /** Logistics 系统 */
+import { recordTyped } from "../../kernel/event-log";
 import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import type { System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { safeRun } from "../../kernel/safe-run";
 import { systemPhase } from "../../kernel/phase";
 import { runLogisticsPlanning } from "./logistics-planner";
@@ -197,7 +198,7 @@ export const logisticsSystem: System = {
       const rec = reconcileRegistry(st.registry, currentKeys, ctx.tick, cfg.requestTtlTicks);
       for (const key of rec.expiredKeys) {
         // 事件通道是数值数组——key 以 32bit 哈希入账（完整 key 见 console/黑匣子文本）。
-        recordEvent(EventKind.RequestExpired, roomName, [strHash(key)]);
+        recordTyped(EventKind.RequestExpired, roomName, { keyHash: strHash(key) });
       }
 
       // 延迟样本：本窗新被认领的 key（claimed 未标记且在册）→ tick − firstSeen。

@@ -14,10 +14,11 @@
  *   4. 复核后 intakePending 清空
  */
 
+import { recordTyped } from "../../kernel/event-log";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { SEGMENT_L2_INTAKE } from "../../kernel/segment-store";
 import { applyIntakeGuardrail } from "../../domain/tuning/intake-guardrail";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import { safeRun } from "../../kernel/safe-run";
 
@@ -49,7 +50,7 @@ export const tuningIntakeSystem: System = {
           payload = JSON.parse(raw);
         } catch {
           log.warn("tuning-intake", "segment 6 JSON parse failed — skipping");
-          recordEvent(EventKind.L2Intake, "", [0, 1]); // accepted=0, rejected=1
+          recordTyped(EventKind.L2Intake, "", { acceptedCount: 0, rejectedCount: 1 });
           return;
         }
 
@@ -90,7 +91,10 @@ export const tuningIntakeSystem: System = {
         }
 
         // ── 5. 事件 + 日志 ──
-        recordEvent(EventKind.L2Intake, "", [result.accepted.length, result.rejected.length]);
+        recordTyped(EventKind.L2Intake, "", {
+          acceptedCount: result.accepted.length,
+          rejectedCount: result.rejected.length,
+        });
         if (result.accepted.length > 0) {
           log.info("tuning-intake", result.summary);
         } else if (result.rejected.length > 0) {

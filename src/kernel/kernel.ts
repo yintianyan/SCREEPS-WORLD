@@ -1,3 +1,4 @@
+import { recordTyped } from "./event-log";
 import {
   type Budget,
   type CreepRole,
@@ -29,7 +30,7 @@ import {
   type SiteProgressSnapshot,
   type PathFailureSnapshot,
 } from "./expectations";
-import { EventKind, recordEvent } from "./event-log";
+import { EventKind } from "./event-log";
 import { emitSummary, initTelemetry } from "./telemetry";
 import {
   collectRuntimeMetrics,
@@ -648,7 +649,9 @@ export class Kernel {
       const g = globalCache();
       if (shouldRecordExpectationEvent(g.expectationEvent, signature, ctx.tick)) {
         g.expectationEvent = { signature, tick: ctx.tick };
-        recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length]);
+        recordTyped(EventKind.ExpectationViolation, "kernel", {
+          violationCount: res.violations.length,
+        });
       }
       if (res.p3Starved) {
         kernelMem.p3StarveBypassUntil = ctx.tick + P3_BYPASS_WINDOW_TICKS;
@@ -1260,10 +1263,10 @@ export function trackP3Frozen(
         "kernel",
         `[${tick}] P3 FROZEN ${frozenDuration} ticks — bucket=${bucket} < ${CONFIG.cpu.tiers.conserve.min}, bypass ineffective. P3 systems (telemetry/tuning/terminal/lab) have been frozen since tick ${kernelMem.p3FrozenSince}. URGENT: reduce rooms/pause expansion to restore CPU headroom.`,
       );
-      recordEvent(EventKind.P3StarvationFrozen, "", [bucket, frozenDuration]);
+      recordTyped(EventKind.P3StarvationFrozen, "", { bucket, frozenDuration });
     } else if (frozenDuration === 0) {
       // 首次冻结：记录事件
-      recordEvent(EventKind.P3StarvationFrozen, "", [bucket]);
+      recordTyped(EventKind.P3StarvationFrozen, "", { bucket });
     }
   } else {
     // bucket >= conserve 最低值: 旁路生效，清除冻结跟踪

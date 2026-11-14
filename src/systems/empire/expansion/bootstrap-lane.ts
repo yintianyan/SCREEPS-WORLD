@@ -1,7 +1,8 @@
 /** Expansion 自举车道 — owned 无 spawn 房间的姊妹房代孵通道（独立于扩张状态机）。 */
+import { recordTyped } from "../../../kernel/event-log";
 import { CONFIG } from "../../../config";
 import type { TickContext } from "../../../kernel/contracts";
-import { EventKind, recordEvent } from "../../../kernel/event-log";
+import { EventKind } from "../../../kernel/event-log";
 import { log } from "../../../kernel/log";
 import {
   decideBootstrapRooms,
@@ -117,7 +118,11 @@ export function runBootstrapLane(ctx: TickContext): void {
         if (hostMem?.spawnQueue) cancelRequestsByHome(hostMem.spawnQueue, d.room);
       }
       log.info("expansion", `[${ctx.tick}] bootstrap: abandon ${d.room} — ${d.reason}`);
-      recordEvent(EventKind.ExpansionOutcome, d.room, [1, 4, 0]);
+      recordTyped(EventKind.ExpansionOutcome, d.room, {
+        phaseCode: 1,
+        outcomeCode: 4,
+        durationTicks: 0,
+      });
       continue;
     }
     if (d.action !== "dispatch" || !d.sponsor) continue;

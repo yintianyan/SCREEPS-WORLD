@@ -1,6 +1,7 @@
 /** Power Creep Manager */
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
-import { recordEvent, EventKind } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { getObjectById } from "../../creeps/support/obj-cache";
 import type { Priority, System, TickContext, RoomSnapshot } from "../../kernel/contracts";
 import {
@@ -36,14 +37,14 @@ export const powerCreepManagerSystem: System = {
       // POWER_CLASS.OPERATOR 的字面量（运行时常量在测试环境不可用）。
       const result = PowerCreep.create(plan.pcName, "operator");
       if (result === OK) {
-        recordEvent(EventKind.PowerCreepMilestone, "", [0]);
+        recordTyped(EventKind.PowerCreepMilestone, "", { stage: 0 });
       }
     } else if (plan.action === "upgrade" && plan.pcName && plan.power !== undefined) {
       const pc = Game.powerCreeps[plan.pcName];
       // upgrade 对未孵化 PC 同样有效（官方语义），失败静默等下轮。
       // PowerId 即引擎 PowerConstant 数值（domain 层锁定该映射）。
       if (pc && pc.upgrade(plan.power as PowerConstant) === OK) {
-        recordEvent(EventKind.PowerCreepMilestone, "", [1, plan.power]);
+        recordTyped(EventKind.PowerCreepMilestone, "", { stage: 1, power: plan.power });
       }
     }
 
@@ -57,7 +58,7 @@ export const powerCreepManagerSystem: System = {
         // 未孵化：在驻留房 powerSpawn 孵化（ERR_TIRED = 死亡冷却中）。
         const home = homeMap.get(pc.name);
         if (home?.powerSpawn && pc.spawn(home.powerSpawn) === OK) {
-          recordEvent(EventKind.PowerCreepMilestone, home.roomName, [2]);
+          recordTyped(EventKind.PowerCreepMilestone, home.roomName, { stage: 2 });
         }
         continue;
       }
@@ -222,7 +223,7 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
       if (!controller) return;
       if (pc.pos.getRangeTo(controller) <= 1) {
         if (pc.enableRoom(controller) === OK) {
-          recordEvent(EventKind.PowerCreepMilestone, snapshot.roomName, [3]);
+          recordTyped(EventKind.PowerCreepMilestone, snapshot.roomName, { stage: 3 });
         }
       } else {
         pc.moveTo(controller, { range: 1 });

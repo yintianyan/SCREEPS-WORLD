@@ -1,7 +1,8 @@
 /** Terminal 跨房协作 — nuke 资产抢救与帝国能量/矿物互济（非市场交易通道）。 */
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import type { TickContext } from "../../kernel/contracts";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { bumpEnergyCounter, globalCache } from "../../kernel/global-cache";
 import { log } from "../../kernel/log";
 import { planEnergyAid, type RoomEnergyState } from "../../domain/economy/energy-logistics";
@@ -68,10 +69,10 @@ export function tryNukeSalvage(ctx: TickContext): void {
         bumpEnergyCounter(snapshot.roomName, "exported", plan.amount);
         bumpEnergyCounter(plan.to, "imported", plan.amount);
       }
-      recordEvent(EventKind.NukeSalvage, snapshot.roomName, [
-        salvageResourceCode(plan.resourceType),
-        plan.amount,
-      ]);
+      recordTyped(EventKind.NukeSalvage, snapshot.roomName, {
+        resourceCode: salvageResourceCode(plan.resourceType),
+        amount: plan.amount,
+      });
       log.info(
         "terminal",
         `[${Game.time}] nuke-salvage: ${snapshot.roomName} → ${plan.to} ${plan.amount} ${plan.resourceType}`,
@@ -133,7 +134,7 @@ export function tryEmpireEnergyAid(ctx: TickContext): void {
     bumpEnergyCounter(plan.from, "exported", plan.amount);
     bumpEnergyCounter(plan.from, "tradeFee", fee);
     bumpEnergyCounter(plan.to, "imported", plan.amount);
-    recordEvent(EventKind.EnergyTransfer, plan.to, [plan.amount]);
+    recordTyped(EventKind.EnergyTransfer, plan.to, { amount: plan.amount });
     log.info(
       "terminal",
       `[${Game.time}] energy-aid: ${plan.from} → ${plan.to} ${plan.amount} energy (fee=${fee})`,
@@ -221,7 +222,7 @@ export function tryEmpireMineralAid(ctx: TickContext): void {
   if (result === OK) {
     // 货是矿物 ⇒ 不记 exported；但运费永远是**本房 terminal 的能量**（#43）。
     bumpEnergyCounter(plan.from, "tradeFee", fee);
-    recordEvent(EventKind.MineralTransfer, plan.to, [plan.amount]);
+    recordTyped(EventKind.MineralTransfer, plan.to, { amount: plan.amount });
     log.info(
       "terminal",
       `[${Game.time}] mineral-aid: ${plan.from} → ${plan.to} ${plan.amount} ${plan.mineral} (fee=${fee})`,

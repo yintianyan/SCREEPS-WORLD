@@ -13,9 +13,10 @@
  * CPU 纪律：无指令时本系统只做一次空判断即返回；全量 `Game.creeps` 遍历只在排空窗口内
  * 发生（受 drainDeadlineTicks 上界约束）。
  */
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import {
   planReleaseStep,
@@ -220,14 +221,14 @@ function finalizeRelease(
   }
 
   try {
-    recordEvent(EventKind.RoomReleased, room, [
-      directive.reason,
-      involuntary ? 1 : 0,
-      opsDropped,
-      tick - directive.startedAt,
-      directive.unclaimAttempts ?? 0,
-      directive.lastUnclaimCode ?? -99,
-    ]);
+    recordTyped(EventKind.RoomReleased, room, {
+      reasonCode: directive.reason,
+      involuntary: involuntary ? 1 : 0,
+      remoteOpsDropped: opsDropped,
+      drainingTicks: tick - directive.startedAt,
+      unclaimAttempts: directive.unclaimAttempts ?? 0,
+      lastUnclaimCode: directive.lastUnclaimCode ?? -99,
+    });
   } catch {
     // 观测写不进不能挡住清账 —— 日志仍然会留下这一笔。
   }

@@ -1,9 +1,10 @@
 /** Tactical Runtime System */
+import { recordTyped } from "../../kernel/event-log";
 import { packPos } from "../../domain/layout/types";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache, querySquad, type GlobalCache } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
-import { recordEvent, EventKind } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { getRoomIntel } from "../intelligence";
 import {
   evaluateTacticalAction,
@@ -783,7 +784,10 @@ function submitReinforcementDemand(
   // 这样避免双写 spawn queue（Tactical → Spawn 边界：只声明需求，war-planner 执行孵化）。
 
   // 但记录事件供追踪
-  recordEvent(EventKind.WarPlanCreated, plan.targetRoom, [shortage.urgency, shortage.count]);
+  recordTyped(EventKind.WarPlanCreated, plan.targetRoom, {
+    statusCode: shortage.urgency,
+    priorityScore: shortage.count,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -890,10 +894,10 @@ function recordTacticalEvent(
   // 写入 event buffer（供 telemetry-collector flush 到 segment）
   // 使用 WarPlanCreated 作为复用事件类型（暂无专用 TacticalEvent 枚举）
   // 后续可扩展 EventKind 枚举
-  recordEvent(EventKind.WarPlanCreated, objectiveId, [
-    EVENT_CODE_MAP[event] ?? 0,
-    Math.floor(confidence * 100),
-  ]);
+  recordTyped(EventKind.WarPlanCreated, objectiveId, {
+    statusCode: EVENT_CODE_MAP[event] ?? 0,
+    priorityScore: Math.floor(confidence * 100),
+  });
 
   // console 输出（可观测性）
   if (event === "TACTICAL_ABORTED" || event === "RETREAT_DECIDED") {

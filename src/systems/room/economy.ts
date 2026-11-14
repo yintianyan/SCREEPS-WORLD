@@ -1,8 +1,9 @@
 /** Economy 系统 — 能量收支核算（模块 1.5，SYSTEM_BOUNDARIES §1.5 合同）。 */
+import { recordTyped } from "../../kernel/event-log";
 import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { globalCache, bumpEnergyCounter, type RoomEnergyCounters } from "../../kernel/global-cache";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { recordSkip } from "../../kernel/memory";
 import {
   INITIAL_EFFICIENCY_FACTOR,
@@ -317,7 +318,10 @@ export const economySystem: System = {
       if (isDriftExcessive(w, acc.driftFloor, acc.driftRatio)) {
         st.driftStreak++;
         if (st.driftStreak === 2) {
-          recordEvent(EventKind.AccountingDrift, roomName, [Math.round(w.drift), st.driftStreak]);
+          recordTyped(EventKind.AccountingDrift, roomName, {
+            drift: Math.round(w.drift),
+            streak: st.driftStreak,
+          });
         }
       } else {
         st.driftStreak = 0;

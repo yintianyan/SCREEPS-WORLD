@@ -1,6 +1,7 @@
 /** Expansion UOEM 事件/遥测/黑名单 — Milestone 与 Terminal Outcome 分离的唯一出口。 */
+import { recordTyped } from "../../../kernel/event-log";
 import { CONFIG } from "../../../config";
-import { EventKind, recordEvent } from "../../../kernel/event-log";
+import { EventKind } from "../../../kernel/event-log";
 import { log } from "../../../kernel/log";
 import {
   makeOperationId,
@@ -46,11 +47,14 @@ export function emitMilestone(expansion: ExpansionState, milestone: string, tick
   }
 
   // recordEvent 保留（eventLog 不变）
-  recordEvent(EventKind.ExpansionOutcome, expansion.target, [
-    expansion.state === "claiming" || expansion.state === "preparing" ? PHASE_CLAIM : PHASE_PIONEER,
-    milestone === "CLAIMED" ? OUTCOME_SUCCESS : OUTCOME_TIMEOUT,
-    tick - expansion.startedAt,
-  ]);
+  recordTyped(EventKind.ExpansionOutcome, expansion.target, {
+    phaseCode:
+      expansion.state === "claiming" || expansion.state === "preparing"
+        ? PHASE_CLAIM
+        : PHASE_PIONEER,
+    outcomeCode: milestone === "CLAIMED" ? OUTCOME_SUCCESS : OUTCOME_TIMEOUT,
+    durationTicks: tick - expansion.startedAt,
+  });
 
   // 保留事件序号推进副作用（原 MilestoneEvent 构造为死代码已移除，seq 递增行为保持不变）
   makeEventId(tick, ++__uoemEventSeq);
@@ -75,11 +79,11 @@ export function enqueueTerminalOutcome(
   const phaseCode =
     expansion.state === "claiming" || expansion.state === "preparing" ? PHASE_CLAIM : PHASE_PIONEER;
   const outcomeCode = resultToOutcomeCode(result);
-  recordEvent(EventKind.ExpansionOutcome, expansion.target, [
+  recordTyped(EventKind.ExpansionOutcome, expansion.target, {
     phaseCode,
     outcomeCode,
-    tick - openedAt, // UOEM: 使用 openedAt 而非 startedAt
-  ]);
+    durationTicks: tick - openedAt, // UOEM: 使用 openedAt 而非 startedAt
+  });
 
   // 构造 OutcomeEvent
   const ev: OutcomeEvent = {

@@ -1,4 +1,5 @@
 /** Empire Strategy */
+import { recordTyped } from "../../kernel/event-log";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { safeRun } from "../../kernel/safe-run";
@@ -15,7 +16,7 @@ import { evaluateAgenda } from "../../domain/strategy/agenda";
 import { evaluateCapacity, pickCpuUsagePerTick } from "../../domain/strategy/capacity";
 import { evaluateEnvironment } from "../../domain/strategy/environment";
 import { CONFIG } from "../../config";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { buildEmpireSituation, type SituationRoomInput } from "../../domain/strategy/situation";
 import { selectEnvBaseline } from "../../domain/strategy/posture-baseline";
 import { isStrategyOverrideLive } from "../../domain/strategy/strategy-reviewer";
@@ -125,7 +126,7 @@ export const empireStrategySystem: System = {
         tick: Game.time,
       };
       // 单格会被下一跳覆盖（短命姿态只有几十拍）；事件环跨 boot 留全量转换。
-      recordEvent(
+      recordTyped(
         EventKind.PostureTransition,
         "",
         postureTransitionEventData(prev?.posture ?? "(none)", result.posture, result.reason),
@@ -181,14 +182,20 @@ export const empireStrategySystem: System = {
       if (prevAgenda?.initiative === "rcl-push" && progressBase !== undefined) {
         const gained = Math.max(0, totalProgress - progressBase);
         const duration = ctx.tick - (prevAgenda.since ?? ctx.tick);
-        recordEvent(EventKind.AgendaOutcome, "", [AGENDA_CODES["rcl-push"]!, gained, duration]);
+        recordTyped(EventKind.AgendaOutcome, "", {
+          initiativeCode: AGENDA_CODES["rcl-push"]!,
+          progressGained: gained,
+          durationTicks: duration,
+        });
       }
       log.info(
         "empire-strategy",
         `agenda: ${prevAgenda?.initiative ?? "(none)"} → ${agenda.initiative}`,
       );
       recordPlanningDecision("agenda", true);
-      recordEvent(EventKind.AgendaChange, "", [AGENDA_CODES[agenda.initiative] ?? 3]);
+      recordTyped(EventKind.AgendaChange, "", {
+        initiativeCode: AGENDA_CODES[agenda.initiative] ?? 3,
+      });
       progressBase = agenda.initiative === "rcl-push" ? totalProgress : undefined;
     }
     Memory.kernel.agenda = {
@@ -285,7 +292,8 @@ export const empireStrategySystem: System = {
     };
     const prevIds = new Set((prevSit?.conditions ?? []).map(c => c.id));
     for (const c of situation.conditions) {
-      if (!prevIds.has(c.id)) recordEvent(EventKind.SituationChange, c.id, [c.severity]);
+      if (!prevIds.has(c.id))
+        recordTyped(EventKind.SituationChange, c.id, { severity: c.severity });
     }
     if (Memory.kernel.capacity?.tier !== capacity.tier) {
       log.info(

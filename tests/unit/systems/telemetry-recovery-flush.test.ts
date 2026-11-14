@@ -40,10 +40,11 @@ vi.mock("../../../src/kernel/timeseries", async importOriginal => {
   return { ...real, sampleCpu: vi.fn(), sampleEconomy: vi.fn() };
 });
 
-vi.mock("../../../src/kernel/event-log", () => ({
-  drainEventBuffer: mocks.drainEventBuffer,
-  EventKind: { PhaseTransition: 0, TierDowngrade: 1, TierUpgrade: 2 },
-}));
+vi.mock("../../../src/kernel/event-log", async importOriginal => {
+  const real = await importOriginal<typeof import("../../../src/kernel/event-log")>();
+  // EventKind 与 packEventPayload 走真实实现；drain 保留本测试的 spy（相位断言用）。
+  return { ...real, drainEventBuffer: mocks.drainEventBuffer };
+});
 
 vi.mock("../../../src/kernel/ring-buffer", () => ({
   ringPush: mocks.ringPush,

@@ -1,4 +1,5 @@
 /** War Planning System */
+import { recordTyped } from "../../kernel/event-log";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
@@ -17,7 +18,7 @@ import type { TerrainContext } from "../../domain/defense/terrain-context";
 import type { PlayerIntelRecord } from "../../domain/defense/player-intel";
 import type { MultiDimensionalConfidence } from "../../domain/defense/confidence";
 import type { CombatPower } from "../../domain/combat/capability";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import { roomLinearDistance } from "../../domain/remote/targeting";
 import { demobilize, REASON_TARGET_SWITCH } from "./war-planner";
@@ -84,10 +85,10 @@ export const warPlanningSystem: System = {
         replacement: plan.logisticsRequirement.replacement,
       };
       writeCompatibleWarPlan(plan, tick, sponsor);
-      recordEvent(EventKind.WarPlanCreated, plan.operation.target.roomName, [
-        PLAN_EVENT_CODES[plan.operation.status] ?? 0,
-        plan.operation.priority.score,
-      ]);
+      recordTyped(EventKind.WarPlanCreated, plan.operation.target.roomName, {
+        statusCode: PLAN_EVENT_CODES[plan.operation.status] ?? 0,
+        priorityScore: plan.operation.priority.score,
+      });
       log.error(
         "war-planning-system",
         `war-planning: plan=${plan.operation.operationId}` +

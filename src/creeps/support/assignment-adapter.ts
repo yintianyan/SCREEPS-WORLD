@@ -1,9 +1,10 @@
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import type { TickContext } from "../../kernel/contracts";
 import { chooseTaskForRole, validateAssignmentRules } from "../../domain/assignment/service";
 import type { TaskPool } from "../../domain/assignment/task-pool";
 import { globalCache } from "../../kernel/global-cache";
-import { recordEvent, EventKind } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { getObjectById } from "./obj-cache";
 
 // 适配层 — 从 Game/Memory/creep 读取数据 → 领域纯函数 → 写回状态。
@@ -78,7 +79,7 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
     else if (assignment.revision !== layoutRevision) failReason = 1;
     else if (assignment.targetId && !targetExists) failReason = 2;
     else if (assignment.sourceId && !sourceExists) failReason = 3;
-    recordEvent(EventKind.AssignmentExpired, home, [failReason]);
+    recordTyped(EventKind.AssignmentExpired, home, { failReasonCode: failReason });
 
     // 无效 — 释放旧 assignment。
     releaseFromTask(creep);
@@ -133,7 +134,7 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
     creep.memory.abandonedAt = undefined;
   }
   pool.assignCreep(chosen.id, creep.name);
-  recordEvent(EventKind.AssignmentAssigned, home, [chosen.priority]);
+  recordTyped(EventKind.AssignmentAssigned, home, { priority: chosen.priority });
   return assignment;
 }
 

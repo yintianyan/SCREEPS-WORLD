@@ -1,7 +1,8 @@
+import { recordTyped } from "./event-log";
 import { CONFIG } from "../config";
 import { globalCache, type ActionCpuEntry } from "./global-cache";
 import { recordSkip } from "./memory";
-import { EventKind, recordEvent } from "./event-log";
+import { EventKind } from "./event-log";
 import { log } from "./log";
 
 function shouldSuppress(label: string, tick: number): boolean {
@@ -66,7 +67,7 @@ function handleError(label: string, error: unknown, critical: boolean): void {
       g.pluginCooldowns.set(label, Game.time + cooldownTicks);
       // K-2c：冷却是插件被禁用的帝国级事件 — 写入事件日志（此前
       // EventKind.PluginCooldown 枚举存在但从未被记录，观测链断）。
-      recordEvent(EventKind.PluginCooldown, label, [cooldownTicks]);
+      recordTyped(EventKind.PluginCooldown, label, { cooldownTicks });
     }
   }
 }
@@ -127,7 +128,7 @@ export function recordTickFatal(error: unknown): void {
   try {
     handleError("loop-fatal", error, true);
     if (!shouldSuppress("loop-fatal-event", Game.time)) {
-      recordEvent(EventKind.TickFatal, "", []);
+      recordTyped(EventKind.TickFatal, "", {});
     }
   } catch {
     // 诊断写入失败绝不放大故障（与 recordLastErrorSnapshot 同一纪律）

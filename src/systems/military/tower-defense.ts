@@ -1,6 +1,7 @@
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG, getWallTargetHits } from "../../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { findCriticalRepair } from "../../creeps/support";
 import { getObjectById } from "../../creeps/support/obj-cache";
 import { selectTowerTarget, type TowerThreat } from "../../domain/defense/tower-target";
@@ -127,13 +128,13 @@ export const towerDefenseSystem: System = {
               // 战斗黑匣子（M9）：记录齐射弹道 — 每 tick 每房至多一条
               // （全塔集火同一目标），战斗期连成弹道序列供事后复盘杀伤链。
               if (fired) {
-                recordEvent(EventKind.TowerVolley, snapshot.roomName, [
+                recordTyped(EventKind.TowerVolley, snapshot.roomName, {
                   firedCount,
-                  target.pos.x,
-                  target.pos.y,
-                  target.body.filter(p => p.type === HEAL).length,
-                  Math.floor(target.hits / 100),
-                ]);
+                  targetX: target.pos.x,
+                  targetY: target.pos.y,
+                  targetHealParts: target.body.filter(p => p.type === HEAL).length,
+                  targetHitsPer100: Math.floor(target.hits / 100),
+                });
               }
             }
           }
@@ -384,10 +385,10 @@ function reportThreatUnhandled(snapshot: RoomSnapshot): void {
     (sum, c) => sum + c.body.filter(p => p.type === HEAL).length,
     0,
   );
-  recordEvent(EventKind.ThreatUnhandled, snapshot.roomName, [
-    snapshot.threatCreeps.length,
-    totalHeal,
-  ]);
+  recordTyped(EventKind.ThreatUnhandled, snapshot.roomName, {
+    threatCount: snapshot.threatCreeps.length,
+    enemyHealParts: totalHeal,
+  });
 }
 
 /**

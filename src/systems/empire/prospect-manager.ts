@@ -1,7 +1,8 @@
 /** Prospect Manager */
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { selectProspectTarget, type ProspectCandidate } from "../../domain/strategy/prospect";
 import { roomLinearDistance } from "../../domain/remote/targeting";
 import {
@@ -195,7 +196,10 @@ function completeMission(tick: number, outcome: number, cooldownTicks: number): 
   const mission = Memory.kernel?.prospect;
   if (!mission) return;
 
-  recordEvent(EventKind.ProspectOutcome, mission.target, [outcome, mission.spawned]);
+  recordTyped(EventKind.ProspectOutcome, mission.target, {
+    outcomeCode: outcome,
+    spawned: mission.spawned,
+  });
   if (cooldownTicks > 0) {
     Memory.kernel!.prospectCooldown ??= {};
     Memory.kernel!.prospectCooldown[mission.target] = tick + cooldownTicks;

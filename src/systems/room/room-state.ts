@@ -1,3 +1,4 @@
+import { recordTyped } from "../../kernel/event-log";
 import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import { flipLatch } from "../../core/scale";
 import { INVADER_USERNAME } from "../../domain/intel";
@@ -13,7 +14,7 @@ import {
 import { computeEnergyPrice } from "../../domain/economy/energy-price";
 import { scaledControllerRiskBand } from "../../domain/economy/downgrade-risk";
 import { hasSurvivalRequest } from "../../domain/spawn/queue";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import { globalCache } from "../../kernel/global-cache";
 import {
   assessThreat,
@@ -221,7 +222,7 @@ export const roomStateSystem: System = {
         for (const n of incoming) {
           if (g.seenNukeIds.has(n.id as string)) continue;
           g.seenNukeIds.add(n.id as string);
-          recordEvent(EventKind.NukeDetected, snapshot.roomName, [n.timeToLand]);
+          recordTyped(EventKind.NukeDetected, snapshot.roomName, { timeToLand: n.timeToLand });
           log.info(
             "room-state",
             `nuke/${snapshot.roomName}: 落点预警！launch=${n.launchRoomName} timeToLand=${n.timeToLand} — 资产抢救链启动`,

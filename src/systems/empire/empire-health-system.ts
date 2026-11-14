@@ -1,4 +1,5 @@
 /** Empire Health System */
+import { recordTyped } from "../../kernel/event-log";
 import { EMPIRE_ECONOMY_SCALE, HEALTH_NAMES_BY_CODE } from "../../domain/economy/empire-snapshot";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
@@ -32,7 +33,7 @@ import { log } from "../../kernel/log";
 import { safeRun } from "../../kernel/safe-run";
 import { reviewStrategy } from "../../domain/strategy/strategy-reviewer";
 import { CONFIG } from "../../config";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 
 // ─── 历史数据追踪（heap，跨 tick 持久）──────────────────
 
@@ -270,7 +271,9 @@ export const empireHealthSystem: System = {
               };
             }
             log.info("empire-health-system", strategyResult.summary);
-            recordEvent(EventKind.StrategyReview, "", [strategyResult.suggestions.length]);
+            recordTyped(EventKind.StrategyReview, "", {
+              suggestionCount: strategyResult.suggestions.length,
+            });
           }
         },
         false,

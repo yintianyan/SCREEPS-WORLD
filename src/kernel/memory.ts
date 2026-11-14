@@ -1,8 +1,9 @@
 /** Memory 生命周期 — 迁移执行、每 tick 维护、skip 遥测。迁移数据表见 ./migrations/。 */
 
+import { recordTyped } from "./event-log";
 import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
-import { EventKind, recordCreepDeath, recordEvent } from "./event-log";
+import { EventKind, recordCreepDeath } from "./event-log";
 import { log } from "./log";
 import { MIGRATIONS } from "./migrations";
 
@@ -142,14 +143,15 @@ function recordLostRoomPurge(roomName: string, lostFor: number): void {
   const count = (obj: Record<string, unknown> | undefined): number =>
     obj ? Object.keys(obj).length : 0;
   try {
-    recordEvent(EventKind.LostRoomPurge, roomName, [
-      0, // reasonCode：0 = 失守宽限期届满（目前唯一出口）
-      count(state?.roleBounds),
-      count(state?.pendingValidation),
-      count(state?.frozenParams),
-      count(remoteOps),
-      lostFor,
-    ]);
+    // reasonCode：0 = 失守宽限期届满（目前唯一出口）
+    recordTyped(EventKind.LostRoomPurge, roomName, {
+      reasonCode: 0,
+      tuningOverrideCount: count(state?.roleBounds),
+      pendingValidationCount: count(state?.pendingValidation),
+      frozenParamCount: count(state?.frozenParams),
+      remoteOpCount: count(remoteOps),
+      lostForTicks: lostFor,
+    });
     log.info(
       "memory",
       `lost-room purge ${roomName}: tuningOverrides=${count(state?.roleBounds)}` +

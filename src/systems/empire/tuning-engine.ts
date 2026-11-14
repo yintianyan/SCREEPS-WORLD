@@ -1,5 +1,6 @@
 /** Tuning Engine */
 
+import { recordTyped } from "../../kernel/event-log";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { getRoleBounds, TUNABLE_ROLES } from "../../config/tuned";
@@ -20,7 +21,7 @@ import type {
 import { readCpuSegment, readEconomySegment } from "../../kernel/segment-store";
 import { ringToArray } from "../../kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../../kernel/timeseries";
-import { recordEvent, EventKind, tuningParamCode } from "../../kernel/event-log";
+import { EventKind, tuningParamCode } from "../../kernel/event-log";
 import { globalCache } from "../../kernel/global-cache";
 import { log } from "../../kernel/log";
 
@@ -316,12 +317,12 @@ function applyRollbacksAndClearPending(
     // #83：第 4 元素 = 验证那一拍的在场角色数（-1 = 旧记录或未知参数）。
     // 为什么靠事件而不是靠采样器：verifyDelay=1,500 拍 > 事件环寿命(~755 拍)，且在场数是瞬时值
     // ⇒ 事后取证按构造取不到那一拍。**纯诊断，任何判据都不读它。**
-    recordEvent(EventKind.TuningRollback, roomName, [
-      tuningParamCode(rb.param),
-      rb.newValue,
+    recordTyped(EventKind.TuningRollback, roomName, {
+      paramCode: tuningParamCode(rb.param),
+      rolledBackValue: rb.newValue,
       preAdjustValue,
-      rb.roleCountAtVerify ?? -1,
-    ]);
+      roleCountAtVerify: rb.roleCountAtVerify ?? -1,
+    });
     log.info(
       "tuning-engine",
       `tuning/${roomName}: ROLLBACK ${rb.param} ${rb.oldValue}→${rb.newValue} (${rb.reason})`,
@@ -352,11 +353,11 @@ function writeFreezeEvents(
   for (const f of freezeResult.newlyFrozen) {
     const fp = roomTuning.frozenParams?.[f.param];
     if (!fp) continue;
-    recordEvent(EventKind.TuningFreeze, roomName, [
-      tuningParamCode(f.param),
-      fp.rollbackCount,
-      fp.frozenUntil - ctx.tick,
-    ]);
+    recordTyped(EventKind.TuningFreeze, roomName, {
+      paramCode: tuningParamCode(f.param),
+      rollbackCount: fp.rollbackCount,
+      frozenUntilDelta: fp.frozenUntil - ctx.tick,
+    });
     log.info(
       "tuning-engine",
       `tuning/${roomName}: FROZEN ${f.param} (rollbackCount=${fp.rollbackCount}, until Δ=${fp.frozenUntil - ctx.tick})`,
@@ -382,11 +383,11 @@ function writeBlockedEventsAndDiag(
     const pv = pendingBefore[param];
     const blockedSinceTick = pv?.blockedSinceTick ?? ctx.tick;
     const blockedDurationTicks = ctx.tick - blockedSinceTick;
-    recordEvent(EventKind.TuningBlocked, roomName, [
-      tuningParamCode(param),
-      pv?.preAdjustValue ?? 0,
+    recordTyped(EventKind.TuningBlocked, roomName, {
+      paramCode: tuningParamCode(param),
+      preAdjustValue: pv?.preAdjustValue ?? 0,
       blockedDurationTicks,
-    ]);
+    });
     log.info(
       "tuning-engine",
       `tuning/${roomName}: BLOCKED ${param} (blockedSince Δ=${blockedDurationTicks}, preAdjustValue=${pv?.preAdjustValue ?? 0})`,
@@ -415,12 +416,12 @@ function applyEvaluationAdjustments(
     applyAdjustment(roomName, adj.param, adj.newValue, ctx.tick);
     // adjustDirectionCode: 0=up, 1=down
     const directionCode = adj.newValue > adj.oldValue ? 0 : 1;
-    recordEvent(EventKind.TuningAdjust, roomName, [
-      tuningParamCode(adj.param),
-      adj.oldValue,
-      adj.newValue,
+    recordTyped(EventKind.TuningAdjust, roomName, {
+      paramCode: tuningParamCode(adj.param),
+      oldValue: adj.oldValue,
+      newValue: adj.newValue,
       directionCode,
-    ]);
+    });
     log.info(
       "tuning-engine",
       `tuning/${roomName}: ${adj.param} ${adj.oldValue}→${adj.newValue} (${adj.reason})`,

@@ -1,6 +1,7 @@
+import { recordTyped } from "./event-log";
 import { CONFIG, tierLimits, tierMaxPriority } from "../config";
 import { log } from "./log";
-import { EventKind, recordEvent } from "./event-log";
+import { EventKind } from "./event-log";
 import type { Budget, CpuTier, Priority } from "./contracts";
 
 /** 各档位的 bucket 阈值（降级立即生效）。
@@ -220,13 +221,13 @@ export function createBudget(): Budget {
     if (!Memory.kernel) Memory.kernel = {};
     Memory.kernel.emergencySurvival = emergency;
     if (emergency) {
-      recordEvent(EventKind.EmergencySurvival, "kernel", [1]);
+      recordTyped(EventKind.EmergencySurvival, "kernel", { direction: 1 });
       log.info(
         "kernel",
         `emergency survival: ENTER (bucket=${bucket}) — P0 车道 + harvester 最小采集`,
       );
     } else {
-      recordEvent(EventKind.EmergencySurvival, "kernel", [0]);
+      recordTyped(EventKind.EmergencySurvival, "kernel", { direction: 0 });
       log.info("kernel", `emergency survival: EXIT (bucket=${bucket}) — 回 Recovery 常规语义`);
     }
   }

@@ -1,7 +1,8 @@
 /** War Planner */
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import {
   decideHealerCount,
   decideSquadSize,
@@ -267,7 +268,7 @@ export const warPlannerSystem: System = {
           bumpEnergyCounter(sponsor, "industrialSpend", NUKE_ENERGY_COST);
           bumpEnergyCounter(sponsor, "nukeSpend", NUKE_ENERGY_COST);
           recordNukeLaunch(plan.targetRoom, ctx.tick);
-          recordEvent(EventKind.NukeLaunched, plan.targetRoom, [plan.towersSeen]);
+          recordTyped(EventKind.NukeLaunched, plan.targetRoom, { towersSeen: plan.towersSeen });
           log.info(
             "war-planner",
             `nuke-launch: ${sponsor} → ${plan.targetRoom} (towers=${plan.towersSeen})`,
@@ -457,11 +458,11 @@ export function demobilize(tick: number, reason: number): void {
     outcome,
     operationId: compatOp.operationId,
   };
-  recordEvent(EventKind.WarOutcome, plan.targetRoom, [
-    OUTCOME_CODES[outcome],
-    plan.spawned ?? 0,
-    reason,
-  ]);
+  recordTyped(EventKind.WarOutcome, plan.targetRoom, {
+    outcomeCode: OUTCOME_CODES[outcome],
+    spawned: plan.spawned ?? 0,
+    reasonCode: reason,
+  });
 
   // 遥测：战后核验 Decision→Outcome 闭环
   if (outcome === "success") {

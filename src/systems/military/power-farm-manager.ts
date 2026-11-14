@@ -2,11 +2,12 @@
  * 同时追踪多个 PB 目标，每个任务独立维护编队和状态。
  * 任务数量上限由 CONFIG.powerFarm.maxConcurrentMissions 控制（默认 2）。
  */
+import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import { bodyCost, selectBody } from "../../config/bodies";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import type { Compound } from "../../domain/industry/types";
-import { EventKind, recordEvent } from "../../kernel/event-log";
+import { EventKind } from "../../kernel/event-log";
 import {
   isPowerFarmAttritionLost,
   isPowerFarmTimedOut,
@@ -278,7 +279,10 @@ function maintainMission(
         // 预置 collector 模式：宽限从 PB 消失起算；旧任务（无 collectors）保留
         // 「首次补派 collector 时才起算」的历史语义，由下方 collect 分支设置。
         if (mission.collectors !== undefined) mission.collectorSpawnedAt ??= ctx.tick;
-        recordEvent(EventKind.PowerFarmOutcome, mission.targetRoom, [4, mission.spawned]);
+        recordTyped(EventKind.PowerFarmOutcome, mission.targetRoom, {
+          reasonCode: 4,
+          spawned: mission.spawned,
+        });
         log.info(
           "power-farm-manager",
           `power-farm: ${mission.targetRoom} PB 已消失，转 collect 阶段`,
@@ -588,7 +592,7 @@ function startFarmIfWorth(
     avoidRooms,
   };
   Memory.kernel.powerFarmMissions.push(newMission);
-  recordEvent(EventKind.PowerFarmOutcome, target.roomName, [4, 0]);
+  recordTyped(EventKind.PowerFarmOutcome, target.roomName, { reasonCode: 4, spawned: 0 });
   log.info(
     "power-farm-manager",
     `power-farm: 开任务 ${sponsors.join("+")} → ${target.roomName} ` +
@@ -1042,7 +1046,10 @@ function concludeMission(mission: PowerFarmMission, _tick: number, reason: numbe
     removeRequestsByMission(queue, "powerBank", mission.targetRoom);
     removeRequestsByMission(queue, "powerCollect", mission.targetRoom);
   }
-  recordEvent(EventKind.PowerFarmOutcome, mission.targetRoom, [reason, mission.spawned ?? 0]);
+  recordTyped(EventKind.PowerFarmOutcome, mission.targetRoom, {
+    reasonCode: reason,
+    spawned: mission.spawned ?? 0,
+  });
   log.info(
     "power-farm-manager",
     `power-farm: 收摊 ${mission.targetRoom} (reason=${reason}` +

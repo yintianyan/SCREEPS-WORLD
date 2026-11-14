@@ -1,4 +1,5 @@
 /** 帝国姿态评估器测试。 */
+import { EventKind, packEventPayload } from "../../../src/kernel/event-log";
 import { describe, expect, it } from "vitest";
 import {
   evaluateEmpirePosture,
@@ -597,7 +598,18 @@ describe("姿态事件码表", () => {
     const branches = Object.values(POSTURE_BRANCH_EVENT_CODE);
     expect(new Set(postures).size).toBe(postures.length);
     expect(new Set(branches).size).toBe(branches.length);
-    expect(postureTransitionEventData("fortify", "develop", "silence-elapsed")).toEqual([2, 0, 6]);
-    expect(postureTransitionEventData("(none)", "expand", "peace")).toEqual([4, 1, 7]);
+    // 载荷对象经 packer 打包后逐位等于历史 d 列序（码表与 packed 列序一起钉死）
+    expect(
+      packEventPayload(
+        EventKind.PostureTransition,
+        postureTransitionEventData("fortify", "develop", "silence-elapsed"),
+      ),
+    ).toEqual([2, 0, 6]);
+    expect(
+      packEventPayload(
+        EventKind.PostureTransition,
+        postureTransitionEventData("(none)", "expand", "peace"),
+      ),
+    ).toEqual([4, 1, 7]);
   });
 });

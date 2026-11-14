@@ -34,25 +34,11 @@ vi.mock("../../../src/kernel/timeseries", async importOriginal => {
   return { ...real, sampleCpu: vi.fn(), sampleEconomy: vi.fn() };
 });
 
-vi.mock("../../../src/kernel/event-log", () => ({
-  EventKind: {
-    PhaseTransition: 0,
-    TierDowngrade: 1,
-    TierUpgrade: 2,
-    ColonyStateChange: 3,
-    ControllerLevelUp: 4,
-    ControllerDowngradeRisk: 5,
-    P0SpawnRequest: 6,
-    EnemyInvasion: 7,
-    EnemyCleared: 8,
-    SafeModeActivated: 9,
-    PluginCooldown: 10,
-    CreepStuck: 11,
-    BuildComplete: 12,
-    StructureDestroyed: 13,
-  },
-  drainEventBuffer: () => [],
-}));
+vi.mock("../../../src/kernel/event-log", async importOriginal => {
+  const real = await importOriginal<typeof import("../../../src/kernel/event-log")>();
+  // EventKind 与 packEventPayload 走真实实现（纯常量/纯函数）；只 stub 环缓冲采集口。
+  return { ...real, drainEventBuffer: () => [] };
+});
 
 vi.mock("../../../src/kernel/ring-buffer", () => ({
   ringPush: (_buf: unknown, entry: unknown) => {

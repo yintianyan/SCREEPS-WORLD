@@ -235,6 +235,345 @@ export function tuningParamCode(param: string): number {
   return TUNING_PARAM_CODES[param] ?? 99;
 }
 
+// ─── 强类型载荷档案（判别联合）─────────────────────────────
+// 已建档 kind 的载荷接口：字段序 = packed 列序（packer 是唯一打包点，列序错位=编译错）。
+// 未建档 kind 走 recordEvent 的 number[] 逃生通道，按 kind 粒度渐进收编（收编后禁走 raw）。
+// packed 存储格式（GameEvent.d: number[]）保持不变 —— segment 2 与离线读数零迁移。
+
+export interface PhaseTransitionPayload {
+  fromCode: number;
+  toCode: number;
+}
+export interface TierChangePayload {
+  fromRank: number;
+  toRank: number;
+}
+export interface ColonyStateChangePayload {
+  fromCode: number;
+  toCode: number;
+}
+export interface ControllerLevelUpPayload {
+  prevRcl: number;
+  rcl: number;
+}
+export interface ControllerDowngradeRiskPayload {
+  ticksToDowngrade: number;
+}
+export interface EnemyInvasionPayload {
+  count: number;
+  healParts: number;
+  rangedParts: number;
+  meleeParts: number;
+}
+export type EnemyClearedPayload = Record<string, never>;
+export interface PluginCooldownPayload {
+  cooldownTicks: number;
+}
+export interface StructureDestroyedPayload {
+  structureTypeCode: number;
+  prevCount: number;
+  currCount: number;
+}
+export interface AssignmentAssignedPayload {
+  priority: number;
+}
+export interface AssignmentExpiredPayload {
+  failReasonCode: number;
+}
+export interface CreepDeathPayload {
+  roleCode: number;
+  x: number;
+  y: number;
+  age: number;
+  natural: 0 | 1;
+}
+export interface TowerVolleyPayload {
+  firedCount: number;
+  targetX: number;
+  targetY: number;
+  targetHealParts: number;
+  targetHitsPer100: number;
+}
+export interface TuningAdjustPayload {
+  paramCode: number;
+  oldValue: number;
+  newValue: number;
+  directionCode: number;
+}
+export interface TuningRollbackPayload {
+  paramCode: number;
+  rolledBackValue: number;
+  preAdjustValue: number;
+  roleCountAtVerify: number;
+}
+export interface TuningFreezePayload {
+  paramCode: number;
+  rollbackCount: number;
+  frozenUntilDelta: number;
+}
+export interface TuningBlockedPayload {
+  paramCode: number;
+  preAdjustValue: number;
+  blockedDurationTicks: number;
+}
+export interface WarOutcomePayload {
+  outcomeCode: number;
+  spawned: number;
+  reasonCode: number;
+}
+export interface TransferPayload {
+  amount: number;
+}
+export interface AgendaChangePayload {
+  initiativeCode: number;
+}
+export interface ProspectOutcomePayload {
+  outcomeCode: number;
+  spawned: number;
+}
+export interface ExpansionOutcomePayload {
+  phaseCode: number;
+  outcomeCode: number;
+  durationTicks: number;
+}
+export interface AgendaOutcomePayload {
+  initiativeCode: number;
+  progressGained: number;
+  durationTicks: number;
+}
+export interface PowerCreepMilestonePayload {
+  stage: number;
+  power?: number;
+}
+export interface NukeLaunchedPayload {
+  towersSeen: number;
+}
+export interface NukeDetectedPayload {
+  timeToLand: number;
+}
+export interface NukeSalvagePayload {
+  resourceCode: number;
+  amount: number;
+}
+export interface EmergencySurvivalPayload {
+  direction: 0 | 1;
+}
+export interface PowerFarmOutcomePayload {
+  reasonCode: number;
+  spawned: number;
+}
+export interface SituationChangePayload {
+  severity: number;
+}
+export interface ExpectationViolationPayload {
+  violationCount: number;
+}
+export interface AccountingDriftPayload {
+  drift: number;
+  streak: number;
+}
+export interface RequestExpiredPayload {
+  keyHash: number;
+}
+export interface WarPlanCreatedPayload {
+  statusCode: number;
+  priorityScore: number;
+}
+export interface ThreatUnhandledPayload {
+  threatCount: number;
+  enemyHealParts: number;
+}
+export interface StrategyReviewPayload {
+  suggestionCount: number;
+}
+export interface P3StarvationFrozenPayload {
+  bucket: number;
+  frozenDuration?: number;
+}
+export interface L2IntakePayload {
+  acceptedCount: number;
+  rejectedCount: number;
+}
+export interface LostRoomPurgePayload {
+  reasonCode: number;
+  tuningOverrideCount: number;
+  pendingValidationCount: number;
+  frozenParamCount: number;
+  remoteOpCount: number;
+  lostForTicks: number;
+}
+export interface RoomReleasedPayload {
+  reasonCode: number;
+  involuntary: number;
+  remoteOpsDropped: number;
+  drainingTicks: number;
+  unclaimAttempts: number;
+  lastUnclaimCode: number;
+}
+export interface RecoveryEscalationPayload {
+  attempts: number;
+  terminal: 0 | 1;
+  repeats: number;
+}
+export interface PostureTransitionPayload {
+  fromCode: number;
+  toCode: number;
+  reasonCode: number;
+}
+export interface CreepDeathCarryPayload {
+  roleCode: number;
+  carryEnergy: number;
+  natural: 0 | 1;
+}
+export type TickFatalPayload = Record<string, never>;
+
+/** 已建档 kind → 载荷类型（判别联合）。 */
+export interface EventPayloadMap {
+  [EventKind.PhaseTransition]: PhaseTransitionPayload;
+  [EventKind.TierDowngrade]: TierChangePayload;
+  [EventKind.TierUpgrade]: TierChangePayload;
+  [EventKind.ColonyStateChange]: ColonyStateChangePayload;
+  [EventKind.ControllerLevelUp]: ControllerLevelUpPayload;
+  [EventKind.ControllerDowngradeRisk]: ControllerDowngradeRiskPayload;
+  [EventKind.EnemyInvasion]: EnemyInvasionPayload;
+  [EventKind.EnemyCleared]: EnemyClearedPayload;
+  [EventKind.PluginCooldown]: PluginCooldownPayload;
+  [EventKind.StructureDestroyed]: StructureDestroyedPayload;
+  [EventKind.AssignmentAssigned]: AssignmentAssignedPayload;
+  [EventKind.AssignmentExpired]: AssignmentExpiredPayload;
+  [EventKind.CreepDeath]: CreepDeathPayload;
+  [EventKind.TowerVolley]: TowerVolleyPayload;
+  [EventKind.TuningAdjust]: TuningAdjustPayload;
+  [EventKind.TuningRollback]: TuningRollbackPayload;
+  [EventKind.TuningFreeze]: TuningFreezePayload;
+  [EventKind.TuningBlocked]: TuningBlockedPayload;
+  [EventKind.WarOutcome]: WarOutcomePayload;
+  [EventKind.EnergyTransfer]: TransferPayload;
+  [EventKind.AgendaChange]: AgendaChangePayload;
+  [EventKind.ProspectOutcome]: ProspectOutcomePayload;
+  [EventKind.ExpansionOutcome]: ExpansionOutcomePayload;
+  [EventKind.AgendaOutcome]: AgendaOutcomePayload;
+  [EventKind.MineralTransfer]: TransferPayload;
+  [EventKind.PowerCreepMilestone]: PowerCreepMilestonePayload;
+  [EventKind.NukeLaunched]: NukeLaunchedPayload;
+  [EventKind.NukeDetected]: NukeDetectedPayload;
+  [EventKind.NukeSalvage]: NukeSalvagePayload;
+  [EventKind.EmergencySurvival]: EmergencySurvivalPayload;
+  [EventKind.PowerFarmOutcome]: PowerFarmOutcomePayload;
+  [EventKind.SituationChange]: SituationChangePayload;
+  [EventKind.ExpectationViolation]: ExpectationViolationPayload;
+  [EventKind.AccountingDrift]: AccountingDriftPayload;
+  [EventKind.RequestExpired]: RequestExpiredPayload;
+  [EventKind.WarPlanCreated]: WarPlanCreatedPayload;
+  [EventKind.ThreatUnhandled]: ThreatUnhandledPayload;
+  [EventKind.StrategyReview]: StrategyReviewPayload;
+  [EventKind.P3StarvationFrozen]: P3StarvationFrozenPayload;
+  [EventKind.L2Intake]: L2IntakePayload;
+  [EventKind.LostRoomPurge]: LostRoomPurgePayload;
+  [EventKind.RoomReleased]: RoomReleasedPayload;
+  [EventKind.RecoveryEscalation]: RecoveryEscalationPayload;
+  [EventKind.PostureTransition]: PostureTransitionPayload;
+  [EventKind.CreepDeathCarry]: CreepDeathCarryPayload;
+  [EventKind.TickFatal]: TickFatalPayload;
+}
+
+export type TypedEventKind = keyof EventPayloadMap;
+
+type EventPacker<K extends TypedEventKind> = (payload: EventPayloadMap[K]) => number[];
+type EventPackerMap = { [K in TypedEventKind]: EventPacker<K> };
+
+const EVENT_PACKERS: EventPackerMap = {
+  [EventKind.PhaseTransition]: p => [p.fromCode, p.toCode],
+  [EventKind.TierDowngrade]: p => [p.fromRank, p.toRank],
+  [EventKind.TierUpgrade]: p => [p.fromRank, p.toRank],
+  [EventKind.ColonyStateChange]: p => [p.fromCode, p.toCode],
+  [EventKind.ControllerLevelUp]: p => [p.prevRcl, p.rcl],
+  [EventKind.ControllerDowngradeRisk]: p => [p.ticksToDowngrade],
+  [EventKind.EnemyInvasion]: p => [p.count, p.healParts, p.rangedParts, p.meleeParts],
+  [EventKind.EnemyCleared]: () => [],
+  [EventKind.PluginCooldown]: p => [p.cooldownTicks],
+  [EventKind.StructureDestroyed]: p => [p.structureTypeCode, p.prevCount, p.currCount],
+  [EventKind.AssignmentAssigned]: p => [p.priority],
+  [EventKind.AssignmentExpired]: p => [p.failReasonCode],
+  [EventKind.CreepDeath]: p => [p.roleCode, p.x, p.y, p.age, p.natural],
+  [EventKind.TowerVolley]: p => [
+    p.firedCount,
+    p.targetX,
+    p.targetY,
+    p.targetHealParts,
+    p.targetHitsPer100,
+  ],
+  [EventKind.TuningAdjust]: p => [p.paramCode, p.oldValue, p.newValue, p.directionCode],
+  [EventKind.TuningRollback]: p => [
+    p.paramCode,
+    p.rolledBackValue,
+    p.preAdjustValue,
+    p.roleCountAtVerify,
+  ],
+  [EventKind.TuningFreeze]: p => [p.paramCode, p.rollbackCount, p.frozenUntilDelta],
+  [EventKind.TuningBlocked]: p => [p.paramCode, p.preAdjustValue, p.blockedDurationTicks],
+  [EventKind.WarOutcome]: p => [p.outcomeCode, p.spawned, p.reasonCode],
+  [EventKind.EnergyTransfer]: p => [p.amount],
+  [EventKind.AgendaChange]: p => [p.initiativeCode],
+  [EventKind.ProspectOutcome]: p => [p.outcomeCode, p.spawned],
+  [EventKind.ExpansionOutcome]: p => [p.phaseCode, p.outcomeCode, p.durationTicks],
+  [EventKind.AgendaOutcome]: p => [p.initiativeCode, p.progressGained, p.durationTicks],
+  [EventKind.MineralTransfer]: p => [p.amount],
+  [EventKind.PowerCreepMilestone]: p => (p.power === undefined ? [p.stage] : [p.stage, p.power]),
+  [EventKind.NukeLaunched]: p => [p.towersSeen],
+  [EventKind.NukeDetected]: p => [p.timeToLand],
+  [EventKind.NukeSalvage]: p => [p.resourceCode, p.amount],
+  [EventKind.EmergencySurvival]: p => [p.direction],
+  [EventKind.PowerFarmOutcome]: p => [p.reasonCode, p.spawned],
+  [EventKind.SituationChange]: p => [p.severity],
+  [EventKind.ExpectationViolation]: p => [p.violationCount],
+  [EventKind.AccountingDrift]: p => [p.drift, p.streak],
+  [EventKind.RequestExpired]: p => [p.keyHash],
+  [EventKind.WarPlanCreated]: p => [p.statusCode, p.priorityScore],
+  [EventKind.ThreatUnhandled]: p => [p.threatCount, p.enemyHealParts],
+  [EventKind.StrategyReview]: p => [p.suggestionCount],
+  [EventKind.P3StarvationFrozen]: p =>
+    p.frozenDuration === undefined ? [p.bucket] : [p.bucket, p.frozenDuration],
+  [EventKind.L2Intake]: p => [p.acceptedCount, p.rejectedCount],
+  [EventKind.LostRoomPurge]: p => [
+    p.reasonCode,
+    p.tuningOverrideCount,
+    p.pendingValidationCount,
+    p.frozenParamCount,
+    p.remoteOpCount,
+    p.lostForTicks,
+  ],
+  [EventKind.RoomReleased]: p => [
+    p.reasonCode,
+    p.involuntary,
+    p.remoteOpsDropped,
+    p.drainingTicks,
+    p.unclaimAttempts,
+    p.lastUnclaimCode,
+  ],
+  [EventKind.RecoveryEscalation]: p => [p.attempts, p.terminal, p.repeats],
+  [EventKind.PostureTransition]: p => [p.fromCode, p.toCode, p.reasonCode],
+  [EventKind.CreepDeathCarry]: p => [p.roleCode, p.carryEnergy, p.natural],
+  [EventKind.TickFatal]: () => [],
+};
+
+/** 强类型载荷 → packed 位置数组（列序唯一打包点）。 */
+export function packEventPayload<K extends TypedEventKind>(
+  kind: K,
+  payload: EventPayloadMap[K],
+): number[] {
+  return EVENT_PACKERS[kind](payload);
+}
+
+/** 强类型发射 — 已建档 kind 的列错位在编译期即红。 */
+export function recordTyped<K extends TypedEventKind>(
+  kind: K,
+  roomName: string,
+  payload: EventPayloadMap[K],
+): void {
+  recordEvent(kind, roomName, packEventPayload(kind, payload));
+}
+
 // ─── 事件数据结构 ────────────────────────────────────────────
 
 /**
@@ -317,20 +656,20 @@ export function recordCreepDeath(name: string): void {
     else dc.combat = (dc.combat ?? 0) + 1;
   }
   const seen = globalCache().creepLastSeen?.get(name);
-  recordEvent(EventKind.CreepDeath, seen?.r ?? "", [
-    roleCode(role),
-    seen?.x ?? -1,
-    seen?.y ?? -1,
+  recordTyped(EventKind.CreepDeath, seen?.r ?? "", {
+    roleCode: roleCode(role),
+    x: seen?.x ?? -1,
+    y: seen?.y ?? -1,
     age,
-    natural,
-  ]);
+    natural: natural as 0 | 1,
+  });
   // 携带量单独成事件：CreepDeath 的 d 已被历史解码器占用，扩列会让旧读数错位。
   if (seen?.e !== undefined && seen.e > 0) {
-    recordEvent(EventKind.CreepDeathCarry, seen.h || (seen.r ?? ""), [
-      roleCode(role),
-      seen.e,
-      natural,
-    ]);
+    recordTyped(EventKind.CreepDeathCarry, seen.h || (seen.r ?? ""), {
+      roleCode: roleCode(role),
+      carryEnergy: seen.e,
+      natural: natural as 0 | 1,
+    });
   }
   // M11 safe mode 熔断的战损计数：仅非自然死亡入账（寿终不是战损）。
   // 惰性清理两倍窗口前的旧记录，防止数组无界增长。
