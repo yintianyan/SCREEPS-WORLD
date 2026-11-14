@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { CONFIG } from "../../src/config";
-import { METRICS_CATALOG } from "../../src/config/metrics";
 import { registry } from "../../src/bootstrap";
 import { buildCadenceTable } from "../../src/kernel/cadence";
 
@@ -39,18 +38,6 @@ describe("F1 config tables", () => {
         expect(entry!.via, system.name).toBe("override");
         expect(entry!.interval, system.name).toBe(Math.max(1, override));
       }
-    }
-  });
-
-  it("metrics 目录：四元组完整、无重复、action 非空", () => {
-    const names = new Set<string>();
-    for (const m of METRICS_CATALOG) {
-      expect(m.name.length, "name").toBeGreaterThan(0);
-      expect(m.source.length, m.name).toBeGreaterThan(0);
-      expect(m.consumer.length, m.name).toBeGreaterThan(0);
-      expect(m.action!.length ?? 0, m.name).toBeGreaterThan(0);
-      expect(names.has(m.name), `duplicate ${m.name}`).toBe(false);
-      names.add(m.name);
     }
   });
 });

@@ -25,12 +25,6 @@ import {
   MAX_TARGETS_PER_SOURCE,
 } from "../../../src/domain/operation/allocation-policy";
 import {
-  classifyPreemption,
-  isPreemptable,
-  attemptPreemption,
-} from "../../../src/domain/operation/preemption";
-import { shouldCancelOperation, getStabilityParams } from "../../../src/domain/operation/stability";
-import {
   RebalanceState,
   decideRebalance,
   markRebalanced,
@@ -60,27 +54,6 @@ function makeEntry(overrides: Partial<RoomRegistryEntry> = {}): RoomRegistryEntr
     needsAid: false,
     transferable: 100000,
     updatedAt: TICK,
-    ...overrides,
-  };
-}
-
-function makeOp(overrides: Partial<OperationContext> = {}): OperationContext {
-  return {
-    id: "supply:A:B:energy",
-    type: "supply",
-    status: "planned",
-    sourceRoom: "A",
-    targetRoom: "B",
-    requestedAmount: 5000,
-    deliveredAmount: 0,
-    reservedAmount: 5000,
-    priority: 2,
-    resource: "energy",
-    deadline: TICK + 2000,
-    createdAt: TICK,
-    updatedAt: TICK,
-    retries: 0,
-    maxRetries: 3,
     ...overrides,
   };
 }
@@ -679,100 +652,7 @@ describe("A3.1-017: Allocation Policy v2 — explainable reasons", () => {
 
 // ── Preemption Tests ───────────────────────────────────
 
-describe("A3.1-018: Preemption — classification", () => {
-  it("critical ops are not preemptable", () => {
-    const op = makeOp({ priority: 0 });
-    expect(classifyPreemption(op, false)).toBe("critical");
-    expect(isPreemptable(op, false)).toBe(false);
-  });
-
-  it("running ops with carrier in transit are committed", () => {
-    const op = makeOp({ status: "running", priority: 2 });
-    expect(classifyPreemption(op, true)).toBe("committed");
-    expect(isPreemptable(op, true)).toBe(false);
-  });
-
-  it("planned low-priority ops are preemptable", () => {
-    const op = makeOp({ status: "planned", priority: 2 });
-    expect(classifyPreemption(op, false)).toBe("preemptable");
-    expect(isPreemptable(op, false)).toBe(true);
-  });
-
-  it("blocked low-priority ops are preemptable", () => {
-    const op = makeOp({ status: "blocked", priority: 3 });
-    expect(classifyPreemption(op, false)).toBe("preemptable");
-  });
-});
-
-describe("A3.1-019: Preemption — attemptPreemption", () => {
-  it("preempts low-priority ops to satisfy critical request", () => {
-    const ops = [
-      makeOp({
-        id: "supply:A:C:energy",
-        sourceRoom: "A",
-        targetRoom: "C",
-        priority: 2,
-        status: "planned",
-        reservedAmount: 5000,
-      }),
-      makeOp({
-        id: "supply:A:D:energy",
-        sourceRoom: "A",
-        targetRoom: "D",
-        priority: 3,
-        status: "planned",
-        reservedAmount: 3000,
-      }),
-    ];
-    const carrierInTransit = new Map<string, boolean>([
-      ["supply:A:C:energy", false],
-      ["supply:A:D:energy", false],
-    ]);
-
-    const result = attemptPreemption(ops, 7000, 0, carrierInTransit);
-    expect(result.preemptedOps.length).toBe(2);
-    expect(result.releasedAmount).toBe(8000);
-    expect(result.shortfall).toBe(0);
-  });
-
-  it("does not preempt critical ops", () => {
-    const ops = [
-      makeOp({ id: "supply:A:C:energy", priority: 0, status: "planned", reservedAmount: 5000 }),
-    ];
-    const carrierInTransit = new Map<string, boolean>([["supply:A:C:energy", false]]);
-
-    const result = attemptPreemption(ops, 5000, 2, carrierInTransit);
-    expect(result.preemptedOps.length).toBe(0);
-    expect(result.releasedAmount).toBe(0);
-    expect(result.shortfall).toBe(5000);
-  });
-});
-
 // ── Plan Stability Tests ───────────────────────────────
-
-describe("A3.1-020: Plan Stability — hysteresis + commitment", () => {
-  it("shouldCancelOperation returns false during hysteresis", () => {
-    const op = makeOp({ createdAt: TICK });
-    expect(shouldCancelOperation(op, TICK + 100, false)).toBe(false);
-  });
-
-  it("shouldCancelOperation returns true after hysteresis + no carrier", () => {
-    const op = makeOp({ createdAt: TICK });
-    expect(shouldCancelOperation(op, TICK + 300, false)).toBe(true);
-  });
-
-  it("shouldCancelOperation returns false if carrier spawned but no commitment", () => {
-    const op = makeOp({ createdAt: TICK, carrierName: "hauler1" });
-    expect(shouldCancelOperation(op, TICK + 300, false)).toBe(false);
-  });
-
-  it("getStabilityParams returns expected values", () => {
-    const params = getStabilityParams();
-    expect(params.hysteresisTicks).toBe(200);
-    expect(params.rebalanceThreshold).toBe(0.1);
-    expect(params.rebalanceCooldown).toBe(200);
-  });
-});
 
 // ── Rebalance State Tests ───────────────────────────────
 

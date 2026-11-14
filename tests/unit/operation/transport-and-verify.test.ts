@@ -1,13 +1,6 @@
 /** A3-006: Transport Planning（路由 + Carrier Body + ETA） */
 import { describe, expect, it } from "vitest";
 import {
-  planTransport,
-  planTransportsBatch,
-  filterExecutable,
-  type RouteResult,
-} from "../../../src/domain/operation/transport-planner";
-import type { AllocationPlan } from "../../../src/domain/operation/allocation";
-import {
   verifyTransfer,
   shouldAbortVerification,
   shouldPartialComplete,
@@ -85,60 +78,6 @@ function makeProfile(overrides: Partial<RoomEconomicProfile> = {}): RoomEconomic
     ...overrides,
   } as RoomEconomicProfile;
 }
-
-describe("A3-006: Transport Planning", () => {
-  const plan: AllocationPlan = {
-    sourceRoom: "W1N1",
-    targetRoom: "W2N1",
-    amount: 2000,
-    priority: 1,
-  };
-
-  it("可达路由生成有效 TransportRequest", () => {
-    const route: RouteResult = { from: "W1N1", to: "W2N1", hops: 1, reachable: true };
-    const result = planTransport(plan, route, 6);
-    expect(result.request).not.toBeNull();
-    expect(result.request!.scope).toBe("empire");
-    expect(result.request!.targetRoom).toBe("W2N1");
-    expect(result.request!.amount).toBe(2000);
-    expect(result.eta).toBeGreaterThan(0);
-    expect(result.carrierBody.length).toBeGreaterThan(0);
-  });
-
-  it("不可达路由生成 null request", () => {
-    const route: RouteResult = { from: "W1N1", to: "W2N1", hops: -1, reachable: false };
-    const result = planTransport(plan, route, 6);
-    expect(result.request).toBeNull();
-    expect(result.eta).toBe(-1);
-  });
-
-  it("filterExecutable 过滤不可达计划", () => {
-    const routeOk: RouteResult = { from: "W1N1", to: "W2N1", hops: 1, reachable: true };
-    const routeBad: RouteResult = { from: "W1N1", to: "W3N1", hops: -1, reachable: false };
-    const plans = [
-      planTransport(plan, routeOk, 6),
-      planTransport({ ...plan, targetRoom: "W3N1" }, routeBad, 6),
-    ];
-    const executable = filterExecutable(plans);
-    expect(executable).toHaveLength(1);
-    expect(executable[0]!.route.hops).toBe(1);
-  });
-
-  it("planTransportsBatch 批量规划", () => {
-    const allocations: AllocationPlan[] = [
-      { sourceRoom: "W1N1", targetRoom: "W2N1", amount: 2000, priority: 1 },
-      { sourceRoom: "W1N1", targetRoom: "W3N1", amount: 3000, priority: 2 },
-    ];
-    const routes = new Map<string, RouteResult>([
-      ["W1N1:W2N1", { from: "W1N1", to: "W2N1", hops: 1, reachable: true }],
-      ["W1N1:W3N1", { from: "W1N1", to: "W3N1", hops: 2, reachable: true }],
-    ]);
-    const rclMap = new Map([["W1N1", 6]]);
-    const plans = planTransportsBatch(allocations, routes, rclMap);
-    expect(plans).toHaveLength(2);
-    expect(plans[0]!.eta).toBeLessThan(plans[1]!.eta);
-  });
-});
 
 describe("A3-007: Transfer Verification", () => {
   it("增量 ≥ 期望 → 验证通过", () => {

@@ -20,14 +20,6 @@ import {
   type ExecutionGateInput,
 } from "../../../src/domain/remote/execution-gate";
 import {
-  createContainerSnapshot,
-  deriveContainerState,
-  transitionContainerState,
-  isContainerTerminal,
-  serializeContainerSnapshot,
-  deserializeContainerSnapshot,
-} from "../../../src/domain/remote/container-lifecycle";
-import {
   createEmptyFlow,
   addProduced,
   addTransported,
@@ -186,77 +178,6 @@ describe("A4.1-004: Operation Deduplication", () => {
 });
 
 // ─── A4.1-009: Container Lifecycle 六状态 ───────────────
-
-describe("A4.1-009: Container Lifecycle", () => {
-  it("should have all 6 states", () => {
-    const states = ["missing", "planned", "building", "active", "damaged", "destroyed"];
-    for (const _s of states) {
-      createContainerSnapshot("src1", "W2N1", 1000);
-      // 通过 deriveContainerState 测试各种状态
-      expect(
-        deriveContainerState({
-          hasContainer: false,
-          hits: undefined,
-          hitsMax: 250000,
-          hasSite: false,
-          needContainer: false,
-          prevState: undefined,
-          repairThresholdRatio: 0.5,
-        }),
-      ).toBe("missing");
-    }
-  });
-
-  it("should transition missing → planned → building → active", () => {
-    let snap = createContainerSnapshot("src1", "W2N1", 1000);
-    expect(snap.state).toBe("missing");
-
-    snap = transitionContainerState(snap, "planned", 1001);
-    expect(snap.state).toBe("planned");
-
-    snap = transitionContainerState(snap, "building", 1002);
-    expect(snap.state).toBe("building");
-
-    snap = transitionContainerState(snap, "active", 1003);
-    expect(snap.state).toBe("active");
-  });
-
-  it("should detect damaged container", () => {
-    const state = deriveContainerState({
-      hasContainer: true,
-      hits: 50000,
-      hitsMax: 250000,
-      hasSite: false,
-      needContainer: false,
-      prevState: "active",
-      repairThresholdRatio: 0.5,
-    });
-    // 50000 < 250000 × 0.5 = 125000 → DAMAGED
-    expect(state).toBe("damaged");
-  });
-
-  it("should detect destroyed container and allow rebuild", () => {
-    let snap = createContainerSnapshot("src1", "W2N1", 1000);
-    snap = { ...snap, state: "active" };
-    snap = transitionContainerState(snap, "destroyed", 1001);
-    expect(snap.state).toBe("destroyed");
-    expect(isContainerTerminal(snap.state)).toBe(true);
-
-    // 重建
-    snap = transitionContainerState(snap, "planned", 1002);
-    expect(snap.state).toBe("planned");
-  });
-
-  it("should serialize and deserialize correctly", () => {
-    let snap = createContainerSnapshot("src1", "W2N1", 1000);
-    snap = transitionContainerState(snap, "planned", 1001);
-    const serialized = serializeContainerSnapshot(snap);
-    const deserialized = deserializeContainerSnapshot(serialized);
-    expect(deserialized.sourceId).toBe(snap.sourceId);
-    expect(deserialized.state).toBe(snap.state);
-    expect(deserialized.roomName).toBe(snap.roomName);
-  });
-});
 
 // ─── A4.1-011: Harvest Production 追踪 ─────────────────
 

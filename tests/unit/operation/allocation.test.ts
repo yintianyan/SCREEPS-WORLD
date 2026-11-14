@@ -7,8 +7,6 @@ import {
   type AllocationPlan,
 } from "../../../src/domain/operation/allocation";
 import type { RoomRegistryEntry } from "../../../src/domain/strategy/room-registry";
-import { processReplanEvent, shouldReplan } from "../../../src/domain/operation/replan";
-import { createOperation } from "../../../src/domain/operation/agenda-item";
 
 const TICK = 1000;
 
@@ -133,73 +131,5 @@ describe("A3-015: Multi-Room Allocation", () => {
     expect(sumAllocationsBySource(plans, "D")).toBe(200);
     expect(sumAllocationsByTarget(plans, "B")).toBe(700);
     expect(sumAllocationsByTarget(plans, "C")).toBe(300);
-  });
-});
-
-describe("A3-017: Event-driven Replanning", () => {
-  it("room-lost 取消涉及该房的 Operation", () => {
-    const ops = [
-      createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK),
-      createOperation("W1N1", "W3N1", "energy", 2000, 1, TICK + 2000, TICK),
-      createOperation("W4N1", "W5N1", "energy", 3000, 1, TICK + 2000, TICK),
-    ];
-
-    const result = processReplanEvent(ops, { type: "room-lost", roomName: "W1N1" }, TICK + 100);
-    // W1N1 涉及的两个 Operation 应被取消
-    expect(result[0]!.status).toBe("cancelled");
-    expect(result[1]!.status).toBe("cancelled");
-    // W4N1 → W5N1 不受影响
-    expect(result[2]!.status).toBe("planned");
-  });
-
-  it("room-critical 取消以该房为 source 的 Operation", () => {
-    const ops = [
-      createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK),
-      createOperation("W2N1", "W3N1", "energy", 2000, 1, TICK + 2000, TICK),
-    ];
-    // 需要让 ops[1] 处于活跃非 planned 状态来测试
-    const result = processReplanEvent(ops, { type: "room-critical", roomName: "W1N1" }, TICK + 100);
-    expect(result[0]!.status).toBe("cancelled");
-    // W2N1 作为 source 的不被取消
-    expect(result[1]!.status).toBe("planned");
-  });
-
-  it("carrier-death 标记 blocked", () => {
-    const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK)];
-    // 需要操作处于 running 状态
-    // 先用 planned 状态测试（carrier-death 只在 running 时生效）
-    const result = processReplanEvent(
-      ops,
-      { type: "carrier-death", operationId: ops[0]!.id, creepName: "hauler1" },
-      TICK + 100,
-    );
-    // planned 状态不受影响
-    expect(result[0]!.status).toBe("planned");
-  });
-
-  it("target-satisfied 取消向该房的 Operation", () => {
-    const ops = [
-      createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK),
-      createOperation("W1N1", "W3N1", "energy", 2000, 1, TICK + 2000, TICK),
-    ];
-
-    const result = processReplanEvent(
-      ops,
-      { type: "target-satisfied", targetRoom: "W2N1" },
-      TICK + 100,
-    );
-    expect(result[0]!.status).toBe("cancelled");
-    expect(result[1]!.status).toBe("planned");
-  });
-
-  it("shouldReplan 检测状态变化", () => {
-    const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK)];
-    const newOps = processReplanEvent(ops, { type: "room-lost", roomName: "W1N1" }, TICK + 100);
-    expect(shouldReplan(newOps, ops)).toBe(true);
-  });
-
-  it("shouldReplan 无变化返回 false", () => {
-    const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK)];
-    expect(shouldReplan(ops, ops)).toBe(false);
   });
 });

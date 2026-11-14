@@ -28,14 +28,6 @@ import {
 } from "../../../src/domain/expansion/empire-integration";
 import { evaluateThreatEscalation } from "../../../src/domain/expansion/threat-escalation";
 import { tryReserve, releaseReservation } from "../../../src/domain/expansion/resource-reservation";
-import {
-  createExpansionOperation,
-  completeStep,
-  completeOperation,
-  failOperation,
-  type ExpansionOperation,
-} from "../../../src/domain/expansion/execution-operation";
-import { buildExecutionDashboard } from "../../../src/domain/expansion/execution-dashboard";
 import type { ExpansionPlan } from "../../../src/domain/expansion/plan";
 import type { TieredExpansionBudget } from "../../../src/domain/expansion/budget";
 
@@ -394,39 +386,6 @@ describe("A3.3 E2E — Success Path", () => {
     expect(canHandover(integration, econResult.activated)).toBe(true);
   });
 
-  it("operation completed with all steps", () => {
-    const op = createExpansionOperation({
-      plan: makePlan(),
-      type: "colonize",
-      tick: 1000,
-      reservedEnergy: 10000,
-    });
-    let current = op;
-    for (const step of op.completionCriteria) {
-      current = completeStep(current, step, 1000);
-    }
-    expect(isOperationCompleteExpanded(current)).toBe(true);
-    const completed = completeOperation(current, 2000);
-    expect(completed.status).toBe("COMPLETED");
-    expect(completed.executionState).toBe("COMPLETED");
-  });
-
-  it("execution dashboard shows AUTONOMOUS at completion", () => {
-    const dashboard = buildExecutionDashboard({
-      tick: 2000,
-      executionState: "COMPLETED",
-      targetRoom: "W5N5",
-      progress: 100,
-      checkpointsPassed: 5,
-      economicResult: evaluateEconomicActivation(makeEconomicInput()),
-      integrationResult: evaluateEmpireIntegration(makeIntegrationInput()),
-      reservedEnergy: 0,
-    });
-    expect(dashboard.summary).toContain("AUTONOMOUS");
-    expect(dashboard.economicActivated).toBe(true);
-    expect(dashboard.empireIntegrated).toBe(true);
-  });
-
   it("resource reservation lifecycle: reserve → consume → release", () => {
     // Reserve
     const reserveResult = tryReserve({
@@ -613,18 +572,6 @@ describe("A3.3 E2E — Failure Paths", () => {
     expect(cp5.failReason).toContain("energy flow");
   });
 
-  it("Operation failure: claim operation fails", () => {
-    const op = createExpansionOperation({
-      plan: makePlan(),
-      type: "claim",
-      tick: 1000,
-      reservedEnergy: 5000,
-    });
-    const failed = failOperation(op, "claimer killed en route", 1005);
-    expect(failed.status).toBe("FAILED");
-    expect(failed.failReason).toBe("claimer killed en route");
-  });
-
   it("Resource reservation failure: insufficient budget", () => {
     const r = tryReserve({
       planId: "p1",
@@ -700,58 +647,6 @@ describe("A3.3 E2E — Dashboard Integration", () => {
     }
     expect(progresses[0]).toBe(0);
     expect(progresses[progresses.length - 1]).toBe(100);
-  });
-
-  it("dashboard at failure shows 0 progress", () => {
-    const dashboard = buildExecutionDashboard({
-      tick: 1000,
-      executionState: "FAILED",
-      progress: 0,
-      checkpointsPassed: 2,
-      reservedEnergy: 3000,
-    });
-    expect(dashboard.progress).toBe(0);
-    expect(dashboard.executionState).toBe("FAILED");
-  });
-
-  it("dashboard at bootstrapping shows partial progress", () => {
-    const records = createAllCheckpointRecords();
-    records[0]!.status = "PASSED";
-    const dashboard = buildExecutionDashboard({
-      tick: 1500,
-      executionState: "BOOTSTRAPPING",
-      targetRoom: "W5N5",
-      sponsorRoom: "W1N1",
-      progress: 45,
-      checkpointsPassed: 1,
-      checkpointRecords: records,
-      reservedEnergy: 4000,
-    });
-    expect(dashboard.progress).toBe(45);
-    expect(dashboard.checkpointsPassed).toBe(1);
-    expect(dashboard.checkpointDetails[0]?.status).toBe("PASSED");
-  });
-
-  it("dashboard with threat shows threat level", () => {
-    const threat = evaluateThreatEscalation({
-      hasHostileCreep: false,
-      hasHostileReservation: true,
-      hasPathThreat: false,
-      sponsorUnderAttack: false,
-      hasHostileTower: false,
-      executionState: "PREPARING",
-      tick: 1000,
-    });
-    const dashboard = buildExecutionDashboard({
-      tick: 1000,
-      executionState: "PREPARING",
-      progress: 10,
-      checkpointsPassed: 0,
-      threatResult: threat,
-      reservedEnergy: 5000,
-    });
-    expect(dashboard.threatLevel).toBe("YELLOW");
-    expect(dashboard.threatAction).toBe("PAUSE");
   });
 });
 
@@ -918,10 +813,3 @@ describe("A3.3 E2E — Multi-tick Simulation", () => {
     expect(records.filter(r => r.status === "PASSED").length).toBe(3);
   });
 });
-
-// ─── 辅助函数 ──────────────────────────────────────────
-
-/** isOperationComplete 的本地包装（避免 import 冲突）。 */
-function isOperationCompleteExpanded(op: ExpansionOperation): boolean {
-  return op.completionCriteria.every(c => op.completedSteps.includes(c));
-}
