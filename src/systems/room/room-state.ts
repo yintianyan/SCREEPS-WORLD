@@ -81,13 +81,20 @@ export const roomStateSystem: System = {
       let labActive: boolean | undefined;
       let fortifyActive: boolean | undefined;
       if (snapshot.storage !== undefined) {
-        // RCL8 用 60K 回差（GCL 复利可选）；RCL<8 用 50K 单门槛（升 RCL 是刚需，
-        // 回差会在 50–60K 制造死区 → 房永远卡在当前 RCL）。见 nextUpgradeActive。
+        // RCL8 用 60K 回差（GCL 复利可选）；RCL<8 入线取 sustainedStorage（10K）——
+        // 与 demand 编制阶梯的「10K 维持 1 upgrader」档、phase 破产线同源：RCL<8
+        // 升级是刚需，10K-50K 区间不应停摆（旧 50K 入线让该区间 RCL 推进停滞）。
+        // 单门槛不带回差（回差会在 50–60K 制造死区 → 房永远卡在当前 RCL）。
+        // 见 nextUpgradeActive —— enterThreshold 按分支双角色取值。
+        const upgradeEnter =
+          snapshot.rcl < 8
+            ? CONFIG.economy.waterlines.sustainedStorage
+            : CONFIG.economy.waterlines.sprintStorage;
         upgradeActive = nextUpgradeActive(
           roomMem.upgradeActive,
           snapshot.rcl,
           storageEnergyNow,
-          CONFIG.economy.waterlines.sprintStorage,
+          upgradeEnter,
           CONFIG.economy.waterlines.gclResumeStorage,
         );
         labActive = nextStorageRichActive(

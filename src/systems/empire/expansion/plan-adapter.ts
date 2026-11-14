@@ -1,4 +1,5 @@
 /** Expansion Plan 适配层 — Plan 消费门禁、Gate 采集、Memory 瘦结构序列化。 */
+import type { ExpansionPlanMemory } from "../../../domain/expansion/plan-memory";
 import { CONFIG } from "../../../config";
 import type { TickContext } from "../../../kernel/contracts";
 import { log } from "../../../kernel/log";

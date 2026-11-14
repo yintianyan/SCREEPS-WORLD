@@ -1,4 +1,8 @@
 /** Expansion Planner 系统 */
+import type {
+  ExpansionCandidateMemory,
+  ExpansionPlanMemory,
+} from "../../domain/expansion/plan-memory";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { queryEmpirePlannerInput, queryEmpirePlannerInputTick } from "./empire-economy";

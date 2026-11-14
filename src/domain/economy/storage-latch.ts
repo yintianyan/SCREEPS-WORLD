@@ -28,10 +28,17 @@ export function nextStorageRichActive(
  * 关键区分：**RCL<8 的升级是刚性发育需求**（升 RCL 才能解锁 spawn/extension/lab），
  * **RCL8 的升级是可选的 GCL 复利**。两者不能用同一把尺：
  *
- * - RCL8：回差（50K 停 / 60K 复）。GCL 是长期复利，可以等 storage 回血。
- * - RCL<8：只用 `sprintStorage(50K)` 单门槛，**不带回差**。回差会在 50–60K 之间
- *   制造一段「明明够 50K 却因未达 60K 而停升级」的死区 —— 线上 W6N1（RCL7，
- *   storage 57.9K）与 W7N1（RCL6，41.6K）因此长期 0 upgrader，永远到不了 RCL8。
+ * - RCL8：回差（sprintStorage 50K 停 / gclResumeStorage 60K 复）。GCL 是长期复利，
+ *   可以等 storage 回血。
+ * - RCL<8：单门槛**不带回差**。回差会在 50–60K 之间制造一段「明明够 50K 却因未达
+ *   60K 而停升级」的死区 —— 线上 W6N1（RCL7，storage 57.9K）与 W7N1（RCL6，41.6K）
+ *   因此长期 0 upgrader，永远到不了 RCL8。
+ *   M3b：调用方对 RCL<8 传入 sustainedStorage(10K) 作入线 —— 与 demand 编制阶梯的
+ *   「10K 维持 1 upgrader」档、phase 破产线同源；旧 50K 入线让 10K-50K 区间的
+ *   RCL 推进停滞（编队阶梯预算了维持档，门却按构造不放行）。
+ *
+ * ⚠️enterThreshold 是双角色参数：RCL<8 分支用它作唯一门槛，RCL8 分支用它作回差
+ * 停线 —— 调用方按 snapshot.rcl 分支取值，不要传同一个数糊弄两个分支。
  *
  * 无 storage 的早期房返回 undefined（调用方回退旧行为：不节流）。
  */

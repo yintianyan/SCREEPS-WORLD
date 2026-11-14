@@ -64,3 +64,22 @@ describe("nextUpgradeActive — 按 RCL 分档", () => {
     expect(nextUpgradeActive(false, 8, 57942, ENTER, RCL8_RESUME)).toBe(false);
   });
 });
+
+describe("nextUpgradeActive — 调用方契约（M3b：RCL<8 入线=10K 档）", () => {
+  // room-state 对 RCL<8 传 sustainedStorage(10K)、RCL8 传 sprintStorage(50K)：
+  // enterThreshold 是双角色参数，两分支的取值契约在此钉死。
+  const SUSTAINED = 10_000;
+  const SPRINT = 50_000;
+
+  it("RCL<8：10K-50K 区间放行（旧 50K 入线让该区间 RCL 推进停滞）", () => {
+    expect(nextUpgradeActive(undefined, 4, 15_000, SUSTAINED, 60_000)).toBe(true);
+    expect(nextUpgradeActive(true, 4, 15_000, SUSTAINED, 60_000)).toBe(true);
+    expect(nextUpgradeActive(undefined, 7, 9_999, SUSTAINED, 60_000)).toBe(false);
+  });
+
+  it("RCL8：仍用 50K 停 / 60K 复回差（GCL 复利可等回血）", () => {
+    expect(nextUpgradeActive(undefined, 8, 15_000, SPRINT, 60_000)).toBe(false);
+    expect(nextUpgradeActive(true, 8, 57_942, SPRINT, 60_000)).toBe(true);
+    expect(nextUpgradeActive(false, 8, 60_000, SPRINT, 60_000)).toBe(true);
+  });
+});
