@@ -9,16 +9,12 @@ import {
   type TacticalAuthorization,
   type EnemySnapshot,
   type SquadMemberSnapshot,
-  type FormationType, // Authorization
   validateAuthorization,
   buildAuthorization,
   validateTargetScope,
   isOffensiveOperation, // State Machine
   evaluateTacticalAction,
   canTransitionTactical, // Formation
-  selectFormationForTerrain,
-  evaluateFormationTransition,
-  FORMATION_SEMANTICS,
 } from "../../../src/domain/tactical";
 import type { CombatCapability, AggregateCapability } from "../../../src/domain/combat/capability";
 import type {
@@ -522,32 +518,6 @@ describe("TAC-011: Logistics Failure → Tactical Degradation", () => {
 
 // ─── TAC-012: Terrain Chokepoint → Formation Change ───
 
-describe("TAC-012: Terrain Chokepoint → Formation Change", () => {
-  it("chokepoint terrain selects COLUMN formation", () => {
-    const formation = selectFormationForTerrain(
-      makeTerrainContext({ terrainType: "CHOKEPOINT" }),
-      "ENGAGING",
-    );
-    expect(formation).toBe("COLUMN");
-  });
-
-  it("open terrain selects WEDGE formation", () => {
-    const formation = selectFormationForTerrain(
-      makeTerrainContext({ terrainType: "OPEN" }),
-      "ENGAGING",
-    );
-    expect(formation).toBe("WEDGE");
-  });
-
-  it("retreating always selects CLUSTER", () => {
-    const formation = selectFormationForTerrain(
-      makeTerrainContext({ terrainType: "OPEN" }),
-      "RETREATING",
-    );
-    expect(formation).toBe("CLUSTER");
-  });
-});
-
 // ─── TAC-013: Equal Target Scores → Deterministic Tie Break ───
 
 describe("TAC-013: Equal Target Scores → Deterministic Tie Break", () => {
@@ -678,35 +648,6 @@ describe("Tactical State Transitions", () => {
 });
 
 // ─── Formation Tests ───
-
-describe("Formation Model", () => {
-  it("all formation types have semantics", () => {
-    const types: FormationType[] = ["LINE", "WEDGE", "COLUMN", "CLUSTER", "SCATTER"];
-    for (const t of types) {
-      expect(FORMATION_SEMANTICS[t]).toBeDefined();
-      expect(FORMATION_SEMANTICS[t]!.useCase).toBeTruthy();
-    }
-  });
-
-  it("formation transition detected on terrain change", () => {
-    const transition = evaluateFormationTransition(
-      "WEDGE",
-      makeTerrainContext({ terrainType: "CHOKEPOINT" }),
-      "ENGAGING",
-    );
-    expect(transition).not.toBeNull();
-    expect(transition!.to).toBe("COLUMN");
-  });
-
-  it("no transition when formation matches terrain", () => {
-    const transition = evaluateFormationTransition(
-      "WEDGE",
-      makeTerrainContext({ terrainType: "OPEN" }),
-      "ENGAGING",
-    );
-    expect(transition).toBeNull();
-  });
-});
 
 // ─── Target Scope Tests ───
 

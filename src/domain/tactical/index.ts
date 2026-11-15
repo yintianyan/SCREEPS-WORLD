@@ -9,9 +9,6 @@ export * from "./authorization";
 // ─── 状态机 ───
 export * from "./state-machine";
 
-// ─── 阵型 ───
-export * from "./formation";
-
 // ─── Role Intent 映射 + 生命周期 ───
 export * from "./role-intent";
 

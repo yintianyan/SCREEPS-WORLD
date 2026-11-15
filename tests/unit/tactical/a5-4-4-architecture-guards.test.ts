@@ -41,7 +41,6 @@ findFile("domain/tactical/state-machine.ts");
 findFile("domain/tactical/role-intent.ts");
 findFile("domain/tactical/squad-formation.ts");
 const SQUAD_MOVEMENT_RUNTIME_FILE = findFile("systems/military/squad-movement-runtime.ts");
-findFile("domain/tactical/formation.ts");
 findFile("domain/tactical/types.ts");
 const INDEX_FILE = findFile("domain/tactical/index.ts");
 const ENGAGEMENT_RUNTIME_FILE = findFile("systems/military/tactical-engagement-runtime.ts");
@@ -492,7 +491,6 @@ describe("Barrel Export", () => {
     expect(src).toContain("./types");
     expect(src).toContain("./authorization");
     expect(src).toContain("./state-machine");
-    expect(src).toContain("./formation");
     expect(src).toContain("./role-intent");
     expect(src).toContain("./squad-formation");
     expect(src).toContain("./focus-fire");

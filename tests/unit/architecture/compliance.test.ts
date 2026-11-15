@@ -445,7 +445,6 @@ describe("同名导出唯一（定义权守卫）", () => {
   // 现存同名导出豁免台账——概念收编进统一 schema 后必须从表中移除，台账只许缩不许涨。
   // 语义分叉组（同名不同物）收编时必须改名或合并；同名同形组收编时保留一份。
   const EXEMPT = new Set([
-    "AutonomyLevel",
     "ExecutionGateInput",
     "GateResult",
     "IntelConfidence",

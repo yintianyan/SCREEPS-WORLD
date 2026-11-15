@@ -20,16 +20,6 @@ import {
   CONTRACT_STATUSES,
   type SupplyContract,
 } from "../../../src/domain/economy/supply-contract";
-import {
-  computeDistanceCost,
-  computeBodyCost,
-  computeEnergyCost,
-  computeTimeCost,
-  computeTransportCost,
-  quickTransportCost,
-  type HaulerBodyConfig,
-  type TransportCostInput,
-} from "../../../src/domain/economy/transport-cost";
 
 // ─── 辅助构造函数 ─────────────────────────────────────────
 
@@ -54,16 +44,6 @@ function makeContract(over?: Partial<SupplyContract>): SupplyContract {
     sourceRole: "core",
     targetRole: "production",
     reason: "role-based-specialization",
-    ...over,
-  };
-}
-
-function makeHaulerBody(over?: Partial<HaulerBodyConfig>): HaulerBodyConfig {
-  return {
-    carryParts: 10,
-    moveParts: 5,
-    spawnCost: 250,
-    capacity: 500,
     ...over,
   };
 }
@@ -306,85 +286,6 @@ describe("supply-contract.ts", () => {
 // ═════════════════════════════════════════════════════════
 // transport-cost.ts
 // ═════════════════════════════════════════════════════════
-
-describe("transport-cost.ts", () => {
-  describe("computeDistanceCost", () => {
-    it("距离×权重", () => {
-      expect(computeDistanceCost(5, 10)).toBe(50);
-    });
-    it("默认权重10", () => {
-      expect(computeDistanceCost(3)).toBe(30);
-    });
-    it("零距离=0", () => {
-      expect(computeDistanceCost(0)).toBe(0);
-    });
-  });
-
-  describe("computeBodyCost", () => {
-    it("spawnCost/lifespan", () => {
-      expect(computeBodyCost(makeHaulerBody({ spawnCost: 250 }), 1000, 1)).toBe(0.25);
-    });
-    it("零寿命返回全额", () => {
-      expect(computeBodyCost(makeHaulerBody({ spawnCost: 250 }), 0, 1)).toBe(250);
-    });
-  });
-
-  describe("computeEnergyCost", () => {
-    it("有 decay 计算损耗", () => {
-      expect(computeEnergyCost(1000, makeHaulerBody({ capacity: 500 }), 5, 10)).toBe(20);
-    });
-    it("零 decay=0", () => {
-      expect(computeEnergyCost(1000, makeHaulerBody({ capacity: 500 }), 5, 0)).toBe(0);
-    });
-    it("零 amount=0", () => {
-      expect(computeEnergyCost(0, makeHaulerBody({ capacity: 500 }), 5, 10)).toBe(0);
-    });
-  });
-
-  describe("computeTimeCost", () => {
-    it("有路 moveSpeed=1", () => {
-      expect(computeTimeCost(1000, makeHaulerBody({ capacity: 500 }), 5, 0.1, true)).toBe(2);
-    });
-    it("无路 moveSpeed=0.5", () => {
-      expect(computeTimeCost(1000, makeHaulerBody({ capacity: 500 }), 5, 0.1, false)).toBe(4);
-    });
-  });
-
-  describe("computeTransportCost", () => {
-    it("总成本=distance+body+energy+time", () => {
-      const input: TransportCostInput = {
-        amount: 1000,
-        linearDistance: 5,
-        body: makeHaulerBody({ spawnCost: 250, capacity: 500 }),
-        hasRoad: true,
-        decayPerTrip: 10,
-        haulerLifespan: 1000,
-        distanceWeight: 10,
-        costPerSpawnEnergy: 1,
-        cpuTimeValue: 0.1,
-      };
-      const r = computeTransportCost(input);
-      expect(r.distance).toBe(50);
-      expect(r.body).toBe(0.25);
-      expect(r.energy).toBe(20);
-      expect(r.time).toBe(2);
-      expect(r.total).toBeCloseTo(72.25, 2);
-      expect(r.roundTrips).toBe(2);
-    });
-  });
-
-  describe("quickTransportCost", () => {
-    it("使用默认参数", () => {
-      const r = quickTransportCost(500, 3, makeHaulerBody({ capacity: 500 }));
-      expect(r.distance).toBe(30);
-      expect(r.roundTrips).toBe(1);
-    });
-    it("支持覆盖", () => {
-      const r = quickTransportCost(500, 3, makeHaulerBody({ capacity: 500 }), { hasRoad: false });
-      expect(r.time).toBeCloseTo(1.2, 5);
-    });
-  });
-});
 
 // ═════════════════════════════════════════════════════════
 // route-efficiency.ts
