@@ -161,14 +161,6 @@ export const PB_SQUAD_BOOST_TIERS: ReadonlyArray<{
 /** 兼容别名（闸门/前馈默认 T3 口径）。 */
 export const PB_SQUAD_COMPOUNDS = PB_SQUAD_BOOST_TIERS[0]!;
 
-/** 任务实际选用的 boost 档位（闸门/前馈/boost 请求三方共用）。 */
-export interface PbBoostTierChoice {
-  attack: Compound;
-  heal: Compound;
-  attackFactor: number;
-  healFactor: number;
-}
-
 /** PB 编队的 boost 备料需求（按规划的部件数 × 30/部件，引擎 boostCreep 消耗）。 */
 export interface PbBoostNeed {
   attackUnits: number;
@@ -206,28 +198,6 @@ export function isPbBoostStockSufficient(
     (inventory[compounds.attack] ?? 0) - reserveAmount >= need.attackUnits &&
     (inventory[compounds.heal] ?? 0) - reserveAmount >= need.healUnits
   );
-}
-
-/**
- * 分层选档：按 T3 → T2 顺序找第一档「两种化合物都够量」的组合。
- * 返回 undefined = 全档缺料（前馈按最低可产档位补产）。
- */
-export function selectPbBoostTier(
-  need: PbBoostNeed,
-  inventory: Readonly<Record<string, number>>,
-  reserveAmount: number,
-): PbBoostTierChoice | undefined {
-  for (const tier of PB_SQUAD_BOOST_TIERS) {
-    if (isPbBoostStockSufficient(need, inventory, reserveAmount, tier)) {
-      return {
-        attack: tier.attack,
-        heal: tier.heal,
-        attackFactor: tier.attackFactor,
-        healFactor: tier.healFactor,
-      };
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -349,15 +319,10 @@ export function evaluateBoostRequests(
   return requests;
 }
 
-export function isValidBoostForRole(
-  role: string,
-  compound: Compound,
-  policy: BoostPolicy = DEFAULT_BOOST_POLICY,
-): boolean {
-  return policy.roleBoosts[role] === compound;
-}
-
-/** boost 效果描述（用于日志/遥测）。 */
-export function getBoostEffect(compound: Compound): string {
-  return BOOST_EFFECTS[compound] ?? "unknown";
+/** 任务实际选用的 boost 档位（闸门/前馈/boost 请求三方共用）。 */
+export interface PbBoostTierChoice {
+  attack: Compound;
+  heal: Compound;
+  attackFactor: number;
+  healFactor: number;
 }

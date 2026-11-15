@@ -60,16 +60,3 @@ export function idleRatio(
   const idleCount = detectIdleHaulers(haulers, currentTick, idleThreshold).length;
   return idleCount / haulers.length;
 }
-
-/**
- * 判断是否需要缩编（闲置率过高）。
- * 纯函数。
- */
-export function shouldShrink(
-  haulers: readonly HaulerIdleSummary[],
-  currentTick: number,
-  idleThreshold: number,
-  shrinkThreshold: number = 0.5,
-): boolean {
-  return idleRatio(haulers, currentTick, idleThreshold) > shrinkThreshold;
-}

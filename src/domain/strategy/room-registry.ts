@@ -127,15 +127,3 @@ export function getRoom(registry: RoomRegistry, roomName: string): RoomRegistryE
 export function removeRoom(registry: RoomRegistry, roomName: string): void {
   registry.delete(roomName);
 }
-
-/**
- * 清理终态：移除所有 isStruggling 且 transferable=0 的房间。
- * （实际清理由 maintainMemory 的失守房检测驱动，此处仅提供工具函数。）
- */
-export function pruneInactive(registry: RoomRegistry): void {
-  for (const [name, entry] of registry) {
-    if (entry.transferable === 0 && entry.needsAid && entry.riskBuffer <= 0) {
-      registry.delete(name);
-    }
-  }
-}

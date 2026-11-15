@@ -433,26 +433,6 @@ export function mapNetworkHealth(level: string): DimensionHealth {
 /**
  * 从 Colony StabilityScore 的 level 字段映射到 DimensionHealth。
 
- * Colony 的四档 → DimensionHealth 的四档：
- *   CRITICAL → critical
- *   DEGRADED → degraded
- *   GOOD → stable
- *   EXCELLENT → healthy
- */
-export function mapColonyHealth(level: string): DimensionHealth {
-  switch (level) {
-    case "CRITICAL":
-      return "critical";
-    case "DEGRADED":
-      return "degraded";
-    case "GOOD":
-      return "stable";
-    case "EXCELLENT":
-      return "healthy";
-    default:
-      return "degraded";
-  }
-}
 
 /**
  * 从 EmpirePosture 映射到 Threat 维度的 DimensionHealth。

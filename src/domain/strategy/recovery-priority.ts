@@ -384,29 +384,3 @@ export function prioritizeRecovery(
 
   return actions;
 }
-
-/**
- * 从恢复动作列表中选择下一个要执行的动作（纯函数）。
-
- * 选择逻辑：
- *   1. 过滤冷却中的
- *   2. 取优先级最高的
- *   3. 如果最高优先级是 urgent，立即返回
- *   4. 否则考虑 ROI（避免高成本低收益的动作）
-
- * @param actions 已排序的恢复动作列表
- * @param maxConcurrent 最大并发恢复数
- * @returns 选中的恢复动作（或 null 如果无可用）
- */
-export function selectNextRecovery(
-  actions: readonly RecoveryAction[],
-  maxConcurrent: number = 3,
-): RecoveryAction | null {
-  if (actions.length === 0) return null;
-
-  // 取前 maxConcurrent 个
-  const candidates = actions.slice(0, maxConcurrent);
-
-  // 第一个就是最优选
-  return candidates[0] ?? null;
-}

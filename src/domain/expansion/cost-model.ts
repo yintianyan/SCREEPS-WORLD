@@ -122,13 +122,3 @@ export function estimateExpansionCost(
     evidence,
   };
 }
-
-/**
- * 批量估算候选房成本。
- */
-export function estimateCosts(
-  candidates: readonly ExpansionCandidateV2[],
-  options: CostModelOptions = DEFAULT_COST_OPTIONS,
-): ExpansionCostEstimate[] {
-  return candidates.map(c => estimateExpansionCost(c, options));
-}

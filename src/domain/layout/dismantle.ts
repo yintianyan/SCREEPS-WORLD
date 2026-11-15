@@ -28,16 +28,11 @@ export function transitionDismantlePlan(plan: DismantlePlan, tick: number): Dism
 }
 
 /**
- * 检查房间是否处于拆改冷却期。
+ * 判定房间是否处于战时状态。
+ * colonyState 由调用方从 Memory 读取后注入（domain 层禁止直读 Memory）。
  */
-export function isDismantleOnCooldown(
-  lastDismantleTick: Map<string, number> | undefined,
-  roomName: string,
-  tick: number,
-): boolean {
-  const lastTick = lastDismantleTick?.get(roomName);
-  if (lastTick === undefined) return false;
-  return tick - lastTick < DISMANTLE_COOLDOWN;
+export function isRoomInDefense(colonyState: string | undefined): boolean {
+  return colonyState === "defense";
 }
 
 /**
@@ -54,9 +49,14 @@ export function isLinkConstrained(
 }
 
 /**
- * 判定房间是否处于战时状态。
- * colonyState 由调用方从 Memory 读取后注入（domain 层禁止直读 Memory）。
+ * 检查房间是否处于拆改冷却期。
  */
-export function isRoomInDefense(colonyState: string | undefined): boolean {
-  return colonyState === "defense";
+export function isDismantleOnCooldown(
+  lastDismantleTick: Map<string, number> | undefined,
+  roomName: string,
+  tick: number,
+): boolean {
+  const lastTick = lastDismantleTick?.get(roomName);
+  if (lastTick === undefined) return false;
+  return tick - lastTick < DISMANTLE_COOLDOWN;
 }

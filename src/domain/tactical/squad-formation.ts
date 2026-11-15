@@ -1223,14 +1223,6 @@ export type StuckLevel =
   | "SQUAD_HEAVY" // 编队严重卡位（Anchor 连续多 tick 未前进）
   | "SQUAD_BLOCKED"; // 编队完全阻塞（需要 Replan）
 
-/** 编队卡位检测结果。 */
-export interface SquadStuckDetection {
-  readonly level: StuckLevel;
-  readonly stuckMembers: readonly string[];
-  readonly anchorStuckTicks: number;
-  readonly reason: string;
-}
-
 /**
  * 检测编队级卡位。
 
@@ -1374,4 +1366,12 @@ export function buildSquadSnapshot(
     regroupPos: plan.regroupPolicy.regroupPos,
     regroupRoom: plan.regroupPolicy.regroupRoom,
   };
+}
+
+/** 编队卡位检测结果。 */
+export interface SquadStuckDetection {
+  readonly level: StuckLevel;
+  readonly stuckMembers: readonly string[];
+  readonly anchorStuckTicks: number;
+  readonly reason: string;
 }

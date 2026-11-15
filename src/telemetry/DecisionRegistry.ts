@@ -79,11 +79,6 @@ export function decisionBufferSize(): number {
   return store().records.length;
 }
 
-/** 获取已 flush 总数。 */
-export function totalDecisionsFlushed(): number {
-  return store().totalFlushed;
-}
-
 // ─── Decision → Outcome 追踪 ───────────────────
 
 /**

@@ -6,11 +6,6 @@ export const WAR_BOOST_COMPOUNDS: ReadonlySet<string> = new Set([
   "XLHO2", // healer — heal ×4
 ]);
 
-/** defender 使用的化合物（威胁期短窗口角色，与 war 编队同档储备）。 */
-export const DEFENDER_BOOST_COMPOUNDS: ReadonlySet<string> = new Set([
-  "XUH2O", // defender — attack ×4
-]);
-
 /**
  * 判断化合物是否为 war/defender 战略储备。
  * war 编队 + defender 共用 XUH2O，XLHO2 为 healer 专用。

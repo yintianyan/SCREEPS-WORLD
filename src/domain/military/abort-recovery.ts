@@ -4,19 +4,6 @@ import type { WarOutcome } from "../war/planning";
 import type { RecoveryAction, RecoveryActionType } from "../strategy/recovery-priority";
 import type { FailureDomain } from "../strategy/failure-propagation";
 
-// ═══════════════════════════════════════════════════════════
-// AbortReason 枚举（与 war-planner.ts REASON_* 对齐）
-// ═══════════════════════════════════════════════════════════
-
-/** 战争止损原因（与 war-planner.ts 的 REASON_* 编码对齐）。 */
-export type WarAbortReason =
-  | "POSTURE" // 姿态退出（非 war）
-  | "ATTRITION" // 消耗战失败
-  | "NO_TARGET" // 无合格目标
-  | "PLAN_TIMEOUT" // 计划超期
-  | "INTEL_STALE" // 授权证据断供超窗 → 撤军（不判负）
-  | "TARGET_SWITCH"; // 改判新目标 → 旧编队收摊（不判负）
-
 /** 战后核验结果 — 唯一定义在 domain/war/planning（本模块 re-export 兼容既有读者）。 */
 export type { WarOutcome };
 

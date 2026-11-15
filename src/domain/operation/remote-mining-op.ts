@@ -1,7 +1,7 @@
 /** Remote Mining Operation */
 
 import type { OperationContext, OperationStatus, OperationPriority } from "./agenda-item";
-import { makeRemoteMiningOperationId, isTerminalStatus, isActive } from "./agenda-item";
+import { makeRemoteMiningOperationId, isActive } from "./agenda-item";
 
 // ─── 检查点 ─────────────────────────────────────────────
 
@@ -45,24 +45,9 @@ export function checkpointIndex(cp: RemoteCheckpoint): number {
   return CHECKPOINT_ORDER.indexOf(cp);
 }
 
-/** 判断 checkpoint A 是否在 B 之前（或等于）。纯函数。 */
-export function isBeforeOrEqual(a: RemoteCheckpoint, b: RemoteCheckpoint): boolean {
-  return checkpointIndex(a) <= checkpointIndex(b);
-}
-
 /** 判断 checkpoint A 是否在 B 之后。纯函数。 */
 export function isAfter(a: RemoteCheckpoint, b: RemoteCheckpoint): boolean {
   return checkpointIndex(a) > checkpointIndex(b);
-}
-
-/**
- * 获取下一个检查点（如果存在）。纯函数。
- * 返回 undefined 表示已在最高检查点。
- */
-export function nextCheckpoint(cp: RemoteCheckpoint): RemoteCheckpoint | undefined {
-  const idx = checkpointIndex(cp);
-  if (idx < 0 || idx >= CHECKPOINT_ORDER.length - 1) return undefined;
-  return CHECKPOINT_ORDER[idx + 1]!;
 }
 
 // ─── 经济健康度 ─────────────────────────────────────────
@@ -78,16 +63,6 @@ export function nextCheckpoint(cp: RemoteCheckpoint): RemoteCheckpoint | undefin
  */
 export type RemoteEconomicHealth = "healthy" | "degraded" | "unprofitable" | "suspended" | "failed";
 
-/** 判定健康度是否为终态。纯函数。 */
-export function isHealthTerminal(health: RemoteEconomicHealth): boolean {
-  return health === "failed";
-}
-
-/** 健康度是否允许继续孵化。纯函数。 */
-export function isHealthOperational(health: RemoteEconomicHealth): boolean {
-  return health === "healthy" || health === "degraded";
-}
-
 // ─── 预算 ──────────────────────────────────────────────
 
 /**
@@ -102,32 +77,6 @@ export interface RemoteOperationBudget {
   limit: number;
   /** 已消耗（能量）。 */
   consumed: number;
-}
-
-/** 获取剩余预算。纯函数。 */
-export function budgetRemaining(budget: RemoteOperationBudget): number {
-  return budget.limit - budget.consumed;
-}
-
-/** 判定预算是否已耗尽。纯函数。 */
-export function isBudgetExhausted(budget: RemoteOperationBudget): boolean {
-  return budgetRemaining(budget) <= 0;
-}
-
-/** 判定剩余预算是否低于最小阈值。纯函数。 */
-export function isBudgetLow(budget: RemoteOperationBudget, minThreshold: number): boolean {
-  return budgetRemaining(budget) < minThreshold;
-}
-
-/** 扣减预算。纯函数 — 返回新对象。 */
-export function consumeBudget(
-  budget: RemoteOperationBudget,
-  amount: number,
-): RemoteOperationBudget {
-  return {
-    limit: budget.limit,
-    consumed: budget.consumed + Math.max(0, amount),
-  };
 }
 
 // ─── RemoteMiningOperationContext ───────────────────────
@@ -316,59 +265,6 @@ export function updateEconomicHealth(
 
 // ─── 经济追踪 ──────────────────────────────────────────
 
-/**
- * 记录产出。
- * 累加 actualProduction，更新 lastProductionTick。
- * 纯函数 — 返回新对象。
- */
-export function recordProduction(
-  op: RemoteMiningOperationContext,
-  amount: number,
-  tick: number,
-): RemoteMiningOperationContext {
-  return {
-    ...op,
-    actualProduction: op.actualProduction + Math.max(0, amount),
-    lastProductionTick: tick,
-    updatedAt: tick,
-  };
-}
-
-/**
- * 记录交付。
- * 累加 actualDelivered，更新 lastDeliveryTick。
- * 纯函数 — 返回新对象。
- */
-export function recordDelivery(
-  op: RemoteMiningOperationContext,
-  amount: number,
-  tick: number,
-): RemoteMiningOperationContext {
-  return {
-    ...op,
-    actualDelivered: op.actualDelivered + Math.max(0, amount),
-    lastDeliveryTick: tick,
-    updatedAt: tick,
-  };
-}
-
-/**
- * 记录损失。
- * 累加 actualLost。
- * 纯函数 — 返回新对象。
- */
-export function recordLoss(
-  op: RemoteMiningOperationContext,
-  amount: number,
-  tick: number,
-): RemoteMiningOperationContext {
-  return {
-    ...op,
-    actualLost: op.actualLost + Math.max(0, amount),
-    updatedAt: tick,
-  };
-}
-
 // ─── 经济激活窗口 ──────────────────────────────────────
 
 /**
@@ -410,22 +306,6 @@ export function resetActivationWindow(
 
 // ─── 预算操作 ──────────────────────────────────────────
 
-/**
- * 扣减 Operation 预算。
- * 纯函数 — 返回新对象。
- */
-export function consumeOpBudget(
-  op: RemoteMiningOperationContext,
-  amount: number,
-  tick: number,
-): RemoteMiningOperationContext {
-  return {
-    ...op,
-    budget: consumeBudget(op.budget, amount),
-    updatedAt: tick,
-  };
-}
-
 // ─── 查询 ──────────────────────────────────────────────
 
 /**
@@ -434,44 +314,6 @@ export function consumeOpBudget(
  */
 export function isEconomicallyActive(op: RemoteMiningOperationContext): boolean {
   return op.checkpoint === "economic_active";
-}
-
-/**
- * 判定 Operation 是否正在采集中（checkpoint >= mining_active）。
- * 纯函数。
- */
-export function isMiningActive(op: RemoteMiningOperationContext): boolean {
-  return isAfter(op.checkpoint, "infrastructure_ready");
-}
-
-/**
- * 判定 Operation 是否正在物流运作（checkpoint >= logistics_active）。
- * 纯函数。
- */
-export function isLogisticsActive(op: RemoteMiningOperationContext): boolean {
-  return (
-    isAfter(op.checkpoint, "mining_active") ||
-    op.checkpoint === "logistics_active" ||
-    op.checkpoint === "economic_active"
-  );
-}
-
-/**
- * 计算产出效率 = actualDelivered / actualProduction。
- * 返回 0..1 的比率。纯函数。
- */
-export function deliveryEfficiency(op: RemoteMiningOperationContext): number {
-  if (op.actualProduction <= 0) return 0;
-  return Math.min(1, op.actualDelivered / op.actualProduction);
-}
-
-/**
- * 计算损失率 = actualLost / actualProduction。
- * 返回 0..1 的比率。纯函数。
- */
-export function lossRate(op: RemoteMiningOperationContext): number {
-  if (op.actualProduction <= 0) return 0;
-  return Math.min(1, op.actualLost / op.actualProduction);
 }
 
 // ─── 序列化 ──────────────────────────────────────────────
@@ -661,16 +503,6 @@ export function deserializeRemoteMiningOp(
 // ─── 批量操作 ──────────────────────────────────────────
 
 /**
- * 从 OperationContext 列表中过滤出 remote_mining 类型。
- * 纯函数。
- */
-export function filterRemoteMiningOps(
-  ops: readonly OperationContext[],
-): RemoteMiningOperationContext[] {
-  return ops.filter((o): o is RemoteMiningOperationContext => o.type === "remote_mining");
-}
-
-/**
  * 查找指定 (homeRoom, targetRoom) 的活跃 RemoteMiningOperation。
  * 纯函数。
  */
@@ -696,16 +528,6 @@ export function hasActiveRemoteMiningOp(
 }
 
 /**
- * 过滤出终态 Operation（可归档删除）。
- * 纯函数。
- */
-export function filterTerminalRemoteMiningOps(
-  ops: readonly RemoteMiningOperationContext[],
-): RemoteMiningOperationContext[] {
-  return ops.filter(o => isTerminalStatus(o.status));
-}
-
-/**
  * 过滤出运营中（非终态）的远矿 Operation。
  * 纯函数。
  */
@@ -713,15 +535,4 @@ export function filterActiveRemoteMiningOps(
   ops: readonly RemoteMiningOperationContext[],
 ): RemoteMiningOperationContext[] {
   return ops.filter(o => isActive(o));
-}
-
-/**
- * 按 homeRoom 过滤远矿 Operation。
- * 纯函数。
- */
-export function getRemoteMiningOpsByHome(
-  ops: readonly RemoteMiningOperationContext[],
-  homeRoom: string,
-): RemoteMiningOperationContext[] {
-  return ops.filter(o => o.sourceRoom === homeRoom);
 }

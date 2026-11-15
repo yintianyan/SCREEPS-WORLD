@@ -134,28 +134,3 @@ export function discoverCandidates(input: DiscoveryInput): DiscoveryResult {
     retainedCount: Math.max(0, retainedCount),
   };
 }
-
-/**
- * 过滤出可评估的候选（已侦察 + 非否决）。
- */
-export function getEvaluableCandidates(
-  candidates: readonly ExpansionCandidateV2[],
-): ExpansionCandidateV2[] {
-  return candidates.filter(isEvaluable);
-}
-
-/**
- * 过滤出合格的候选（已评分 + QUALIFIED）。
- */
-export function getQualifiedCandidates(
-  candidates: readonly ExpansionCandidateV2[],
-): ExpansionCandidateV2[] {
-  return candidates.filter(c => c.status === "QUALIFIED");
-}
-
-/**
- * 获取候选房名集合（用于 Plan 去重检查）。
- */
-export function getCandidateRoomNames(candidates: readonly ExpansionCandidateV2[]): Set<string> {
-  return new Set(candidates.map(c => c.roomName));
-}

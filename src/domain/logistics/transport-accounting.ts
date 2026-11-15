@@ -58,15 +58,6 @@ export function recordAssigned(acc: TransportAccounting, amount: number): Transp
 }
 
 /**
- * 累加装载量。
- * 纯函数 — 返回新对象。
- */
-export function recordLoaded(acc: TransportAccounting, amount: number): TransportAccounting {
-  const loaded = acc.loaded + Math.max(0, amount);
-  return { ...acc, loaded };
-}
-
-/**
  * 累加交付量。
  * 同时更新 remaining 和 roi。
  * 纯函数 — 返回新对象。
@@ -87,16 +78,6 @@ export function recordLost(acc: TransportAccounting, amount: number): TransportA
   const lost = acc.lost + Math.max(0, amount);
   const remaining = computeRemaining({ ...acc, lost });
   return { ...acc, lost, remaining };
-}
-
-/**
- * 设置运输成本。
- * 同时更新 roi。
- * 纯函数 — 返回新对象。
- */
-export function setCost(acc: TransportAccounting, cost: number): TransportAccounting {
-  const roi = cost > 0 ? acc.delivered / cost : acc.delivered > 0 ? Infinity : 0;
-  return { ...acc, cost: Math.max(0, cost), roi };
 }
 
 // ─── 计算工具 ──────────────────────────────────────────────

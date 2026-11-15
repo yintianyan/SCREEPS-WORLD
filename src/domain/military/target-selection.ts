@@ -8,28 +8,6 @@ import type { MultiDimensionalConfidence } from "../defense/confidence";
 // 类型定义
 // ═══════════════════════════════════════════════════════════
 
-/** 目标价值维度。 */
-export interface TargetValueBreakdown {
-  /** 资源价值（energy/mineral）。 */
-  resourceValue: number;
-  /** 经济影响（摧毁后对敌方经济的打击）。 */
-  economicImpact: number;
-  /** 战略价值（位置/通道意义）。 */
-  strategicValue: number;
-  /** 房间价值（RCL/设施等级）。 */
-  roomValue: number;
-  /** 未来价值（扩张潜力）。 */
-  futureValue: number;
-  /** 我方重建成本（如果目标是我方损失后夺回）。 */
-  replacementCost: number;
-  /** 物流成本（到达目标的运输开销）。 */
-  logisticsCost: number;
-  /** 军事成本（攻击所需的军事投入）。 */
-  militaryCost: number;
-  /** 总价值。 */
-  total: number;
-}
-
 export interface TargetCandidate {
   /** 房间名。 */
   roomName: string;

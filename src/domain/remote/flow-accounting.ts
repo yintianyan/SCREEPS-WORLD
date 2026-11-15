@@ -108,15 +108,6 @@ export function transportEfficiency(flow: ResourceFlowSnapshot): number {
 }
 
 /**
- * 计算损失率 = lost / produced。纯函数。
- * 返回 0..1 的比率。
- */
-export function lossRate(flow: ResourceFlowSnapshot): number {
-  if (flow.produced <= 0) return 0;
-  return Math.min(1, flow.lost / flow.produced);
-}
-
-/**
  * 判定是否为过量生产（Production > Transport Capacity）。
  * 即 container 在持续积压。
  * 纯函数。
@@ -128,18 +119,4 @@ export function isOverproducing(
 ): boolean {
   // 存量接近满 + 产出 > 运输
   return flow.stored >= containerCapacity * 0.9 && flow.produced > flow.transported;
-}
-
-/**
- * 判定是否为生产不足（Transport Capacity > Production）。
- * 即 hauler 有运力但无矿可运。
- * 纯函数。
- */
-export function isUnderproducing(
-  flow: ResourceFlowSnapshot,
-  /** 预期产出速率。 */
-  expectedRate: number,
-): boolean {
-  const actualRate = productionRate(flow);
-  return actualRate < expectedRate * 0.5;
 }

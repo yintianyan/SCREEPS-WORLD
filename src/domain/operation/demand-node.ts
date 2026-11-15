@@ -114,24 +114,6 @@ export function buildDemandNodes(
 }
 
 /**
- * 计算所有 Demand Nodes 的总需求量。
- */
-export function sumDemandRequested(nodes: readonly DemandNode[]): number {
-  let sum = 0;
-  for (const n of nodes) sum += n.requested;
-  return sum;
-}
-
-/**
- * 计算所有 Demand Nodes 的总剩余需求量。
- */
-export function sumDemandRemaining(nodes: readonly DemandNode[]): number {
-  let sum = 0;
-  for (const n of nodes) sum += n.remaining;
-  return sum;
-}
-
-/**
  * 更新 Demand Node 的已满足量（部分满足）。
  * 返回新 Demand Node（不可变）。
  */
@@ -237,4 +219,13 @@ function criticalityRank(c: Criticality): number {
     case "low":
       return 3;
   }
+}
+
+/**
+ * 计算所有 Demand Nodes 的总剩余需求量。
+ */
+export function sumDemandRemaining(nodes: readonly DemandNode[]): number {
+  let sum = 0;
+  for (const n of nodes) sum += n.remaining;
+  return sum;
 }

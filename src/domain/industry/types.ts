@@ -133,30 +133,6 @@ export interface LabDemandTable {
 
 // ─── Boost 决策 ─────────────────────────────────────────────
 
-/** Boost 请求：某个 creep 需要某种 boost。 */
-export interface BoostRequest {
-  readonly creepName: string;
-  readonly compound: Compound;
-  /** 需要 boost 的 body part 数量。 */
-  readonly bodyParts: number;
-  /** 优先级（越高越先执行）。 */
-  readonly priority: number;
-}
-
-/** Boost 策略配置。 */
-export interface BoostPolicy {
-  /** 角色 → 期望 boost 化合物映射。 */
-  readonly roleBoosts: Readonly<Record<string, Compound>>;
-  /** 降级 boost 链：当首选化合物的库存不足时，按序尝试更低 tier 的替代品。
-   * 例：["GH2O", "GH"] 表示首选 XGH2O 不足 → 试 GH2O（T2）→ 试 GH（T1）。
-   * 缺省或不设 → 仅使用首选，无降级（向后兼容）。 */
-  readonly fallbackBoosts?: Readonly<Record<string, readonly Compound[]>>;
-  /** 最低 RCL 才启用 boost。 */
-  readonly minRcl: number;
-  /** storage 中化合物低于此量时停止 boost（保留反应原料）。 */
-  readonly reserveAmount: number;
-}
-
 // ─── Terminal 策略（预留多房间扩展） ─────────────────────────
 
 /** Terminal 传输请求。 */
@@ -275,3 +251,27 @@ export const BOOST_EFFECT_PART: Readonly<Record<BoostEffect, BodyPartConstant>> 
   move: MOVE,
   tough: TOUGH,
 };
+
+/** Boost 策略配置。 */
+export interface BoostPolicy {
+  /** 角色 → 期望 boost 化合物映射。 */
+  readonly roleBoosts: Readonly<Record<string, Compound>>;
+  /** 降级 boost 链：当首选化合物的库存不足时，按序尝试更低 tier 的替代品。
+   * 例：["GH2O", "GH"] 表示首选 XGH2O 不足 → 试 GH2O（T2）→ 试 GH（T1）。
+   * 缺省或不设 → 仅使用首选，无降级（向后兼容）。 */
+  readonly fallbackBoosts?: Readonly<Record<string, readonly Compound[]>>;
+  /** 最低 RCL 才启用 boost。 */
+  readonly minRcl: number;
+  /** storage 中化合物低于此量时停止 boost（保留反应原料）。 */
+  readonly reserveAmount: number;
+}
+
+/** Boost 请求：某个 creep 需要某种 boost。 */
+export interface BoostRequest {
+  readonly creepName: string;
+  readonly compound: Compound;
+  /** 需要 boost 的 body part 数量。 */
+  readonly bodyParts: number;
+  /** 优先级（越高越先执行）。 */
+  readonly priority: number;
+}

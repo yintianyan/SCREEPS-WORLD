@@ -497,14 +497,6 @@ function getHostilesCached(room: Room): Creep[] {
  * 角色层（attacker）在 RolePolicy 的 acquire/work 候选中调用此函数，
  * 获取当前 tick 的攻击指令（目标 ID + 攻击类型 + 优先级）。
 
- * 如果返回 null，角色回退到原有行为（Legacy 兼容）。
- */
-export function getAttackIntent(creepName: string): AttackIntent | null {
-  const g = globalCache() as unknown as GlobalCache & TacticalEngagementCache;
-  const intents = g.attackIntents;
-  if (!intents) return null;
-  return intents.get(creepName) ?? null;
-}
 
 /**
  * 查询编队的 FocusFirePlan（诊断观测用）。

@@ -92,14 +92,6 @@ export type LabelSet = Partial<Record<AllowedLabel, string>>;
 
 // ─── Telemetry Event Schema ────────────────────
 
-export interface TelemetryEvent {
-  readonly tick: number;
-  readonly type: string;
-  readonly room?: string;
-  readonly operation?: string;
-  readonly data: Record<string, unknown>;
-}
-
 // ─── Decision Schema ─────────────────────────────
 
 export interface DecisionRecord {

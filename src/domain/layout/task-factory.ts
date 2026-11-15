@@ -140,19 +140,6 @@ export function relocateCandidate(
   return undefined;
 }
 
-/** 筛选可立即入队的安全任务（过滤 terrain/occupied/seal 等永久失败）。 */
-export function filterValidCandidates(
-  candidates: readonly BuildTaskCandidate[],
-): BuildTaskCandidate[] {
-  return candidates.filter(
-    c =>
-      c.validation === "ok" ||
-      c.validation === "rcl" ||
-      c.validation === "dependency" ||
-      c.validation === "site-limit",
-  );
-}
-
 /** 提取永久失败任务（用于 blocked 记录）；seal 除非邻居消失否则永不放行。 */
 export function extractBlockedCandidates(
   candidates: readonly BuildTaskCandidate[],

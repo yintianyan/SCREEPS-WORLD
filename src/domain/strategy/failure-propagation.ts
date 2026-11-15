@@ -496,21 +496,6 @@ export function findRootCauses(graph: FailureGraph): FailureNode[] {
 /**
  * 从失败节点列表中找到所有叶子节点（症状 = 没有出边的节点）。
 
- * @param graph 失败传播图
- * @returns 症状节点列表
- */
-export function findSymptoms(graph: FailureGraph): FailureNode[] {
-  const { nodes, edges } = graph;
-
-  // 收集所有有出边的节点 ID
-  const nodesWithOutgoing = new Set<string>();
-  for (const edge of edges) {
-    nodesWithOutgoing.add(edge.from);
-  }
-
-  // 症状 = 没有出边的活跃节点
-  return nodes.filter(n => !n.resolved && !nodesWithOutgoing.has(n.id));
-}
 
 /**
  * 计算失败图的整体严重度（纯函数）。

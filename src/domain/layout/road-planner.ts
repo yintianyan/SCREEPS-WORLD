@@ -162,16 +162,3 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
 
   return tasks;
 }
-
-/**
- * 【D-1 修复】交通数据轮换接口 — domain 层不再直读 globalCache。
- * 调用方（layout-planner system 层）提供轮换操作函数，
- * domain 层只负责声明「需要轮换」这一意图。
-
- * 无论 RCL、无论是否生成道路，每规划周期必须调用一次。
- * 确保 RCL4 启用流量路时已有 prevTraffic 可供双窗口比较。
- */
-export interface TrafficRotator {
-  /** 将当前窗口快照为 prevTraffic，然后清零当前窗口。 */
-  rotate(roomName: string): void;
-}

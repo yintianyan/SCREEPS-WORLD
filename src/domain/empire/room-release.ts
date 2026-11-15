@@ -27,18 +27,6 @@ export const RELEASE_REASON = {
   ColonyFailure: 1,
 } as const;
 
-/** 在途释放指令：房名 → 指令。territory-manager 是唯一写者。 */
-export interface RoomReleaseDirective {
-  /** 首次受理 tick —— draining 计时基准。 */
-  startedAt: number;
-  /** RELEASE_REASON 码。 */
-  reason: number;
-  /** 已发起 unclaim 的次数（含失败重试）。 */
-  unclaimAttempts?: number;
-  /** 最近一次 unclaim 的返回码（观测用，不参与判定）。 */
-  lastUnclaimCode?: number;
-}
-
 /** planReleaseStep 的输入 —— 全部由执行层从 Game/Memory 读好再传进来（domain 不碰运行时全局）。 */
 export interface ReleaseStepInput {
   /** 该房仍归我们且有视野（controller.my 成立 ⟺ territory-manager 认它还在）。 */
@@ -85,4 +73,16 @@ export function planReleaseStep(input: ReleaseStepInput): ReleaseStep {
     return { action: "unclaim" };
   }
   return { action: "keep-draining" };
+}
+
+/** 在途释放指令：房名 → 指令。territory-manager 是唯一写者。 */
+export interface RoomReleaseDirective {
+  /** 首次受理 tick —— draining 计时基准。 */
+  startedAt: number;
+  /** RELEASE_REASON 码。 */
+  reason: number;
+  /** 已发起 unclaim 的次数（含失败重试）。 */
+  unclaimAttempts?: number;
+  /** 最近一次 unclaim 的返回码（观测用，不参与判定）。 */
+  lastUnclaimCode?: number;
 }

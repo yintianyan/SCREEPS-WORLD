@@ -23,18 +23,6 @@ export interface BaseEvent {
 
 // ─── Milestone Event ──────────────────────────────────────
 
-/** 非终态事件 — 不进入 OutcomeChannel，不 finalize Experience。
- * - P1 claim 成功 → Milestone("CLAIMED")
- * - P5 forced advance → Milestone("FORCED_ADVANCE")
- * - P7 forced success → Milestone("FORCED_ADVANCE") */
-export interface MilestoneEvent extends BaseEvent {
-  readonly kind: "MILESTONE";
-  /** 里程碑名称：CLAIMED / FORCED_ADVANCE / STATE_TRANSITION 等。 */
-  readonly milestone: string;
-  /** 发生 tick。 */
-  readonly at: number;
-}
-
 // ─── Outcome Event ────────────────────────────────────────
 
 /** 扩张终态结果。只有这些才能进入 OutcomeChannel。
@@ -95,9 +83,6 @@ export interface OutcomeEvent extends BaseEvent {
   readonly delta?: DeltaObservation;
 }
 
-/** UOEM 事件联合类型。 */
-export type UOEMEvent = OutcomeEvent | MilestoneEvent;
-
 // ─── Outcome Channel ──────────────────────────────────────
 
 /** 入队结果。 */
@@ -109,4 +94,16 @@ export interface ChannelOverflowInfo {
   readonly duplicateRejected: number;
   /** 因容量不足被丢弃的最老事件数。 */
   readonly overflowEvicted: number;
+}
+
+/** 非终态事件 — 不进入 OutcomeChannel，不 finalize Experience。
+ * - P1 claim 成功 → Milestone("CLAIMED")
+ * - P5 forced advance → Milestone("FORCED_ADVANCE")
+ * - P7 forced success → Milestone("FORCED_ADVANCE") */
+export interface MilestoneEvent extends BaseEvent {
+  readonly kind: "MILESTONE";
+  /** 里程碑名称：CLAIMED / FORCED_ADVANCE / STATE_TRANSITION 等。 */
+  readonly milestone: string;
+  /** 发生 tick。 */
+  readonly at: number;
 }

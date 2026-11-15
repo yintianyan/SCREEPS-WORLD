@@ -153,11 +153,6 @@ export function intelConfidence(subject: string, tick: number) {
   return entry ? confidenceAt(entry, tick) : ("unknown" as const);
 }
 
-/** 观测通道：IntelState 体积（观测用）。 */
-export function intelSize(): { rooms: number; players: number } {
-  return { rooms: roomEntries.size, players: playerEntries.size };
-}
-
 /** 测试专用：清空 IntelState heap（单元测试跨用例隔离；生产路径不调用）。 */
 export function __resetIntelStateForTests(): void {
   roomEntries.clear();

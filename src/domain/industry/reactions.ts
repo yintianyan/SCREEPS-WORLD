@@ -127,14 +127,6 @@ export function evaluateReactionPlan(
   return { status: "complete" };
 }
 
-/** 总生产 tick 估算（单 lab 对；用于优先级排序）。 */
-export function estimateTicks(plan: ReactionPlan): number {
-  return plan.steps.reduce((total, step) => {
-    const batches = Math.ceil(step.amount / LAB_REACTION_AMOUNT);
-    return total + batches;
-  }, 0);
-}
-
 // ─── Lab 相邻校验（反应执行前置约束） ───────────────────────
 
 /** Lab 的位置信息（用于相邻校验，纯数据）。 */

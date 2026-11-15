@@ -8,10 +8,6 @@ import type { ResourceType } from "../operation/agenda-item";
 /**
  * 资源状态分类——用于五态分离。
 
- * 不变量：总量 = STORED + RESERVED + IN_TRANSIT + ALLOCATED + CONSUMED
- * （CONSUMED 是累计已消费量，不属于当前存量）。
- */
-export type ResourceState =
   | "stored" // 存储中（storage / terminal / container / carry）
   | "reserved" // 已预留（被 Reservation 锁定）
   | "in_transit" // 在途（被 Operation 分配，正在搬运）
@@ -273,17 +269,6 @@ export function updateProductionRateEma(
   return emaSample(prev, windowPerTick, alpha);
 }
 
-/**
- * 消费速率 EMA 更新。纯函数。
- */
-export function updateConsumptionRateEma(
-  prev: number | undefined,
-  windowPerTick: number,
-  alpha: number,
-): number {
-  return emaSample(prev, windowPerTick, alpha);
-}
-
 // ─── 多资源账本 ─────────────────────────────────────────────
 
 /**
@@ -343,16 +328,6 @@ export function getOrCreateEntry(
     ledger.set(resource, entry);
   }
   return entry;
-}
-
-/**
- * 获取账本条目（不存在返回 undefined）。纯函数。
- */
-export function getLedgerEntry(
-  ledger: ResourceLedger,
-  resource: ResourceType,
-): ResourceLedgerEntry | undefined {
-  return ledger.get(resource);
 }
 
 /**

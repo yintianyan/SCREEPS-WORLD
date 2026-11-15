@@ -1,5 +1,4 @@
 /** Terminal 交易与备货策略 — 纯函数层。单房只产一种矿物，而 lab 反应链需要 */
-import type { TerminalPolicy, TerminalTransfer } from "./types";
 
 /** 基础矿物库存目标（每种至少保留的量）。 */
 const MINERAL_RESERVE_TARGET: Readonly<Record<string, number>> = {
@@ -10,16 +9,6 @@ const MINERAL_RESERVE_TARGET: Readonly<Record<string, number>> = {
   K: 500,
   Z: 500,
   X: 200,
-};
-
-/** 单房间阶段 no-op 策略；多房间时替换为实际调度。 */
-export const singleRoomTerminalPolicy: TerminalPolicy = {
-  planTransfers(
-    _roomName: string,
-    _available: Readonly<Record<string, number>>,
-  ): readonly TerminalTransfer[] {
-    return [];
-  },
 };
 
 /** 低于 MINERAL_RESERVE_TARGET 的矿物缺口列表（供市场采购决策）。 */

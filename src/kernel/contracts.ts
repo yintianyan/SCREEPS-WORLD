@@ -236,16 +236,6 @@ export interface RoomSnapshot {
   readonly creepPositions?: ReadonlyMap<number, { name: string; my: boolean; fatigue: number }>;
 }
 
-/** 状态族版本（Intent 分层指纹数据源；实现见 kernel/state-store）。 */
-export interface StateStore {
-  /** 当前族版本（未触碰=0）。 */
-  version(family: string): number;
-  /** 递增并返回新版本（owner 在差分写入时调用）。 */
-  bump(family: string): number;
-  /** 全族快照（诊断/测试用）。 */
-  versionOfAll(): Record<string, number>;
-}
-
 /** 传递给每个系统和角色的不可变单 tick 上下文。 */
 export interface TickContext {
   readonly tick: number;
