@@ -1,7 +1,8 @@
 # ─── E2E 引擎验证 ─────────────────────────────────────────────
 # 在 PR 时运行真实引擎验证（screeps-server-mockup + dist/main.js）。
-# 与 deploy-screeps.yml 分离：deploy 用 --ignore-scripts 跳过原生模块，
-# E2E 需要完整的 isolated-vm 编译。
+# 与 deploy-screeps.yml 的分工按触发时机划界：本工作流守 PR（发布前的人工审查入口），
+# deploy 守 push dev（自动发布）；两者安装与冒烟步骤相同 —— 完整 npm ci
+#（isolated-vm 由 git 版 mockup 支持 Node24 编译），均含 E2E 冒烟。
 name: E2E Engine Verification
 
 on:

@@ -18,7 +18,7 @@ npm run build
 src/
 ├── main.ts / bootstrap.ts      启动入口与唯一组合根（所有角色/系统在此注册）
 ├── kernel/                     内核：调度、容错、CPU 预算、版本化内存
-│   └── migrations/             Memory schema 迁移数据表（按版本段拆分）
+│   └── migrations/             Memory schema 迁移（旧链归并后的单入口原子变换）
 ├── config/                     策略参数单一入口（CONFIG、body 配比、调优基线）
 ├── domain/                     纯领域逻辑（尽量与 Screeps 全局隔离，便于测试）
 │   ├── assignment/ economy/ expansion/ industry/ logistics/ remote/ spawn/
