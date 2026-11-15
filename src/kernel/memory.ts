@@ -8,7 +8,7 @@ import { log } from "./log";
 import { MIGRATIONS } from "./migrations";
 
 /**
- * 执行版本化迁移（K-5：与日常维护拆分为独立错误边界）。
+ * 执行版本化迁移（与日常维护拆分为独立错误边界：迁移 throw 不连坐清理）。
  * 迁移中途 throw 不再连坐死 creep 清理/房间兜底 — 持续失败的迁移
  * 曾使 maintainMemory 后半段整 tick 跳过，Memory.creeps 慢性泄漏。
  */
@@ -31,7 +31,7 @@ export function runMigrations(): void {
   }
 }
 
-/** 维护 Memory：清理死亡 creep、初始化默认值、失守房宽限清理（迁移由 runMigrations 独立执行，见 K-5）。 */
+/** 维护 Memory：清理死亡 creep、初始化默认值、失守房宽限清理（迁移由 runMigrations 独立执行）。 */
 export function maintainMemory(): void {
   Memory.creeps ??= {};
   Memory.rooms ??= {};

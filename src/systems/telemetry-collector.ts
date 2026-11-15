@@ -343,7 +343,7 @@ export const telemetryCollectorSystem: System = {
     // 1. CPU 时序采样（每 interval tick = 每 10 tick）
     sampleCpuData(tick, ctx);
 
-    // K-6 相位适配：本系统被 kernel 错峰到 tick ≡ phase (mod interval)，
+    // 相位适配：本系统被 kernel 错峰到 tick ≡ phase (mod interval)，
     // 内部二级采样门必须用相位相对判定 — 绝对对齐 tick % 50 === 0 与
     // 运行 tick 无交集，经济/人口采样会静默永久失效（tuning 输入断供）。
     const phase = systemPhase("telemetry-collector", CONFIG.telemetry.cpuSampleInterval);
@@ -1150,7 +1150,7 @@ export function tallyStrayObjects(
 }
 
 /**
- * 每 `populationInterval`（100 拍）一次，写在相位相对门里（K-6 约定，见 run() 的注释）。
+ * 每 `populationInterval`（100 拍）一次，写在相位相对门里（相位偏移约定，见 run() 的注释）。
  * ⚠️**干净态也落盘**（`structures: {}`）—— 这台仪器的"没残留"必须是正面读数；
  * 键整个不见只意味着两件事之一：这段代码没上线，或本 boot 段没跑到那一拍。
  */

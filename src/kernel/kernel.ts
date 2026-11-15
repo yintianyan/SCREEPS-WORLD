@@ -180,7 +180,7 @@ export class Kernel {
     const preCost = measuredRun("phase/pre", () => {
       safeRun("segments-request", () => requestSegments(), true);
 
-      // Memory — 迁移与日常维护拆分为两个错误边界（K-5）：迁移 throw 不连坐
+      // Memory — 迁移与日常维护拆分为两个错误边界：迁移 throw 不连坐
       // 死 creep 清理/房间兜底（防 Memory.creeps 慢性泄漏）。关键步骤：永不冷却。
       safeRun("memory-migrate", () => runMigrations(), true);
       safeRun("memory", () => maintainMemory(), true);
@@ -524,7 +524,7 @@ export class Kernel {
             globalCreepEnergy,
             globalPendingHarvesters,
           ),
-        // K-1：快照是 P0 级基础设施 — 构建失败通常是确定性代码 bug，非 critical
+        // 快照是 P0 级基础设施 — 构建失败通常是确定性代码 bug，非 critical
         // 会在连续 3 次失败后冷却 80 tick，该房对所有消费快照的系统/角色隐身。
         // critical=true 让失败走限流日志暴露而非静默冷却，与 maintainMemory 同待遇。
         true,
@@ -546,7 +546,7 @@ export class Kernel {
     const systems = this.sortedSystems;
     for (const [i, system] of systems.entries()) {
       if (!this.shouldRunSystem(system, ctx)) {
-        // K-6：interval 跳过是计划内行为，不记 skipReason —
+        // 相位偏移：interval 跳过是计划内行为，不记 skipReason —
         // 与 budget/colony-state 等异常跳过混入同一表会让遥测
         // skipHotspot 长期被百级 interval 计数淹没，真实信号不可见。
         continue;
@@ -584,7 +584,7 @@ export class Kernel {
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) {
         // 这条出口故意不写 skipReason（逐系统记会淹没 skipHotspot，见上面
-        // K-6 注释），但「整批饿死」是这台机器唯一不可数的失败面 ⇒ 只记聚合标量。
+        // 相位偏移注释），但「整批饿死」是这台机器唯一不可数的失败面 ⇒ 只记聚合标量。
         // 口径＝本拍到期而未跑（过 interval 闸，纯函数），是上界不是「一定跑得成」。
         recordTailDrop(
           gRun,
@@ -901,7 +901,7 @@ export class Kernel {
   }
 
   private shouldRunSystem(system: System, ctx: Context): boolean {
-    // 间隔检查：最多每 N tick 运行一次。K-6：按系统名哈希做相位偏移 —
+    // 间隔检查：最多每 N tick 运行一次。按系统名哈希做相位偏移 —
     // 原先 tick % interval === 0 使同 interval 的系统在同一 tick 扎堆运行
     // （每 10 tick 一个 CPU 尖峰节律），「错峰」原则未落实到系统层。
     // 内部有二级取模调度的系统必须用 systemPhase() 做相位相对判定。
