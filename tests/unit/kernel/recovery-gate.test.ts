@@ -8,7 +8,16 @@ import { upgraderRole } from "../../../src/creeps/roles/upgrader";
 import { resetGlobals } from "../../support/factories";
 
 function makeCreep(name: string, role: string, home = "W7N4") {
-  return { name, memory: { role, home }, ticksToLive: 1000 };
+  // buildSnapshots 逐 creep 读取 room/pos/body（per-creep 容错缺一即跳过该 creep），
+  // 测试 creep 须贴近真实引擎对象形状。
+  return {
+    name,
+    memory: { role, home },
+    room: { name: home },
+    pos: { x: 25, y: 25 },
+    body: [],
+    ticksToLive: 1000,
+  };
 }
 
 function makeKernel() {
@@ -58,6 +67,7 @@ describe("Kernel recovery 门禁 — recoveryEligible 角色豁免", () => {
     };
     (globalThis as any).Memory.rooms = { W7N4: { colonyState: "recovery" } };
 
+    (kernel as any).buildSnapshots(makeCtx());
     (kernel as any).runCreeps(makeCtx());
 
     expect(mSpy).toHaveBeenCalledTimes(1);
@@ -75,6 +85,7 @@ describe("Kernel recovery 门禁 — recoveryEligible 角色豁免", () => {
     };
     (globalThis as any).Memory.rooms = { W7N4: { colonyState: "bootstrap" } };
 
+    (kernel as any).buildSnapshots(makeCtx());
     (kernel as any).runCreeps(makeCtx());
 
     // builder 豁免：bootstrap 下建造关键基建是生存行为
@@ -90,6 +101,7 @@ describe("Kernel recovery 门禁 — recoveryEligible 角色豁免", () => {
     (globalThis as any).Game.creeps = { mm: makeCreep("mm", "mineralMiner") };
     (globalThis as any).Memory.rooms = { W7N4: { colonyState: "recovery" } };
 
+    (kernel as any).buildSnapshots(makeCtx());
     (kernel as any).runCreeps(makeCtx());
 
     expect(mSpy).toHaveBeenCalledTimes(1);

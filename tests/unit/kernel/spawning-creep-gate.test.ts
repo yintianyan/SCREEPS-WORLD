@@ -17,7 +17,16 @@ import { upgraderRole } from "../../../src/creeps/roles/upgrader";
 import { resetGlobals } from "../../support/factories";
 
 function makeCreep(name: string, role: string, spawning = false) {
-  return { name, memory: { role, home: "W7N4" }, spawning, ticksToLive: 1000 };
+  // 同 recovery-gate：贴近真实引擎对象形状（buildSnapshots 逐 creep 读 room/pos/body）。
+  return {
+    name,
+    memory: { role, home: "W7N4" },
+    room: { name: "W7N4" },
+    pos: { x: 25, y: 25 },
+    body: [],
+    spawning,
+    ticksToLive: 1000,
+  };
 }
 
 function makeCtx() {
@@ -46,6 +55,7 @@ describe("kernel — 孵化中的 creep 不进角色管线", () => {
     (globalThis as any).Game.creeps = { b1: makeCreep("b1", "builder", true) };
     (globalThis as any).Memory.rooms = { W7N4: { colonyState: "normal" } };
 
+    (kernel as any).buildSnapshots(makeCtx());
     (kernel as any).runCreeps(makeCtx());
 
     expect(bSpy).not.toHaveBeenCalled();
@@ -58,6 +68,7 @@ describe("kernel — 孵化中的 creep 不进角色管线", () => {
     (globalThis as any).Game.creeps = { b2: makeCreep("b2", "builder", false) };
     (globalThis as any).Memory.rooms = { W7N4: { colonyState: "normal" } };
 
+    (kernel as any).buildSnapshots(makeCtx());
     (kernel as any).runCreeps(makeCtx());
 
     expect(bSpy).toHaveBeenCalledTimes(1);

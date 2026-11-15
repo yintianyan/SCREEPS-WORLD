@@ -128,6 +128,13 @@ function hashCreepName(name: string): number {
 
 export class Kernel {
   private readonly roleMap: Map<string, CreepRole>;
+  /** 每 tick 的角色管线花名册 — buildSnapshots 单遍构建，runCreeps 直接消费。
+   *  旧实现 runCreeps 再做一次 O(creeps) 全量遍历；三处遍历（快照索引/E7 施工统计/
+   *  角色管线）合一为采集端单遍。
+   *  role 为 undefined = 未知角色，runCreeps 走自愈分支。 */
+  private tickRoster: Array<{ creep: Creep; role: CreepRole | undefined }> = [];
+  /** 每 tick 的「能施工人数」按房统计（含孵化中，WORK≥1 即计）— 供 E7 buildQueue 期望消费。 */
+  private tickWorkersByRoom: Record<string, number> = {};
   private readonly sortedSystems: readonly System[];
   private readonly postSystems: readonly System[];
   /** 观测层系统（`System.budgetExempt`）—— 不经预算闸，见 runObservabilitySystems。 */
@@ -355,6 +362,12 @@ export class Kernel {
     // 供 spawn-manager / assignment / logistics / logistics-planner / lab-system 消费。
     const creepRefs: CreepRef[] = [];
     const roleMap = this.roleMap;
+    this.tickRoster = [];
+    this.tickWorkersByRoom = {};
+    // E7 施工人数统计保持旧节流：仅当本 tick 存在工地时才逐 creep 数 WORK 部件
+    // （无工地时 E7 早返回，计数纯浪费）。
+    const hasConstructionSites =
+      Game.constructionSites !== undefined && Object.keys(Game.constructionSites).length > 0;
     for (const creep of Object.values(Game.creeps)) {
       // per-creep 防御：单只异常 creep 只损失它自己的索引条目，不拖垮整个
       // 快照构建。个别字段异常（引擎 edge case、手工注入的 mock 缺字段）是
@@ -374,6 +387,21 @@ export class Kernel {
         }
         const roleName = creep.memory.role;
         const roleDef = roleMap.get(roleName ?? "");
+        // 角色管线花名册（孵化中不入列，其 skip 计数在采集端等价聚合；
+        // 未知角色入列，由 runCreeps 走自愈分支）。roster push 放 try 最顶部：
+        // 后续任一字段异常只损失该 creep 的索引条目，不损失它的本拍执行权。
+        if (creep.spawning) {
+          recordSkip("creep/spawning");
+        } else {
+          this.tickRoster.push({ creep, role: roleDef });
+        }
+        if (hasConstructionSites) {
+          const workParts = creep.getActiveBodyparts(WORK) ?? 0;
+          if (workParts > 0) {
+            const rn = creep.room?.name;
+            if (rn) this.tickWorkersByRoom[rn] = (this.tickWorkersByRoom[rn] ?? 0) + 1;
+          }
+        }
         // 角色自报分类标签 — kernel 不硬编码角色名。
         if (roleDef?.isRepairWorker) {
           const repairHome = home ?? creep.room.name;
@@ -770,18 +798,10 @@ export class Kernel {
       return result;
     }
 
-    // 一次遍历 creep 得到每房「能施工的人」（带 ≥1 个 WORK 部件的我方 creep）。
-    // ⚠️不按 role 筛：远矿路是通勤 hauler 建的（remote-hauler.ts:89），只数 builder 会把远矿停滞误判成"没派人"。
-    // O(creeps) 一遍，不是 O(sites × creeps)。
-    const workersByRoom: Record<string, number> = {};
-    for (const name in Game.creeps) {
-      const creep = Game.creeps[name];
-      if (!creep || creep.my !== true) continue;
-      const roomName = creep.pos?.roomName;
-      if (!roomName) continue;
-      if ((creep.getActiveBodyparts(WORK) ?? 0) <= 0) continue;
-      workersByRoom[roomName] = (workersByRoom[roomName] ?? 0) + 1;
-    }
+    // 「能施工的人」按房统计来自 buildSnapshots 单遍（含孵化中，WORK≥1 即计；
+    // ⚠️不按 role 筛：远矿路是通勤 hauler 建的（remote-hauler.ts:89），只数 builder
+    // 会把远矿停滞误判成"没派人"）——此处不再遍历。
+    const workersByRoom = this.tickWorkersByRoom;
 
     for (const id of siteIds) {
       const site = sites[id];
@@ -973,21 +993,13 @@ export class Kernel {
   }
 
   private runCreeps(ctx: Context): void {
-    const roleMap = this.roleMap;
-
     const creepEntries: Array<{ creep: Creep; role: CreepRole }> = [];
-    for (const creep of Object.values(Game.creeps)) {
-      // 孵化中的 creep 不进角色管线：引擎对它的一切动作都回 ERR_BUSY，跑一整个
-      // 候选链只产生空签发（实测占 3 房发育世界全部无效签发的 82%：move BUSY
-      // 0.52/tick，且按 spawn 槽位数而非人口-scaling —— 6 房帝国会更贵）。
-      // 相关性实测：在孵数=0 的 437 tick 上 move BUSY 恰为 0.000/tick，
-      // 在孵 ≥1 的 763 tick 上是 0.824/tick。
-      if (creep.spawning) {
-        recordSkip("creep/spawning");
-        continue;
-      }
-      const role = roleMap.get(creep.memory.role);
-      if (!role) {
+    // 花名册来自 buildSnapshots 单遍（本 tick 前序相位，数据同构）——此处不再遍历。
+    // 孵化中的 creep 不进角色管线：引擎对它的一切动作都回 ERR_BUSY，跑一整个
+    // 候选链只产生空签发（实测占 3 房发育世界全部无效签发的 82%），skip 计数
+    // 已在采集端按同 key 聚合。
+    for (const { creep, role: roleDef } of this.tickRoster) {
+      if (!roleDef) {
         // 自愈：清除未知角色的旧目标/分配；用稳定 label（按角色名而非 creep 名）限频。
         creep.memory.targetId = undefined;
         creep.memory.assignment = undefined;
@@ -999,7 +1011,7 @@ export class Kernel {
         });
         continue;
       }
-      creepEntries.push({ creep, role });
+      creepEntries.push({ creep, role: roleDef });
     }
 
     // 排序：角色优先级升序（P0 在前）→ 同优先级按执行顺序（X-19）→ ticksToLive 升序。
