@@ -122,6 +122,15 @@ describe("computeSelfSufficiency", () => {
 // ─── buildRoomEconomicProfile ─────────────────────────────
 
 describe("buildRoomEconomicProfile", () => {
+  // 净流时间尺度自描述：同一个 netFlow 字段名承载两台时钟（房间快窗 / 扩张闸慢窗）。
+  // 构造器产出永远是快窗；慢窗由 empire-economy 二次平滑后自行改标记。这条不变量
+  // 是可断言的，不靠读调用栈——历史上「读错刻度」反复发生，读错时不会有任何报错。
+  it("产出的净流刻度标记恒为 room（慢窗由消费方自行改标）", () => {
+    const snap = mockSnapshot({ rcl: 6, spawns: [{} as never], storage: makeStorageMock(50000) });
+    const p = buildRoomEconomicProfile(snap, makeRoomMem(), makeEconomy(), 1000);
+    expect(p.netFlowWindow).toBe("room");
+  });
+
   it("组装完整 Profile：RCL6 + storage + 正净流", () => {
     const snap = mockSnapshot({
       rcl: 6,
@@ -268,6 +277,7 @@ describe("canExportEnergy", () => {
       hasStorage: true,
       hasTerminal: true,
       netFlow: 5,
+      netFlowWindow: "room",
       contractReserve: 50000,
       riskBuffer: 1000,
       estimatedIncome: 14,
@@ -336,6 +346,7 @@ describe("needsEnergyAid", () => {
       hasStorage: true,
       hasTerminal: false,
       netFlow: 5,
+      netFlowWindow: "room",
       contractReserve: 30000,
       riskBuffer: 600,
       estimatedIncome: 14,

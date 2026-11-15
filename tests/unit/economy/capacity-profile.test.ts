@@ -15,6 +15,7 @@ function makeProfile(over?: Partial<RoomEconomicProfile>): RoomEconomicProfile {
     hasStorage: true,
     hasTerminal: true,
     netFlow: 5,
+    netFlowWindow: "room",
     contractReserve: 50000,
     riskBuffer: 1000,
     estimatedIncome: 14,

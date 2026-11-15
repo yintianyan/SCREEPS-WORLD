@@ -61,6 +61,13 @@ export type RoomEconomicClass = "core" | "production" | "candidate" | "strugglin
  * - storageCapacity 为 0 时 storageRatio = 0（不 NaN）
  * - economyQuery 为 undefined（未核算过）时，三指标字段回退为 0/安全默认值
  */
+/**
+ * 净流读数的时间尺度。
+ * - `room`：房间级快窗（CONFIG.economy.accounting.netFlowAlpha，α=0.3）。
+ * - `gate`：扩张闸慢窗（netFlowGateAlpha，α=0.02），由房间值二次平滑而来。
+ */
+export type NetFlowWindow = "room" | "gate";
+
 export interface RoomEconomicProfile {
   /** 房间名。 */
   roomName: string;
@@ -76,8 +83,26 @@ export interface RoomEconomicProfile {
   hasTerminal: boolean;
 
   // ── Economy 三指标（从 EconomyQuery 派生）──
-  /** 净流 EMA（能量/tick，可负）。未核算过为 0。 */
+  /**
+   * 净流 EMA（能量/tick，可负）。未核算过为 0。
+   *
+   * ⚠️ 读它前先看 `netFlowWindow`：同一个字段名承载两台时钟 ——
+   * `"room"` 是房间级快窗（α=0.3，喂预算分配与健康度），
+   * `"gate"` 是把房间值再过一道慢 EMA（α=0.02，只为扩张闸 G3/G4）。
+   * 两台时钟不可互换：快窗会给成包到达的能量（远矿一趟 1,000~2,000）
+   * 造成混叠，慢窗会让幼房预算迟迟不放行。
+   */
   netFlow: number;
+  /**
+   * `netFlow` 的时间尺度标记 —— 这个字段自描述「我读的是哪台时钟」。
+   *
+   * 建立的理由：empire-economy 步 4b 用 `{ ...p, netFlow: smoothed }` 把整份
+   * profile 换成慢时钟版本，下游（resource-view / room-registry / supply-node）
+   * 都盲读 `profile.netFlow`。于是「某个值到底是快是慢」只能靠回溯调用栈判断，
+   * 谁在中途插一段消费逻辑都可能读错刻度而不自知 —— 这正是同一指标多出口
+   * 反复出错的形态。标记让刻度成为数据，可断言、可测试。
+   */
+  netFlowWindow: NetFlowWindow;
   /**
    * 刹车用净流（能量/tick）= netFlow + 资本支出。
    * 与 netFlow 的唯一区别：建造（自有/远矿工地）不再记成"失血"。
@@ -267,6 +292,8 @@ export function buildRoomEconomicProfile(
   const hasTerminal = snapshot.terminal !== undefined;
 
   // ── Economy 三指标 ──
+  // 这里产出的永远是房间级快窗；慢窗版本由消费方（empire-economy 步 4b）二次平滑后
+  // 自行标记为 "gate"，不许在原地改写 netFlow 而不改标记。
   const netFlow = economy?.netFlow ?? 0;
   // 资本支出加回去 ⇒ 刹车用净流。缺列（旧快照/未核算）时恒等于 netFlow，不改变行为。
   const capexFlow = Math.max(0, economy?.capexFlow ?? 0);
@@ -314,6 +341,7 @@ export function buildRoomEconomicProfile(
     hasStorage,
     hasTerminal,
     netFlow,
+    netFlowWindow: "room",
     brakeNetFlow,
     contractReserve,
     riskBuffer,

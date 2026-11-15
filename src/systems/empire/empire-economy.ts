@@ -234,7 +234,9 @@ export const empireEconomySystem: System = {
     const gateProfiles = profiles.map(p => {
       const smoothed = updateNetFlowEma(gateStore[p.roomName], p.netFlow, gateAlpha);
       gateStore[p.roomName] = smoothed;
-      return { ...p, netFlow: smoothed };
+      // 换掉 netFlow 必须同时换刻度标记：下游任何消费方都靠它区分快慢两台时钟，
+      // 只换值不换标记等于让读者误以为手里还是快窗读数。
+      return { ...p, netFlow: smoothed, netFlowWindow: "gate" as const };
     });
     // 丢掉已不属于本帝国的房（失房/放弃后不留残值，免得下次同名房继承旧 EMA）。
     for (const roomName of Object.keys(gateStore)) {
