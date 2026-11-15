@@ -13,6 +13,22 @@ interface StaticParts {
   allStructures: AnyStructure[];
   sources: Source[];
   minerals: Mineral[];
+  /** 类型分组结果与 find 一同缓存（元素是同一批活对象引用，hits/energy 自动新鲜）——
+   *  免去缓存命中后每拍仍对全量数组做 9 次 filter + 5 次 find 的重复遍历。 */
+  spawns: StructureSpawn[];
+  extensions: StructureExtension[];
+  towers: StructureTower[];
+  links: StructureLink[];
+  labs: StructureLab[];
+  containers: StructureContainer[];
+  roads: StructureRoad[];
+  walls: StructureWall[];
+  ramparts: StructureRampart[];
+  extractor?: StructureExtractor;
+  factory?: StructureFactory;
+  observer?: StructureObserver;
+  powerSpawn?: StructurePowerSpawn;
+  nuker?: StructureNuker;
 }
 
 const staticCache = new Map<string, StaticParts>();
@@ -34,7 +50,50 @@ function readStaticParts(room: Room): StaticParts {
   } catch {
     // FIND_MINERALS 可能在测试环境未定义。
   }
-  return { tick: Game.time, myStructures, allStructures, sources, minerals };
+  const spawns = myStructures.filter(isSpawn) as StructureSpawn[];
+  const extensions = myStructures.filter(isExtension) as StructureExtension[];
+  const towers = myStructures.filter(isTower) as StructureTower[];
+  const links = myStructures.filter(isLink) as StructureLink[];
+  const labs = myStructures.filter(isLab) as StructureLab[];
+  const containers = allStructures.filter(
+    s => s.structureType === STRUCTURE_CONTAINER,
+  ) as StructureContainer[];
+  const roads = allStructures.filter(s => s.structureType === STRUCTURE_ROAD) as StructureRoad[];
+  const walls = allStructures.filter(s => s.structureType === STRUCTURE_WALL) as StructureWall[];
+  const ramparts = allStructures.filter(
+    s => s.structureType === STRUCTURE_RAMPART,
+  ) as StructureRampart[];
+  const extractor = allStructures.find(s => s.structureType === STRUCTURE_EXTRACTOR) as
+    StructureExtractor | undefined;
+  const factory = allStructures.find(s => s.structureType === STRUCTURE_FACTORY) as
+    StructureFactory | undefined;
+  const observer = allStructures.find(s => s.structureType === STRUCTURE_OBSERVER) as
+    StructureObserver | undefined;
+  const powerSpawn = allStructures.find(s => s.structureType === STRUCTURE_POWER_SPAWN) as
+    StructurePowerSpawn | undefined;
+  const nuker = allStructures.find(s => s.structureType === STRUCTURE_NUKER) as
+    StructureNuker | undefined;
+  return {
+    tick: Game.time,
+    myStructures,
+    allStructures,
+    sources,
+    minerals,
+    spawns,
+    extensions,
+    towers,
+    links,
+    labs,
+    containers,
+    roads,
+    walls,
+    ramparts,
+    extractor,
+    factory,
+    observer,
+    powerSpawn,
+    nuker,
+  };
 }
 
 function readStaticPartsCached(room: Room): StaticParts {
@@ -64,34 +123,22 @@ export function buildRoomSnapshot(
   globalPendingHarvesters?: ReadonlyMap<string, number>,
 ): RoomSnapshot {
   const staticParts = readStaticPartsCached(room);
-  const myStructures = staticParts.myStructures;
-  const spawns = myStructures.filter(isSpawn);
-  const extensions = myStructures.filter(isExtension);
-  const towers = myStructures.filter(isTower);
-  const links = myStructures.filter(isLink);
-  const labs = myStructures.filter(isLab);
-
-  // 一次 find 获取所有中性结构，在 JS 层按类型分组 — 比多次带 filter 的 find
-  // 更高效（减少 C++ ↔ JS 边界穿越）。
+  // 类型分组随 find 一同缓存（StaticParts）——缓存命中拍不再重跑 9 次 filter + 5 次 find。
   const allStructures = staticParts.allStructures;
-  const containers = allStructures.filter(
-    s => s.structureType === STRUCTURE_CONTAINER,
-  ) as StructureContainer[];
-  const roads = allStructures.filter(s => s.structureType === STRUCTURE_ROAD) as StructureRoad[];
-  const walls = allStructures.filter(s => s.structureType === STRUCTURE_WALL) as StructureWall[];
-  const ramparts = allStructures.filter(
-    s => s.structureType === STRUCTURE_RAMPART,
-  ) as StructureRampart[];
-  const extractor = allStructures.find(s => s.structureType === STRUCTURE_EXTRACTOR) as
-    StructureExtractor | undefined;
-  const factory = allStructures.find(s => s.structureType === STRUCTURE_FACTORY) as
-    StructureFactory | undefined;
-  const observer = allStructures.find(s => s.structureType === STRUCTURE_OBSERVER) as
-    StructureObserver | undefined;
-  const powerSpawn = allStructures.find(s => s.structureType === STRUCTURE_POWER_SPAWN) as
-    StructurePowerSpawn | undefined;
-  const nuker = allStructures.find(s => s.structureType === STRUCTURE_NUKER) as
-    StructureNuker | undefined;
+  const spawns = staticParts.spawns;
+  const extensions = staticParts.extensions;
+  const towers = staticParts.towers;
+  const links = staticParts.links;
+  const labs = staticParts.labs;
+  const containers = staticParts.containers;
+  const roads = staticParts.roads;
+  const walls = staticParts.walls;
+  const ramparts = staticParts.ramparts;
+  const extractor = staticParts.extractor;
+  const factory = staticParts.factory;
+  const observer = staticParts.observer;
+  const powerSpawn = staticParts.powerSpawn;
+  const nuker = staticParts.nuker;
 
   const storage = room.storage ?? undefined;
   const terminal = room.terminal ?? undefined;

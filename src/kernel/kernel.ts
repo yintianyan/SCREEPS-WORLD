@@ -132,7 +132,8 @@ export class Kernel {
    *  旧实现 runCreeps 再做一次 O(creeps) 全量遍历；三处遍历（快照索引/E7 施工统计/
    *  角色管线）合一为采集端单遍。
    *  role 为 undefined = 未知角色，runCreeps 走自愈分支。 */
-  private tickRoster: Array<{ creep: Creep; role: CreepRole | undefined }> = [];
+  private readonly p3SystemRefs: P3SystemRef[];
+  private tickRoster: Array<{ creep: Creep; role: CreepRole | undefined; ttl: number }> = [];
   /** 每 tick 的「能施工人数」按房统计（含孵化中，WORK≥1 即计）— 供 E7 buildQueue 期望消费。 */
   private tickWorkersByRoom: Record<string, number> = {};
   private readonly sortedSystems: readonly System[];
@@ -155,6 +156,9 @@ export class Kernel {
     const scheduled = all.filter(s => s.budgetExempt !== true);
     this.sortedSystems = scheduled.filter(s => (s.phase ?? "main") === "main");
     this.postSystems = scheduled.filter(s => s.phase === "post");
+    this.p3SystemRefs = [...this.sortedSystems, ...this.postSystems]
+      .filter(s => s.priority === 3)
+      .map(s => ({ name: s.name, interval: s.interval }));
   }
 
   run(): void {
@@ -393,7 +397,7 @@ export class Kernel {
         if (creep.spawning) {
           recordSkip("creep/spawning");
         } else {
-          this.tickRoster.push({ creep, role: roleDef });
+          this.tickRoster.push({ creep, role: roleDef, ttl: creep.ticksToLive ?? 1500 });
         }
         if (hasConstructionSites) {
           const workParts = creep.getActiveBodyparts(WORK) ?? 0;
@@ -595,9 +599,7 @@ export class Kernel {
     const kernelMem = Memory.kernel;
     if (!kernelMem) return;
     const g = globalCache();
-    const p3Systems: P3SystemRef[] = [...this.sortedSystems, ...this.postSystems]
-      .filter(s => s.priority === 3)
-      .map(s => ({ name: s.name, interval: s.interval }));
+    const p3Systems = this.p3SystemRefs;
     // E3: 采集每房 spawn queue 快照
     const spawnQueues: SpawnQueueSnapshot[] = [];
     const e3Prev: Record<string, E3ViolationRecord> =

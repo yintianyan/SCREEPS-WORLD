@@ -58,6 +58,8 @@ export function emitSummary(budget: Budget): void {
   if (!g.telemetry) return;
   const t = g.telemetry;
   const totalCpu = Game.cpu.getUsed();
+  // 早退在前：排序/拼串只在真要打日志时才做（每拍省一次全表排序与字符串构建）。
+  if (!(totalCpu > budget.softLimit * 0.8 || t.errors > 0)) return;
   const bucket = Game.cpu.bucket ?? 0;
 
   const topSystems = Object.entries(t.systemCpu)
@@ -100,7 +102,5 @@ export function emitSummary(budget: Budget): void {
     }
   }
 
-  if (totalCpu > budget.softLimit * 0.8 || t.errors > 0) {
-    log.info("telemetry", parts.join(" "));
-  }
+  log.info("telemetry", parts.join(" "));
 }

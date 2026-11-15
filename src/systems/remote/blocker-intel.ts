@@ -1,4 +1,5 @@
 /** 远矿威胁与阻断情报 — body-aware 威胁检测、InvaderCore 分类、防御决策输入构建。 */
+import { getHostilesCached } from "../../creeps/support/targeting";
 import { CONFIG } from "../../config";
 import { selectBody } from "../../config/bodies";
 import { classifyThreats } from "../../domain/defense/threat";
@@ -25,7 +26,9 @@ export function collectRemoteThreats(
     // F-2：body-aware 威胁判定，与经济角色 flee 的 getRoomThreats 同口径
     // （classifyThreats 用同一 THREAT_PARTS）。原实现"任何非盟友即威胁"会为
     // 纯 MOVE 斥候空孵 defender（追不上也杀不了）+ 停产 300t，口径与 flee 分裂。
-    const hostiles = room.find(FIND_HOSTILE_CREEPS);
+    // 与经济角色 flee 的 getHostilesCached 共享 per-tick per-room 缓存（defender
+    // 同拍在场时不再重复全房 find）。
+    const hostiles = getHostilesCached(room);
     threats[roomName] = classifyThreats(hostiles, CONFIG.defense.allies).length > 0;
   }
   return threats;
