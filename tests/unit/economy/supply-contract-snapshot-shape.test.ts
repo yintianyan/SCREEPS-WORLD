@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
+  commitContractLedger,
   contractEndpointsHaveStorage,
   deserializeContract,
+  openContractLedger,
   serializeContract,
   isContractActive,
   type ContractMemorySnapshot,
@@ -78,5 +82,84 @@ describe("contractEndpointsHaveStorage — 复活路径的安全闸", () => {
     expect(contractEndpointsHaveStorage(c, room => room === "W37S58")).toBe(false);
     // source 侧缺 storage 同样不发（没得可抽）
     expect(contractEndpointsHaveStorage(c, room => room === "W38S56")).toBe(false);
+  });
+});
+/**
+ * 事务边界把「读到什么形状」收敛到单点：三方消费者原先各自断言，
+ * 字段读不懂的条目会按各自默认值被解释（缺 st 读成 proposed、缺 s 永不被摘），
+ * 而 planner 的整表写回会把误读的条目原样续写。事务保证三方看到同一份良构快照。
+ */
+describe("合同账事务 — 畸形条目在边界丢弃", () => {
+  const good = {
+    i: "c1",
+    s: "W1N1",
+    t: "W1N2",
+    r: "E",
+    tr: 180,
+    mr: 200000,
+    p: 0,
+    st: "A",
+    ca: 1,
+    ua: 2,
+    td: 0,
+    cs: 0,
+    dm: 50,
+    rs: "x",
+  };
+
+  it("非数组 / 缺省视为空账且不计畸形", () => {
+    expect(openContractLedger(undefined)).toEqual({ malformed: 0, snapshots: [] });
+    expect(openContractLedger("nope")).toEqual({ malformed: 0, snapshots: [] });
+  });
+
+  it("良构条目原样保留，非对象与缺关键列被剔除并计数", () => {
+    const tx = openContractLedger([
+      good,
+      null,
+      { ...good, i: "" },
+      { ...good, s: undefined },
+      { ...good, tr: "180" },
+      { ...good, dm: Number.NaN },
+    ]);
+    expect(tx.snapshots).toHaveLength(1);
+    expect(tx.snapshots[0]).toBe(good);
+    expect(tx.malformed).toBe(5);
+  });
+
+  it("可选列缺省合法（旧快照没有 lm/ac/tm/li/sr/tr2）", () => {
+    const old = {
+      i: "c2",
+      s: "W1N1",
+      t: "W1N2",
+      r: "E",
+      tr: 10,
+      mr: 0,
+      p: 1,
+      st: "P",
+      ca: 1,
+      ua: 1,
+      td: 0,
+      cs: 0,
+      dm: 100,
+      rs: "",
+    };
+    expect(openContractLedger([old]).snapshots).toHaveLength(1);
+  });
+
+  it("提交后交回纯快照数组，空账交回空数组而非 undefined", () => {
+    expect(commitContractLedger(openContractLedger([good]))).toEqual([good]);
+    expect(commitContractLedger({ malformed: 3, snapshots: [] })).toEqual([]);
+  });
+});
+
+/**
+ * 守卫：Memory 契约不得退化为 unknown[]。退化的代价是每个读者重新长一份本地断言，
+ * 读者之间按各自默认值解释同一条脏数据 —— 正是「一张表两种形状」事故的土壤。
+ */
+describe("守卫 — supplyContracts 在 Memory 契约中带具体类型", () => {
+  it("global.d.ts 不把它声明为 unknown[]", () => {
+    const src = readFileSync(resolve(__dirname, "../../../src/types/global.d.ts"), "utf8");
+    expect(/supplyContracts\s*\?:\s*unknown\s*\[\]/.test(src)).toBe(false);
+    expect(/supplyContracts\s*\?:\s*ContractMemorySnapshot\s*\[\]/.test(src)).toBe(true);
   });
 });

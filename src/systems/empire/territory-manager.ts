@@ -16,6 +16,7 @@
 import { recordTyped } from "../../kernel/event-log";
 import { CONFIG } from "../../config";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
+import { commitContractLedger } from "../../domain/economy/supply-contract";
 import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import {
@@ -270,11 +271,11 @@ function dropCrossRoomLedgersFor(kernel: KernelMemory, room: string): void {
     }
   }
 
-  const contracts = kernel.supplyContracts as Array<{ s?: string; t?: string }> | undefined;
+  const contracts = kernel.supplyContracts;
   if (Array.isArray(contracts)) {
     const kept = contracts.filter(c => c.s !== room && c.t !== room);
     if (kept.length !== contracts.length) {
-      kernel.supplyContracts = kept;
+      kernel.supplyContracts = commitContractLedger({ malformed: 0, snapshots: kept });
     }
   }
 }
@@ -294,7 +295,7 @@ function dropCrossRoomLedgersFor(kernel: KernelMemory, room: string): void {
  * 失房清理要到 20k tick 宽限期之后才删）。字段读不懂的条目一律留给 planner 自己校验。
  */
 function voidContractsOutsideEmpire(kernel: KernelMemory): void {
-  const contracts = kernel.supplyContracts as Array<{ s?: string; t?: string }> | undefined;
+  const contracts = kernel.supplyContracts;
   if (!Array.isArray(contracts) || contracts.length === 0) return;
   const released = kernel.releasedRooms;
   const outsideEmpire = (room: unknown): boolean => {
@@ -302,9 +303,9 @@ function voidContractsOutsideEmpire(kernel: KernelMemory): void {
     if (released?.[room] !== undefined) return true;
     return Memory.rooms[room] === undefined;
   };
-  const kept = contracts.filter(c => !outsideEmpire(c?.s) && !outsideEmpire(c?.t));
+  const kept = contracts.filter(c => !outsideEmpire(c.s) && !outsideEmpire(c.t));
   if (kept.length === contracts.length) return;
-  kernel.supplyContracts = kept;
+  kernel.supplyContracts = commitContractLedger({ malformed: 0, snapshots: kept });
   log.info(
     "territory-manager",
     `[${Game.time}] territory: voided ${contracts.length - kept.length} supply contract(s) ` +

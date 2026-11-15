@@ -428,6 +428,65 @@ export function deserializeResourceCode(code: string): ResourceType {
 }
 
 /**
+ * 跨房供给合同的一轮读-校验-写事务。
+ *
+ * 存在的理由：合同的三个维护方各管一段——specialization-planner 整表读写、
+ * territory-manager 按房名摘条目、logistics-planner 只读消费。原先每方各自
+ * `Memory.kernel.supplyContracts as {…}[]` 断言一次，字段读不懂的条目会按各自
+ * 默认值被解释（`c.s` 缺失即永不被摘、`st` 缺失即被读成 proposed），
+ * 而 planner 的整表写回会把这些被误读的条目原样续写下去。
+ *
+ * 事务把「读到什么形状」收敛到单点：畸形条目在这里就被丢弃（带计数），
+ * 三方看到的永远是同一份良构快照。纯函数，Memory 由调用方传入传出。
+ */
+export interface ContractLedgerTx {
+  /** 读内存时被丢弃的畸形条目数（非对象、缺端点字符串、缺数字/状态码）。 */
+  malformed: number;
+  /** 良构快照（保序）。 */
+  snapshots: ContractMemorySnapshot[];
+}
+
+/**
+ * 判断单条内存条目是否为良构瘦快照。
+ *
+ * 只校验「三家消费者真正依赖的字段」+「数字列可参与算术」：
+ * - `i`/`s`/`t`/`r`/`st` 必须是非空 string —— 端点与状态码是分诊依据；
+ * - 其余数值列必须是 number —— 否则 `tr / 10` 之类会产出 NaN，污染下游排序与预算。
+ * 可选列（lm/ac/tm/li/sr/tr2）缺省合法：旧快照确实没有这些列。
+ */
+function isWellFormedContractSnapshot(v: unknown): v is ContractMemorySnapshot {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  const str = (k: string): boolean => typeof o[k] === "string" && (o[k] as string).length > 0;
+  const num = (k: string): boolean => typeof o[k] === "number" && Number.isFinite(o[k]);
+  if (!["i", "s", "t", "r", "st"].every(str)) return false;
+  return ["tr", "mr", "p", "ca", "ua", "td", "cs", "dm"].every(num) && typeof o.rs === "string";
+}
+
+/**
+ * 开启一轮合同事务：从 Memory 侧原始数组筛出良构快照。
+ * @param raw Memory.kernel.supplyContracts 的原始值（非数组/缺省视为空账，不记畸形）。
+ */
+export function openContractLedger(raw: unknown): ContractLedgerTx {
+  if (!Array.isArray(raw)) return { malformed: 0, snapshots: [] };
+  const snapshots: ContractMemorySnapshot[] = [];
+  let malformed = 0;
+  for (const entry of raw) {
+    if (isWellFormedContractSnapshot(entry)) snapshots.push(entry);
+    else malformed++;
+  }
+  return { malformed, snapshots };
+}
+
+/**
+ * 关闭事务：交回可直接落 Memory 的数组。
+ * 空账交回空数组而非 undefined —— 字段存在性本身是「已纳入管理」的标记。
+ */
+export function commitContractLedger(tx: ContractLedgerTx): ContractMemorySnapshot[] {
+  return tx.snapshots;
+}
+
+/**
  * Supply Contract 瘦快照（存入 Memory.kernel.supplyContracts）。
  * 只存必要字段——数字 + 枚举 + ID。
  * 纯函数。

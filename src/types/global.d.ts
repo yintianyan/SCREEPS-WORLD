@@ -7,6 +7,7 @@ import type { EconomyMemorySnapshot } from "../domain/economy/accounting";
 import type { CreepMode, ColonyState, TaskKind, CpuTier } from "../kernel/contracts";
 import type { ColonyPhase } from "../domain/economy/phase";
 import type { RoomTuningState } from "../domain/tuning/types";
+import type { ContractMemorySnapshot } from "../domain/economy/supply-contract";
 
 export {};
 
@@ -1183,11 +1184,14 @@ declare global {
      */
     reservations?: Record<string, unknown>;
     /**
-     * 跨房供给合同瘦快照（specialization-planner 写入，logistics-planner 每轮读）。
-     * 瘦快照字段是缩写字母（i/s/t/r/…），类型由各读者本地声明；此处只登记「存在且是数组」，
-     * 以便领土释放能按房名摘掉条目 —— 它没有 deadline，不摘就永久留在账上。
+     * 跨房供给合同瘦快照（specialization-planner 整表写入，logistics-planner 每轮读，
+     * territory-manager 按房名摘条目）。缩写键字段见 ContractMemorySnapshot。
+     *
+     * 三方不得各自断言类型：读写一律走 supply-contract 的 openContractLedger /
+     * commitContractLedger，畸形条目在事务边界丢弃并计数，避免各读者按各自默认值
+     * 解释同一条脏数据（缺 st 被读成 proposed、缺 s 永不被摘）。
      */
-    supplyContracts?: unknown[];
+    supplyContracts?: ContractMemorySnapshot[];
     /**
      * 扩张计划列表（expansion-planner 每 interval tick 写入）— 有界列表，
      * 最多 MAX_ACTIVE_PLANS(5) 个 Active Plan + 终态 Plan 保留期内条目。

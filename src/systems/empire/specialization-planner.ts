@@ -35,8 +35,9 @@ import {
   isContractStale,
   serializeContract,
   deserializeContract,
+  commitContractLedger,
+  openContractLedger,
   type SupplyContract,
-  type ContractMemorySnapshot,
 } from "../../domain/economy/supply-contract";
 import { log } from "../../kernel/log";
 
@@ -340,9 +341,14 @@ function maintainSupplyContracts(tick: number): void {
  */
 function loadContractsFromMemory(): SupplyContract[] {
   if (!Memory.kernel) return [];
-  const stored = (Memory.kernel as { supplyContracts?: ContractMemorySnapshot[] }).supplyContracts;
-  if (!stored || !Array.isArray(stored)) return [];
-  return stored.map(deserializeContract);
+  const tx = openContractLedger(Memory.kernel.supplyContracts);
+  if (tx.malformed > 0) {
+    log.info(
+      "specialization-planner",
+      `specialization-planner: dropped ${tx.malformed} malformed contract snapshot(s)`,
+    );
+  }
+  return tx.snapshots.map(deserializeContract);
 }
 
 /**
@@ -354,7 +360,7 @@ function saveContractsToMemory(contracts: SupplyContract[], _tick: number): void
   const snapshots = contracts
     .filter(c => !isContractTerminalStatus(c.status))
     .map(serializeContract);
-  (Memory.kernel as { supplyContracts?: ContractMemorySnapshot[] }).supplyContracts = snapshots;
+  Memory.kernel.supplyContracts = commitContractLedger({ malformed: 0, snapshots });
 }
 
 /**
