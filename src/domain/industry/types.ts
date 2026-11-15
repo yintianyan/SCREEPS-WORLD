@@ -143,15 +143,6 @@ export interface TerminalTransfer {
   readonly priority: number;
 }
 
-/** Terminal 策略接口 — 未来多房间资源调度的扩展点。 */
-export interface TerminalPolicy {
-  /** 计算本 tick 的传输计划。 */
-  planTransfers(
-    roomName: string,
-    available: Readonly<Record<string, number>>,
-  ): readonly TerminalTransfer[];
-}
-
 // ─── 反应配方表 ─────────────────────────────────────────────
 
 /** 所有反应的配方映射：output → [input1, input2]。 */

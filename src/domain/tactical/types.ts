@@ -489,27 +489,3 @@ export type TacticalDecisionEvent =
   | "RETREAT_DECIDED"
   | "REGROUP_DECIDED"
   | "TACTICAL_ABORTED";
-
-/** Tactical 决策事件记录。 */
-export interface TacticalDecisionRecord {
-  /** 事件类型。 */
-  readonly event: TacticalDecisionEvent;
-  /** 关联 Operation ID。 */
-  readonly operationId: string;
-  /** 关联 Objective ID。 */
-  readonly objectiveId: string;
-  /** 关联 Squad ID。 */
-  readonly squadId?: string;
-  /** 当前 tick。 */
-  readonly tick: number;
-  /** 决策原因。 */
-  readonly reason: string;
-  /** 量化证据。 */
-  readonly evidence: string[];
-  /** 置信度（0-1）。 */
-  readonly confidence: number;
-  /** 被拒绝的备选方案。 */
-  readonly rejectedAlternatives: readonly RejectedTacticalAlternative[];
-  /** 决策 Hash。 */
-  readonly decisionHash: string;
-}
