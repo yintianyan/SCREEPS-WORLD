@@ -50,6 +50,11 @@ jobs:
       - name: Comment doc-reference guard
         run: npm run check:docs
 
+      # Lint warnings 基线冻结：存量（4647，2026-11-15 实测）只许降不许涨，
+      # 新增 warning 立即响亮失败。降存量时同步下调 package.json 的 --max-warnings。
+      - name: Lint warning baseline
+        run: npm run lint
+
       # Build 在 Integration 之前：bundle-parity.test.ts（be82be9 起的 parity 门禁）
       # 断言 dist/main.js 存在，CI 全新 checkout 无构建产物，必须先构建再跑集成。
       - name: Build
