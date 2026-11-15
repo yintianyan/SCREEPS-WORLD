@@ -367,9 +367,6 @@ function toStockView(store: Record<string, number>): StockView {
   return view;
 }
 
-/** 解压期间 factory 内能量的水位阀（超过则暂停解压，等回收链搬运）。 */
-const DECOMPRESS_FACTORY_ENERGY_CAP = 20_000;
-
 /**
  * battery 解压回能：storage 未达目标水位时，把 factory 内的 battery 逆向生产为能量。
  *
@@ -400,7 +397,7 @@ function tryDecompressBattery(snapshot: RoomSnapshot, factory: StructureFactory)
   // （W8N3 实测 3 只 8C ≈ 1,200/趟），factory energy 一度堆到 19.9K。
   // 超过此水位就暂停解压，等 reclaimFactoryOutput 把能量搬回 storage 再继续 ——
   // 否则堆到容量 50K 后 produce 返 ERR_FULL，整条解压链静默停摆。
-  if (factory.store.getUsedCapacity(RESOURCE_ENERGY) >= DECOMPRESS_FACTORY_ENERGY_CAP) {
+  if (factory.store.getUsedCapacity(RESOURCE_ENERGY) >= CONFIG.factory.decompressEnergyCap) {
     return false;
   }
 

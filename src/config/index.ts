@@ -585,6 +585,13 @@ export const CONFIG = {
       /** storage 能量 ≥ 此值时维持大 body 满功率升级（≈ 盈余全喂 controller）。 */
       sustainedStorage: 10000,
       /**
+       * 深贫困地板：storage 低于此值时，远矿编制连替换与一次性军事投资（coreClearer）
+       * 也停 —— 维持成本会把 storage 继续往下拉（2026-10-24 现场：2,886 storage 时
+       * 替换仍在补员，越补越穷）。是消费降级链位于 low(2k) 与 sustained(10k) 之后的
+       * 最后一档，仅 poverty gate（远矿首孵/扩编/替换与 coreClearer 门）使用。
+       */
+      deepPovertyFloor: 4000,
+      /**
        * RCL8 冲 GCL 的容量比例富线（占总容量比）：**RCL8 专属** — RCL<8 的
        * upgrade 是房间刚需（升 RCL 本身），沿用绝对刻度低线；RCL8 的 upgrade
        * 只产出账号级 GCL，是奢侈品，必须等 storage 真正富余：
@@ -1197,6 +1204,16 @@ export const CONFIG = {
      * 在那之下 battery 应该全部回流成能量，去支撑升级 / lab / 基础防护。
      */
     decompressStorageTarget: 300_000,
+    /**
+     * battery 解压期间 factory 内能量的水位阀：超过即暂停解压 produce，
+     * 等回收链（reclaimFactoryOutput / distributor）把能量搬回 storage 再继续。
+     *
+     * 依据：解压注入 50 e/t 远超 distributor 搬运能力（W8N3 实测 3 只 8C ≈ 1,200/趟），
+     * 不设阀时 factory energy 一度堆到 19.9K；堆满 50K 容量后 produce 返 ERR_FULL，
+     * 整条解压链静默停摆。与 market.storageEnergyFloor(20k) 同值不同物 —— 那是
+     * storage 水位（terminal 装填/互济门），这是 factory 自身 store 的解压节流阀。
+     */
+    decompressEnergyCap: 20_000,
     /** distributor 为 factory 维持的能量库存目标（5 批缓冲）。 */
     stockTarget: 3000,
     /** commodity 采购需求的价格闸（比例，非绝对价）：只有

@@ -1,3 +1,4 @@
+import { emaSample } from "../core/scale";
 import { recordTyped } from "./event-log";
 import {
   type Budget,
@@ -980,7 +981,7 @@ export class Kernel {
     const gEma = globalCache();
     const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
     const prevEma = emaMap.get(system.name);
-    const ema = prevEma === undefined ? cost : prevEma * 0.8 + cost * 0.2;
+    const ema = emaSample(prevEma, cost, 0.2);
     emaMap.set(system.name, ema);
     // 归一必须用生效 cadence：覆盖层把 interval 改了而这里读注册值，会让被降频系统
     // 的 per-tick 榜虚高（等于把 per-run 当 per-tick）。

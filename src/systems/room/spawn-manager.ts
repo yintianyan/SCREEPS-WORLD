@@ -1,5 +1,6 @@
 import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import { CONFIG } from "../../config";
+import { emaSample } from "../../core/scale";
 import { bodyCost, degradeBody } from "../../config/bodies";
 import { getRoleBounds } from "../../config/tuned";
 import { brakeGateSum, isUpgradeReserveActive } from "../../domain/economy/accounting";
@@ -571,9 +572,6 @@ function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 
  * @internal 导出仅供单元测试（tests/unit/spawn/try-spawn.test.ts）— 业务代码
  *           不得直接调用，唯一入口是 spawnManagerSystem.run。
  */
-/** 深贫困地板（能量）：低于此值连替换也停 — 维持成本会把 storage 继续往下拉。 */
-const DEEP_POVERTY_FLOOR = 4000;
-
 /** 远矿编制角色（补员可被贫困闸暂停；现有成员照常工作）。 */
 const REMOTE_LINE_ROLES: ReadonlySet<string> = new Set([
   "remoteHarvester",
@@ -603,10 +601,10 @@ export function remoteSpawnPovertyBlocked(
   // clearer → 1500 tick 空转废弃 → 豁免立即重开，形成无限「废弃→重开」循环
   // （线上实证 W6N1→W7N3：4832735/4835825 连续两次 Stalled 后又重开）。
   // 仅保留深贫困地板，极低储时不再支出。
-  if (role === "coreClearer") return storageEnergy < DEEP_POVERTY_FLOOR;
+  if (role === "coreClearer") return storageEnergy < CONFIG.economy.waterlines.deepPovertyFloor;
   // 深贫困（<4,000）：连替换也停 —— 2026-10-24 现场：2,886 storage 时替换仍在补员，
   // 维持成本把 storage 继续往下拉。
-  if (storageEnergy < DEEP_POVERTY_FLOOR) return true;
+  if (storageEnergy < CONFIG.economy.waterlines.deepPovertyFloor) return true;
   // 替换 = 保住现有线收入的最小支出，只受上面的深贫困地板约束。
   if (key.includes(":repl:")) return false;
   // 低储回血期暂停远矿「首孵/扩编」—— 新编制是净支出，先让 home storage
@@ -934,8 +932,7 @@ export function trySpawn(
         const latency = Math.max(0, Game.time - anchor);
         if (!stats.replaceLatency) stats.replaceLatency = {};
         const prev = stats.replaceLatency[req.role];
-        stats.replaceLatency[req.role] =
-          prev === undefined ? latency : Math.round(prev * 0.8 + latency * 0.2);
+        stats.replaceLatency[req.role] = Math.round(emaSample(prev, latency, 0.2));
         if (stats.deathAnchor) delete stats.deathAnchor[req.role];
       }
       // 扣减本地能量预算，换下一个空闲 spawn 继续消费队列。
