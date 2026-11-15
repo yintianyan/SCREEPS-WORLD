@@ -157,7 +157,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
-  it("无 kernel 时安全跳过", () => {
+  it("无 kernel 时安全完成（结构底座创建 kernel，版本盖章）", () => {
     (globalThis as any).Memory = {
       schemaVersion: 40,
       creeps: {},
@@ -165,7 +165,9 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     };
 
     expect(() => runMigrations()).not.toThrow();
-    expect((globalThis as any).Memory.kernel).toBeUndefined();
+    // 迁移归并后结构底座（creeps/rooms/kernel ??=）无条件建立——
+    // maintainMemory 在同一拍本就会创建 kernel，行为等价。
+    expect((globalThis as any).Memory.kernel).toBeDefined();
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 

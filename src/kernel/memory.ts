@@ -173,39 +173,19 @@ function recordLostRoomPurge(roomName: string, lostFor: number): void {
  * 只对新 Memory 首次启动有实质收益（global reset 不重置 schemaVersion）。
  */
 function migrateMemory(currentVersion: number): void {
-  // 快速跳过：如果 currentVersion=0 但有 checkpoint，跳到 checkpoint。
-  // checkpoint 只在 migrateMemory 成功执行后才写入，保证只跳过已执行的迁移。
-  // 安全前提：每个迁移幂等——即使 checkpoint 过期（代码回滚），从旧 checkpoint
-  // 继续也不会出错（幂等的迁移重复执行不改变状态）。
-  const checkpoint = Memory.kernel?.migrationCheckpoint;
-  let version = currentVersion;
-  if (
-    version === 0 &&
-    checkpoint !== undefined &&
-    checkpoint > 0 &&
-    checkpoint <= CONFIG.memory.schemaVersion
-  ) {
-    version = checkpoint;
-    Memory.schemaVersion = version;
-    log.info("memory", `[schema] fast-forward from v0 to v${version} (checkpoint)`);
+  if (currentVersion >= CONFIG.memory.schemaVersion) return; // 现行版本：迁移链休眠
+  // 结构底座（原链首步职责）：后续变换的迭代前提。
+  Memory.creeps ??= {};
+  Memory.rooms ??= {};
+  Memory.kernel ??= {};
+  // 一次性原子变换：9 个数据搬家/退役/畸形自愈按原链顺序执行（全部幂等，
+  // segment 未就绪则整体中断下 tick 重试）；「逐版本补可选字段」类步骤已随
+  // 归并移除——所有读取方以 ?? 默认值兜底，字段缺失与补齐语义等价。
+  for (const transform of MIGRATIONS) {
+    if (transform.ready && !transform.ready()) return;
+    transform.run();
   }
-
-  for (const migration of MIGRATIONS) {
-    if (version !== migration.from) continue;
-    if (migration.ready && !migration.ready()) break;
-    migration.run();
-    version = migration.to;
-    Memory.schemaVersion = version;
-  }
-
-  // 更新快照：只前进不后退（防止回滚后 checkpoint 锁住新版本）。
-  // 只在 kernel 已存在时写入——不在「迁移不创建 kernel」的测试场景中意外创建。
-  if (version > 0 && Memory.kernel) {
-    const existing = Memory.kernel.migrationCheckpoint ?? 0;
-    if (version > existing) {
-      Memory.kernel.migrationCheckpoint = version;
-    }
-  }
+  Memory.schemaVersion = CONFIG.memory.schemaVersion;
 }
 
 /** 记录跳过原因，用于遥测和诊断。

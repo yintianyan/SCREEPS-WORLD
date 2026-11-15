@@ -1,9 +1,6 @@
-/** 迁移步骤：从版本 from 升到 to。run 必须幂等。
- * ready（可选）：迁移依赖的外部资源（如 RawMemory segment）是否就绪 —
- * 未就绪时迁移链在此中断，版本停在断点，下 tick 重试。 */
-export interface MigrationStep {
-  from: number;
-  to: number;
+/** 旧备份 Memory 变换：name 供诊断；ready（可选）未就绪时中断变换，版本不盖章，下 tick 重试。 */
+export interface LegacyTransform {
+  name: string;
   ready?: () => boolean;
   run: () => void;
 }
