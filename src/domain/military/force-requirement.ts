@@ -1,6 +1,6 @@
 /** Force Requirement */
 
-import type { OperationType } from "./operation";
+import type { MilitaryOperationType } from "./operation";
 import type { CombatPower } from "../combat/capability";
 
 // ═══════════════════════════════════════════════════════════
@@ -48,11 +48,11 @@ export interface ForceComposition {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 从 OperationType 推导 RequiredCapability
+// 从 MilitaryOperationType 推导 RequiredCapability
 // ═══════════════════════════════════════════════════════════
 
 export function deriveRequiredCapability(
-  type: OperationType,
+  type: MilitaryOperationType,
   enemyPower: CombatPower,
   _enemyTowers: number,
 ): RequiredCapability {
@@ -280,7 +280,7 @@ export function computeCapabilityGap(
 // ═══════════════════════════════════════════════════════════
 
 export function deriveForceComposition(
-  type: OperationType,
+  type: MilitaryOperationType,
   required: RequiredCapability,
 ): ForceComposition {
   const evidence: string[] = [];

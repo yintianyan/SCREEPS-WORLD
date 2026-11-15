@@ -213,7 +213,7 @@ function levelRank(level: ThreatLevel): number {
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 检查 WarPosture 是否授权特定 OperationType。
+ * 检查 WarPosture 是否授权特定 MilitaryOperationType。
 
  * DEFENSIVE: 只允许 DEFEND / ESCORT / RETREAT
  * CONTAIN: DEFENSIVE + HARASS / REMOTE_DENIAL

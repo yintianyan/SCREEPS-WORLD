@@ -1,10 +1,10 @@
 /** Military Operation Model */
 
 // ═══════════════════════════════════════════════════════════
-// OperationType — 12 种军事行动类型
+// MilitaryOperationType — 12 种军事行动类型
 // ═══════════════════════════════════════════════════════════
 
-export type OperationType =
+export type MilitaryOperationType =
   | "DEFEND" // 防守核心房
   | "ESCORT" // 远矿护航
   | "HARASS" // 骚扰敌方经济
@@ -35,10 +35,10 @@ export type WarObjective =
   | "RETREAT_AND_PRESERVE_FORCE"; // 撤退保存力量
 
 // ═══════════════════════════════════════════════════════════
-// OperationStatus — 生命周期
+// MilitaryOperationStatus — 生命周期
 // ═══════════════════════════════════════════════════════════
 
-export type OperationStatus =
+export type MilitaryOperationStatus =
   | "PLANNED" // 已规划，待授权
   | "AUTHORIZED" // 已授权，待准备
   | "PREPARING" // 准备中（集结/boost/物流）
@@ -51,10 +51,10 @@ export type OperationStatus =
   | "EXPIRED"; // 超时过期
 
 // ═══════════════════════════════════════════════════════════
-// OperationPriority
+// MilitaryOperationPriority
 // ═══════════════════════════════════════════════════════════
 
-export type OperationPriorityFactor =
+export type MilitaryOperationPriorityFactor =
   | "EMERGENCY" // 紧急（核心房被攻）
   | "STRATEGIC" // 战略目标
   | "ECONOMIC" // 经济保护
@@ -62,11 +62,11 @@ export type OperationPriorityFactor =
   | "OFFENSIVE" // 进攻
   | "OPPORTUNISTIC"; // 机会主义
 
-export interface OperationPriority {
+export interface MilitaryOperationPriority {
   /** 数值优先级（0-100，越高越优先）。 */
   score: number;
   /** 主导因素。 */
-  factor: OperationPriorityFactor;
+  factor: MilitaryOperationPriorityFactor;
   /** 证据。 */
   evidence: string[];
 }
@@ -126,7 +126,7 @@ export interface MilitaryOperation {
   /** 唯一标识。 */
   operationId: string;
   /** 行动类型。 */
-  type: OperationType;
+  type: MilitaryOperationType;
   /** 战争目标。 */
   objective: WarObjective;
   /** 目标。 */
@@ -134,11 +134,11 @@ export interface MilitaryOperation {
   /** 姿态（DEFENSIVE/CONTAIN/LIMITED_OFFENSIVE/FULL_OFFENSIVE）。 */
   posture: string;
   /** 优先级。 */
-  priority: OperationPriority;
+  priority: MilitaryOperationPriority;
   /** 风险等级。 */
   risk: string; // LOW | MEDIUM | HIGH | CRITICAL
   /** 当前状态。 */
-  status: OperationStatus;
+  status: MilitaryOperationStatus;
   /** 约束条件。 */
   constraints: OperationConstraints;
   /** 创建 tick。 */
@@ -158,7 +158,7 @@ export interface MilitaryOperation {
 // ═══════════════════════════════════════════════════════════
 
 /** 合法状态转换表。 */
-const VALID_TRANSITIONS: Record<OperationStatus, readonly OperationStatus[]> = {
+const VALID_TRANSITIONS: Record<MilitaryOperationStatus, readonly MilitaryOperationStatus[]> = {
   PLANNED: ["AUTHORIZED", "EXPIRED", "FAILED"],
   AUTHORIZED: ["PREPARING", "ABORTING", "EXPIRED", "FAILED"],
   PREPARING: ["READY", "DEGRADED", "ABORTING", "EXPIRED", "FAILED"],
@@ -171,14 +171,14 @@ const VALID_TRANSITIONS: Record<OperationStatus, readonly OperationStatus[]> = {
   EXPIRED: [],
 };
 
-export function canTransition(from: OperationStatus, to: OperationStatus): boolean {
+export function canTransition(from: MilitaryOperationStatus, to: MilitaryOperationStatus): boolean {
   const allowed = VALID_TRANSITIONS[from];
   return allowed ? allowed.includes(to) : false;
 }
 
 export function transition(
   op: MilitaryOperation,
-  to: OperationStatus,
+  to: MilitaryOperationStatus,
   tick: number,
   reason: string,
 ): MilitaryOperation {
@@ -255,7 +255,7 @@ export function makeOperationId(tick: number, seq: number): string {
   return `OP-${tick}-${seq}`;
 }
 
-export function isOffensive(type: OperationType): boolean {
+export function isOffensive(type: MilitaryOperationType): boolean {
   return (
     type === "ASSAULT" ||
     type === "SIEGE" ||
@@ -266,10 +266,10 @@ export function isOffensive(type: OperationType): boolean {
   );
 }
 
-export function isDefensive(type: OperationType): boolean {
+export function isDefensive(type: MilitaryOperationType): boolean {
   return type === "DEFEND" || type === "ESCORT" || type === "RETREAT";
 }
 
-export function isTerminal(status: OperationStatus): boolean {
+export function isTerminal(status: MilitaryOperationStatus): boolean {
   return status === "COMPLETED" || status === "FAILED" || status === "EXPIRED";
 }

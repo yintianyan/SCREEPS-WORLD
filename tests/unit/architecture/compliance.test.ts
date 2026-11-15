@@ -444,20 +444,17 @@ describe("systems 间值导入审计", () => {
 describe("同名导出唯一（定义权守卫）", () => {
   // 现存同名导出豁免台账——概念收编进统一 schema 后必须从表中移除，台账只许缩不许涨。
   // 语义分叉组（同名不同物）收编时必须改名或合并；同名同形组收编时保留一份。
-  const EXEMPT = new Set([
-    "ExecutionGateInput",
-    "GateResult",
-    "IntelConfidence",
-    "IntelSource",
-    "OperationPriority",
-    "OperationStatus",
-    "OperationType",
-    "PlayerIntelRecord",
-    "RiskLevel",
-    "RiskResult",
-    "TargetCandidate",
-    "ThreatLevel",
-  ]);
+  // 现存同名只保留「同形同义、跨域独立演化」的三组 —— 它们取值集合完全一致，
+  // 合并需要引入跨域依赖（军事 ↔ 扩张），收益不足以抵消分层破坏：
+  // - RiskLevel / RiskResult：两地都是 LOW/MEDIUM/HIGH/CRITICAL 与分数+明细形状，
+  //   但一个评估作战风险、一个评估选址风险，评估维度不同。
+  // - TargetCandidate：一个面向作战目标选择、一个面向集火，字段面不同但同属
+  //   「候选目标」概念的自然并行实现。
+  // 其余概念冲突组已收编：威胁分级的扩张侧改名 ExpansionThreatSignal（三级交通灯
+  // ≠ 五级威胁量级）、军事操作族改名 MilitaryOperation*（作战模型 ≠ 调拨议程）、
+  // 玩家情报档案与 segment 存储骨架分流为 PlayerIntel* / PlayerIntelStoredRecord、
+  // 执行门按粒度分流为 ExpansionGateCheckResult / RemoteGateVerdict。
+  const EXEMPT = new Set(["RiskLevel", "RiskResult", "TargetCandidate"]);
 
   it("export 的 type/interface/enum/class/const 名全仓唯一（豁免台账外）", () => {
     const defs = new Map<string, Set<string>>();

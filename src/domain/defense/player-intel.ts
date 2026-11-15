@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 /** 情报置信度等级。 */
-export type IntelConfidence =
+export type PlayerIntelConfidence =
   | "CONFIRMED" // 引擎事实或亲眼所见（如 body 解析）
   | "HIGH" // 多源交叉验证
   | "MEDIUM" // 单一可靠来源
@@ -14,7 +14,7 @@ export type IntelConfidence =
   | "UNKNOWN"; // 无情报
 
 /** 情报来源类型。 */
-export type IntelSource =
+export type PlayerIntelSource =
   | "OBSERVED" // 本 tick 或近 tick 直接观察到
   | "ROOM_HISTORY" // 房间历史记录
   | "COMBAT_LOG" // 战斗日志
@@ -33,13 +33,13 @@ export interface IntelEvidence {
   /** 情报类别。 */
   category: IntelCategory;
   /** 情报来源。 */
-  source: IntelSource;
+  source: PlayerIntelSource;
   /** 观察 tick。 */
   observedTick: number;
   /** 相对当前 tick 的年龄（tick）。 */
   age: number;
   /** 该条证据的置信度。 */
-  confidence: IntelConfidence;
+  confidence: PlayerIntelConfidence;
   /** 证据描述（可读字符串）。 */
   evidence: string;
 }
@@ -55,7 +55,7 @@ export interface PlayerIntelRecord {
   /** 冲突描述（如果 hasConflict=true）。 */
   conflictDescription?: string;
   /** 聚合后的置信度。 */
-  aggregatedConfidence: IntelConfidence;
+  aggregatedConfidence: PlayerIntelConfidence;
   /** 威胁指数（0-100，仅供参考，不直接控制 Threat Level）。 */
   threatIndex: number;
   /** 黑名单标记。 */
@@ -85,7 +85,7 @@ export const FRESHNESS_THRESHOLDS = {
 } as const;
 
 /** 不同来源的默认可信度权重（不是「永远正确」，只是初始倾向）。 */
-export const SOURCE_DEFAULT_WEIGHT: Record<IntelSource, number> = {
+export const SOURCE_DEFAULT_WEIGHT: Record<PlayerIntelSource, number> = {
   OBSERVED: 1.0, // 直接观察最可靠
   COMBAT_LOG: 0.9, // 战斗日志可靠但可能过时
   ROOM_HISTORY: 0.7, // 房间历史有参考价值
@@ -95,8 +95,8 @@ export const SOURCE_DEFAULT_WEIGHT: Record<IntelSource, number> = {
   UNKNOWN: 0.1,
 };
 
-/** IntelConfidence → 数值映射（用于聚合计算）。 */
-export const CONFIDENCE_VALUE: Record<IntelConfidence, number> = {
+/** PlayerIntelConfidence → 数值映射（用于聚合计算）。 */
+export const CONFIDENCE_VALUE: Record<PlayerIntelConfidence, number> = {
   CONFIRMED: 1.0,
   HIGH: 0.8,
   MEDIUM: 0.6,
@@ -124,7 +124,10 @@ export function computeFreshness(age: number): "FRESH" | "RECENT" | "STALE" | "E
 
  * 过期情报必须降低 Confidence，禁止旧情报永久保持 HIGH。
  */
-export function applyFreshnessDecay(confidence: IntelConfidence, age: number): IntelConfidence {
+export function applyFreshnessDecay(
+  confidence: PlayerIntelConfidence,
+  age: number,
+): PlayerIntelConfidence {
   const freshness = computeFreshness(age);
 
   switch (freshness) {
@@ -143,8 +146,8 @@ export function applyFreshnessDecay(confidence: IntelConfidence, age: number): I
 }
 
 /** 降一级 Confidence。 */
-function decayOneLevel(confidence: IntelConfidence): IntelConfidence {
-  const order: IntelConfidence[] = ["CONFIRMED", "HIGH", "MEDIUM", "LOW", "STALE", "UNKNOWN"];
+function decayOneLevel(confidence: PlayerIntelConfidence): PlayerIntelConfidence {
+  const order: PlayerIntelConfidence[] = ["CONFIRMED", "HIGH", "MEDIUM", "LOW", "STALE", "UNKNOWN"];
   const idx = order.indexOf(confidence);
   if (idx < 0 || idx >= order.length - 1) return "UNKNOWN";
   return order[idx + 1]!;
@@ -246,7 +249,7 @@ function isContradictory(a: string, b: string): boolean {
 export function aggregateIntelConfidence(
   evidence: IntelEvidence[],
   hasConflict: boolean,
-): IntelConfidence {
+): PlayerIntelConfidence {
   if (evidence.length === 0) return "UNKNOWN";
 
   // 按类别权重
@@ -284,8 +287,8 @@ export function aggregateIntelConfidence(
   return valueToConfidence(finalValue);
 }
 
-/** 将数值映射回 IntelConfidence 等级。 */
-function valueToConfidence(value: number): IntelConfidence {
+/** 将数值映射回 PlayerIntelConfidence 等级。 */
+function valueToConfidence(value: number): PlayerIntelConfidence {
   if (value >= 0.9) return "CONFIRMED";
   if (value >= 0.65) return "HIGH";
   if (value >= 0.4) return "MEDIUM";
@@ -485,7 +488,7 @@ export function makeInference(
   observedTick: number,
   currentTick: number,
   description: string,
-  confidence: IntelConfidence = "MEDIUM",
+  confidence: PlayerIntelConfidence = "MEDIUM",
 ): IntelEvidence {
   return {
     category: "INFERENCE",
@@ -502,7 +505,7 @@ export function makePrediction(
   observedTick: number,
   currentTick: number,
   description: string,
-  confidence: IntelConfidence = "LOW",
+  confidence: PlayerIntelConfidence = "LOW",
 ): IntelEvidence {
   return {
     category: "PREDICTION",

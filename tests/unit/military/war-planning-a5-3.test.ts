@@ -2,8 +2,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  type OperationType,
-  type OperationStatus,
+  type MilitaryOperationType,
+  type MilitaryOperationStatus,
   type MilitaryOperation,
   makeOperationId,
   isOffensive,
@@ -203,11 +203,11 @@ function makeWarPlanningInput(overrides: Partial<WarPlanningInput> = {}): WarPla
 }
 
 // ═══════════════════════════════════════════════════════════
-// Operation 模型 — 12 种 OperationType
+// Operation 模型 — 12 种 MilitaryOperationType
 // ═══════════════════════════════════════════════════════════
 
 describe("Operation 模型", () => {
-  const ALL_TYPES: OperationType[] = [
+  const ALL_TYPES: MilitaryOperationType[] = [
     "DEFEND",
     "ESCORT",
     "HARASS",
@@ -223,7 +223,7 @@ describe("Operation 模型", () => {
   ];
 
   describe("isOffensive / isDefensive — 12 种分类", () => {
-    const offensive: OperationType[] = [
+    const offensive: MilitaryOperationType[] = [
       "ASSAULT",
       "SIEGE",
       "RAID",
@@ -231,7 +231,7 @@ describe("Operation 模型", () => {
       "REMOTE_DENIAL",
       "CLAIM",
     ];
-    const defensive: OperationType[] = ["DEFEND", "ESCORT", "RETREAT"];
+    const defensive: MilitaryOperationType[] = ["DEFEND", "ESCORT", "RETREAT"];
 
     it.each(offensive)("isOffensive(%s) = true", type => {
       expect(isOffensive(type)).toBe(true);
@@ -274,7 +274,7 @@ describe("Operation 模型", () => {
   });
 
   describe("isTerminal — 终态判定", () => {
-    it.each(["COMPLETED", "FAILED", "EXPIRED"] as OperationStatus[])("%s 是终态", s => {
+    it.each(["COMPLETED", "FAILED", "EXPIRED"] as MilitaryOperationStatus[])("%s 是终态", s => {
       expect(isTerminal(s)).toBe(true);
     });
 
@@ -286,7 +286,7 @@ describe("Operation 模型", () => {
       "ACTIVE",
       "DEGRADED",
       "ABORTING",
-    ] as OperationStatus[])("%s 非终态", s => {
+    ] as MilitaryOperationStatus[])("%s 非终态", s => {
       expect(isTerminal(s)).toBe(false);
     });
   });
@@ -704,7 +704,14 @@ describe("WarPosture 授权矩阵", () => {
 
   describe("isOperationAuthorized — 授权矩阵", () => {
     it("CEASEFIRE → 不授权任何操作", () => {
-      const types: OperationType[] = ["DEFEND", "ESCORT", "HARASS", "ASSAULT", "SIEGE", "CLAIM"];
+      const types: MilitaryOperationType[] = [
+        "DEFEND",
+        "ESCORT",
+        "HARASS",
+        "ASSAULT",
+        "SIEGE",
+        "CLAIM",
+      ];
       for (const t of types) {
         expect(isOperationAuthorized("CEASEFIRE", t)).toBe(false);
       }
@@ -746,7 +753,7 @@ describe("WarPosture 授权矩阵", () => {
     });
 
     it("FULL_OFFENSIVE → 全部授权（包括 ASSAULT + CLAIM）", () => {
-      const allTypes: OperationType[] = [
+      const allTypes: MilitaryOperationType[] = [
         "DEFEND",
         "ESCORT",
         "HARASS",
@@ -1407,7 +1414,7 @@ describe("planMilitaryOperation 端到端 + Hash 确定性", () => {
     expect(plan!.operation.target.roomName).toBe("W1N1");
   });
 
-  it("war 姿态 + CRITICAL 威胁 + healthy + spawn>0 + confidence≥0.7 → FULL_OFFENSIVE → DEFEND（防御性 OperationType）", () => {
+  it("war 姿态 + CRITICAL 威胁 + healthy + spawn>0 + confidence≥0.7 → FULL_OFFENSIVE → DEFEND（防御性 MilitaryOperationType）", () => {
     // deriveOperationType 对核心房 CRITICAL 威胁 → DEFEND
     const threat = makeThreatAssessment({
       level: "CRITICAL",

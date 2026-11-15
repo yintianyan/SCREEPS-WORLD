@@ -558,7 +558,7 @@ export function upsertRoomEntry(entries: Map<string, IntelEntry>, entry: IntelEn
 // ─── 玩家域：segment 结构化记录互转 ──────────────────────────
 
 /** 玩家域 segment 记录的结构形态（与 kernel segment-store 的结构化最小集对齐）。 */
-export interface PlayerIntelRecord {
+export interface PlayerIntelStoredRecord {
   lastSeenAt?: number;
   lastHostileAt?: number;
   rooms?: Record<string, number>;
@@ -566,8 +566,8 @@ export interface PlayerIntelRecord {
 
 export function toPlayersRecord(
   players: Map<string, PlayerIntelEntry>,
-): Record<string, PlayerIntelRecord> {
-  const out: Record<string, PlayerIntelRecord> = {};
+): Record<string, PlayerIntelStoredRecord> {
+  const out: Record<string, PlayerIntelStoredRecord> = {};
   for (const [owner, e] of players) {
     out[owner] = {
       lastSeenAt: e.lastSeenAt,
@@ -578,7 +578,7 @@ export function toPlayersRecord(
   return out;
 }
 
-export function fromPlayersRecord(owner: string, rec: PlayerIntelRecord): PlayerIntelEntry {
+export function fromPlayersRecord(owner: string, rec: PlayerIntelStoredRecord): PlayerIntelEntry {
   return {
     owner,
     lastSeenAt: rec.lastSeenAt ?? 0,

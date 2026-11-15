@@ -8,7 +8,7 @@ import type { CombatPower } from "../combat/capability";
 import type { EmpireHealthResult } from "../strategy/empire-health";
 
 import {
-  type OperationType,
+  type MilitaryOperationType,
   type WarObjective,
   type MilitaryOperation,
   type AbortCondition,
@@ -204,14 +204,14 @@ export function newWarFunnel(tick: number): WarFunnelCounters {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 核心：从威胁推导 OperationType
+// 核心：从威胁推导 MilitaryOperationType
 // ═══════════════════════════════════════════════════════════
 
 /**
  * 从威胁评估推导军事行动类型。
 
  * ThreatIntent 回答「敌人想干什么？」
- * OperationType 回答「我们准备干什么？」
+ * MilitaryOperationType 回答「我们准备干什么？」
 
  * 例如：
  * - REMOTE_MINING_ATTACK → DEFEND_REMOTE / ESCORT / PAUSE_REMOTE / RETREAT
@@ -221,7 +221,7 @@ export function newWarFunnel(tick: number): WarFunnelCounters {
 function deriveOperationType(
   threat: ThreatAssessment,
   isRemoteRoom: boolean,
-): { type: OperationType; objective: WarObjective } {
+): { type: MilitaryOperationType; objective: WarObjective } {
   const intent = threat.estimatedIntent.intent;
 
   // 远矿房威胁
@@ -277,7 +277,7 @@ function deriveOperationType(
 function deriveTarget(
   threat: { roomName: string; assessment: ThreatAssessment },
   candidates: readonly TargetCandidate[],
-  opType: OperationType,
+  opType: MilitaryOperationType,
   input: WarPlanningInput,
 ): TargetSelectionResult {
   if (!isOffensive(opType)) {
@@ -361,13 +361,13 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
     return rank > maxRank ? t : max;
   }, input.threatAssessments[0]!);
 
-  // 3. 推导 OperationType + Objective
+  // 3. 推导 MilitaryOperationType + Objective
   const isRemote =
     maxThreatEntry.assessment.estimatedIntent.intent === "REMOTE_MINING_ATTACK" ||
     maxThreatEntry.assessment.estimatedIntent.intent === "SCOUTING";
   const { type: opType, objective } = deriveOperationType(maxThreatEntry.assessment, isRemote);
 
-  // 4. 检查 WarPosture 是否授权此 OperationType
+  // 4. 检查 WarPosture 是否授权此 MilitaryOperationType
   const authorized = isOperationAuthorized(posture.posture, opType);
   if (!authorized) {
     evidence.push(`operationType=${opType} not authorized by posture=${posture.posture}`);

@@ -15,14 +15,14 @@ import type { RemoteOpportunity } from "./remote-opportunity";
  * - NO_BUDGET: 预算不足——无法承担运营成本
  * - NO_DEMAND: 帝国无需求——资源已饱和
  */
-export type GateResultType =
+export type RemoteGateVerdictType =
   "pass" | "wait" | "block" | "replan" | "duplicate" | "no_budget" | "no_demand";
 
 /**
  * Execution Gate 检查结果。
  */
-export interface GateResult {
-  type: GateResultType;
+export interface RemoteGateVerdict {
+  type: RemoteGateVerdictType;
   /** 通过的检查项数量（0-10）。 */
   passedChecks: number;
   /** 失败的检查项（如果有）。 */
@@ -34,7 +34,7 @@ export interface GateResult {
 }
 
 /** 全部检查通过的结果。 */
-export const GATE_PASS: GateResult = {
+export const REMOTE_GATE_PASS: RemoteGateVerdict = {
   type: "pass",
   passedChecks: 10,
   failedCheck: undefined,
@@ -74,7 +74,7 @@ export type GateCheck =
 
  * 所有数据由调用方（系统侧薄壳）注入——不访问 Game/Memory。
  */
-export interface ExecutionGateInput {
+export interface RemoteGateInput {
   // ── Opportunity 信息 ──
   opportunity: RemoteOpportunity;
 
@@ -143,11 +143,11 @@ export interface ExecutionGateInput {
  * 执行 Execution Gate 的全部 10 项检查。
 
  * 逐项检查，遇到第一个失败项即返回（短路）。
- * 全部通过返回 GATE_PASS。
+ * 全部通过返回 REMOTE_GATE_PASS。
 
  * 纯函数 — 不访问 Game/Memory。
  */
-export function checkExecutionGate(input: ExecutionGateInput): GateResult {
+export function checkExecutionGate(input: RemoteGateInput): RemoteGateVerdict {
   const { tick } = input;
 
   // 1. Source 是否仍存在
@@ -253,7 +253,7 @@ export function checkExecutionGate(input: ExecutionGateInput): GateResult {
   }
 
   // 全部通过
-  return GATE_PASS;
+  return REMOTE_GATE_PASS;
 }
 
 // ─── 辅助函数 ──────────────────────────────────────────
@@ -262,7 +262,7 @@ export function checkExecutionGate(input: ExecutionGateInput): GateResult {
  * 判定 Gate 结果是否为可通过（type === "pass"）。
  * 纯函数。
  */
-export function isGatePassed(result: GateResult): boolean {
+export function isGatePassed(result: RemoteGateVerdict): boolean {
   return result.type === "pass";
 }
 
@@ -270,6 +270,6 @@ export function isGatePassed(result: GateResult): boolean {
  * 判定 Gate 结果是否为永久拒绝（不可重试）。
  * 纯函数。
  */
-export function isGatePermanentFailure(result: GateResult): boolean {
+export function isGatePermanentFailure(result: RemoteGateVerdict): boolean {
   return result.type === "block" || result.type === "replan" || result.type === "duplicate";
 }

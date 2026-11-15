@@ -15,7 +15,7 @@ import {
   checkExecutionGate,
   isGatePassed,
   isGatePermanentFailure,
-  type ExecutionGateInput,
+  type RemoteGateInput,
 } from "../../domain/remote/execution-gate";
 import type { RemoteMiningOperationContext } from "../../domain/operation/remote-mining-op";
 import {
@@ -160,7 +160,7 @@ function buildGateInput(
   opp: RemoteOpportunity,
   activeOps: readonly RemoteMiningOperationContext[],
   tick: number,
-): ExecutionGateInput | undefined {
+): RemoteGateInput | undefined {
   // 从 intel 获取 source 和 room 信息
   const entry = getRoomIntel(opp.targetRoom);
   if (!entry) return undefined;

@@ -2,8 +2,16 @@
 
 import type { ExecutionState } from "./execution-state";
 
-/** 威胁等级。 */
-export type ThreatLevel = "GREEN" | "YELLOW" | "RED";
+/**
+ * 扩张威胁升线信号：GREEN 可推进 / YELLOW 降速 / RED 冻结。
+ *
+ * 与 defense/threat-assessment 的 ThreatLevel 是两把不同的尺，不得互换：
+ * 那边是「本房此刻被威胁到什么程度」（五级 NONE→CRITICAL，由敌方编队与行为评分得出）；
+ * 这里是「这次扩张/拓荒还该不该继续投人」（三级交通灯，由路径威胁、赞助房受击、
+ * 新房敌方塔等执行条件归纳）。同一个扩张计划可以面对 CRITICAL 的房间威胁却仍是 GREEN
+ * （目标房在另一侧、路径干净），也可能房间只是 LOW 却必须 RED（赞助房被打、付不起兵）。
+ */
+export type ExpansionThreatSignal = "GREEN" | "YELLOW" | "RED";
 
 /** 威胁评估输入。 */
 export interface ThreatEscalationInput {
@@ -34,7 +42,7 @@ export type ThreatResponseAction =
 /** 威胁评估结果。 */
 export interface ThreatEscalationResult {
   /** 威胁等级。 */
-  level: ThreatLevel;
+  level: ExpansionThreatSignal;
   /** 响应动作。 */
   action: ThreatResponseAction;
   /** 威胁证据。 */
@@ -89,7 +97,7 @@ export function evaluateThreatEscalation(input: ThreatEscalationInput): ThreatEs
     evidence.push("pathThreat=true");
   }
 
-  const level: ThreatLevel =
+  const level: ExpansionThreatSignal =
     redThreats.length > 0 ? "RED" : yellowThreats.length > 0 ? "YELLOW" : "GREEN";
 
   // 响应动作判定

@@ -17,7 +17,7 @@ import {
   checkExecutionGate,
   isGatePassed,
   isGatePermanentFailure,
-  type ExecutionGateInput,
+  type RemoteGateInput,
 } from "../../../src/domain/remote/execution-gate";
 import {
   createEmptyFlow,
@@ -55,7 +55,7 @@ import { assessRemoteValue } from "../../../src/domain/remote/remote-value";
 describe("Execution Gate", () => {
   it("should pass when all 10 checks pass", () => {
     const opp = createTestOpportunity();
-    const input: ExecutionGateInput = {
+    const input: RemoteGateInput = {
       opportunity: opp,
       sourceExists: true,
       sourceMineable: true,
@@ -86,7 +86,7 @@ describe("Execution Gate", () => {
 
   it("should block when source no longer exists", () => {
     const opp = createTestOpportunity();
-    const input: ExecutionGateInput = {
+    const input: RemoteGateInput = {
       ...createPassGateInput(opp, 1000),
       sourceExists: false,
     };
@@ -99,7 +99,7 @@ describe("Execution Gate", () => {
 
   it("should wait when threat is active", () => {
     const opp = createTestOpportunity();
-    const input: ExecutionGateInput = {
+    const input: RemoteGateInput = {
       ...createPassGateInput(opp, 1000),
       threatClear: false,
     };
@@ -112,7 +112,7 @@ describe("Execution Gate", () => {
 
   it("should reject duplicate operation", () => {
     const opp = createTestOpportunity();
-    const input: ExecutionGateInput = {
+    const input: RemoteGateInput = {
       ...createPassGateInput(opp, 1000),
       hasActiveOp: true,
     };
@@ -124,7 +124,7 @@ describe("Execution Gate", () => {
 
   it("should reject when budget insufficient", () => {
     const opp = createTestOpportunity();
-    const input: ExecutionGateInput = {
+    const input: RemoteGateInput = {
       ...createPassGateInput(opp, 1000),
       budgetSufficient: false,
       budgetRemaining: 100,
@@ -438,7 +438,7 @@ function createTestOp(homeRoom: string, targetRoom: string): RemoteMiningOperati
 function createPassGateInput(
   opp: ReturnType<typeof createTestOpportunity>,
   tick: number,
-): ExecutionGateInput {
+): RemoteGateInput {
   return {
     opportunity: opp,
     sourceExists: true,

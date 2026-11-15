@@ -17,8 +17,15 @@ export type GateCheckId =
   | "GATE_INTEL_FRESH" // Intel 未过期
   | "GATE_THREAT_UNCHANGED"; // 威胁未升级
 
-/** 单项 Gate 结果。 */
-export interface GateResult {
+/**
+ * 单项 Gate 检查结果（逐项明细）。
+ *
+ * 区域限定在扩张执行门：与 remote/execution-gate 的 GateResult 是不同粒度 ——
+ * 那边是「这次远矿准入整体过没过、为什么不过」（Pass/Wait/Block/Replan 判定 + 失败检查项），
+ * 这里是「第 N 项检查当前值多少、条件是什么」，由 validateExecutionGate 汇总成
+ * ExecutionGateResult.gates。同名同文件互相导入时极易读错粒度，故带域前缀。
+ */
+export interface ExpansionGateCheckResult {
   /** 检查项 ID。 */
   id: GateCheckId;
   /** 是否通过。 */
@@ -56,7 +63,7 @@ export interface ExecutionGateInput {
 /** Execution Gate 结果。 */
 export interface ExecutionGateResult {
   /** 所有 Gate 检查结果。 */
-  gates: GateResult[];
+  gates: ExpansionGateCheckResult[];
   /** 是否全部通过。 */
   allPassed: boolean;
   /** 失败的 Gate 列表。 */
@@ -72,7 +79,7 @@ export interface ExecutionGateResult {
  * 或降级为 CANCELLED / REPLAN。
  */
 export function validateExecutionGate(input: ExecutionGateInput): ExecutionGateResult {
-  const gates: GateResult[] = [];
+  const gates: ExpansionGateCheckResult[] = [];
 
   // GATE_PLAN_VALID
   const g1 = input.plan.status === "WAITING_EXECUTION";
