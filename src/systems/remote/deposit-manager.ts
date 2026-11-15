@@ -10,7 +10,12 @@
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { selectBody } from "../../config/bodies";
-import { buildSpawnRequest, hasRequest, spawnKey, submitRequest } from "../../domain/spawn/queue";
+import {
+  buildSpawnRequest,
+  hasRoomRequest,
+  spawnKey,
+  submitRoomRequests,
+} from "../../domain/spawn/queue";
 import {
   planDepositAssignments,
   type DepositHomeObservation,
@@ -272,14 +277,12 @@ export const depositManagerSystem: System = {
 
       // 稳定 key 绑定 deposit：同一 deposit 的请求只会存在一条。
       const key = spawnKey("depositHarvester", assignment.home, 0, assignment.depositId);
-      const queue = homeMem.spawnQueue ?? [];
-      if (hasRequest(queue, key)) continue;
+      if (hasRoomRequest(homeMem, key)) continue;
 
       const body = selectBody("depositHarvester", homeRoom.energyCapacityAvailable, {
         rcl: homeRoom.controller?.level,
       });
-      submitRequest(
-        queue,
+      submitRoomRequests(homeMem, [
         buildSpawnRequest(ctx.tick, {
           key,
           role: "depositHarvester",
@@ -300,8 +303,7 @@ export const depositManagerSystem: System = {
             ...(avoidRooms.length > 0 ? { avoidRooms } : {}),
           },
         }),
-      );
-      homeMem.spawnQueue = queue;
+      ]);
       log.info(
         "deposit-manager",
         `deposit: ${assignment.home} → ${assignment.depositRoom} ` +

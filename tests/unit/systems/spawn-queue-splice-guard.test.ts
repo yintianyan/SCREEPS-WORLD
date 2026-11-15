@@ -40,12 +40,15 @@ function stripComments(source: string): string {
  * 允许「同时出现 .spawnQueue 引用 + .splice( 调用」的文件白名单。
 
  * - spawn-manager：队列属主，tick 内独占消费孵化，直接 splice 出队合法。
-
- * domain/spawn/queue.ts 是纯函数层（不读 Memory，不会触发复合判定），
- * 故不在白名单内——若未来该文件开始读 Memory，则需在白名单补登记
- * 或重构为不读 Memory 的形态（设计上不应读）。
+ * - domain/spawn/queue.ts：纯函数通道本体。房间级出口 submitRoomRequests 必须在
+ *   本模块内接触 host.spawnQueue（否则出口无处落地），而它调用的 submitRequest
+ *   是本模块自身的纯函数、不含 splice；该文件仍不读 Memory 全局、不读 Game。
+ *   外模块绕过通道直操作队列仍被本守卫拦截 —— 白名单只登记通道本身。
  */
-const ALLOWED_COMBINATION_FILES = new Set<string>(["systems/room/spawn-manager.ts"]);
+const ALLOWED_COMBINATION_FILES = new Set<string>([
+  "systems/room/spawn-manager.ts",
+  "domain/spawn/queue.ts",
+]);
 
 describe("静态守卫 — spawnQueue 直 splice 仅在 spawn-manager", () => {
   it("src 全域无外模块同时引用 .spawnQueue 与调用 .splice(", () => {
@@ -81,5 +84,13 @@ describe("静态守卫 — spawnQueue 直 splice 仅在 spawn-manager", () => {
     const code = stripComments(readFileSync(file, "utf-8"));
     expect(/\.spawnQueue\b/.test(code), "spawn-manager 应包含 .spawnQueue 引用").toBe(true);
     expect(/\.splice\s*\(/.test(code), "spawn-manager 应包含 .splice( 调用").toBe(true);
+  });
+
+  it("白名单 queue 模块不得读 Memory / Game（通道纯度自检）", () => {
+    // queue 是纯函数通道：登记白名单的前提是它不触达运行时全局。一旦开始读
+    // Memory 或 Game，它会变成第三个「复合判定」位点，白名单便失去合法性。
+    const code = stripComments(readFileSync(join(SRC_DIR, "domain", "spawn", "queue.ts"), "utf-8"));
+    expect(/\bMemory\b/.test(code), "queue 模块不得引用 Memory").toBe(false);
+    expect(/\bGame\b/.test(code), "queue 模块不得引用 Game").toBe(false);
   });
 });

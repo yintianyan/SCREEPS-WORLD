@@ -59,12 +59,12 @@ vi.mock("../../../src/telemetry", () => ({
 vi.mock("../../../src/systems/room/economy", () => ({ queryEconomy: () => undefined }));
 vi.mock("../../../src/config/bodies", () => ({ selectBody: () => [] }));
 vi.mock("../../../src/domain/spawn/queue", () => ({
-  submitRequest: vi.fn(() => true),
-  hasRequest: () => false,
+  submitRoomRequests: vi.fn(),
+  hasRoomRequest: () => false,
 }));
 
 const { agendaManagerSystem } = await import("../../../src/systems/empire/agenda-manager");
-const { submitRequest } = await import("../../../src/domain/spawn/queue");
+const { submitRoomRequests: submitRequest } = await import("../../../src/domain/spawn/queue");
 
 function makeOp(id: string, carrierName?: string) {
   return {

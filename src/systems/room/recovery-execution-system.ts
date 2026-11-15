@@ -15,7 +15,12 @@ import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
 import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../../config/bodies";
-import { submitRequest, hasRequest, spawnKey, buildSpawnRequest } from "../../domain/spawn/queue";
+import {
+  hasRoomRequest,
+  submitRoomRequests,
+  spawnKey,
+  buildSpawnRequest,
+} from "../../domain/spawn/queue";
 import { energyBuyAmount } from "../../domain/economy/energy-logistics";
 import {
   brakeGateSum,
@@ -329,11 +334,10 @@ function submitSpawnRecovery(
     };
   }
 
-  const queue = roomMem.spawnQueue ?? [];
   const key = spawnKey("worker", room, 0);
 
   // 幂等检查：已有同 key 请求
-  if (hasRequest(queue, key)) {
+  if (hasRoomRequest(roomMem, key)) {
     return { submitted: true, executionRef: key, reason: "already in queue (idempotent)" };
   }
 
@@ -346,8 +350,7 @@ function submitSpawnRecovery(
     "move",
   ]) ?? [...RECOVERY_BODY];
 
-  submitRequest(
-    queue,
+  submitRoomRequests(roomMem, [
     buildSpawnRequest(ctx.tick, {
       key,
       role: "worker",
@@ -363,8 +366,7 @@ function submitSpawnRecovery(
         recoveryCorrelationId: correlationId,
       } as CreepMemory,
     }),
-  );
-  roomMem.spawnQueue = queue;
+  ]);
 
   return { submitted: true, executionRef: key, reason: "spawn request submitted" };
 }
@@ -393,10 +395,9 @@ function submitLogisticsFix(
     };
   }
 
-  const queue = roomMem.spawnQueue ?? [];
   const key = spawnKey("hauler", room, 0);
 
-  if (hasRequest(queue, key)) {
+  if (hasRoomRequest(roomMem, key)) {
     return { submitted: true, executionRef: key, reason: "already in queue (idempotent)" };
   }
 
@@ -409,8 +410,7 @@ function submitLogisticsFix(
       "move",
     ]) ?? minimalBodyFor("hauler");
 
-  submitRequest(
-    queue,
+  submitRoomRequests(roomMem, [
     buildSpawnRequest(ctx.tick, {
       key,
       role: "hauler",
@@ -425,8 +425,7 @@ function submitLogisticsFix(
         recoveryCorrelationId: correlationId,
       } as CreepMemory,
     }),
-  );
-  roomMem.spawnQueue = queue;
+  ]);
 
   return { submitted: true, executionRef: key, reason: "hauler spawn request submitted" };
 }
@@ -471,10 +470,9 @@ function submitEnergyRedirect(
     return { submitted: false, reason: "distributor already alive — energy redirect not needed" };
   }
 
-  const queue = roomMem.spawnQueue ?? [];
   const key = spawnKey("distributor", room, 0);
 
-  if (hasRequest(queue, key)) {
+  if (hasRoomRequest(roomMem, key)) {
     return { submitted: true, executionRef: key, reason: "already in queue (idempotent)" };
   }
 
@@ -486,8 +484,7 @@ function submitEnergyRedirect(
     "move",
   ]) ?? [CARRY, CARRY, MOVE, MOVE];
 
-  submitRequest(
-    queue,
+  submitRoomRequests(roomMem, [
     buildSpawnRequest(ctx.tick, {
       key,
       role: "distributor",
@@ -502,8 +499,7 @@ function submitEnergyRedirect(
         recoveryCorrelationId: correlationId,
       } as CreepMemory,
     }),
-  );
-  roomMem.spawnQueue = queue;
+  ]);
 
   return { submitted: true, executionRef: key, reason: "distributor spawn for energy redirect" };
 }
@@ -704,7 +700,6 @@ function submitPopulationRebuild(
     };
   }
 
-  const queue = roomMem.spawnQueue ?? [];
   const harvesterKey = spawnKey("harvester", room, 0);
   let submitted = false;
 
@@ -718,9 +713,8 @@ function submitPopulationRebuild(
   ) ?? [WORK, CARRY, MOVE];
 
   // 提交 harvester 请求
-  if (!hasRequest(queue, harvesterKey)) {
-    submitRequest(
-      queue,
+  if (!hasRoomRequest(roomMem, harvesterKey)) {
+    submitRoomRequests(roomMem, [
       buildSpawnRequest(ctx.tick, {
         key: harvesterKey,
         role: "harvester",
@@ -735,11 +729,9 @@ function submitPopulationRebuild(
           recoveryCorrelationId: correlationId,
         } as CreepMemory,
       }),
-    );
+    ]);
     submitted = true;
   }
-
-  roomMem.spawnQueue = queue;
   return submitted
     ? {
         submitted: true,
@@ -794,7 +786,6 @@ function submitDevelopmentResume(
     };
   }
 
-  const queue = roomMem.spawnQueue ?? [];
   const gameRoom = Game.rooms[room];
   const energyCapacity = gameRoom?.energyCapacityAvailable ?? 300;
   const energyAvailable = gameRoom?.energyAvailable ?? 0;
@@ -829,14 +820,13 @@ function submitDevelopmentResume(
   const requested: string[] = [];
   for (const role of roles) {
     const key = spawnKey(role, room, 1);
-    if (hasRequest(queue, key)) continue;
+    if (hasRoomRequest(roomMem, key)) continue;
     const body = degradeBody(selectBody(role, energyCapacity, { rcl }), energyAvailable, [
       "work",
       "carry",
       "move",
     ]) ?? [WORK, CARRY, MOVE];
-    submitRequest(
-      queue,
+    submitRoomRequests(roomMem, [
       buildSpawnRequest(ctx.tick, {
         key,
         role,
@@ -851,10 +841,9 @@ function submitDevelopmentResume(
           recoveryCorrelationId: correlationId,
         } as CreepMemory,
       }),
-    );
+    ]);
     requested.push(role);
   }
-  roomMem.spawnQueue = queue;
 
   return requested.length > 0
     ? {
@@ -956,10 +945,9 @@ function submitDefenseResponse(
     }
 
     // 提交 defender spawn 请求
-    const queue = roomMem.spawnQueue ?? [];
     const key = spawnKey("defender", room, 0);
 
-    if (hasRequest(queue, key)) {
+    if (hasRoomRequest(roomMem, key)) {
       return {
         submitted: true,
         executionRef: key,
@@ -975,8 +963,7 @@ function submitDefenseResponse(
       "move",
     ]) ?? [ATTACK, MOVE];
 
-    submitRequest(
-      queue,
+    submitRoomRequests(roomMem, [
       buildSpawnRequest(ctx.tick, {
         key,
         role: "defender",
@@ -991,8 +978,7 @@ function submitDefenseResponse(
           recoveryCorrelationId: correlationId,
         } as CreepMemory,
       }),
-    );
-    roomMem.spawnQueue = queue;
+    ]);
 
     log.info(
       "recovery",
@@ -1225,7 +1211,7 @@ function isExecutionRefActive(executionRef: string | undefined, actionType: stri
     // 检查请求是否还在队列
     const roomMem = Memory.rooms[room];
     if (roomMem?.spawnQueue) {
-      return hasRequest(roomMem.spawnQueue, executionRef);
+      return hasRoomRequest(roomMem, executionRef);
     }
     return false;
   }

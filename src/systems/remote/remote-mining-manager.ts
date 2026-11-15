@@ -13,7 +13,7 @@ import {
   rememberThreatRooms,
   threatRoomsFromIntel,
 } from "../../domain/war/march-threats";
-import { submitRequest, removeRequestsByTarget } from "../../domain/spawn/queue";
+import { submitRoomRequests, removeRequestsByTarget } from "../../domain/spawn/queue";
 import {
   globalCache,
   querySquad,
@@ -631,11 +631,8 @@ export const remoteMiningManagerSystem: System = {
           ),
         });
 
-        // 推入 spawnQueue。
-        for (const req of requests) {
-          submitRequest(queue, req);
-        }
-        roomMem.spawnQueue = queue;
+        // 推入 spawnQueue（出口就地合并；roomMem 已有队列时 queue 引用不变）。
+        submitRoomRequests(roomMem, requests);
 
         // E9：将本房 demand 评估 CPU 按 active op 数均摊，更新各 op 账本的 cpuPerTick EMA。
         // 这是「观测期」测量——只记录、不定价，把 netRate 与 cpu/tick 并列供人工校准。

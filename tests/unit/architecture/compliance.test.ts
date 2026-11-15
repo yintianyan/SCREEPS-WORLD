@@ -502,3 +502,24 @@ describe("core 层纯度（定义权原语零依赖）", () => {
 // production bundle parity 守卫已迁出 unit 层 —— dist 仅在 build 后存在，
 // 守卫必须在 build 之后运行（unit 层在 CI 中先于 build，恒走 skip 分支形同虚设；
 // 「已删模块不回流」检查一并迁移）。
+
+describe("spawnQueue 单写者（所有权守卫）", () => {
+  // 整体写（spawnQueue = / ??=）只允许两处：queue 模块本体（出口实现所在）与
+  // spawn-manager（属主）。外部生产者一律走 domain/spawn/queue 的 submitRoomRequests
+  // 出口；在宿主已有队列上调用本模块纯函数就地变更不构成整体写，不在拦截范围。
+  // state-machine 新房初始化 `spawnQueue: []` 是「已纳管」标记语义，字段创建形式
+  // （冒号后跟类型/字面量）与本守卫的赋值判据天然不重叠。codeLines 过滤注释行，
+  // 注释中的示例写法（如 bootstrap-lane 的历史记述）不误报。
+  const QUEUE_WRITERS = new Set(["domain/spawn/queue.ts", "systems/room/spawn-manager.ts"]);
+
+  it("spawnQueue 整体写只出现在 queue 模块与 spawn-manager", () => {
+    const re = /spawnQueue\s*\??=/;
+    const bad: string[] = [];
+    for (const f of ALL_FILES) {
+      const rel = relative(SRC, f);
+      if (QUEUE_WRITERS.has(rel)) continue;
+      if (re.test(codeLines(readFileSync(f, "utf8")))) bad.push(rel);
+    }
+    expect(bad, `spawnQueue 整体写泄漏: ${bad.join(", ")}`).toHaveLength(0);
+  });
+});

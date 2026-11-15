@@ -19,7 +19,7 @@ import {
   type EmpireIntegrationInput,
 } from "../../../domain/expansion/empire-integration";
 import { tryReserve } from "../../../domain/expansion/resource-reservation";
-import { hasRequest, submitRequest, buildSpawnRequest } from "../../../domain/spawn/queue";
+import { hasRoomRequest, submitRoomRequests, buildSpawnRequest } from "../../../domain/spawn/queue";
 import { querySquad, globalCache } from "../../../kernel/global-cache";
 import { selectAnchors } from "../../../domain/layout/anchor-selection";
 import { computeDistanceField } from "../../../domain/layout/terrain-analysis";
@@ -178,8 +178,8 @@ function advancePreparing(
 
   // 检查 Claimer 是否已创建
   const claimerAlive = querySquad({ role: "claimer", remoteTarget: expansion.target }).length > 0;
-  const claimerPending = hasRequest(
-    Memory.rooms[expansion.sponsor]?.spawnQueue ?? [],
+  const claimerPending = hasRoomRequest(
+    Memory.rooms[expansion.sponsor],
     `claimer:${expansion.sponsor}:${expansion.target}`,
   );
 
@@ -671,13 +671,11 @@ function abortExpansion(
 function submitClaimer(sponsor: string, target: string, tick: number): void {
   const roomMem = Memory.rooms[sponsor];
   if (!roomMem) return;
-  const queue = roomMem.spawnQueue ?? [];
   const key = `claimer:${sponsor}:${target}`;
-  if (hasRequest(queue, key)) return;
+  if (hasRoomRequest(roomMem, key)) return;
 
   const capacity = Game.rooms[sponsor]?.energyCapacityAvailable ?? 650;
-  submitRequest(
-    queue,
+  submitRoomRequests(roomMem, [
     buildSpawnRequest(tick, {
       key,
       role: "claimer",
@@ -687,8 +685,7 @@ function submitClaimer(sponsor: string, target: string, tick: number): void {
       body: selectBody("claimer", capacity),
       memory: { role: "claimer", home: sponsor, mode: "acquire", remoteTarget: target },
     }),
-  );
-  roomMem.spawnQueue = queue;
+  ]);
 }
 
 /**
@@ -734,7 +731,6 @@ function seedLayoutAnchor(room: Room): boolean {
 function submitPioneers(_ctx: TickContext, expansion: ExpansionState): void {
   const roomMem = Memory.rooms[expansion.sponsor];
   if (!roomMem) return;
-  const queue = roomMem.spawnQueue ?? [];
   const capacity = Game.rooms[expansion.sponsor]?.energyCapacityAvailable ?? 300;
   const sponsorRcl = Game.rooms[expansion.sponsor]?.controller?.level ?? 4;
 
@@ -750,26 +746,30 @@ function submitPioneers(_ctx: TickContext, expansion: ExpansionState): void {
   ];
 
   for (const { role, count } of squad) {
-    const pending = queue.filter(r => r.role === role && r.home === expansion.target).length;
+    // 读现拍宿主队列：前序角色的 door 提交已写回，同拍内计数与探测相互可见。
+    const pending = (roomMem.spawnQueue ?? []).filter(
+      r => r.role === role && r.home === expansion.target,
+    ).length;
     const total = (living[role] ?? 0) + pending;
     for (let i = total; i < count; i++) {
       const key = `expansion:${role}:${expansion.target}:${i}`;
-      if (hasRequest(queue, key)) continue;
-      submitRequest(queue, {
-        key,
-        role,
-        home: expansion.target,
-        priority: 2,
-        survival: false,
-        body: selectBody(role, capacity, { rcl: sponsorRcl }),
-        memory: { role, home: expansion.target, mode: "acquire", spawnIndex: i },
-        createdAt: Game.time,
-        expiresAt: Game.time + CONFIG.spawn.requestTtl,
-        retries: 0,
-      });
+      if (hasRoomRequest(roomMem, key)) continue;
+      submitRoomRequests(roomMem, [
+        {
+          key,
+          role,
+          home: expansion.target,
+          priority: 2,
+          survival: false,
+          body: selectBody(role, capacity, { rcl: sponsorRcl }),
+          memory: { role, home: expansion.target, mode: "acquire", spawnIndex: i },
+          createdAt: Game.time,
+          expiresAt: Game.time + CONFIG.spawn.requestTtl,
+          retries: 0,
+        },
+      ]);
     }
   }
-  roomMem.spawnQueue = queue;
 }
 
 /**

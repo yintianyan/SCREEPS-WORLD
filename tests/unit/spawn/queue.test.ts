@@ -5,12 +5,14 @@ import {
   countPending,
   countPendingByMission,
   hasRequest,
+  hasRoomRequest,
   removeRequest,
   removeRequestsByMission,
   removeRequestsByTarget,
   sortQueue,
   spawnKey,
   submitRequest,
+  submitRoomRequests,
 } from "../../../src/domain/spawn/queue";
 
 function makeRequest(
@@ -392,5 +394,36 @@ describe("SpawnQueue — spawnKey", () => {
 
   it("generates key with source", () => {
     expect(spawnKey("harvester", "W1N1", 0, "src123")).toBe("harvester:W1N1:src123:0");
+  });
+});
+
+describe("房间级出口 — submitRoomRequests / hasRoomRequest", () => {
+  it("宿主无队列时提交即创建队列", () => {
+    const host: { spawnQueue?: SpawnRequest[] } = {};
+    submitRoomRequests(host, [makeRequest("k1")]);
+    expect(host.spawnQueue?.map(r => r.key)).toEqual(["k1"]);
+  });
+
+  it("空提交不读写：宿主保持无队列字段", () => {
+    const host: { spawnQueue?: SpawnRequest[] } = {};
+    submitRoomRequests(host, []);
+    expect(host.spawnQueue).toBeUndefined();
+  });
+
+  it("已有队列就地合并：同 key 更新不重复、引用保持稳定", () => {
+    const host: { spawnQueue?: SpawnRequest[] } = { spawnQueue: [makeRequest("k1")] };
+    const before = host.spawnQueue;
+    submitRoomRequests(host, [makeRequest("k1", 0), makeRequest("k2")]);
+    expect(host.spawnQueue).toBe(before);
+    expect(host.spawnQueue?.map(r => r.key)).toEqual(["k1", "k2"]);
+    expect(host.spawnQueue?.find(r => r.key === "k1")?.priority).toBe(0);
+  });
+
+  it("hasRoomRequest：无队列视为未排队，有队列按 key 判定", () => {
+    const host: { spawnQueue?: SpawnRequest[] } = {};
+    expect(hasRoomRequest(host, "k1")).toBe(false);
+    submitRoomRequests(host, [makeRequest("k1")]);
+    expect(hasRoomRequest(host, "k1")).toBe(true);
+    expect(hasRoomRequest(host, "k2")).toBe(false);
   });
 });

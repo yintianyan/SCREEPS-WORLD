@@ -44,6 +44,52 @@ export function removeRequest(queue: SpawnRequest[], key: string): void {
   if (idx >= 0) queue.splice(idx, 1);
 }
 
+// ─── 房间级出口：spawnQueue 写所有权唯一逃生门 ───────────────────────
+
+/**
+ * 房间孵化队列宿主的最小结构形状。RoomMemory 结构性满足（spawnQueue?:
+ * SpawnRequest[]），domain 层借此保持与 Screeps 全局类型的隔离 —— 出口只要求
+ * 「持有一个可选队列字段」，不感知 Memory 全局。
+ */
+type SpawnQueueHost = { spawnQueue?: SpawnRequest[] };
+
+/**
+ * 外部生产者向房间孵化队列提交请求的唯一出口：按稳定 key 逐条合并（submitRequest
+ * 的幂等语义），队列不存在则以空数组起步并在提交后创建。
+ *
+ * 写规则：宿主已有队列时在原数组上就地生效（同一引用，调用方此前持有的工作副本
+ * 不会失效）；宿主原本没有队列且 requests 为空则不读不写 —— 防止路过即给
+ * RoomMemory 种下无信息量的 spawnQueue:[]（例外：state-machine 新房初始化的
+ * 空队列是 spawn-manager 的「已纳管」标记语义，不经本出口，保留显式直写）。
+ *
+ * 撤销/清理类变更目前只有属主 spawn-manager 实施（本模块纯函数在其数组上就地
+ * 变更，不构成整体写）；外部将来出现 withdraw 意图时在本模块追加对应出口，
+ * 禁止回退到整体赋值。合规测试断言 spawnQueue 整体写形式在本文件与
+ * spawn-manager 之外为零。
+ */
+export function submitRoomRequests(host: SpawnQueueHost, requests: readonly SpawnRequest[]): void {
+  if (requests.length === 0) return;
+  const existing = host.spawnQueue;
+  if (existing) {
+    // 已有队列：就地合并（同一数组引用，调用方此前持有的视图即时可见）。
+    for (const req of requests) submitRequest(existing, req);
+    return;
+  }
+  // 无队列：先在独立数组上合并再整体挂载 —— 不经「取空数组、改完写回」的中转，
+  // 避免写回瞬间覆盖掉同 tick 其他写者在此期间新建的队列。
+  const queue: SpawnRequest[] = [];
+  for (const req of requests) submitRequest(queue, req);
+  host.spawnQueue = queue;
+}
+
+/**
+ * 房间队列幂等探测：key 是否已排队。替代调用方自行取队列再 hasRequest 的读样板，
+ * 队列不存在时视为未排队。只读，无副作用。
+ */
+export function hasRoomRequest(host: SpawnQueueHost | undefined, key: string): boolean {
+  return host?.spawnQueue?.some(r => r.key === key) ?? false;
+}
+
 /**
  * 撤销房间内某角色的全部待处理请求（返回移除数）。
  * 常规出队路径只有孵化成功/TTL 过期/重试隔离；需求前提消失（威胁清除后的 defender、

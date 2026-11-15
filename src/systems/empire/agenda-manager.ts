@@ -50,7 +50,7 @@ import {
 import { hasActiveOperation, pruneTerminal } from "../../domain/operation/dedup";
 import { computeOperationMetrics, formatOperationMetrics } from "../../domain/operation/metrics";
 import { recordExecution } from "../../telemetry";
-import { submitRequest, hasRequest } from "../../domain/spawn/queue";
+import { hasRoomRequest, submitRoomRequests } from "../../domain/spawn/queue";
 import { selectBody } from "../../config/bodies";
 
 // imports
@@ -171,10 +171,9 @@ function submitCarrierSpawn(op: OperationContext, tick: number): void {
   const roomMem = Memory.rooms[op.sourceRoom];
   if (!roomMem) return;
 
-  const queue = roomMem.spawnQueue ?? [];
   const spawnKey = `carrier:${op.id}`;
 
-  if (hasRequest(queue, spawnKey)) return;
+  if (hasRoomRequest(roomMem, spawnKey)) return;
 
   const sourceRoom = Game.rooms[op.sourceRoom];
   const energyCapacity = sourceRoom?.energyCapacityAvailable ?? 300;
@@ -204,8 +203,7 @@ function submitCarrierSpawn(op: OperationContext, tick: number): void {
     retries: 0,
   };
 
-  submitRequest(queue, request);
-  roomMem.spawnQueue = queue;
+  submitRoomRequests(roomMem, [request]);
 }
 
 /**
@@ -248,7 +246,7 @@ function hasCarrierForOp(op: OperationContext): boolean {
   const roomMem = Memory.rooms[op.sourceRoom];
   if (roomMem?.spawnQueue) {
     const spawnKey = `carrier:${op.id}`;
-    if (hasRequest(roomMem.spawnQueue, spawnKey)) return true;
+    if (hasRoomRequest(roomMem, spawnKey)) return true;
   }
   // 按 role/home/remoteTarget 兜底匹配。assignment 租约会被 assignment-adapter 清除
   // （操作直派任务不在任务池内 → failReason 4「任务已出池」），只认 carrierName 与
