@@ -5,6 +5,9 @@ import { setGauge, incrementCounter, observeHistogram } from "../MetricRegistry"
 import { shouldCollect, markCollected } from "../TickAggregator";
 import { globalCache } from "../../kernel/global-cache";
 
+/** 直方图观测抽样间隔（拍）——均值统计对采样密度不敏感。 */
+const KERNEL_METRICS_INTERVAL = 10;
+
 // ─── Metric Registration ──────────────────────────────────
 
 let registered = false;
@@ -85,6 +88,8 @@ export function collectKernelMetrics(skipped: number = 0, errors: number = 0): v
     const tel = g.telemetry as TelemetryData | undefined;
 
     if (!tel || tel.tick !== Game.time) return;
+    // 直方图观测按 10t 抽样：均值统计对采样密度不敏感，每 tick 全表观测是 collect 家族里最重的单点。
+    if (Game.time % KERNEL_METRICS_INTERVAL !== 0) return;
 
     // System CPU → process_type 维度
     let activeCount = 0;

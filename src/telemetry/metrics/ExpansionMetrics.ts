@@ -22,6 +22,7 @@ export function registerExpansionMetrics(): void {
 
 /** 采集 Expansion Metrics。事件驱动，不做周期采集。 */
 export function collectExpansionMetrics(): void {
+  if (Game.time % 10 !== 0) return;
   try {
     const g = globalCache();
     const dashboard = g.expansionDashboard;

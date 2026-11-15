@@ -471,6 +471,31 @@ export function selectWalkedRoadTiles(
  * 失明时维持上一判定（不清除标记），防视野消失 → 清标 → 孵化恢复 → 路仍断 →
  * 新视野 → 重新标记的抖动循环。墙被拆除后（路径上无 wall）清除标记 + 回收 dismantler。
  */
+/**
+ * 地形常量路径缓存：无 CostMatrix 的 search 结果只由 (anchor, goal) 与地形决定，
+ * 永久有效——墙/路不改变寻路结果（墙只挡 overlay 统计，creep 寻路自动绕行），
+ * source 旁 container 出现/消失会改变 goal 坐标 → 自然换键，无需失效逻辑。
+ * 存 packed 坐标（非 RoomPosition 实例），消费者只读 x/y/roomName。
+ */
+const remotePathCache = new Map<string, { x: number; y: number; roomName: string }[]>();
+
+function searchRemotePathCached(
+  anchorPos: RoomPosition,
+  goalPos: RoomPosition,
+): { x: number; y: number; roomName: string }[] {
+  const key = `${anchorPos.roomName}:${anchorPos.x},${anchorPos.y}|${goalPos.roomName}:${goalPos.x},${goalPos.y}`;
+  let path = remotePathCache.get(key);
+  if (!path) {
+    path = PathFinder.search(
+      anchorPos,
+      { pos: goalPos, range: 1 },
+      { maxRooms: 2, plainCost: 2, swampCost: 10 },
+    ).path.map(p => ({ x: p.x, y: p.y, roomName: p.roomName }));
+    remotePathCache.set(key, path);
+  }
+  return path;
+}
+
 export function detectPathWallBlockers(
   homeRoom: string,
   remoteOps: Record<string, RemoteOp>,
@@ -506,16 +531,7 @@ export function detectPathWallBlockers(
         filter: st => st.structureType === STRUCTURE_CONTAINER,
       })[0] as StructureContainer | undefined;
       const goal = container ? container.pos : source.pos;
-      const result = PathFinder.search(
-        anchor.pos,
-        { pos: goal, range: 1 },
-        {
-          maxRooms: 2,
-          plainCost: 2,
-          swampCost: 10,
-        },
-      );
-      for (const pos of result.path) {
+      for (const pos of searchRemotePathCached(anchor.pos, goal)) {
         if (pos.roomName !== rn) continue;
         if (wallKeys.has(`${pos.x},${pos.y}`)) {
           foundWallOnPath = true;
@@ -585,16 +601,7 @@ export function detectRoadCoverage(
         filter: st => st.structureType === STRUCTURE_CONTAINER,
       })[0] as StructureContainer | undefined;
       const goal = container ? container.pos : source.pos;
-      const searchResult = PathFinder.search(
-        anchor.pos,
-        { pos: goal, range: 1 },
-        {
-          maxRooms: 2,
-          plainCost: 2,
-          swampCost: 10,
-        },
-      );
-      for (const pos of searchResult.path) {
+      for (const pos of searchRemotePathCached(anchor.pos, goal)) {
         if (pos.roomName !== rn && pos.roomName !== homeRoom) continue;
         const key = `${pos.x},${pos.y}`;
         totalPathTiles++;

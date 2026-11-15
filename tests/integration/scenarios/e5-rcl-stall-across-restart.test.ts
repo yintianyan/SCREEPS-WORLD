@@ -52,13 +52,15 @@ function violations(): string[] {
 }
 
 describe("E5 rclStale — 停滞基准跨部署（Memory 锚点）", () => {
-  it("新进程 + Memory 里早已陈旧的锚点 → 立即报 rclStale（旧实现读 heap 判 0，永远不报）", () => {
+  it("新进程 + Memory 里早已陈旧的锚点 → 首个门控拍即报 rclStale（旧实现读 heap 判 0，永远不报）", () => {
     const world = buildFrozenRoom();
     const runner = new TickRunner();
     runner.setLoop(loop);
 
     let seen: string[] = [];
-    runner.run(world, 4, {
+    // E1-E9 自 10t 门控后按门控拍运行（任意 10 连拍必含一个）——跑 14 拍保证
+    // 跨过老化后的首个门控拍。
+    runner.run(world, 14, {
       onTick: (w, t) => {
         if (t === 1) ageTheStall(w, E5_STALE_TICKS + 1);
         seen = violations();

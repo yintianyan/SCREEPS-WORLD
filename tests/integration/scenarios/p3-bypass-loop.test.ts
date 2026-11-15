@@ -86,8 +86,10 @@ describe("P3 饥饿旁路（E2）— 自愈闭环", () => {
           globalCache().systemLastRun = stale;
           injected = true;
         }
-        if (injected && t === WARM + STARVE) {
-          // 饥饿已发生数 tick：E2 应已检出并置旁路。
+        // E1-E9 自 10t 门控后按门控拍运行——捕获点后移 10 拍（任意 10 连拍
+        // 必含一个门控拍），保证捕获到的是「注入已生效且 E2 已评估」的状态。
+        if (injected && t === WARM + STARVE + 10) {
+          // 饥饿已发生数拍：E2 应已检出并置旁路。
           captured = {
             violations: [...(g().Memory.kernel.expectations?.violations ?? [])],
             bypass: g().Memory.kernel.p3StarveBypassUntil as number,

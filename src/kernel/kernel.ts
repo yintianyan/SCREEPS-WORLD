@@ -285,7 +285,12 @@ export class Kernel {
     );
 
     measuredRun("system/expectations", () =>
-      safeRun("expectations", () => this.runExpectations(ctx)),
+      safeRun("expectations", () => {
+        // E1-E9 全部阈值 ≥2000t、事件限流 100-500t —— 10t 门控对判定零影响，
+        // 每 tick 省观测税的大头（估 0.1-0.25/t）。tick 新鲜度 10t 内，
+        // 部署判效读数（tick 新鲜=已上线）不受影响。
+        if (ctx.tick % EXPECTATIONS_INTERVAL === 0) this.runExpectations(ctx);
+      }),
     );
     // 这两处此前完全不计费：segments-flush 每拍序列化整段 rawMemory（大字符串
     // 构造 + 写 Memory 段），是全 tick 最贵的单次动作之一，却落在所有榜之外 ——
@@ -1209,6 +1214,7 @@ export function colonyStateFreezesRole(
 // ─── 方向 3：保底可观测性层 ────────────────────────────────────
 
 /** 保底可观测性采样间隔（tick）。即使在 recovery tier 也由 kernel 直接执行。 */
+const EXPECTATIONS_INTERVAL = 10;
 const BASELINE_SAMPLE_INTERVAL = 10;
 
 /** 保底可观测性采样：每 10 tick 由 kernel 直接写入关键指标到 stats。
