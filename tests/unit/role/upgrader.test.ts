@@ -49,13 +49,16 @@ describe("upgrader — work 模式", () => {
 
   it("帝国净流之和为负 → 成熟房暂停升级（失血闸）", () => {
     (globalThis as any).Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
+    // 单写者契约：storage 5K < 10K 档 → room-state 落盘 latch=false；
+    // 空载 upgrader 直接 idle（背能个体才按「先烧完再停」豁免）。
+    (globalThis as any).Memory.rooms = { W7N4: { upgradeActive: false } };
     const controller = mockController();
     const storage = mockStructure("storage", { id: "st1", energy: 5000, capacity: 100000 });
     const snap = mockSnapshot({ controller, rcl: 4, storage });
     const creep = mockCreep({
       name: "upgrader_1",
       role: "upgrader",
-      used: 50,
+      used: 0,
       capacity: 50,
       mode: "work",
     });

@@ -78,7 +78,7 @@ describe("RCL8 GCL 升级开关", () => {
 
   it("开启 + 闩锁关闭（低储）→ 仍不孵（低储节流优先）", () => {
     setGclUpgrade(true);
-    expect(upgraderRequests(rcl8Snapshot(60000), { richStorageActive: false })).toHaveLength(0);
+    expect(upgraderRequests(rcl8Snapshot(60000), { upgradeActive: false })).toHaveLength(0);
   });
 
   it("关闭 → 不孵（旧行为对照）", () => {

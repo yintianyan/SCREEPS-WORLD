@@ -36,6 +36,8 @@ function setup(opts: { covered: boolean }) {
     fillTargets: [],
     myConstructionSites: [],
   });
+  // 单写者契约：fortifyActive 由 room-state 每拍落盘——夹具显式注入「门开」形态。
+  (globalThis as any).Memory.rooms.W7N4 = { fortifyActive: true };
   const creep = mockCreep({
     name: "builder_1",
     role: "builder",

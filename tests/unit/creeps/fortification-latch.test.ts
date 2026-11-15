@@ -94,14 +94,16 @@ describe("repairFortifications — storage 回差闩锁", () => {
     expect(repairFortifications().resolve(ac)).not.toBeUndefined();
   });
 
-  it("和平期 + 无闩锁字段（旧路径/单测）+ storage 60K → 按 50K 门槛放行", () => {
+  it("无闩锁字段（room-state 未落盘）→ 不修（单写者契约：只有显式 true 才开闸）", () => {
+    // 归并前此处回退原始 50K 水位线；单写者化后该回退层不可达且已删除——
+    // 闩锁缺席等价于「本房不该修墙」（无 storage 房），保守不给维修权。
     const ac = makeAc({ storageEnergy: 60000 });
-    expect(repairFortifications().resolve(ac)).not.toBeUndefined();
+    expect(repairFortifications().resolve(ac)).toBeUndefined();
   });
 
-  it("和平期 + 无闩锁字段 + storage 40K → 不修", () => {
-    const ac = makeAc({ storageEnergy: 40000 });
-    expect(repairFortifications().resolve(ac)).toBeUndefined();
+  it("fortifyActive=true + storage 40K（低于旧 50K 线）→ 仍放行（只看闩锁）", () => {
+    const ac = makeAc({ storageEnergy: 40000, fortifyActive: true });
+    expect(repairFortifications().resolve(ac)).not.toBeUndefined();
   });
 
   it("Phase D：storage 200K（已过 100K 但未到 300K）+ fortify=false → 不修墙", () => {

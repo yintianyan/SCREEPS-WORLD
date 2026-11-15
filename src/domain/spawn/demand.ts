@@ -373,9 +373,8 @@ export function evaluateDemand(
   const storageNearFull = roomCtx.storageNearFull === true;
   // 低储回血期（闩锁显式关闭）。undefined 视为未注入，不节流。
   // Phase D：分级 —— 升级看 upgradeActive(60K)，工业看 labActive(55K)。
-  // 未注入时统一回退 richStorageActive(100K)。
-  const upgradeLatchClosed = (roomCtx.upgradeActive ?? roomCtx.richStorageActive) === false;
-  const labLatchClosed = (roomCtx.labActive ?? roomCtx.richStorageActive) === false;
+  const upgradeLatchClosed = roomCtx.upgradeActive === false;
+  const labLatchClosed = roomCtx.labActive === false;
   // 供需价格信号 — 0=紧缺（抑制消费），1=充裕（鼓励消费）。
   const energyPrice = roomCtx.energyPrice ?? 0.5;
   // 消费端 + 物流端弹性系数（crisis 时不应用弹性调节 — crisis 路径已有独立收缩逻辑）。
@@ -1006,18 +1005,9 @@ export function evaluateDemand(
   // Phase 1：与 `upgrader.ts` 的 richStorage 同一把尺。
   // 帝国净流闸在 storage 富余房会结构性关死升级（W8N3 878K、W7N2 999K 都曾 0 upgrader）；
   // storage ≥ sprintStorage 时升级是把库存换 RCL 复利，不应被帝国净流和挡住。
-  // 优先用闩锁；未注入时回退原始水位（单测/无 storage 房）。
-  // Phase D：升级读专用闸 upgradeActive（恢复线 60K），与 lab/修墙解耦。
-  const rawRichStorage =
-    snapshot.storage !== undefined &&
-    snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) >=
-      CONFIG.economy.waterlines.sprintStorage;
-  const richStorageForUpgrade =
-    roomCtx.upgradeActive === undefined
-      ? roomCtx.richStorageActive === undefined
-        ? rawRichStorage
-        : roomCtx.richStorageActive
-      : roomCtx.upgradeActive;
+  // 闩锁由 room-state 单写者每拍注入（storage 存在必定义）——原始水位回退层
+  // 在单写者后不可达，删除（M3a 等价化简）。
+  const richStorageForUpgrade = roomCtx.upgradeActive;
   const allowUpgrader =
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
     !rcl8NoUpgrade &&

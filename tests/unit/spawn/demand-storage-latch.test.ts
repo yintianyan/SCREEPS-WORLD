@@ -60,7 +60,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: false }),
+      ctx({ upgradeActive: false }),
       1000,
     ).requests.filter(r => r.role === "upgrader");
     expect(closed).toHaveLength(0);
@@ -71,7 +71,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: true }),
+      ctx({ upgradeActive: true }),
       1000,
     ).requests.filter(r => r.role === "upgrader");
     // 冲刺档非满仓封顶 3；rich 豁免价格弹性。
@@ -86,7 +86,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: false, controllerDowngradeRisk: true }),
+      ctx({ upgradeActive: false, controllerDowngradeRisk: true }),
       1000,
     );
     const upgraders = requests.filter(r => r.role === "upgrader");
@@ -108,7 +108,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: false }),
+      ctx({ labActive: false }),
       1000,
     ).requests.filter(r => r.role === "mineralMiner");
     expect(closed).toHaveLength(0);
@@ -119,7 +119,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: true }),
+      ctx({ labActive: true }),
       1000,
     ).requests.filter(r => r.role === "mineralMiner");
     expect(open).toHaveLength(1);
@@ -175,7 +175,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: false, labSupplyNeeded: true }),
+      ctx({ labActive: false, labSupplyNeeded: true }),
       1000,
     ).requests.filter(r => r.role === "labTender");
     expect(closed).toHaveLength(0);
@@ -186,7 +186,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: true, labSupplyNeeded: true }),
+      ctx({ labActive: true, labSupplyNeeded: true }),
       1000,
     ).requests.filter(r => r.role === "labTender");
     expect(open).toHaveLength(2);
@@ -213,7 +213,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: false }),
+      ctx({ upgradeActive: false }),
       1000,
     ).requests.filter(r => r.role === "builder");
     expect(closed).toHaveLength(1);
@@ -230,7 +230,7 @@ describe("storage 闩锁关闭（storage 曾跌破 50K、尚未回到 100K）", 
       "normal",
       livingHarvester(),
       [],
-      ctx({ richStorageActive: false }),
+      ctx({ upgradeActive: false }),
       1000,
     ).requests.filter(r => r.role === "builder");
     expect(open).toHaveLength(2);

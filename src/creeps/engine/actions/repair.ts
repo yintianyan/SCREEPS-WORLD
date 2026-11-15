@@ -197,11 +197,9 @@ export function repairFortifications(): ActionCandidate<Fortification> {
         const storageEnergy = storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
         if (storageEnergy < CONFIG.economy.waterlines.sustainedStorage) return undefined;
         const roomMem = Memory.rooms[ac.snapshot.roomName];
-        const richActive = roomMem?.fortifyActive ?? roomMem?.storageRichActive;
-        const richGateOpen =
-          richActive === undefined
-            ? storageEnergy >= CONFIG.economy.waterlines.sprintStorage
-            : richActive === true;
+        // fortifyActive 由 room-state 单写者每拍落盘（storage 存在必定义）——
+        // 原始水位回退层在单写者后不可达，删除。
+        const richGateOpen = roomMem?.fortifyActive === true;
         capHits = richGateOpen
           ? Infinity
           : Math.min(CONFIG.defense.rampartBootstrapHits, Math.floor(storageEnergy / 10));

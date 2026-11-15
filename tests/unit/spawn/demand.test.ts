@@ -1936,7 +1936,7 @@ describe("Phase 1 — 富 storage 豁免升级需求闸", () => {
       "normal",
       livingHarvester(),
       [],
-      normalCtx(0),
+      { ...normalCtx(0), upgradeActive: true },
       1000,
       -10, // 帝国净流和 < floor 2
       true, // expansionPush（floor=2）
@@ -1955,7 +1955,7 @@ describe("Phase 1 — 富 storage 豁免升级需求闸", () => {
       "normal",
       livingHarvester(),
       [],
-      { ...normalCtx(0), energyPrice: 0 },
+      { ...normalCtx(0), upgradeActive: true, energyPrice: 0 },
       1000,
       0,
       false,

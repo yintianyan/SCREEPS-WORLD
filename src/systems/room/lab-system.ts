@@ -825,23 +825,10 @@ export const labSystem: System = {
       // Phase D：改读 lab 专用闸（50K 停 / 55K 复）—— 与升级（60K）和修墙（300K）解耦。
       // lab 成本比单只升级（15 e/t）低一个量级，因此恢复线设得比升级更低：
       // storage 一过 55K 就让工业链转起来，把 ZK/UL/G 的储备推进（nuker 目标 5,000 G）。
-      const storageLatch =
-        Memory.rooms[snapshot.roomName]?.labActive ??
-        Memory.rooms[snapshot.roomName]?.storageRichActive;
-      let reactionEnergyOk: boolean;
-      if (storageLatch !== undefined) {
-        reactionEnergyOk = storageLatch;
-      } else {
-        // mock/旧房未注入闩锁：回退原始水位，保持既有行为。
-        try {
-          reactionEnergyOk =
-            snapshot.storage !== undefined &&
-            snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) >=
-              CONFIG.economy.waterlines.sprintStorage;
-        } catch {
-          reactionEnergyOk = true;
-        }
-      }
+      // 闩锁由 room-state 单写者每拍落盘（storage 存在必定义、无 storage 必删除
+      // ⇒ undefined 仅出现在无 storage 房，反应本就不该跑）——原始水位回退层
+      // 与 fail-open catch 在单写者后不可达，删除（fail-open 本身是行为隐患）。
+      const reactionEnergyOk = Memory.rooms[snapshot.roomName]?.labActive ?? false;
       if (labPlan.reaction && reactionEnergyOk) {
         const input1Assignments = labPlan.assignments.filter(a => a.role === "input1");
         const input2Assignments = labPlan.assignments.filter(a => a.role === "input2");

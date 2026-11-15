@@ -607,6 +607,8 @@ describe("builder — 防御工事维修（维修权从塔移交 creep）", () =
       rcl: 3, // wallTargetHits rcl3_4 = 100K，rampart 50K 低于 perimeter 目标
       energyAvailable: 100,
     });
+    // 单写者契约：fortifyActive 由 room-state 每拍落盘——夹具显式注入「门开」形态。
+    (globalThis as any).Memory.rooms.W7N4 = { fortifyActive: true };
     const creep = mockCreep({
       name: "builder_1",
       role: "builder",
@@ -1094,6 +1096,7 @@ describe("builder — 防御工事分层维护", () => {
       storage,
       rcl: 3,
     });
+    (globalThis as any).Memory.rooms.W7N4 = { fortifyActive: true };
     const creep = mockCreep({
       name: "builder_1",
       role: "builder",

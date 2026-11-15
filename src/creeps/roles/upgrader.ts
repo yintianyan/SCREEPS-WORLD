@@ -141,9 +141,9 @@ function upgraderGate(ac: ActionContext): boolean {
   // Phase D：改读升级专用闸（恢复线 60K），不再被 lab/修墙的更高门槛拖住。
   // 已背着能量的个体先烧完再停 —— 能量已从 storage 取出，不升级只会随死亡掉落；
   // 空仓者直接 idle 归站，不再从 storage/container/link 取新能量。
-  const upgradeLatch =
-    Memory.rooms[ac.snapshot.roomName]?.upgradeActive ??
-    Memory.rooms[ac.snapshot.roomName]?.storageRichActive;
+  // 闩锁由 room-state 单写者每拍落盘（storage 存在必定义、无 storage 必删除），
+  // 无需再回退 storageRichActive 或原始水位（M3a 单写者后的等价化简）。
+  const upgradeLatch = Memory.rooms[ac.snapshot.roomName]?.upgradeActive;
   if (upgradeLatch === false && ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
     nudgeToStation(ac);
     return false;
@@ -178,15 +178,9 @@ function upgraderGate(ac: ActionContext): boolean {
   }
   // 与 demand 同一把闩锁；背着能量的个体在闩锁关闭时仍按「富余」放行，
   // 让它把已取出的能量烧完（否则会 idle 抱能，死亡时整包掉落）。
-  // Phase D：优先读升级专用闸 upgradeActive。
-  const storageLatch =
-    Memory.rooms[ac.snapshot.roomName]?.upgradeActive ??
-    Memory.rooms[ac.snapshot.roomName]?.storageRichActive;
   const richStorage =
     ac.snapshot.storage !== undefined &&
-    (storageLatch === undefined
-      ? storageEnergy >= CONFIG.economy.waterlines.sprintStorage
-      : storageLatch || ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
+    (upgradeLatch === true || ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
   if (
     !earlyRoom &&
     !richStorage &&
