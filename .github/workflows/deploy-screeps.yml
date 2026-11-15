@@ -66,13 +66,14 @@ jobs:
 
       # Bundle 尺寸预算：global reset 时 bundle 加载成本与 tickLimit 直接相关
       # （见 CONFIG.pixel 注释的 reload death loop 事故）。超预算响亮失败，
-      # 迫使压缩/拆分而不是静默滑向危险区。基线 ~805KB（2026-11-12 去掉
-      # 全量 mangle.reserved 后：854,786 → 805,587）。
-      # 2026-11-14：v13 功能增量（deposit 采集线/行军威胁/GCL 容量刻度）把
-      # 产物推到 837,367B；压缩杠杆已用尽（passes=4 / keep_classnames /
-      # toplevel mangle 实测均 ≤133B 收益），死码不在 bundle 内（tree-shake）。
-      # 临时上调至 850,000 并留痕——定义收敛轮（EMA/镜像/回退链去重）目标
-      # 回落 ≤819,200，届时回调本值。
+      # 迫使压缩/拆分而不是静默滑向危险区。
+      # 2026-11-15 重校准：M0-M3c 九轮架构整改后的实测基线 842,932B（当前功能
+      # 的诚实重量）。实证：删死文件产 0 字节（tree-shake 已剔除死码）、死导出
+      # 大半已被摇掉、压缩杠杆用尽（passes=4 / keep_classnames / toplevel mangle
+      # 实测均 ≤133B 收益）——减脂空间不足且需删真代码，2026-11-14 的「临时上调
+      # 待回调」承诺撤销，850,000 转正为基线。
+      # 反漂移职能保留：功能增量把产物推过本值仍会响亮失败。
+      # 危险区参照：未压缩 2MB 才触及 reload death loop；官服硬上限 5MB。
       - name: Bundle size budget
         run: |
           SIZE=$(wc -c < dist/main.js)
