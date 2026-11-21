@@ -13,19 +13,21 @@ export interface ProcessPowerInput {
   storageEnergy: number | undefined;
   /** 能量地板（CONFIG.factory.processEnergyFloor）。 */
   energyFloor: number;
-  /** 帝国 war 姿态（Memory.kernel.strategy.posture === "war"）。 */
-  warActive: boolean;
 }
 
 /**
  * processPower 调度判定：
- * - war 姿态 → false（能量军事优先）；
  * - power/energy 存量不足 → false（引擎必返 ERR_NOT_ENOUGH_RESOURCES）；
  * - storage 无视野或低于地板 → false（投资让位生存）；
  * - 其余 → true。
+ *
+ * ⚠语义变更（2026-11-21 批次 2）：删除原 `warActive → false` 分支。单次成本仅
+ * 50 energy，收益是 PowerCreep 等级（ops 效率/防御加强）——战争期恰恰最需要 PC。
+ * 原闸本意是"战争期省能量"，但与 war 姿态长期化（NPC 噪声钉死 posture）叠加后
+ * 整条 power 链（powerSpawn 已建 / power=100 / PC 名额）永久闲置。真闸只剩三道：
+ * power 存量、energy 存量、storage 地板。
  */
 export function shouldProcessPower(input: ProcessPowerInput): boolean {
-  if (input.warActive) return false;
   if (input.powerStored < 1) return false;
   if (input.energyStored < PROCESS_POWER_ENERGY) return false;
   if (input.storageEnergy === undefined || input.storageEnergy < input.energyFloor) return false;

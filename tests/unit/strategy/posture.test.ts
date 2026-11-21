@@ -116,10 +116,10 @@ describe("empire posture — sponsor 门（稳定性模型，取代 100k 库存�
 });
 
 describe("empire posture — 威胁升级（紧急旁路）", () => {
-  it("任一房近期受袭且有活威胁 → 立即 fortify，扩张与新远矿点全部关停", () => {
+  it("任一房近期玩家敌意且有活威胁 → 立即 fortify，扩张与新远矿点全部关停", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room(), room({ lastHostileAt: tick - 100, hasLiveThreat: true })],
+        rooms: [room(), room({ lastPlayerHostileAt: tick - 100, hasLiveThreat: true })],
         prev: { posture: "expand", since: tick - 50 },
       }),
     );
@@ -131,7 +131,7 @@ describe("empire posture — 威胁升级（紧急旁路）", () => {
   it("威胁超过记忆窗口 → 不再触发 fortify", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - DEFAULT_POSTURE_OPTIONS.threatWindow - 1 })],
+        rooms: [room({ lastPlayerHostileAt: tick - DEFAULT_POSTURE_OPTIONS.threatWindow - 1 })],
       }),
     );
     expect(r.posture).toBe("expand");
@@ -142,7 +142,7 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
   it("近期受袭但敌已撤离（无活威胁）→ 姿态 fortify，但远矿物流与扩张均恢复", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100 })], // 记忆窗口内但无 hasLiveThreat（敌已撤离）
+        rooms: [room({ lastPlayerHostileAt: tick - 100 })], // 记忆窗口内但无 hasLiveThreat（敌已撤离）
         prev: { posture: "expand", since: tick - 50 },
       }),
     );
@@ -152,11 +152,11 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
   });
 
   it("扩张侧恐吓税修复：fortify 无活威胁 + 全面健康 → expansionAllowed true", () => {
-    // 复现线上 Aguia 边境游荡：lastHostileAt 在窗口内（posture 钉 fortify），但此刻无活敌、
+    // 复现线上 Aguia 边境游荡：lastPlayerHostileAt 在窗口内（posture 钉 fortify），但此刻无活敌、
     // 帝国全面健康 → 殖民授权应开放（殖民目标 W36S56 远离 Aguia 边境 W38S58，安全）。
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100 })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100 })],
         prev: { posture: "fortify", since: tick - 200 },
       }),
     );
@@ -164,38 +164,43 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
     expect(r.expansionAllowed).toBe(true);
   });
 
-  it("war 姿态 + 来源不明的近期威胁（无身份分尺）→ expansionAllowed false（保守）", () => {
+  it("来源不明（无分尺盖章）的近期威胁不再支撑 war —— 静默期满回 develop", () => {
+    // 威胁写读分轨后姿态机只认玩家敌意；classifyThreatOwners 保证非 Invader 一律记
+    // player，「来源不明」在实践中不存在（本例钉住混合口径 lastHostileAt 单独存在时
+    // 姿态机不再读它——这正是分轨要消除的语义）。
     const r = evaluateEmpirePosture(
       input({
         rooms: [room({ lastHostileAt: tick - 100 })],
         prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
       }),
     );
-    expect(r.posture).toBe("war");
-    expect(r.newRemoteOpsAllowed).toBe(true); // 无活敌 → 现役远矿可继续
-    expect(r.expansionAllowed).toBe(false); // 无法确认来源 ⇒ 按玩家处理
-  });
-
-  // NPC 过境间隔≈威胁窗，若与玩家宣战同价，war 占空比≈100% ⇒ 扩张永久冻结。
-  // 只在「确认仅 NPC 骚扰」时给 war 解禁；玩家敌意/来源不明仍拦。
-  it("war 姿态 + 确认仅 NPC 骚扰（invader 近期、player 无）→ expansionAllowed true", () => {
-    const r = evaluateEmpirePosture(
-      input({
-        rooms: [room({ lastHostileAt: tick - 100, lastInvaderHostileAt: tick - 100 })],
-        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
-      }),
-    );
-    expect(r.posture).toBe("war"); // 姿态本身不变（防御照常）
+    expect(r.posture).toBe("develop");
+    expect(r.reason).toBe("silence-elapsed");
     expect(r.newRemoteOpsAllowed).toBe(true);
     expect(r.expansionAllowed).toBe(true);
   });
 
-  it("war 姿态 + 玩家近期敌意（即便同时有 NPC）→ expansionAllowed false", () => {
+  // NPC 过境间隔≈威胁窗，若与玩家宣战同价，war 占空比≈100% ⇒ 扩张永久冻结。
+  // 威胁写读分轨后：war 期间玩家敌意出窗、仅 invader 记忆在窗 ⇒ 立即降 fortify
+  //（npc-deescalate），不再让 NPC 噪声续命战争机器。
+  it("war 姿态 + 玩家敌意出窗、仅 NPC 近期 → npc-deescalate 降 fortify，扩张解锁", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastInvaderHostileAt: tick - 100 })],
+        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
+      }),
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("npc-deescalate");
+    expect(r.newRemoteOpsAllowed).toBe(true);
+    expect(r.expansionAllowed).toBe(true); // fortify 不封锁扩张（健康门通过）
+  });
+
+  it("war 姿态 + 玩家近期敌意（即便同时有 NPC）→ 维持 war，扩张关闭", () => {
     const r = evaluateEmpirePosture(
       input({
         rooms: [
           room({
-            lastHostileAt: tick - 100,
             lastInvaderHostileAt: tick - 100,
             lastPlayerHostileAt: tick - 50,
           }),
@@ -204,32 +209,15 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
       }),
     );
     expect(r.posture).toBe("war");
+    expect(r.reason).toBe("war-sustain");
     expect(r.expansionAllowed).toBe(false);
   });
 
-  it("war 姿态 + 玩家攻击已在窗口外、仅 NPC 近期 → expansionAllowed true", () => {
+  it("war 姿态 + 仅 NPC 近期但在房活敌 → npc-deescalate 降 fortify，冻结优先", () => {
     const r = evaluateEmpirePosture(
       input({
         rooms: [
           room({
-            lastHostileAt: tick - 100,
-            lastInvaderHostileAt: tick - 100,
-            lastPlayerHostileAt: tick - DEFAULT_POSTURE_OPTIONS.threatWindow - 1,
-          }),
-        ],
-        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
-      }),
-    );
-    expect(r.posture).toBe("war");
-    expect(r.expansionAllowed).toBe(true);
-  });
-
-  it("war 姿态 + 仅 NPC 分尺但在房活敌 → expansionAllowed false（liveThreat 冻结优先）", () => {
-    const r = evaluateEmpirePosture(
-      input({
-        rooms: [
-          room({
-            lastHostileAt: tick - 100,
             lastInvaderHostileAt: tick - 100,
             hasLiveThreat: true,
           }),
@@ -237,15 +225,16 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
         prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
       }),
     );
-    expect(r.posture).toBe("war");
-    expect(r.newRemoteOpsAllowed).toBe(false);
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("npc-deescalate");
+    expect(r.newRemoteOpsAllowed).toBe(false); // liveThreat 冻结优先于降轨
     expect(r.expansionAllowed).toBe(false);
   });
 
   it("war 姿态但无活威胁 → 远矿物流恢复（现役运营不受影响，仅新 op 放开）", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100 })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100 })],
         prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
       }),
     );
@@ -286,7 +275,7 @@ describe("empire posture — fortify → war 升级", () => {
   it("设防超过耐心窗口且敌情未消且经济扛得住 → war", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100 })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100 })],
         prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
       }),
     );
@@ -296,7 +285,7 @@ describe("empire posture — fortify → war 升级", () => {
   it("经济压力高时不升 war（打不起就不打）", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100, economyPressure: 0.9 })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100, economyPressure: 0.9 })],
         prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
       }),
     );
@@ -306,11 +295,22 @@ describe("empire posture — fortify → war 升级", () => {
   it("耐心窗口未满 → 维持 fortify", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100 })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100 })],
         prev: { posture: "fortify", since: tick - 100 },
       }),
     );
     expect(r.posture).toBe("fortify");
+  });
+
+  it("仅 NPC 近期（无玩家敌意）→ 不升 war（NPC 不触发紧急旁路，防御在 room 级）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastInvaderHostileAt: tick - 100 })],
+        prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
+      }),
+    );
+    expect(r.posture).toBe("develop"); // 玩家敌意出窗 → 走静默路径，不驻留 fortify
+    expect(r.reason).toBe("silence-elapsed");
   });
 });
 
@@ -352,7 +352,7 @@ describe("empire posture — 降级滞回", () => {
 
 describe("empire posture — war 可持续退出（经济止损）", () => {
   const pressureRoom = (pressure: number) =>
-    room({ lastHostileAt: tick - 100, economyPressure: pressure });
+    room({ lastPlayerHostileAt: tick - 100, economyPressure: pressure });
 
   it("war + 压力持续超标达到耐心窗口 → 立即降 fortify（不等 minDwell 驻留期）", () => {
     const r = evaluateEmpirePosture(
@@ -393,7 +393,7 @@ describe("empire posture — war 可持续退出（经济止损）", () => {
   it("war 压力退出后（fortify）重新升 war 仍需耐心窗口（既有升级链不破坏）", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100 })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100 })],
         prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
       }),
     );
@@ -433,7 +433,7 @@ describe("empire posture — 能量危机≠战争（recovery/bootstrap 经济�
   it("recovery 态下 fortify 耐心窗口满 + 经济扛得住 → 仍不升 war（打不起就不打）", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100, colonyState: "recovery" })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100, colonyState: "recovery" })],
         prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
       }),
     );
@@ -443,7 +443,7 @@ describe("empire posture — 能量危机≠战争（recovery/bootstrap 经济�
   it("bootstrap 态同理：不发动进攻性战争", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100, colonyState: "bootstrap" })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100, colonyState: "bootstrap" })],
         prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
       }),
     );
@@ -464,17 +464,20 @@ describe("empire posture — 能量危机≠战争（recovery/bootstrap 经济�
   it("recovery 态下 war 但有真实在房威胁（紧急旁路）→ 维持 war（防御优先于经济收缩）", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ colonyState: "recovery", hasLiveThreat: true })],
+        rooms: [
+          room({ colonyState: "recovery", hasLiveThreat: true, lastPlayerHostileAt: tick - 100 }),
+        ],
         prev: { posture: "war", since: tick - 100 },
       }),
     );
     expect(r.posture).toBe("war");
+    expect(r.reason).toBe("war-sustain");
   });
 
   it("正常态（normal）下战争升级链不受影响（对照：recovery 才拦截）", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ lastHostileAt: tick - 100 })],
+        rooms: [room({ lastPlayerHostileAt: tick - 100 })],
         prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
       }),
     );
@@ -491,7 +494,7 @@ describe("empire posture — defense 不是经济危机（anyRecovery 与 strugg
   it("war + defense 且威胁仍在窗内 → 维持 war（撤防臂不开火，对照 recovery 会降）", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ colonyState: "defense", lastHostileAt: tick - 100 })],
+        rooms: [room({ colonyState: "defense", lastPlayerHostileAt: tick - 100 })],
         prev: { posture: "war", since: tick - 100 },
       }),
     );
@@ -511,7 +514,7 @@ describe("empire posture — defense 不是经济危机（anyRecovery 与 strugg
   it("defense 不拦升 war（耐心满 + 经济扛得住 → war；对照 recovery/bootstrap 拦）", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room({ colonyState: "defense", lastHostileAt: tick - 100 })],
+        rooms: [room({ colonyState: "defense", lastPlayerHostileAt: tick - 100 })],
         prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
       }),
     );
@@ -530,7 +533,7 @@ describe("empire posture — 分支标签（转换那一拍走了哪条 return�
 
   it("威胁窗口内 + prev=develop → threat-hold-fortify", () => {
     const r = hit({
-      rooms: [room({ lastHostileAt: tick - 1 })],
+      rooms: [room({ lastPlayerHostileAt: tick - 1 })],
       prev: { posture: "develop", since: tick - 9999 },
     });
     expect(r.posture).toBe("fortify");
@@ -539,7 +542,7 @@ describe("empire posture — 分支标签（转换那一拍走了哪条 return�
 
   it("威胁窗口内 + prev=war + 未达止损 → war-sustain", () => {
     const r = hit({
-      rooms: [room({ lastHostileAt: tick - 1 })],
+      rooms: [room({ lastPlayerHostileAt: tick - 1 })],
       prev: { posture: "war", since: tick - 50 },
       warPressureTicks: 0,
     });
@@ -549,7 +552,7 @@ describe("empire posture — 分支标签（转换那一拍走了哪条 return�
 
   it("威胁窗口内 + prev=war + 压力计满 → war-exit-patience（止损）", () => {
     const r = hit({
-      rooms: [room({ lastHostileAt: tick - 1, economyPressure: o.warMaxPressure + 0.01 })],
+      rooms: [room({ lastPlayerHostileAt: tick - 1, economyPressure: o.warMaxPressure + 0.01 })],
       prev: { posture: "war", since: tick - 50 },
       warPressureTicks: o.warExitPatienceTicks - 1,
     });
@@ -566,9 +569,18 @@ describe("empire posture — 分支标签（转换那一拍走了哪条 return�
     expect(r.reason).toBe("war-divest-crisis");
   });
 
+  it("prev=war + 仅 NPC 记忆在窗 → npc-deescalate（NPC 降轨先于驻留支）", () => {
+    const r = hit({
+      rooms: [room({ lastInvaderHostileAt: tick - 1 })],
+      prev: { posture: "war", since: tick - 50 },
+    });
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("npc-deescalate");
+  });
+
   it("prev=fortify + 驻留够 + 打得起 → war-enter-patience（进攻授权）", () => {
     const r = hit({
-      rooms: [room({ lastHostileAt: tick - 1 })],
+      rooms: [room({ lastPlayerHostileAt: tick - 1 })],
       prev: { posture: "fortify", since: tick - (o.warPatience + 1) },
     });
     expect(r.posture).toBe("war");
@@ -592,6 +604,117 @@ describe("empire posture — 分支标签（转换那一拍走了哪条 return�
   });
 });
 
+describe("empire posture — 威胁写读分轨矩阵（invader-only / player / mixed × prev 姿态）", () => {
+  // 矩阵契约（2026-11-21 批次 2）：
+  //  - invader-only：不进 war、不驻留 fortify——develop/expand 照常 peace；fortify 走
+  //    静默路径回落；war 立即 npc-deescalate 降 fortify（即便 minDwell 未满）。
+  //  - player：war 全链照旧（进入/维持/退出），develop/expand 被 threat-hold-fortify 升。
+  //  - mixed（player+invader 同窗）：与 player 完全一致——玩家敌意是唯一升级依据。
+  // 防御响应不在本矩阵：room 级 tower-defense / colonyState=defense / agenda
+  // defense-readiness 独立运行，不受帝国姿态分轨影响。
+  const recent = tick - 100;
+
+  function matrixCase(
+    threat: Partial<RoomStrategyInput>,
+    prev: { posture: "develop" | "expand" | "fortify" | "war"; since: number },
+  ) {
+    return evaluateEmpirePosture(
+      input({
+        rooms: [room(threat)],
+        prev,
+        warPressureTicks: 0,
+      }),
+    );
+  }
+
+  it("invader-only × prev=develop → 和平路径（NPC 不升级帝国姿态，健康门放行 expand）", () => {
+    const r = matrixCase(
+      { lastInvaderHostileAt: recent },
+      { posture: "develop", since: tick - 500 },
+    );
+    expect(r.posture).toBe("expand"); // room() fixture 全面健康 → peace 路径按 expandHealth 选 expand
+    expect(r.reason).toBe("peace");
+    expect(r.expansionAllowed).toBe(true);
+    expect(r.newRemoteOpsAllowed).toBe(true);
+  });
+
+  it("invader-only × prev=expand → 维持 expand（NPC 噪声不收扩张授权）", () => {
+    const r = matrixCase(
+      { lastInvaderHostileAt: recent },
+      { posture: "expand", since: tick - 500 },
+    );
+    expect(r.posture).toBe("expand");
+    expect(r.reason).toBe("peace");
+    expect(r.expansionAllowed).toBe(true);
+  });
+
+  it("invader-only × prev=fortify（驻留已满）→ 回落 develop（NPC 不驻留 fortify）", () => {
+    const r = matrixCase(
+      { lastInvaderHostileAt: recent },
+      { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell },
+    );
+    expect(r.posture).toBe("develop");
+    expect(r.reason).toBe("silence-elapsed");
+  });
+
+  it("invader-only × prev=war（驻留未满）→ npc-deescalate 立即降 fortify", () => {
+    const r = matrixCase({ lastInvaderHostileAt: recent }, { posture: "war", since: tick - 50 });
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("npc-deescalate");
+    expect(r.since).toBe(tick); // 姿态变更刷新 since
+    expect(r.warPressureTicks).toBe(0);
+  });
+
+  it("player × prev=develop → threat-hold-fortify（玩家敌意升级）", () => {
+    const r = matrixCase(
+      { lastPlayerHostileAt: recent },
+      { posture: "develop", since: tick - 500 },
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("threat-hold-fortify");
+  });
+
+  it("player × prev=expand → threat-hold-fortify（升级优先于和平姿态）", () => {
+    const r = matrixCase({ lastPlayerHostileAt: recent }, { posture: "expand", since: tick - 500 });
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("threat-hold-fortify");
+  });
+
+  it("player × prev=fortify（驻留未满耐心）→ 维持 fortify", () => {
+    const r = matrixCase(
+      { lastPlayerHostileAt: recent },
+      { posture: "fortify", since: tick - 100 },
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("threat-hold-fortify");
+  });
+
+  it("player × prev=war → war-sustain（维持战争）", () => {
+    const r = matrixCase({ lastPlayerHostileAt: recent }, { posture: "war", since: tick - 50 });
+    expect(r.posture).toBe("war");
+    expect(r.reason).toBe("war-sustain");
+    expect(r.expansionAllowed).toBe(false);
+  });
+
+  it("mixed × prev=develop → 与 player 一致（threat-hold-fortify）", () => {
+    const r = matrixCase(
+      { lastInvaderHostileAt: recent, lastPlayerHostileAt: recent },
+      { posture: "develop", since: tick - 500 },
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.reason).toBe("threat-hold-fortify");
+  });
+
+  it("mixed × prev=war → 与 player 一致（war-sustain，不降轨）", () => {
+    const r = matrixCase(
+      { lastInvaderHostileAt: recent, lastPlayerHostileAt: recent },
+      { posture: "war", since: tick - 50 },
+    );
+    expect(r.posture).toBe("war");
+    expect(r.reason).toBe("war-sustain");
+  });
+});
+
 describe("姿态事件码表", () => {
   it("姿态与分支码各自唯一，三元组与线上口径一致", () => {
     const postures = Object.values(POSTURE_EVENT_CODE);
@@ -611,5 +734,17 @@ describe("姿态事件码表", () => {
         postureTransitionEventData("(none)", "expand", "peace"),
       ),
     ).toEqual([4, 1, 7]);
+  });
+
+  it("npc-deescalate 只追加不重排（码 8），历史分支码不变", () => {
+    expect(POSTURE_BRANCH_EVENT_CODE["npc-deescalate"]).toBe(8);
+    expect(POSTURE_BRANCH_EVENT_CODE["war-sustain"]).toBe(2);
+    expect(POSTURE_BRANCH_EVENT_CODE.peace).toBe(7);
+    expect(
+      packEventPayload(
+        EventKind.PostureTransition,
+        postureTransitionEventData("war", "fortify", "npc-deescalate"),
+      ),
+    ).toEqual([3, 2, 8]);
   });
 });

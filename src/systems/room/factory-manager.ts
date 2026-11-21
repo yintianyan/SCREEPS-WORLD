@@ -39,7 +39,6 @@ export const factoryManagerSystem: System = {
             energyStored: powerSpawn.store.getUsedCapacity(RESOURCE_ENERGY),
             storageEnergy: snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY),
             energyFloor: CONFIG.factory.processEnergyFloor,
-            warActive: Memory.kernel?.strategy?.posture === "war",
           })
         ) {
           const result = powerSpawn.processPower();

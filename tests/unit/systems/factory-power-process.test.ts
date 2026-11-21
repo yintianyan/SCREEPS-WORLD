@@ -76,7 +76,7 @@ describe("factory-manager — processPower 调度接线", () => {
     expect(processPower).not.toHaveBeenCalled();
   });
 
-  it("war 姿态 → 暂停（能量军事优先）", () => {
+  it("war 姿态 → 照常处理（2026-11-21 批次 2：war 闸删除，PC 等级战争期最需要）", () => {
     (globalThis as any).Memory = {
       kernel: {
         strategy: { posture: "war", since: 0, expansionAllowed: false, newRemoteOpsAllowed: false },
@@ -90,7 +90,9 @@ describe("factory-manager — processPower 调度接线", () => {
 
     factoryManagerSystem.run(makeCtx([room]));
 
-    expect(processPower).not.toHaveBeenCalled();
+    expect(processPower).toHaveBeenCalledTimes(1);
+    const ledger = (globalThis as any).energyLedger?.rooms?.W7N4;
+    expect(ledger?.industrialSpend).toBe(50);
   });
 
   it("无 powerSpawn → 安全跳过不报错", () => {

@@ -5,11 +5,15 @@ import type { PostureTransitionPayload } from "../../kernel/event-log";
 export interface RoomStrategyInput {
   colonyState: string;
   economyPressure: number;
-  /** 最近一次房内出现威胁的 tick（无记录为 undefined）。带滞回的记忆。 */
+  /** 最近一次房内出现威胁的 tick（无记录为 undefined）。带滞回的记忆。
+   * ⚠语义契约（2026-11-21 威胁写读分轨）：这是**混合口径**（不分行凶者身份）。
+   * 姿态机不再读它——war 全链只认 `lastPlayerHostileAt`。现消费者：agenda 的
+   * defense-readiness 倡议（房级防御准备，对 NPC 响应是正确的）。 */
   lastHostileAt?: number;
   /** 最近一次确认由 NPC（Invader）或玩家造成的威胁 tick。
    * 与 `lastHostileAt` 同拍盖章、按行凶者身份分尺（room-state 写）。
-   * 只用于「战争态下扩张是否解锁」：确认仅 NPC 骚扰时战争不拦扩张。 */
+   * `lastPlayerHostileAt` 是姿态机 war 进入/维持/退出的唯一威胁依据；
+   * `lastInvaderHostileAt` 仅用于 npc-deescalate 降轨判定（war 不被 NPC 噪声续命）。 */
   lastInvaderHostileAt?: number;
   lastPlayerHostileAt?: number;
   /** 本 tick 房内是否存在真实在房威胁（snapshot.threatCreeps 非空的透传）。
@@ -107,6 +111,9 @@ export type PostureBranch =
   | "war-exit-patience"
   /** 威胁窗口内、prev=war、未达止损 ⇒ 继续 war（压力计数累加或清零）。 */
   | "war-sustain"
+  /** prev=war 且玩家敌意已出窗、仅 invader 记忆仍在窗 ⇒ fortify（NPC 降轨：war 的
+   * 进攻授权只能由玩家敌意支撑，NPC 过境只配 fortify 级别防御；不等 minDwell 立即降）。 */
+  | "npc-deescalate"
   /** 威胁窗口内、prev=fortify、驻留≥warPatience 且打得起且非危机 ⇒ war（进攻授权）。 */
   | "war-enter-patience"
   /** 威胁窗口内的其余情形 ⇒ fortify（含驻留未到、危机下不开战）。 */
@@ -137,6 +144,7 @@ export const POSTURE_BRANCH_EVENT_CODE: Record<PostureBranch, number> = {
   "hold-min-dwell": 5,
   "silence-elapsed": 6,
   peace: 7,
+  "npc-deescalate": 8,
 };
 
 /** 姿态转换事件载荷（packed 列序 [fromCode, toCode, reasonCode] 由 event-log packer 唯一定义）。 */
@@ -181,22 +189,27 @@ export function evaluateEmpirePosture(
   const cpuRatioOk = totalCreepCpu / effectiveLimit < options.expandMaxCpuRatio;
 
   // ── 世界状态信号 ──
-  const threatRecent = rooms.some(
-    r => r.lastHostileAt !== undefined && tick - r.lastHostileAt < options.threatWindow,
+  // 威胁写读分轨（2026-11-21 批次 2）：写侧 room-state 已按行凶者身份分尺盖章
+  // （lastInvaderHostileAt / lastPlayerHostileAt），读侧姿态机全链只认**玩家敌意**。
+  // 病灶：混合口径 lastHostileAt 把 NPC 过境与玩家宣战记成同一件事，而 NPC 到达
+  // 间隔≈威胁窗 ⇒ war 占空比≈100%（线上实证：branch 长期 war-sustain、
+  // adversariesTotal=0、warPressureTicks=0，扩张门被 NPC 噪声钉死）。
+  // invader-only 场景不进 war、不驻留 fortify——防御响应在 room 级
+  // （tower-defense / colonyState=defense / agenda defense-readiness）独立运行，
+  // 帝国姿态只对玩家敌意升级；当下有敌仍由 liveThreat 冻结新远矿/扩张。
+  const playerThreatRecent = rooms.some(
+    r => r.lastPlayerHostileAt !== undefined && tick - r.lastPlayerHostileAt < options.threatWindow,
   );
   // 零滞回「此刻有敌」：任一房本 tick 有真实在房威胁（已剔除盟友）。这是冻结指令的
   // 真相来源——不读滞回记忆，只读当下视线。敌人撤离即清零，自治立即恢复。
   const liveThreat = rooms.some(r => r.hasLiveThreat === true);
-  // 战争态拦扩张的依据必须与「谁在打」一致。房级 `lastHostileAt` 把 NPC 过境与
-  // 玩家宣战记成同一件事（NPC 到达间隔≈威胁窗 ⇒ war 占空比≈100%，扩张被永久冻结）。
-  // 这里只在**确认仅 NPC 骚扰**时给 war 解禁；玩家敌意或来源不明仍按原语义拦住（保守），
-  // 且 liveThreat 的冻结优先于一切。war 姿态本身、防御响应与 warPressure 计数不变。
+  // 仅 NPC 骚扰：invader 记忆在窗内且玩家敌意不在窗内。唯一用途是 war 降轨分支
+  //（npc-deescalate）——war 期间玩家敌意出窗、只剩 NPC 记忆时立即降 fortify，
+  // 不让 NPC 噪声续命战争机器（classifyThreatOwners 保证非 Invader 一律记 player，
+  // 「来源不明」在实践中不存在，无需保守回退）。
   const invaderThreatRecent = rooms.some(
     r =>
       r.lastInvaderHostileAt !== undefined && tick - r.lastInvaderHostileAt < options.threatWindow,
-  );
-  const playerThreatRecent = rooms.some(
-    r => r.lastPlayerHostileAt !== undefined && tick - r.lastPlayerHostileAt < options.threatWindow,
   );
   const npcOnlyThreatRecent = invaderThreatRecent && !playerThreatRecent;
   const avgPressure =
@@ -247,13 +260,31 @@ export function evaluateEmpirePosture(
       0,
       liveThreat,
       expandHealth,
-      npcOnlyThreatRecent,
       "war-divest-crisis",
     );
   }
 
+  // ── NPC 降轨（威胁写读分轨）：prev=war 且玩家敌意已出窗、仅 invader 记忆仍在窗
+  // ⇒ 立即降 fortify（不等 minDwell）。war 的进攻授权只能由玩家敌意支撑；NPC 过境
+  // 只配 fortify 级别的防御姿态。之后 fortify 的回落走常规 minDwell→develop 路径，
+  // NPC 记忆不再驻留 fortify（「不进 war、不驻留 fortify」统一收编）。
+  // 位置：在危机撤资之后、玩家威胁链之前 —— 玩家敌意在窗时本分支不触发（npcOnly
+  // 要求 playerThreatRecent=false），war 进入/维持/退出全链语义不受影响。
+  if (prevPosture === "war" && npcOnlyThreatRecent) {
+    return finalize(
+      "fortify",
+      prevPosture,
+      since,
+      tick,
+      0,
+      liveThreat,
+      expandHealth,
+      "npc-deescalate",
+    );
+  }
+
   // ── 威胁升级：立即生效（紧急旁路，不等驻留期）──
-  if (threatRecent) {
+  if (playerThreatRecent) {
     // ── war 可持续性（止损）：打不动经济必须退 ──
     // 计数跨 tick 累积（调用方持久化回传）、压力恢复即清零；达窗口立即降级
     // fortify，不等 minDwell — 战争机器烧的是存活所需的经济。
@@ -270,7 +301,6 @@ export function evaluateEmpirePosture(
           0,
           liveThreat,
           expandHealth,
-          npcOnlyThreatRecent,
           "war-exit-patience",
         );
       }
@@ -282,7 +312,6 @@ export function evaluateEmpirePosture(
         nextCounter,
         liveThreat,
         expandHealth,
-        npcOnlyThreatRecent,
         "war-sustain",
       );
     }
@@ -303,7 +332,6 @@ export function evaluateEmpirePosture(
         0,
         liveThreat,
         expandHealth,
-        npcOnlyThreatRecent,
         "war-enter-patience",
       );
     }
@@ -315,7 +343,6 @@ export function evaluateEmpirePosture(
       0,
       liveThreat,
       expandHealth,
-      npcOnlyThreatRecent,
       "threat-hold-fortify",
     );
   }
@@ -331,7 +358,6 @@ export function evaluateEmpirePosture(
         0,
         liveThreat,
         expandHealth,
-        npcOnlyThreatRecent,
         "hold-min-dwell",
       );
     }
@@ -344,7 +370,6 @@ export function evaluateEmpirePosture(
       0,
       liveThreat,
       expandHealth,
-      npcOnlyThreatRecent,
       "silence-elapsed",
     );
   }
@@ -361,7 +386,6 @@ export function evaluateEmpirePosture(
     0,
     liveThreat,
     expandHealth,
-    npcOnlyThreatRecent,
     "peace",
   );
 }
@@ -371,16 +395,16 @@ export function evaluateEmpirePosture(
 
  * 冻结指令跟随「真实在房威胁」而非过期姿态记忆：
  *  - 有活威胁(liveThreat) → 冻结新远矿 + 扩张：防御优先，不把新物流/殖民队送进战场；
- *  - 无活威胁 → 即便姿态仍卡 war/fortify（lastHostileAt 在威胁窗口内、敌人已撤离），
+ *  - 无活威胁 → 即便姿态仍卡 war/fortify（lastPlayerHostileAt 在威胁窗口内、敌人已撤离），
  *    也恢复自治，避免一次边境路过冻结扩张却无任何产出（"恐吓税"）。
  *  现役远矿运营不受影响（newRemoteOpsAllowed 只门禁"新"远矿点，现役 op 照常）。
 
- * 扩张授权（expansionAllowed）= 扩张健康门(expandHealth) && 无活威胁 && (非战争态 或 仅 NPC 骚扰)：
+ * 扩张授权（expansionAllowed）= 扩张健康门(expandHealth) && 无活威胁 && 非战争态：
  *  - 不再要求 posture==="expand"——殖民是高承诺动作，授权门由"全面健康+无活敌"决定，
  *    与姿态显示解耦（fortify 记忆不封锁扩张）；
- *  - war 姿态在**玩家敌意或来源不明**时硬性关闭扩张；确认仅 NPC 过境
- *    （invader 近期且 player 不近期）时不再拦扩张——NPC 骚扰间隔≈威胁窗，
- *    按原语义会把扩张永久冻结（10 拍过境 → 5,000 拍冻结）。war 姿态/防御本身不变；
+ *  - war 姿态硬性关闭扩张。威胁写读分轨后 war 只能由玩家敌意进入/维持
+ *    （NPC-only 走 npc-deescalate 降 fortify），因此「非战争态」这一条即完整覆盖
+ *    「玩家敌意拦扩张」的保守语义，无需再读威胁分尺；
  *  - liveThreat 门禁保留（有活敌不打殖民，防御优先于速度）。
  */
 function finalize(
@@ -391,7 +415,6 @@ function finalize(
   warPressureTicks: number = 0,
   liveThreat: boolean = false,
   expandHealth: boolean = false,
-  npcOnlyThreatRecent: boolean = false,
   reason: PostureBranch = "peace",
 ): PostureResult {
   const since = posture === prevPosture ? prevSince : tick;
@@ -400,7 +423,7 @@ function finalize(
     reason,
     posture,
     since,
-    expansionAllowed: expandHealth && !freeze && (posture !== "war" || npcOnlyThreatRecent),
+    expansionAllowed: expandHealth && !freeze && posture !== "war",
     newRemoteOpsAllowed: !freeze,
     warPressureTicks,
   };
