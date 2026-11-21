@@ -468,8 +468,9 @@ export const CONFIG = {
      * lab 当前容量 clamp，陈旧需求不会超灌。 */
     labDemandTtl: 20,
     /** 扩张推进态的升级预留净流（e/tick）。**仅在**本房 RCL≥7 且存在
-     * `isExpansionPushPlan` 计划（EVALUATED/READY/APPROVED/WAITING_EXECUTION/EXECUTING）
-     * 时，升级刹车从 0 抬到本值——把盈余留给扩张门 G4。
+     * `isExpansionPushPlan` 计划（WAITING_EXECUTION/EXECUTING——只认资源已被
+     * 真实占用的状态，EVALUATED/READY/APPROVED 是纸面候选、零占用不算，见
+     * plan.ts 语义契约）时，升级刹车从 0 抬到本值——把盈余留给扩张门 G4。
      * 2026-11-08：5 → 2，与 G4 `minNetFlow` 同步。实测 W8N3 净流在 5.1 附近抖动，
      * 一个 EVALUATED 的 W6N1 计划把升级刹车钉在 5 ⇒ 每次升级消耗把净流压到 4.x
      * 就触发 gate 关闭、停升，随后净流回升又开 —— progress 被切成 0.2/tick 的碎拍。

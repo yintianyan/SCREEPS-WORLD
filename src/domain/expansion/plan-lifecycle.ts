@@ -34,6 +34,14 @@ export interface LifecycleOptions {
   rebuildCooldown: number;
   /** 重评间隔（tick）。 */
   reevalInterval: number;
+  /**
+   * EVALUATED 僵尸作废阈值（tick，按 createdAt 计）。
+   * 防抖计时只对「迟早会 ready」的计划有意义；被执行闸（G6 等）长期挡住的计划
+   * 永停 EVALUATED（线上 W39S56/W39S57 分别滞留 40 万/13 万 tick），占
+   * MAX_ACTIVE_PLANS 名额并污染 dashboard。取 50000 ≫ upgradeTicks(500) 的正常
+   * 升档路径，绝不会误杀"正在攒 ready"的计划——isReady 为真时 500 tick 即升 READY。
+   */
+  evaluatedStaleTicks: number;
 }
 
 export const DEFAULT_LIFECYCLE_OPTIONS: LifecycleOptions = {
@@ -41,6 +49,7 @@ export const DEFAULT_LIFECYCLE_OPTIONS: LifecycleOptions = {
   upgradeTicks: 500,
   rebuildCooldown: 10000,
   reevalInterval: 500,
+  evaluatedStaleTicks: 50000,
 };
 
 /**
@@ -158,6 +167,32 @@ export function applyHysteresis(
     return updatePlanStatus(next, "EVALUATED", tick, "hysteresis-downgrade");
   }
   return next;
+}
+
+/**
+ * EVALUATED 僵尸计划 TTL 作废（纯函数，返回更新后的列表与作废数）。
+ *
+ * 为什么必须有：防抖计时（applyHysteresis）只对「迟早会 ready」的计划有意义——
+ * isReady 为真时 500 tick 即升 READY。被执行闸（G6: CPU tier 等）长期挡住的计划
+ * 会永停 EVALUATED：线上 W39S56/W39S57 分别滞留 40 万/13 万 tick，占着
+ * MAX_ACTIVE_PLANS(5) 的名额、污染 dashboard 的"Plans=N active"，且评估快照
+ * （成本/风险）早已过时。超期按 createdAt 判定，CANCELLED(stale-evaluated) 后
+ * 由 prunePlans 在 rebuildCooldown 期满时物理移除，isRebuildBlocked 挡住
+ * 「作废→下一轮立即重建」的抖动；候选若仍合格，冷却期满后会带着新评估快照重建。
+ */
+export function cancelStaleEvaluatedPlans(
+  plans: readonly ExpansionPlan[],
+  tick: number,
+  options: LifecycleOptions = DEFAULT_LIFECYCLE_OPTIONS,
+): { plans: ExpansionPlan[]; cancelled: number } {
+  let cancelled = 0;
+  const next = plans.map(p => {
+    if (p.status !== "EVALUATED") return p;
+    if (tick - p.createdAt < options.evaluatedStaleTicks) return p;
+    cancelled++;
+    return updatePlanStatus(p, "CANCELLED", tick, "stale-evaluated");
+  });
+  return { plans: next, cancelled };
 }
 
 /**

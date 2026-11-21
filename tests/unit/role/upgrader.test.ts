@@ -776,9 +776,25 @@ describe("upgrader — claim-secure 护栏（脆弱新房放宽取能地板）",
   });
 });
 
-// 限定版扩张预留——只有“本房 RCL≥7 且有扩张推进态计划”才把刹车抬到 5。
+// 限定版扩张预留——只有“本房 RCL≥7 且有扩张推进态计划”才把刹车抬到预留值。
+// 2026-11-18 立案①：推进态只认资源已真实占用的状态（WAITING_EXECUTION/EXECUTING），
+// EVALUATED/READY/APPROVED 是纸面候选、零占用，不再构成推进态。
 describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
-  it("有计划(EVALUATED) 且 RCL7、净流 1<2 ⇒ 暂停升级（2026-11-08 门槛 5→2）", () => {
+  it("推进态(EXECUTING) 且 RCL7、净流 1<2 ⇒ 暂停升级（2026-11-08 门槛 5→2）", () => {
+    (globalThis as any).Memory.kernel = {
+      gateNetFlow: { A: 1, B: 0 },
+      expansionPlans: [{ st: "EXECUTING" }],
+    };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, rcl: 7 });
+    const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
+    upgraderRole.run(creep, mockContext(snap));
+    expect(creep.upgradeController).not.toHaveBeenCalled();
+  });
+
+  it("回归（立案①）：纸面候选(EVALUATED) 同净流 1 ⇒ 放行——EVALUATED 不再构成推进态，升级道不被幽灵计划锁死", () => {
+    // 线上病灶复现：W38S56 RCL7 挂着两张永停 EVALUATED 的计划（被 G6 挡住），
+    // 旧实现据此把升级道按冲刺语义关死 40 万 tick。
     (globalThis as any).Memory.kernel = {
       gateNetFlow: { A: 1, B: 0 },
       expansionPlans: [{ st: "EVALUATED" }],
@@ -787,7 +803,7 @@ describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
     const snap = mockSnapshot({ controller, rcl: 7 });
     const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
     upgraderRole.run(creep, mockContext(snap));
-    expect(creep.upgradeController).not.toHaveBeenCalled();
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 
   it("无计划时同净流 3 ⇒ 按原语义放行（控制组）", () => {
@@ -799,10 +815,10 @@ describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
     expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 
-  it("有计划但净流达 2≥2 ⇒ 放行", () => {
+  it("推进态(EXECUTING)且净流达 2≥2 ⇒ 放行（预留地板的边界）", () => {
     (globalThis as any).Memory.kernel = {
       gateNetFlow: { A: 1, B: 1 },
-      expansionPlans: [{ st: "EVALUATED" }],
+      expansionPlans: [{ st: "EXECUTING" }],
     };
     const controller = mockController();
     const snap = mockSnapshot({ controller, rcl: 7 });
@@ -814,10 +830,10 @@ describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
 
 // 扩张推进态 + CPU 无余量时，连“净流够”的升级也停。
 describe("upgrader — 扩张推进态的 CPU 余量闸", () => {
-  it("有计划且 tier=tight ⇒ 即使净流 6≥2 也暂停升级", () => {
+  it("推进态(EXECUTING)且 tier=tight ⇒ 即使净流 6≥2 也暂停升级", () => {
     (globalThis as any).Memory.kernel = {
       gateNetFlow: { A: 3, B: 3 },
-      expansionPlans: [{ st: "EVALUATED" }],
+      expansionPlans: [{ st: "EXECUTING" }],
       capacity: { tier: "tight" },
     };
     const controller = mockController();
@@ -827,10 +843,23 @@ describe("upgrader — 扩张推进态的 CPU 余量闸", () => {
     expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 
-  it("有计划且 tier=comfortable ⇒ 放行（控制组）", () => {
+  it("回归（立案①）：纸面候选(EVALUATED) + tier=tight ⇒ 放行——CPU 闸只对真实推进态生效", () => {
     (globalThis as any).Memory.kernel = {
       gateNetFlow: { A: 3, B: 3 },
       expansionPlans: [{ st: "EVALUATED" }],
+      capacity: { tier: "tight" },
+    };
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, rcl: 7 });
+    const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
+    upgraderRole.run(creep, mockContext(snap));
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+
+  it("推进态(EXECUTING)且 tier=comfortable ⇒ 放行（控制组）", () => {
+    (globalThis as any).Memory.kernel = {
+      gateNetFlow: { A: 3, B: 3 },
+      expansionPlans: [{ st: "EXECUTING" }],
       capacity: { tier: "comfortable" },
     };
     const controller = mockController();

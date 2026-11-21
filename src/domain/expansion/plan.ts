@@ -178,14 +178,17 @@ export function updatePlanStatus(
 }
 
 /** 该计划状态是否意味着“帝国处于扩张推进态”。
- * 用途：升级预留闸（只在扩张计划已评估/待执行时，把升级刹车抬到净流门槛）。
- * 纯函数；终态（COMPLETED/CANCELLED/BLACKLISTED）与 DISCOVERED 不算。 */
+ * 用途：升级预留闸 / 远矿扩编门 / prospect-manager（把升级刹车抬到净流门槛、
+ * 放宽远矿 op 上限等"扩张冲刺期让资源"的消费端）。
+ *
+ * ⚠语义契约（2026-11-18 立案修复）：只有**资源已被真实占用**的状态才算推进态。
+ * 旧实现把 EVALUATED/READY/APPROVED 也算进去 —— 但那些是纸面候选，对能量和 CPU
+ * 的占用为零。后果是被 G6 挡在门外的计划永停 EVALUATED，消费端却以为"正在扩张"，
+ * 把 sponsor 房的升级道按冲刺语义关死（线上 W38S56 RCL7 冻结 40 万 tick）。
+ * 消费端只能订阅"资源真实占用"，不能订阅"意图状态"：
+ *   - WAITING_EXECUTION：编队孵化已排队，能量/CPU 从此拍开始真实消耗；
+ *   - EXECUTING：claimer/bootstrap 在场。
+ * 纯函数；终态（COMPLETED/CANCELLED/BLACKLISTED）与 DISCOVERED/EVALUATED/READY/APPROVED 不算。 */
 export function isExpansionPushPlan(status: PlanStatus): boolean {
-  return (
-    status === "EVALUATED" ||
-    status === "READY" ||
-    status === "APPROVED" ||
-    status === "WAITING_EXECUTION" ||
-    status === "EXECUTING"
-  );
+  return status === "WAITING_EXECUTION" || status === "EXECUTING";
 }

@@ -103,10 +103,16 @@ describe("乙：upgradeBrakeAllows —— 三个读者共用同一评价", () =>
 });
 
 describe("乙/丁：门槛与求和口径", () => {
-  it("isUpgradeReserveActive：RCL<7 或无推进态计划 ⇒ false；RCL7+EVALUATED ⇒ true", () => {
-    expect(isUpgradeReserveActive(6, [{ st: "EVALUATED" }])).toBe(false);
+  it("isUpgradeReserveActive：RCL<7 或无推进态计划 ⇒ false；纸面候选（EVALUATED/READY/APPROVED）零占用不算；只有编队已排队的 WAITING_EXECUTION/EXECUTING ⇒ true", () => {
+    // 回归（2026-11-18 立案①）：被 G6 挡住的计划永停 EVALUATED，旧实现把纸面候选
+    // 当推进态 ⇒ sponsor 房升级道被永久关死（W38S56 RCL7 冻结 40 万 tick）。
+    expect(isUpgradeReserveActive(6, [{ st: "EXECUTING" }])).toBe(false);
     expect(isUpgradeReserveActive(7, [{ st: "COMPLETED" }])).toBe(false);
-    expect(isUpgradeReserveActive(7, [{ st: "EVALUATED" }])).toBe(true);
+    expect(isUpgradeReserveActive(7, [{ st: "EVALUATED" }])).toBe(false);
+    expect(isUpgradeReserveActive(7, [{ st: "READY" }])).toBe(false);
+    expect(isUpgradeReserveActive(7, [{ st: "APPROVED" }])).toBe(false);
+    expect(isUpgradeReserveActive(7, [{ st: "WAITING_EXECUTION" }])).toBe(true);
+    expect(isUpgradeReserveActive(7, [{ st: "EXECUTING" }])).toBe(true);
     expect(isUpgradeReserveActive(7, undefined)).toBe(false);
   });
   it("upgradeBrakeFloor：生效取预留值，否则 0", () => {

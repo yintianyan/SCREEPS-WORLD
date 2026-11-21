@@ -539,6 +539,11 @@ declare global {
   }
 
   interface KernelMemory {
+    /**
+     * bucket 档位口径（scheduler createBudget 写入，resolveTier 由 bucket 映射
+     * healthy/conserve/recovery），调度优先级消费。
+     * ⚠与 `Memory.kernel.capacity.tier`（usage 负载口径）同名不同义，见该字段语义契约。
+     */
     tier?: CpuTier;
     /** 最近一次 CpuTier 变更 tick（驻留时长观测）。 */
     tierChangedAt?: number;
@@ -970,8 +975,17 @@ declare global {
     /**
      * 算力容量分层（v30+，empire-strategy 写入）：规模规划的前馈层 —
      * 按 min(cpuLimit, tickLimit) 动态计算，消费者据此缩放远矿/扩张雄心。
+     *
+     * ⚠语义契约（tier 双口径，2026-11-18 审查立案②改名澄清）：
+     *   - 本字段是 **usage 负载口径**（avg/limit 比率 + 300t 滞回，见 domain/strategy/capacity.ts），
+     *     G6/远矿扩编门消费的是它；
+     *   - `Memory.kernel.tier`（CpuTier）是 **bucket 档位口径**（bucket→healthy/conserve/recovery
+     *     映射，scheduler createBudget 写入），调度优先级消费的是它。
+     *   两者同名 tier 但判据完全不同，可能长期背离（线上：bucket 满仓 10000 ⇒ kernel.tier=healthy，
+     *   同时 usage 82% ⇒ capacity.tier=constrained 把扩张锁死）。读数与复盘时先问自己读的是哪把尺。
      */
     capacity?: {
+      /** usage 负载口径档位（非 bucket 档位，见上方语义契约）。 */
       tier: "abundant" | "comfortable" | "tight" | "constrained";
       since: number;
       /** 升档候选连续满足余量的 tick 数（滞回防抖）。 */

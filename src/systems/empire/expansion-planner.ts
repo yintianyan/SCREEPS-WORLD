@@ -20,6 +20,7 @@ import {
   deduplicatePlans,
   prunePlans,
   applyHysteresis,
+  cancelStaleEvaluatedPlans,
   needsReevaluation,
   rehomePlanSponsors,
   DEFAULT_LIFECYCLE_OPTIONS,
@@ -218,6 +219,19 @@ export const expansionPlannerSystem: System = {
     const isReady = extendedReadiness.allPassed && plannerInput.readiness.readiness !== "NOT_READY";
 
     plans = plans.map(p => applyHysteresis(p, isReady, ctx.tick));
+
+    // ── 步 7.5：EVALUATED 僵尸 TTL 作废 ──
+    // 被 G6 等执行闸长期挡住的计划永停 EVALUATED（线上滞留 40 万 tick），超期作废，
+    // 释放 MAX_ACTIVE_PLANS 名额；rebuildCooldown 挡「作废→立即重建」抖动。
+    const stale = cancelStaleEvaluatedPlans(plans, ctx.tick);
+    if (stale.cancelled > 0) {
+      log.info(
+        "expansion-planner",
+        `expansion-planner: ${stale.cancelled} 张滞留 EVALUATED 超过 ` +
+          `${DEFAULT_LIFECYCLE_OPTIONS.evaluatedStaleTicks}t，作废（stale-evaluated）`,
+      );
+    }
+    plans = stale.plans;
 
     // 停摆可见性：EVALUATED 卡了多久是这道门唯一的外界证据 —— 旧实现把计数器放在 heap 里，
     // 既不被任何读数看到，也在每次部署时清零，于是「扩张从不执行」这件事持续了 75 万 tick 无人察觉。

@@ -123,28 +123,36 @@ describe("prospect-manager — 任务开启", () => {
 });
 
 describe("prospect-manager — 侦察任务的 CPU 闸", () => {
-  function setup(expansionPlans: boolean, tier?: string): void {
+  function setup(expansionPlans: boolean, tier?: string, planStatus = "EXECUTING"): void {
     (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(true);
     (globalThis as any).Game.cpu.bucket = 10000;
     if (tier) (globalThis as any).Memory.kernel.capacity = { tier };
-    if (expansionPlans) (globalThis as any).Memory.kernel.expansionPlans = [{ st: "EVALUATED" }];
+    if (expansionPlans) (globalThis as any).Memory.kernel.expansionPlans = [{ st: planStatus }];
   }
 
-  it("推进态 + tier tight → 不开新侦察任务（侦察会把 G6 顶死）", () => {
+  it("推进态(EXECUTING) + tier tight → 不开新侦察任务（侦察会把 G6 顶死）", () => {
     setup(true, "tight");
     prospectManagerSystem.run(makeContext());
     expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
   });
 
-  it("推进态 + tier constrained → 不开新侦察任务", () => {
+  it("推进态(EXECUTING) + tier constrained → 不开新侦察任务", () => {
     setup(true, "constrained");
     prospectManagerSystem.run(makeContext());
     expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
   });
 
-  it("推进态 + tier comfortable → 照常开任务", () => {
+  it("回归（立案①）：纸面候选(EVALUATED) + tier tight → 照常开任务——侦察评估是扩张的前置情报，纸面计划不该冻结它", () => {
+    // 旧语义下 EVALUATED 计划把侦察闸一并锁死：而侦察恰恰是让候选走完评估、
+    // 最终升档 EXECUTING 的必要输入——锁侦察 = 锁死整条扩张管道的情报源。
+    setup(true, "tight", "EVALUATED");
+    prospectManagerSystem.run(makeContext());
+    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+  });
+
+  it("推进态(EXECUTING) + tier comfortable → 照常开任务", () => {
     setup(true, "comfortable");
     prospectManagerSystem.run(makeContext());
     expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
