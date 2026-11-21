@@ -222,6 +222,15 @@ export function planRemotePathRoads(
   // 本轮清扫释放的车道额度 — roadBudget 是 tick 入口的快照（per-tick 缓存），不减掉
   // 刚 remove 的残骸会让「被自己的残骸锁死」这条路径多等一个 manager 间隔才解开。
   let released = 0;
+  // 实测插桩（2026-11-21 批次 4 #7）：热力 57/96 格而 roadLaid=0 的三个候选成因
+  // （跨主房车道挤占 / per-op 挂起帽 / 进程被预算饿死）在既有 remoteRoadLane 里
+  // 分不开 —— pendingTotal+saturated 只回答车道，闸后两道与 createConstructionSite
+  // 返回码此前静默。逐道落码（blockedBy / created / released / create*），拿到数据
+  // 再决定修法；进程是否被饿死由 tick 新鲜度回答（stats 落写前早退则 tick 停走）。
+  let createAttempts = 0;
+  let createErrFull = 0;
+  let createErrOther = 0;
+  let blockedBy = "none";
   for (const [rn, op] of Object.entries(remoteOps)) {
     // 循环头**不设**「本轮新建已触顶就 return」：那会把后面所有车道的残骸回收与账本校正一起吞掉
     // （反向实验见 tests/unit/remote/road-site-reaper.test.ts）。新建上限的闸挪到铺路之前。
@@ -307,6 +316,7 @@ export function planRemotePathRoads(
       coldCounters.roadProgressSum = roadProgressSum;
       coldCounters.roadSitesPending = roadSitesPending;
       coldCounters.roadsBuilt = roadsBuilt;
+      blockedBy = "cold-no-heat";
       continue;
     }
 
@@ -351,23 +361,21 @@ export function planRemotePathRoads(
     counters.roadProgressSum = roadProgressSum;
     counters.roadSitesPending = roadSitesPending;
     counters.roadsBuilt = roadsBuilt;
-    // `roadLaid` 是**每 pass** 值。三处预算闸原本直接 continue，把赋值留在闸后 ⇒
-    // 车道饱和时整列停写、保留最后一次铺路的旧值，而"闸关着"恰是最想读它的那一刻
-    // （线上据此误读过一次）。本列在 src 零读者，纯留痕 ⇒ 行为不变。
-    let laid = 0;
+    // （roadLaid 每 pass 留痕列已删，批次 4 #15 —— 零读者死遥测；闸止步与铺路
+    // 数量改由 stats.remoteRoadLane.blockedBy/created/create* 承担，见本函数头部。）
     // 清扫之后才判预算：本轮释放的额度当场可用（roadBudget 是 tick 入口快照）。
     if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) {
-      op.roadLaid = laid;
+      blockedBy = "lane-cap";
       continue;
     }
     // 单 op 挂起 road site 数（含在建）超上限则跳过 —— 铺完自然回落。
     if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) {
-      op.roadLaid = laid;
+      blockedBy = "op-pending-cap";
       continue;
     }
     // 每轮新建限速（这条必须在清扫与账本校正**之后**）。
     if (created >= CONFIG.remote.roadSitesPerRun) {
-      op.roadLaid = laid;
+      blockedBy = "run-limit";
       continue;
     }
     const sources = room.find(FIND_SOURCES);
@@ -383,10 +391,10 @@ export function planRemotePathRoads(
       if (created >= CONFIG.remote.roadSitesPerRun) break;
       if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;
       if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) break;
+      createAttempts++;
       const rc = room.createConstructionSite(tile.x, tile.y, STRUCTURE_ROAD);
       if (rc === OK) {
         created++;
-        laid++;
         roadSitesPending++;
         blockedKeys.add(tile.key);
         // 道路是运力倍增器（有路 hauler 速度 ×2），但也是实打实的能量投入，
@@ -394,10 +402,25 @@ export function planRemotePathRoads(
         bumpRemoteOpLedger(homeRoom, rn, "infraCost", structureCost(STRUCTURE_ROAD));
       } else {
         // ERR_FULL / ERR_INVALID_TARGET（地形冲突等）：跳过该格，下轮重评。
+        if (rc === ERR_FULL) createErrFull++;
+        else createErrOther++;
         blockedKeys.add(tile.key);
       }
     }
-    op.roadLaid = laid;
+    if (tiles.length === 0) blockedBy = "no-candidate-tiles";
+  }
+
+  // 插桩落盘（批次 4 #7）：本轮 createConstructionSite 返回码分布 + 各道闸止步处。
+  // 与车道口径（pendingTotal/saturated）并排，一套读数分清「车道挤占 / per-op 帽 /
+  // 每轮限速 / 无候选格 / 地形失败」—— 修哪道闸由数据说了算。
+  const laneStats = (Memory.kernel?.stats as any)?.remoteRoadLane;
+  if (laneStats) {
+    laneStats.created = created;
+    laneStats.released = released;
+    laneStats.createAttempts = createAttempts;
+    laneStats.createErrFull = createErrFull;
+    laneStats.createErrOther = createErrOther;
+    laneStats.blockedBy = blockedBy;
   }
 }
 

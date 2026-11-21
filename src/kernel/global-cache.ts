@@ -212,6 +212,11 @@ export interface GlobalCache {
   /** 本 tick 拥有 builder/worker creep 的房间名集合（Kernel.buildSnapshots 预构建）；
    * tower-defense 消费，避免独立全量 Game.creeps 扫描。 */
   repairRooms?: ReadonlySet<string>;
+  /** 和平期修墙速率预算池（2026-11-21 批次 4 #5）：房名 → 能量水位。
+   * room-state（P0）每拍累加进水（rate 2、cap 10K）；塔与 builder 的和平期
+   * wall/rampart 维修消费同池扣账。heap-only：global reset 清零后按 rate 重新蓄水，
+   * 等价于「新进程从零预算起步」，语义无害。纯函数规则见 domain/economy/wall-budget。 */
+  wallBudgets?: Record<string, number>;
   /** 本 tick 拥有存活 hauler 的房间名集合（Kernel.buildSnapshots 预构建）。
    * isLogisticsContainer 消费：container 的「物流源」身份以本房确有 hauler 为前提 —
    * 拓荒爬坡期无 hauler 时无物流消费者，builder/upgrader 应可直取

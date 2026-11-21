@@ -223,6 +223,13 @@ describe("Kernel 禁止 import 业务模块", () => {
         // 消除 kernel 内嵌 find/isThreat 与角色层重复扫描；kernel 只读结果集合）
         if (rel === "kernel/kernel.ts" && imp.resolved.includes("creeps/support/targeting"))
           continue;
+        // 已登记白名单（2026-11-21 批次 4 #14）：pickCpuUsagePerTick（纯函数，零副作用）。
+        // CPU 逐拍均量的信任规则必须单一来源：L1 调度前馈（scheduler.canStart）与
+        // systems 容量分档（empire-strategy）同尺 —— 两处各写一份必然漂移
+        //（同族教训见 empire-strategy 的 cpuUsageMeasurement 注释）。
+        // 规则读本侧 stats 形状、落在 domain 纯函数层，kernel 只读结果。
+        if (rel === "kernel/scheduler.ts" && imp.resolved.includes("domain/strategy/capacity"))
+          continue;
         const targetRel = relative(SRC, imp.resolved);
         const exemptKey = `${rel}:${targetRel}`;
         if (R9_VALUE_EXEMPTIONS.has(exemptKey)) continue;

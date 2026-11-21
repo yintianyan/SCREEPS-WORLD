@@ -12,6 +12,12 @@ import {
   isTowerCovered,
   resolveUnderSiege,
 } from "../../../domain/defense/fortification";
+import {
+  isWallBudgetExempt,
+  isWallBudgetTracked,
+  spendWallBudget,
+} from "../../../domain/economy/wall-budget";
+import { globalCache } from "../../../kernel/global-cache";
 
 /** 道路维修阈值 — 血量低于此比例才修（与 builder 维修需求信号共用 CONFIG 口径）。 */
 const ROAD_REPAIR_THRESHOLD: number = CONFIG.construction.roadRepairThreshold;
@@ -206,6 +212,30 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       }
       // 无 storage（RCL1-4）— 放宽门禁，靠 work chain 优先级保证不抢生存行为。
 
+      // 和平期修墙速率预算（2026-11-21 批次 4 #5）：fortify 开关闸之上再叠预算闸。
+      // 塔与 builder 共用每房能量池（room-state P0 每拍进水 rate 2、cap 10K）；
+      // 本选择器只做**水位预检**（已立账且池空 ⇒ 本拍不选墙目标），扣账在 execute
+      // 里按实际 landed 的 intent 能量记 —— 行走拍不扣、修不到不扣。
+      // 房未立账（undefined）= 无预算区，闸开；备战期豁免：liveThreat /
+      // colonyState=defense / 帝国 war 姿态（批次 2 后 war 只由玩家敌意维持）。
+      // 不含受袭记忆窗 —— 「记住挨过打」≠「正在挨打」。
+      {
+        const mem = Memory.rooms[ac.snapshot.roomName];
+        const exempt = isWallBudgetExempt(
+          ac.snapshot.threatCreeps.length > 0,
+          mem?.colonyState ?? "normal",
+          Memory.kernel?.strategy?.posture ?? "develop",
+        );
+        const pools = globalCache().wallBudgets;
+        if (
+          !exempt &&
+          isWallBudgetTracked(pools, ac.snapshot.roomName) &&
+          (pools?.[ac.snapshot.roomName] ?? 0) < 1
+        ) {
+          return undefined;
+        }
+      }
+
       // 分层分类上下文：min-cut 割集来自 Memory 持久化数据。
       const fortCtx = buildFortificationContext(ac.snapshot, roomMemory?.minCut?.positions);
       // 位置评估——塔火圈外的 perimeter rampart 只维持 bootstrap 线。
@@ -252,7 +282,10 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       return target;
     },
     execute: (ac, t) => {
-      runCountedAction(
+      // 预算扣账（批次 4 #5）：intent 在动作前求值（与 L1 核算同口径、能量单位），
+      // landed（result===OK）才扣 —— 行走拍（ERR_NOT_IN_RANGE）零扣账。
+      const energyIntent = repairIntentAmount(ac.creep, t);
+      const result = runCountedAction(
         ac.creep,
         t,
         ACTION_RANGE_FAR,
@@ -263,8 +296,23 @@ export function repairFortifications(): ActionCandidate<Fortification> {
             ac.creep.memory.repairTargetId = undefined;
           },
         },
-        () => repairIntentAmount(ac.creep, t),
+        () => energyIntent,
       );
+      if (result === OK && energyIntent > 0) {
+        // 豁免态（备战期）与未立账房不扣账 —— 池只为和平期预算区服务。
+        const exempt = isWallBudgetExempt(
+          ac.snapshot.threatCreeps.length > 0,
+          Memory.rooms[ac.snapshot.roomName]?.colonyState ?? "normal",
+          Memory.kernel?.strategy?.posture ?? "develop",
+        );
+        const pools = globalCache().wallBudgets;
+        if (!exempt && isWallBudgetTracked(pools, ac.snapshot.roomName)) {
+          pools![ac.snapshot.roomName] = spendWallBudget(
+            pools![ac.snapshot.roomName],
+            energyIntent,
+          ).pool;
+        }
+      }
     },
   };
 }

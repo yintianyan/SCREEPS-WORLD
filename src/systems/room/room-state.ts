@@ -12,6 +12,7 @@ import {
   type PhaseState,
 } from "../../domain/economy/phase";
 import { computeEnergyPrice } from "../../domain/economy/energy-price";
+import { accrueWallBudget } from "../../domain/economy/wall-budget";
 import { nextStorageRichActive, nextUpgradeActive } from "../../domain/economy/storage-latch";
 import {
   HOME_MINERAL_STOP_STOCK,
@@ -120,6 +121,16 @@ export const roomStateSystem: System = {
         } else if (roomMem[key] !== value) {
           roomMem[key] = value;
         }
+      }
+
+      // 和平期修墙速率预算池进水（2026-11-21 批次 4 #5）：P0 每拍累加，塔/builder
+      // 的和平期 wall 维修消费同池扣账（塔 10/笔整笔、builder 按实际 intent 能量）。
+      // 进水无条件（豁免只作用于支出侧 —— 备战期不修墙，池照常蓄水到 cap）。
+      // 本系统是 P0 且先于塔/creep 执行 ⇒ 当拍进水当拍可用，消费端无顺序竞态。
+      {
+        const gc = globalCache();
+        if (!gc.wallBudgets) gc.wallBudgets = {};
+        gc.wallBudgets[snapshot.roomName] = accrueWallBudget(gc.wallBudgets[snapshot.roomName], 1);
       }
 
       // home mineral 停采闩锁（10K 停 / 5K 复）。无矿物的房不启用。

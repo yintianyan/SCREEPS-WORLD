@@ -2,6 +2,7 @@ import { recordTyped } from "./event-log";
 import { CONFIG, tierLimits, tierMaxPriority } from "../config";
 import { log } from "./log";
 import { EventKind } from "./event-log";
+import { pickCpuUsagePerTick } from "../domain/strategy/capacity";
 import type { Budget, CpuTier, Priority } from "./contracts";
 
 /** 各档位的 bucket 阈值（降级立即生效）。
@@ -170,26 +171,32 @@ export class CpuBudget implements Budget {
       return false;
     }
     // 前馈预测：历史 CPU 持续高位时收紧非 P0 任务的通过率。
-    // cpuAvg10/cpuMax10 是最近 10 个采样点（~100 tick）的均值/峰值，
-    // 非 real-time 但能反映本 tick 的基线 CPU 消耗水平。
-    // 守卫：cpuMax10/cpuAvg10 必须为正数才视为有效历史数据 —
-    // 测试环境或 reset 首 tick stats 可能未初始化（值为 0 或 undefined），
-    // 此时不应启用前馈预测，避免残留/空数据错误拒绝低优先级任务。
-    // 审计修复（线上 W37S58 P3 全族饥饿 ~13h 实证）：旧判据
-    // 「cpuMax10 ≥ hardLimit*0.8 → 拒 P2+」用**峰值**做永久惩罚 —— 任何一次
-    // 尖峰（行情调用/战斗 tick/reload 后首拍）都会让 10 样本窗口 max 长期
-    // 高于阈值，而 P2/P3 被冻结恰恰保证窗口 max 不回落 → 自锁死循环：
-    // telemetry-collector/terminal/factory/pixel 等 P3 系统整体停摆，
-    // stats 冻结后前馈又以冻结值持续拒绝（本事故根因）。修正为：
-    //   - 峰值判据仅在「上窗真实触顶」(max10 ≥ hardLimit) 时硬拒 P2+；
-    //   - 基线压力由 avg 把守：avg ≥ softLimit 拒 P3+（P2 仍放行）。
+    // 批次 4 #14（2026-11-21）：前馈口径从 avg10/cpuMax10 改为 **rate 口径**
+    // （cpuRate.total/windowTicks，复用 capacity.pickCpuUsagePerTick 的信任规则——
+    // 窗未建立/漏采/超龄退回 avg10）。依据：① avg10 采样系统性偏高 ~2.6/t
+    // （REPAIR-PLAN §11 实测），基线闸拿着偏高的尺拒绝 P3；② cpuMax10 峰值口径
+    // 让任何一次尖峰（行情调用/战斗 tick）在 10 样本窗里长期占位 —— 审计修复
+    // （W37S58 P3 全族饥饿 ~13h）已把峰值判据收窄到 max10 ≥ hardLimit，但只要
+    // 它还在，一次触顶仍惩罚整整一个采样窗。rate 是逐拍实测均量，天然免疫单点尖峰。
+    // 守卫：rate ≤ 0（stats 未初始化/退回 avg10 也为 0）不启用前馈 ——
+    // 测试环境或 reset 首 tick 不应凭空拒绝低优先级任务。
     if (priority >= 2 && !p3Escape) {
       const stats = Memory.kernel?.stats;
-      if (stats && (stats.cpuMax10 ?? 0) > 0 && (stats.cpuAvg10 ?? 0) > 0) {
-        // 上窗峰值真实触及硬上限 → 本 tick 大概率透支，P2+ 拒绝。
-        if (stats.cpuMax10! >= this.hardLimit) return false;
-        // 基线持续高位 → P3+ 拒绝（P2 仍放行）。
-        if (priority >= 3 && stats.cpuAvg10! >= this.softLimit) return false;
+      if (stats) {
+        const rate = pickCpuUsagePerTick({
+          avg10: stats.cpuAvg10 ?? 0,
+          rateTotal: stats.cpuRate?.total,
+          rateWindowTicks: stats.cpuRate?.windowTicks,
+          rateUnsampledTicks: stats.cpuRate?.unsampledTicks,
+          rateAt: stats.cpuRate?.at,
+          tick: Game.time,
+        });
+        if (rate > 0) {
+          // 上窗逐拍均值触及硬上限 → 本 tick 大概率透支，P2+ 拒绝。
+          if (rate >= this.hardLimit) return false;
+          // 基线持续高位 → P3+ 拒绝（P2 仍放行）。
+          if (priority >= 3 && rate >= this.softLimit) return false;
+        }
       }
     }
     return true;

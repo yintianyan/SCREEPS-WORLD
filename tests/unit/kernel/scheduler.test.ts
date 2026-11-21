@@ -166,11 +166,19 @@ describe("CpuBudget — 前馈预测", () => {
     expect(budget.canStart(3 as Priority)).toBe(true);
   });
 
-  it("cpuMax10 真实触顶 hardLimit → P2+ 拒绝（P0/P1 仍放行）", () => {
+  it("rate 逐拍均值触顶 hardLimit → P2+ 拒绝（P0/P1 仍放行）", () => {
     const budget = new CpuBudget("healthy");
     (globalThis as any).Memory = {
       kernel: {
-        stats: { cpuMax10: 19.5, cpuAvg10: 10 },
+        stats: {
+          cpuAvg10: 10,
+          cpuRate: {
+            total: 19.5,
+            windowTicks: 200,
+            unsampledTicks: 0,
+            at: (globalThis as any).Game.time,
+          },
+        },
       },
     };
     expect(budget.canStart(0 as Priority)).toBe(true);
@@ -179,13 +187,51 @@ describe("CpuBudget — 前馈预测", () => {
     expect(budget.canStart(3 as Priority)).toBe(false);
   });
 
-  it("cpuAvg10 触及 softLimit 时 P3+ 被拒绝（P2 仍放行）", () => {
+  it("仅峰值触顶（rate 均值未触顶）→ P2 放行（批次 4 #14：峰值口径不再惩罚单次尖峰）", () => {
     const budget = new CpuBudget("healthy");
-    // cpuAvg10 = 18 >= 17.5 → 基线高企，P3+ 拒绝
-    // cpuMax10 = 14 < 19.2 → P2 仍放行
     (globalThis as any).Memory = {
       kernel: {
-        stats: { cpuMax10: 14, cpuAvg10: 18 },
+        stats: {
+          cpuMax10: 19.5, // 单次尖峰占位
+          cpuAvg10: 10,
+          cpuRate: {
+            total: 12,
+            windowTicks: 200,
+            unsampledTicks: 0,
+            at: (globalThis as any).Game.time,
+          },
+        },
+      },
+    };
+    expect(budget.canStart(2 as Priority)).toBe(true);
+    expect(budget.canStart(3 as Priority)).toBe(true);
+  });
+
+  it("rate 触及 softLimit 时 P3+ 被拒绝（P2 仍放行）", () => {
+    const budget = new CpuBudget("healthy");
+    // rate = 18 >= 17.5 → 基线高企，P3+ 拒绝
+    (globalThis as any).Memory = {
+      kernel: {
+        stats: {
+          cpuRate: {
+            total: 18,
+            windowTicks: 200,
+            unsampledTicks: 0,
+            at: (globalThis as any).Game.time,
+          },
+        },
+      },
+    };
+    expect(budget.canStart(2 as Priority)).toBe(true);
+    expect(budget.canStart(3 as Priority)).toBe(false);
+  });
+
+  it("rate 不可信（窗未建立）→ 退 avg10 口径（偏高即保守）", () => {
+    const budget = new CpuBudget("healthy");
+    (globalThis as any).Memory = {
+      kernel: {
+        // 无 cpuRate → 退 avg10 = 18 >= softLimit → P3+ 拒绝
+        stats: { cpuAvg10: 18 },
       },
     };
     expect(budget.canStart(2 as Priority)).toBe(true);

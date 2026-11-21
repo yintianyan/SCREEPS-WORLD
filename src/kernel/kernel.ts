@@ -702,21 +702,29 @@ export class Kernel {
         );
       }
     } else {
-      kernelMem.expectations = {
-        tick: ctx.tick,
-        // 留痕列**两支都要写**，否则「这列不在」同时兼容"没违例"与"产物没这列"两种解释
-        // ——而自检面的读数恰恰要区分这两者（同形先例：`tailDrop` 恒定写、`roadLaid`
-        // 每 pass 写；线上实证：部署后 `expectations.tick` 新鲜、`violations=[]`、`violationsTotal`
-        // 缺席，判效器据此误报 NOT_DEPLOYED）。
-        violationsTotal: 0,
-        violations: [],
-        // ⚠️这一行是修 bug，不是可选装饰：违例是**间歇状态**（工地被回收、饥饿一拍缓解都会让
-        // violations 变空），若这里不带走 `recent`，整块对象就被干净的一拍覆写掉，
-        // 事后归因随之失效。线上实证（sha 649eb94b9784，boot 后 ~15k 拍）：
-        // `kernel.expectations={tick,violations:[],e3:{}}` —— `recent` 键整个不见。
-        recent: kernelMem.expectations?.recent,
-        e3: e3Prev as Record<string, unknown>,
-      };
+      // 无违例稳态（2026-11-21 批次 4 #9 字段级 diff 写入）：不再每 pass 重建整棵
+      // 子树（3.4KB 写放大，kernel 自证"无违例也完整写入"），改为**复用既有对象、
+      // 只刷 tick 标量**——violations/violationsTotal/recent/e3 的引用原样保留。
+      // 契约不变式（注释保留如下）：留痕列**两支都要存在**（缺席会被判效器误读为
+      // NOT_DEPLOYED）；`recent` 键不许被清写（违例是间歇状态，事后归因靠它）。
+      // 字段级落点：仅当上一 pass 有违例残留（violationsTotal≠0 或 violations 非空）
+      // 才显式清这两列 —— 从"有违例"到"无违例"的转换拍只发生一次，其后每 pass
+      // 的分配成本从"新对象+新数组"降到一次标量赋值。
+      const prev = kernelMem.expectations;
+      if (prev) {
+        if (prev.violationsTotal !== 0 || (prev.violations?.length ?? 0) !== 0) {
+          prev.violationsTotal = 0;
+          prev.violations = [];
+        }
+        prev.tick = ctx.tick;
+      } else {
+        kernelMem.expectations = {
+          tick: ctx.tick,
+          violationsTotal: 0,
+          violations: [],
+          e3: e3Prev as Record<string, unknown>,
+        };
+      }
       if (kernelMem.p3StarveBypassUntil !== undefined) delete kernelMem.p3StarveBypassUntil;
       // P3 不再饥饿：清除冻结跟踪
       if (kernelMem.p3FrozenSince !== undefined) delete kernelMem.p3FrozenSince;

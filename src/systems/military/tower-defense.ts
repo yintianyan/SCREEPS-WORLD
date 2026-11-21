@@ -13,6 +13,11 @@ import {
   resolveUnderSiege,
   type FortificationContext,
 } from "../../domain/defense/fortification";
+import {
+  isWallBudgetExempt,
+  isWallBudgetTracked,
+  spendWallBudget,
+} from "../../domain/economy/wall-budget";
 import { globalCache, bumpEnergyCounter, safeModeCounters } from "../../kernel/global-cache";
 
 /** P3 L1 核算：塔动作耗能按 intent 计（attack/heal/repair 每次 TOWER_ENERGY_COST）。
@@ -258,7 +263,21 @@ export const towerDefenseSystem: System = {
           : fortifyLatch === undefined
             ? storageEnergy >= CONFIG.economy.waterlines.sprintStorage
             : fortifyLatch === true;
-      const wallMaintenanceAllowed = colonyState === "normal" && fortifyGateOpen;
+      // 和平期修墙速率预算（2026-11-21 批次 4 #5）：fortify 开关闸之上再叠预算闸 ——
+      // 开关闸只回答"能不能修"，预算闸回答"每拍能修多少"（rate 2 e/t，W37S58 实测
+      // 开关闸下灌墙 6.3 e/t ≈ 全房净流）。塔与 builder 共用一池；备战期豁免；
+      // 房未立账（room-state 尚未进水过，池记录 undefined）= 无预算区，闸开。
+      const wallBudgetExempt = isWallBudgetExempt(
+        snapshot.threatCreeps.length > 0,
+        colonyState,
+        Memory.kernel?.strategy?.posture ?? "develop",
+      );
+      const wallBudgetPool = globalCache().wallBudgets?.[snapshot.roomName];
+      const wallBudgetTracked = isWallBudgetTracked(globalCache().wallBudgets, snapshot.roomName);
+      const wallMaintenanceAllowed =
+        colonyState === "normal" &&
+        fortifyGateOpen &&
+        (wallBudgetExempt || !wallBudgetTracked || (wallBudgetPool ?? 0) > 0);
 
       for (const tower of snapshot.towers) {
         // G-DF-07：能量 < 50 时不维修（保留攻击能量）；能量 = 0 时跳过。
@@ -276,17 +295,28 @@ export const towerDefenseSystem: System = {
         }
 
         // G-DF-08：wall/rampart 维护（最低优先级）。
-        // 门禁：colonyState 必须 normal + tower 能量 > 70%（保留应急储备）。
+        // 门禁：colonyState 必须 normal + tower 能量 > 70%（保留应急储备）+ 预算池
+        // 整笔扣账成功（TOWER_ENERGY_COST —— 池不足 10 则不放空炮、不扣账；
+        // 未立账/豁免态不扣账、直接放行）。
         if (wallRepairTarget && wallMaintenanceAllowed) {
           const towerEnergyRatio =
             tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY);
           if (towerEnergyRatio > 0.7) {
-            countedTowerAction(
-              snapshot.roomName,
-              tower,
-              () => tower.repair(wallRepairTarget),
-              "walls",
-            );
+            const spend =
+              wallBudgetExempt || !wallBudgetTracked
+                ? { granted: TOWER_ENERGY_COST, pool: wallBudgetPool ?? 0 }
+                : spendWallBudget(wallBudgetPool!, TOWER_ENERGY_COST);
+            if (spend.granted >= TOWER_ENERGY_COST) {
+              if (!wallBudgetExempt && wallBudgetTracked) {
+                (globalCache().wallBudgets ??= {})[snapshot.roomName] = spend.pool;
+              }
+              countedTowerAction(
+                snapshot.roomName,
+                tower,
+                () => tower.repair(wallRepairTarget),
+                "walls",
+              );
+            }
           }
         }
       }
