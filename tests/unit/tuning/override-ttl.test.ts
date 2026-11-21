@@ -48,3 +48,40 @@ describe("strategyOverrides 读时过期", () => {
     expect(isStrategyOverrideLive({ adjustedAt: Number.NaN }, TICK)).toBe(false);
   });
 });
+
+// ── 物理清理（2026-11-21 批次 3，立案 #11）──
+// 读时过期（上方判别式）只保证"不生效"；过期条目永留 Memory 会误导复盘
+// （线上实证：49 万拍前的 minDwell=1600 看起来像现行配置）。写侧清理才是"不留尸体"。
+import { pruneExpiredStrategyOverrides } from "../../../src/domain/strategy/strategy-reviewer";
+
+describe("pruneExpiredStrategyOverrides（物理删除过期条目）", () => {
+  it("过期条目被物理移除，现行条目原样保留", () => {
+    const overrides = {
+      "posture.minDwell": { value: 1600, adjustedAt: TICK - 500_000, reason: "stale" },
+      "posture.warPatience": { value: 4000, adjustedAt: TICK - 100, reason: "fresh" },
+    };
+    const pruned = pruneExpiredStrategyOverrides(overrides, TICK);
+    expect(pruned["posture.minDwell"]).toBeUndefined();
+    expect(pruned["posture.warPatience"]).toEqual(overrides["posture.warPatience"]);
+  });
+
+  it("边界：恰好 TTL 的条目保留，TTL+1 移除（与读侧判别式同一把尺）", () => {
+    const overrides = {
+      a: { value: 1, adjustedAt: TICK - STRATEGY_OVERRIDE_TTL_TICKS, reason: "" },
+      b: { value: 2, adjustedAt: TICK - STRATEGY_OVERRIDE_TTL_TICKS - 1, reason: "" },
+    };
+    const pruned = pruneExpiredStrategyOverrides(overrides, TICK);
+    expect(pruned.a).toBeDefined();
+    expect(pruned.b).toBeUndefined();
+  });
+
+  it("畸形条目（缺 adjustedAt）按不生效处理 ⇒ 被清理（宁缺勿假）", () => {
+    const pruned = pruneExpiredStrategyOverrides({ bad: { value: 3, reason: "" } } as never, TICK);
+    expect(pruned).toEqual({});
+  });
+
+  it("undefined/空输入 → 空对象（调用方按条数差写回，零写放大）", () => {
+    expect(pruneExpiredStrategyOverrides(undefined, TICK)).toEqual({});
+    expect(pruneExpiredStrategyOverrides({}, TICK)).toEqual({});
+  });
+});

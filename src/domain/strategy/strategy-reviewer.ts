@@ -89,6 +89,26 @@ export function isStrategyOverrideLive(
   return currentTick - entry.adjustedAt <= STRATEGY_OVERRIDE_TTL_TICKS;
 }
 
+/**
+ * 物理删除过期 override 条目（纯函数）——复盘器每轮调用。
+ *
+ * 消费端 resolveStrategyOverrides 早已跳过过期条目（读侧安全），但条目本身永留 Memory：
+ * 线上实证（2026-11-21 立案 #11）"49 万拍前的 minDwell=1600" 看起来像现行配置，误导复盘。
+ * 状态必须有生命周期（设计原则 4）——读侧跳过只是"不生效"，写侧清理才是"不留尸体"。
+ * 返回新对象；无过期条目时返回等价副本（调用方按条数差决定是否写回，避免无谓 Memory 重写）。
+ */
+export function pruneExpiredStrategyOverrides(
+  overrides: Record<string, StrategyOverrideEntry> | undefined,
+  currentTick: number,
+): Record<string, StrategyOverrideEntry> {
+  const out: Record<string, StrategyOverrideEntry> = {};
+  if (!overrides) return out;
+  for (const [key, entry] of Object.entries(overrides)) {
+    if (isStrategyOverrideLive(entry, currentTick)) out[key] = entry;
+  }
+  return out;
+}
+
 /** 储备趋势上升判定窗口（最近 N 个采样点）。 */
 const RESERVE_UPTREND_WINDOW = 10;
 

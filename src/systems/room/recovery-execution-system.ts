@@ -55,6 +55,7 @@ import {
   computeRecoveryStats,
   isActionActive,
   upsertEscalation,
+  archiveTerminalEscalations,
   type RecoveryActionTable,
   type RecoveryActionRecord,
   type RecoveryWorldSnapshot,
@@ -1131,7 +1132,18 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
               attempts: newRecord.attempts,
               terminal: newRecord.state === "terminal",
             });
-            if (Memory.kernel) Memory.kernel.escalations = esc.list;
+            // 终态归档（2026-11-21 批次 3，立案 #10）：terminal 且 repeats 达阈值的条目
+            // 移出清单停止累积 —— 线上实证 terminal_trade repeats=177 仍持续增长。
+            // 归档不撤证据：明细在事件环，复发时从 1 重新计数保持证据新鲜有界。
+            const arch = archiveTerminalEscalations(esc.list);
+            if (Memory.kernel) Memory.kernel.escalations = arch.list;
+            if (arch.archived.length > 0) {
+              log.info(
+                "recovery",
+                `[${tick}] recovery: ARCHIVED ${arch.archived.length} terminal escalation(s)` +
+                  ` (${arch.archived.map(a => `${a.room}/${a.actionType}`).join(",")})`,
+              );
+            }
             if (esc.shouldEmit) {
               recordTyped(EventKind.RecoveryEscalation, escRoom, {
                 attempts: newRecord.attempts,

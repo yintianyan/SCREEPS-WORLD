@@ -31,7 +31,10 @@ import {
 } from "../../domain/strategy/autonomy-metrics";
 import { log } from "../../kernel/log";
 import { safeRun } from "../../kernel/safe-run";
-import { reviewStrategy } from "../../domain/strategy/strategy-reviewer";
+import {
+  pruneExpiredStrategyOverrides,
+  reviewStrategy,
+} from "../../domain/strategy/strategy-reviewer";
 import { CONFIG } from "../../config";
 import { EventKind } from "../../kernel/event-log";
 
@@ -274,6 +277,25 @@ export const empireHealthSystem: System = {
             recordTyped(EventKind.StrategyReview, "", {
               suggestionCount: strategyResult.suggestions.length,
             });
+          }
+
+          // 过期 override 物理清理（2026-11-21 批次 3，立案 #11）：每轮复盘都执行
+          //（与建议是否产生无关）。读侧早已跳过期条目，但条目永留 Memory 会误导复盘
+          //（线上实证：49 万拍前的 minDwell=1600 看起来像现行配置）。按条数差决定写回，
+          // 无过期条目时零写放大。
+          const kernelForPrune = Memory.kernel;
+          const prevOverrides = kernelForPrune?.tuning?.strategyOverrides;
+          if (kernelForPrune?.tuning && prevOverrides) {
+            const pruned = pruneExpiredStrategyOverrides(prevOverrides, tick);
+            const dropped = Object.keys(prevOverrides).length - Object.keys(pruned).length;
+            if (dropped > 0) {
+              kernelForPrune.tuning.strategyOverrides = pruned;
+              log.info(
+                "empire-health-system",
+                `strategy-reviewer: pruned ${dropped} expired strategy override(s)` +
+                  ` (${Object.keys(pruned).length} live)`,
+              );
+            }
           }
         },
         false,

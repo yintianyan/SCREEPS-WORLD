@@ -79,6 +79,24 @@ export interface TradeLedger {
    * 与 `SELL_PRIORITY_CAP` 对照才知道买入有没有被日常卖出挤出 deal 窗口。
    */
   buyDeficitPriority: number;
+  // ── 挂单侧（terminal-manager.tryManageSellOrders 写）：判「credits 2.36 亿却 0 挂单」卡在哪一道 ──
+  // 2026-11-21 批次 3 立案 #8：挂单/改价/撤单逻辑完整、credits 静止 2.36 亿、线上 0 挂单。
+  // 卖出 deal 候选（sell-*）只吃即刻买盘、无买盘即空转；挂单分支每道止步处的动作完全不同
+  //（阈值/定价/无单可挂），先插桩拿数据再决定修法 —— 与采购侧立账同一理由。
+  /** 最近一次大宗盈余挂单分支的止步处：`""` = 本轮没走到该分支（无 terminal / 无房）。 */
+  sellOrderGate:
+    | ""
+    | "no-mineral"
+    | "no-surplus"
+    | "in-flight"
+    | "no-bid"
+    | "below-min"
+    | "create-failed"
+    | "created";
+  /** 上述止步的 tick（heap 值，global reset 后归零 —— 只与同窗口读数对照）。 */
+  sellOrderGateAt: number;
+  /** 止步现场关键读数：`房 资源 surplus=N bid=P ask=A min=M`（定价/阈值一字符串看全）。 */
+  sellOrderDetail: string;
 }
 
 /**
@@ -118,5 +136,8 @@ export function createTradeLedger(): TradeLedger {
     buyTried: 0,
     buyOk: 0,
     buyDeficitPriority: 0,
+    sellOrderGate: "",
+    sellOrderGateAt: 0,
+    sellOrderDetail: "",
   };
 }

@@ -10,8 +10,10 @@
 import { describe, it, expect } from "vitest";
 import {
   upsertEscalation,
+  archiveTerminalEscalations,
   ESCALATIONS_CAP,
   ESCALATION_EVENT_HEARTBEAT_TICKS,
+  ESCALATION_ARCHIVE_REPEATS,
   type EscalationEntry,
 } from "../../../src/domain/strategy/recovery-lifecycle";
 
@@ -110,5 +112,52 @@ describe("upsertEscalation", () => {
     expect(r.list[0]?.repeats).toBe(1); // 队首是 B —— 修复前事件第三列报的就是这个 1
     expect(r.repeats).toBe(4); // 必须是本次被升级那条
     expect(r.shouldEmit).toBe(true); // 跨过心跳窗 ⇒ 仍应发事件（这条不该被 repeats 修复弄坏）
+  });
+});
+
+describe("archiveTerminalEscalations（2026-11-21 批次 3，立案 #10）", () => {
+  const termAt = (repeats: number, room = "W1N1"): EscalationEntry => ({
+    room,
+    domain: "trade",
+    actionType: "terminal_trade",
+    firstAt: 1000,
+    lastAt: 1000 + repeats,
+    repeats,
+    attempts: 3,
+    terminal: true,
+  });
+
+  it("线上实证复现：terminal_trade repeats=177 且 terminal → 归档移除", () => {
+    const r = archiveTerminalEscalations([termAt(177)]);
+    expect(r.list).toHaveLength(0);
+    expect(r.archived).toHaveLength(1);
+    expect(r.archived[0]).toMatchObject({ room: "W1N1", repeats: 177, terminal: true });
+  });
+
+  it("阈值边界：repeats = 50 归档，49 保留", () => {
+    expect(ESCALATION_ARCHIVE_REPEATS).toBe(50);
+    expect(archiveTerminalEscalations([termAt(ESCALATION_ARCHIVE_REPEATS - 1)]).list).toHaveLength(
+      1,
+    );
+    expect(archiveTerminalEscalations([termAt(ESCALATION_ARCHIVE_REPEATS)]).list).toHaveLength(0);
+  });
+
+  it("非终态的慢性失败不受影响 —— 反复烧穿重试的证据必须持续累积", () => {
+    const chronic: EscalationEntry = { ...termAt(ESCALATION_ARCHIVE_REPEATS + 9), terminal: false };
+    const r = archiveTerminalEscalations([chronic]);
+    expect(r.list).toHaveLength(1);
+    expect(r.archived).toHaveLength(0);
+  });
+
+  it("归档保留其余条目与顺序；归档后复发从 1 重新计数（证据新鲜有界）", () => {
+    const young: EscalationEntry = { ...termAt(3, "W2N2") };
+    const r = archiveTerminalEscalations([termAt(ESCALATION_ARCHIVE_REPEATS), young]);
+    expect(r.list).toHaveLength(1);
+    expect(r.list[0]?.room).toBe("W2N2");
+
+    // 归档后同一案例再次出现 → upsert 全新条目 repeats=1（而非在旧条目上 +1）。
+    const recur = upsertEscalation(r.list, { ...base, tick: 50_000 });
+    expect(recur.list).toHaveLength(2);
+    expect(recur.list[0]).toMatchObject({ room: "W1N1", repeats: 1, firstAt: 50_000 });
   });
 });

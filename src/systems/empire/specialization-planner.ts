@@ -231,12 +231,19 @@ function buildHealthInput(
 /**
  * 修复：从 networkSnapshot 的 surplus/deficit 对维护 Supply Contract。
 
- * 逻辑：
- *   1. 读取 globalCache().networkSnapshot（由 agenda-manager 每 100t 写入）
- *   2. 对每个 (surplusRoom, deficitRoom, resource) 对：
- *      - 如果已有非终态 Contract → 跳过（幂等）
- *      - 否则创建 ACTIVE SupplyContract
- *   3. 清理终态 Contract（COMPLETED/CANCELLED）
+ * 逻辑（2026-11-21 批次 3 拆段，立案 #6）：
+ *   1. **僵尸清理段（无条件）**：终态直接丢；供需任一消失的合同给宽限窗口
+ *      （isContractStale，600t），连续超时才清理。本段不读任何 heap 输入——
+ *      旧实现首行 `if (!networkSnapshot) return` 让清理与创建捆绑早退，而
+ *      networkSnapshot 存 heap（部署即失、agenda-manager 被预算车道饿死即缺），
+ *      生产上清理路径从未执行过（线上合同 ua=ca 存活 100 万拍即此断点的铁证）。
+ *      契约活性只能由 Memory 里的生命周期字段（lastMatchedAt/createdAt）自证，
+ *      不能订阅意图快照。
+ *   2. **创建/匹配段（依赖 networkSnapshot）**：对每个 (surplusRoom, deficitRoom,
+ *      resource) 对：已有非终态 Contract → 跳过（幂等）；否则创建 ACTIVE Contract。
+ *      快照缺失时仅跳过本段——清理照常落盘。
+ *   3. 同周期顺带清扫 pbBoostDemand 过期残留（写者 power-farm-manager 只在
+ *      自己开新计划时顺带清，无新计划期间死条目永存——同一 sweeper 周期收编）。
  *   4. 序列化写入 Memory.kernel.supplyContracts（瘦快照）
 
  * Contract 参数推导：
@@ -245,17 +252,19 @@ function buildHealthInput(
  *   - priority: 由 deficit.criticality 推导
  */
 function maintainSupplyContracts(tick: number): void {
-  const networkSnapshot = globalCache().networkSnapshot;
-  if (!networkSnapshot) return;
-
-  // 读取现有 Contracts（从 Memory 反序列化）
+  // 读取现有 Contracts（从 Memory 反序列化）—— 清理段与创建段共用一次读。
   const existing = loadContractsFromMemory();
 
-  // 从 networkSnapshot 提取 surplus/deficit 对
-  const supplyNodes = networkSnapshot.supplyNodes;
-  const demandNodes = networkSnapshot.demandNodes;
-  const supplyKeys = new Set(supplyNodes.map(node => `${node.room}|${node.resource}`));
-  const demandKeys = new Set(demandNodes.map(node => `${node.room}|${node.resource}`));
+  const networkSnapshot = globalCache().networkSnapshot;
+  // 快照缺失 ⇒ 键集为空 ⇒ 本 pass 无合同被"匹配"（lastMatchedAt 不刷新）。
+  // 宽限窗（600t）远大于快照写节律（100t），heap 空窗由宽限自然吸收：
+  // 快照连续 600t 不在 ⇒ 合同确实无法再验证 ⇒ 按 stale 清，语义正确。
+  const supplyKeys = new Set(
+    (networkSnapshot?.supplyNodes ?? []).map(node => `${node.room}|${node.resource}`),
+  );
+  const demandKeys = new Set(
+    (networkSnapshot?.demandNodes ?? []).map(node => `${node.room}|${node.resource}`),
+  );
 
   // 存活合同：终态直接丢；供需任一消失的合同给宽限窗口，连续超时才清理。
   // 旧实现只过滤终态，而产线没有任何终态转换 ⇒ 合同一旦签发就永久派单，
@@ -285,7 +294,17 @@ function maintainSupplyContracts(tick: number): void {
         `(supply/demand pair absent > grace window)`,
     );
   }
+  // 清理段独立落盘：快照缺失也要把清完的名单写回（旧实现早退 = 连名单都不保存）。
+  saveContractsToMemory(activeContracts, tick);
 
+  // pbBoostDemand 清扫同属无条件卫生段：不依赖 heap 快照（见函数注释）。
+  pruneExpiredPbBoostDemand(tick);
+
+  // ── 创建/匹配段：快照缺失时到此为止 ──
+  if (!networkSnapshot) return;
+
+  const supplyNodes = networkSnapshot.supplyNodes;
+  const demandNodes = networkSnapshot.demandNodes;
   let newContractsCreated = 0;
 
   for (const supply of supplyNodes) {
@@ -332,6 +351,32 @@ function maintainSupplyContracts(tick: number): void {
       "specialization-planner",
       `specialization-planner: created ${newContractsCreated} supply contracts ` +
         `(${activeContracts.length} active total)`,
+    );
+  }
+}
+
+/**
+ * 清扫 Memory.kernel.pbBoostDemand 中过期的前馈补产条目（`until <= tick`）。
+ * 写者（power-farm-manager）只在自己开新计划时顺带清一遍；连续无新计划期间
+ * 死条目永存并被 lab-system 当现行需求读（僵尸状态误导复盘）。
+ * 同一 sweeper 周期收编到这里——pbBoostDemand 与 supplyContracts 同属
+ * 「Memory 里只增不清的生命周期外状态」。
+ */
+function pruneExpiredPbBoostDemand(tick: number): void {
+  const demand = Memory.kernel?.pbBoostDemand;
+  if (!demand) return;
+  let dropped = 0;
+  for (const roomName of Object.keys(demand)) {
+    const entry = demand[roomName];
+    if (!entry || entry.until <= tick) {
+      delete demand[roomName];
+      dropped++;
+    }
+  }
+  if (dropped > 0) {
+    log.info(
+      "specialization-planner",
+      `specialization-planner: pruned ${dropped} expired pbBoostDemand entries`,
     );
   }
 }

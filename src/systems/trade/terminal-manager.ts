@@ -130,7 +130,7 @@ export const terminalManagerSystem: System = {
 
       // 0.8 挂单生命周期管理：超龄撤单 + 大宗盈余挂 sell 单
       //（不占 terminal 冷却 — createOrder/cancelOrder 是账户操作）。
-      tryManageSellOrders(snapshot);
+      tryManageSellOrders(snapshot, ledger);
 
       if (terminal.cooldown > 0) {
         ledger.roomsOnCooldown++;
@@ -303,8 +303,20 @@ export const terminalManagerSystem: System = {
  * 2. homeMineral 大宗盈余（吃单单笔消化不完）且无在途挂单 → createOrder
  *    挂 sell 单（价 = 最优 buy × markup — 吃即刻成交与挂单等买家之间的价差套利）。
  * 挂单是账户操作（手续费 credits），不占 terminal 冷却。
+ *
+ * 插桩（2026-11-21 批次 3，立案 #8）：大宗盈余挂单分支的每道止步处记入
+ * `ledger.sellOrderGate/At/Detail`（heap → telemetry 镜像到 stats.trade）。
+ * 「逻辑全在、零挂单」必须能回答卡在哪一道 —— 阈值（below-min）、定价（no-bid）、
+ * 还是根本没票据来源（no-surplus/in-flight）。先测量后优化，不盲改参数。
  */
-function tryManageSellOrders(snapshot: RoomSnapshot): void {
+function tryManageSellOrders(snapshot: RoomSnapshot, ledger: TradeLedger): void {
+  /** 记一笔挂单分支止步现场（同轮后房覆写前房 —— 与采购侧指纹同约定）。 */
+  const noteGate = (gate: TradeLedger["sellOrderGate"], detail: string, tick: number): void => {
+    ledger.sellOrderGate = gate;
+    ledger.sellOrderGateAt = tick;
+    ledger.sellOrderDetail = detail;
+  };
+
   const market = Game.market as typeof Game.market & {
     orders?: Record<string, any>;
     createOrder?: (params: Record<string, unknown>) => number;
@@ -397,16 +409,35 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
 
   // homeMineral 大宗盈余挂单。
   const homeMineral = snapshot.minerals[0]?.mineralType;
-  if (!homeMineral) return;
+  if (!homeMineral) {
+    noteGate("no-mineral", snapshot.roomName, Game.time);
+    return;
+  }
   const inTerminal = snapshot.terminal?.store.getUsedCapacity(homeMineral) ?? 0;
   const inStorage = snapshot.storage?.store.getUsedCapacity(homeMineral) ?? 0;
   const surplus = inTerminal + inStorage - CONFIG.market.sellReserve;
-  if (surplus <= 0) return;
+  if (surplus <= 0) {
+    // 无票据来源：库存低于 sellReserve，挂单分支无货可挂（与卖出 deal 候选同一断粮点）。
+    noteGate(
+      "no-surplus",
+      `${snapshot.roomName} ${homeMineral} surplus=${surplus} reserve=${CONFIG.market.sellReserve}`,
+      Game.time,
+    );
+    return;
+  }
 
   const existing = myOrders.find(
     o => o.type === "sell" && o.roomName === snapshot.roomName && o.resourceType === homeMineral,
   );
-  if (existing && (existing.remainingAmount ?? 0) > 0) return; // 在途有效挂单 — 不重复
+  if (existing && (existing.remainingAmount ?? 0) > 0) {
+    // 在途有效挂单 — 不重复。remaining 一并记下：0 成交的在途单是定价问题的直接证据。
+    noteGate(
+      "in-flight",
+      `${snapshot.roomName} ${homeMineral} remaining=${existing.remainingAmount}/${existing.totalAmount} @${existing.price}`,
+      Game.time,
+    );
+    return;
+  }
 
   const bids = toSummaries(
     Game.market.getAllOrders({ type: ORDER_BUY, resourceType: homeMineral }),
@@ -420,6 +451,7 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
       CONFIG.market.fallbackMinSellPrice,
     ),
   );
+  const competingAsk = bestCompetingAsk(homeMineral, ownOrderIds, askCache);
   const plan = planSellOrder({
     resourceType: homeMineral,
     surplus,
@@ -429,14 +461,25 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
     maxOrderAmount: CONFIG.market.maxOrderAmount,
     minOrderAmount: CONFIG.market.minOrderAmount,
     pricing: {
-      competingAsk: bestCompetingAsk(homeMineral, ownOrderIds, askCache),
+      competingAsk,
       // 同上：挂单地板只用绝对地板。用 bid×0.9 当地板会在交叉市场里把压价锚吃掉，
       // 挂单永远排在最低竞品 ask 之上 ⇒ 永不成交（O @36.38 挂 4,646 拍零成交即此）。
       floor: orderPriceFloor,
       step: CONFIG.market.sellUndercutStep,
     },
   });
-  if (!plan) return;
+  if (!plan) {
+    // planSellOrder 只剩两道：无 bid 锚（定价）或量低于下限（阈值）。surplus 与
+    // bid/ask 都在场，一道 detail 字符串就能把两种止步分开。
+    const gate = best?.price === undefined || best.price <= 0 ? "no-bid" : "below-min";
+    noteGate(
+      gate,
+      `${snapshot.roomName} ${homeMineral} surplus=${surplus}` +
+        ` bid=${best?.price ?? "-"} ask=${competingAsk ?? "-"} min=${CONFIG.market.minOrderAmount}`,
+      Game.time,
+    );
+    return;
+  }
 
   const result = market.createOrder({
     type: ORDER_SELL,
@@ -446,9 +489,20 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
     roomName: snapshot.roomName,
   });
   if (result === OK) {
+    noteGate(
+      "created",
+      `${snapshot.roomName} ${plan.resourceType} ${plan.totalAmount} @${plan.price}`,
+      Game.time,
+    );
     log.info(
       "terminal",
       `[${Game.time}] market: 挂单 sell ${plan.totalAmount} ${plan.resourceType} @ ${plan.price}（${snapshot.roomName}）`,
+    );
+  } else {
+    noteGate(
+      "create-failed",
+      `${snapshot.roomName} ${plan.resourceType} ${plan.totalAmount} @${plan.price} code=${result}`,
+      Game.time,
     );
   }
 }

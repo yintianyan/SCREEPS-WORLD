@@ -962,3 +962,33 @@ export function upsertEscalation(
   });
   return { list: list.slice(0, ESCALATIONS_CAP), shouldEmit: true, repeats: 1 };
 }
+
+/** 终态案例归档阈值：terminal 且 repeats 达到此值 ⇒ 从清单移除（归档），停止累积。
+ * 线上实证（2026-11-21 立案 #10）：terminal_trade repeats=177 且 terminal=true 仍持续累积
+ * —— 事件心跳只限流 emission，不限流清单条目本身的 repeats 增长。归档后若条件仍在，
+ * 下一次复发从 1 重新计数：证据保持**新鲜且有界**，历史明细在事件环（RecoveryEscalation）。 */
+export const ESCALATION_ARCHIVE_REPEATS = 50;
+
+export interface EscalationArchiveResult {
+  /** 归档后的清单（不改入参，调用方负责写回 Memory）。 */
+  list: EscalationEntry[];
+  /** 本次被归档的条目（供调用方打日志/事件）。 */
+  archived: EscalationEntry[];
+}
+
+/**
+ * 归档终态且 repeats 达标的升级条目（纯函数）。
+ * 非终态条目不受影响——慢性失败（反复重试烧穿）的证据必须持续累积供复盘；
+ * 只有已判"不可恢复"的终态案例才需要止损：它的处置结论已定，继续累积只是噪声。
+ */
+export function archiveTerminalEscalations(
+  prev: readonly EscalationEntry[] | undefined,
+): EscalationArchiveResult {
+  const list: EscalationEntry[] = [];
+  const archived: EscalationEntry[] = [];
+  for (const e of prev ?? []) {
+    if (e.terminal && e.repeats >= ESCALATION_ARCHIVE_REPEATS) archived.push(e);
+    else list.push(e);
+  }
+  return { list, archived };
+}
