@@ -1,6 +1,7 @@
 /** Empire Strategy 系统测试（发布层 — 容量分档 + 议程归因）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { empireStrategySystem } from "../../../src/systems/empire/empire-strategy";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { EventKind } from "../../../src/kernel/event-log";
 import { CONFIG } from "../../../src/config";
 import { mockBudget, mockController, mockSnapshot, resetGlobals } from "../../support/factories";
@@ -421,5 +422,85 @@ describe("empire-strategy — 姿态转换事件", () => {
     empireStrategySystem.run(makeContext(snap));
 
     expect(events(EventKind.PostureTransition)).toHaveLength(0);
+  });
+});
+
+describe("empire-strategy — 低频尾段门（cadence 共存，2026-11-21 事故回归）", () => {
+  // 事故：G6 cadence 覆盖（每 5 拍，运行拍 ≡4 mod 5）后，内部绝对门
+  // tick%100===0 / ===16 永无交集 ⇒ 环境画像与专业化规划静默停摆 58 万拍。
+  // 本组用例按事故节律只喂运行拍（tick ≡4 mod 5），断言两个子系统都在跑。
+  const ZOMBIE = {
+    i: "contract:W37S58:W38S56:energy",
+    s: "W37S58",
+    t: "W38S56",
+    r: "E",
+    tr: 180,
+    mr: 200000,
+    p: 0,
+    st: "A",
+    ca: 83316316,
+    ua: 83316316,
+    ac: 83316316,
+    td: 0,
+    cs: 0,
+    dm: 50,
+    rs: "network-surplus-deficit-pair",
+  };
+
+  beforeEach(() => {
+    // heap 距离钟跨测试残留（globalCache 不随 resetGlobals 清空）—— 每组从头起表。
+    const clocks = globalCache() as any;
+    delete clocks.__envLastSampleTick;
+    delete clocks.__specLastRunTick;
+  });
+
+  function runOverRunTicks(startTick: number, count: number): void {
+    const snap = mockSnapshot();
+    (globalThis as any).Memory.rooms.W7N4 = {
+      spawnQueue: [],
+      buildQueue: [],
+      colonyState: "normal",
+    };
+    for (let i = 0; i < count; i++) {
+      const t = startTick + i * 5; // G6 cadence：运行拍 ≡ startTick (mod 5)
+      (globalThis as any).Game.time = t;
+      empireStrategySystem.run({
+        tick: t,
+        budget: mockBudget("healthy"),
+        globalSiteCount: 0,
+        getSnapshot: () => snap,
+        *snapshots() {
+          yield snap;
+        },
+      } as any);
+    }
+  }
+
+  it("G6 节律（≡4 mod 5）下环境画像照常采样（旧绝对门在本节律下永无命中）", () => {
+    (globalThis as any).Memory = { rooms: {}, kernel: { bootTick: 0 } };
+    (globalThis as any).Game.time = 83816504; // ≡4 mod 5，事故现场附近的运行拍
+    runOverRunTicks(83816504, 3);
+    const envTick = (globalThis as any).Memory.kernel?.environment?.tick;
+    expect(envTick).toBe(83816504); // boot 即采样（旧门：83816504 % 100 = 4 ≠ 0，永不写）
+  });
+
+  it("距离钟：boot 采样后 100 拍内不重复采样，跨过 100 拍的运行拍再采", () => {
+    (globalThis as any).Memory = { rooms: {}, kernel: { bootTick: 0 } };
+    runOverRunTicks(83816504, 1);
+    expect((globalThis as any).Memory.kernel?.environment?.tick).toBe(83816504);
+    runOverRunTicks(83816509, 19); // 推进 95 拍（19 个运行拍）— 仍在间隔内
+    expect((globalThis as any).Memory.kernel?.environment?.tick).toBe(83816504);
+    runOverRunTicks(83816604, 1); // 距上次 100 拍
+    expect((globalThis as any).Memory.kernel?.environment?.tick).toBe(83816604);
+  });
+
+  it("供给合同僵尸在 G6 节律下被清理（专业化规划恢复运行；旧门下永不清）", () => {
+    (globalThis as any).Memory = {
+      rooms: {},
+      kernel: { bootTick: 0, supplyContracts: [{ ...ZOMBIE }] },
+    };
+    runOverRunTicks(84402884, 3);
+    const kept = (globalThis as any).Memory.kernel?.supplyContracts ?? [];
+    expect(kept).toHaveLength(0); // ca=83316316 距今 > 宽限窗 ⇒ 清
   });
 });

@@ -3,7 +3,7 @@ import { recordTyped } from "../../kernel/event-log";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { safeRun } from "../../kernel/safe-run";
-import { systemPhase } from "../../kernel/phase";
+import { cadenceSafeGate } from "../../kernel/phase";
 import { runSpecializationPlanning } from "./specialization-planner";
 import { queryRoomIntel } from "../intelligence";
 import {
@@ -37,8 +37,6 @@ const AGENDA_CODES: Record<string, number> = {
 // networkSnapshot 来自 agenda-manager 的错峰写入，与原读取节律无同 tick
 // 交集，读取新鲜度与合并前一致。safeRun 独立标签保留原错误隔离边界；
 // canStart(P1) 复刻原预算车道语义。
-const SPEC_INTERVAL = 100;
-const SPEC_PHASE = systemPhase("specialization-planner", SPEC_INTERVAL);
 
 export const empireStrategySystem: System = {
   name: "empire-strategy",
@@ -330,14 +328,24 @@ export const empireStrategySystem: System = {
       },
     };
 
-    // ── 环境画像 — 低频采样（每 100 tick），getAllOrders 是 CPU 大户 ──
-    if (ctx.tick % 100 === 0) {
+    // ── 低频尾段：环境画像 + 专业化规划（各 ≥100 拍一跳，heap 距离钟）──
+    // ⚠相位门必须 cadence 无关（phase.ts cadenceSafeGate 注释）：G6 覆盖层把本系统
+    // 降为每 5 拍（运行拍 ≡4 mod 5）后，原绝对门 tick%100===0 / ===16 永无交集，
+    // 两个子系统静默停摆 58 万拍（2026-11-21 线上实测才发现）。被预算拒掉时不拨钟，
+    // 下个运行拍重试 —— 低频任务晚跑可以，漏跑不行。
+    const tailClocks = globalCache() as {
+      __envLastSampleTick?: number;
+      __specLastRunTick?: number;
+    };
+    if (cadenceSafeGate(tailClocks.__envLastSampleTick, ctx.tick, 100)) {
+      tailClocks.__envLastSampleTick = ctx.tick;
+      // ── 环境画像 — getAllOrders 是 CPU 大户 ──
       sampleEnvironment(ctx);
     }
-
-    // ── 专业化规划（并入的原独立系统，每 100t）──
-    // 独立 safeRun：其故障不得中断姿态求值主链。
-    if (ctx.tick % SPEC_INTERVAL === SPEC_PHASE && ctx.budget.canStart(1)) {
+    if (cadenceSafeGate(tailClocks.__specLastRunTick, ctx.tick, 100) && ctx.budget.canStart(1)) {
+      tailClocks.__specLastRunTick = ctx.tick;
+      // ── 专业化规划（并入的原独立系统）──
+      // 独立 safeRun：其故障不得中断姿态求值主链。
       safeRun("specialization-planner", () => runSpecializationPlanning(ctx), false);
     }
   },

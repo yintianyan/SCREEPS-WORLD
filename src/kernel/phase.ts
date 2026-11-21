@@ -27,3 +27,26 @@ export function systemPhase(name: string, interval: number): number {
 export function roomPhase(roomName: string, interval: number): number {
   return hashPhase(roomName, interval);
 }
+
+/**
+ * 低频内部门 —— cadence 无关的「距上次执行 ≥ interval」判定（与 heap 钟配对使用：
+ * gate 放行且真正执行后，调用方才把钟拨到本拍；被预算拒掉时**不拨钟**，下个运行拍重试）。
+ *
+ * 为什么不能用 `tick % interval === phase`：系统的**运行拍序列**由 cadence 覆盖层
+ * （CONFIG.cpu.cadenceOverrides）错峰到某个剩余类，绝对取模门要求 tick 同时落在
+ * 另一个剩余类 —— 两个类可能**永无交集**，门静默永久失效。
+ * 实证：2026-10-23 G6 把 empire-strategy 覆盖为每 5 拍（运行拍 ≡4 mod 5）后，其内部
+ * 绝对门 env（tick%100===0，≡0 mod 5）与 specialization-planner（tick%100===16，
+ * ≡1 mod 5）双双永无命中 —— 随 11-19 重构战役部署生效起，环境画像与专业化规划
+ * （供给合同清理/pb 清扫/networkSnapshot 消费链）静默停摆 58 万拍（2026-11-21 线上
+ * 实测：env.tick 与 supplyContracts 僵尸 ca=83316316 双双冻结）。room-observer 同案
+ * 在册（其修法是锁死 cadence=1）；本门是对任何 cadence 都可命中的通用形。
+ * lastTick 缺失（boot/global reset）⇒ 立即放行：采样与规划均幂等，早跑无害。
+ */
+export function cadenceSafeGate(
+  lastTick: number | undefined,
+  tick: number,
+  interval: number,
+): boolean {
+  return lastTick === undefined || tick - lastTick >= interval;
+}
