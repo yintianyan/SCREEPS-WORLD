@@ -35,6 +35,7 @@ import {
   pruneExpiredStrategyOverrides,
   reviewStrategy,
 } from "../../domain/strategy/strategy-reviewer";
+import { archiveTerminalEscalations } from "../../domain/strategy/recovery-lifecycle";
 import { CONFIG } from "../../config";
 import { EventKind } from "../../kernel/event-log";
 
@@ -294,6 +295,22 @@ export const empireHealthSystem: System = {
                 "empire-health-system",
                 `strategy-reviewer: pruned ${dropped} expired strategy override(s)` +
                   ` (${Object.keys(pruned).length} live)`,
+              );
+            }
+          }
+
+          // escalation 终态休眠行周期归档（2026-11-22）：recovery-execution 的归档钩子
+          // 只在**复发**时触发 —— 无复发的休眠终态行永驻清单（线上实证 terminal_trade
+          // rep=207 挂了数天无人清）。复盘器每轮无条件扫一次，与 override 清理同款卫生段。
+          const kernelForEsc = Memory.kernel;
+          if (kernelForEsc && (kernelForEsc.escalations?.length ?? 0) > 0) {
+            const escArch = archiveTerminalEscalations(kernelForEsc.escalations);
+            if (escArch.archived.length > 0) {
+              kernelForEsc.escalations = escArch.list;
+              log.info(
+                "empire-health-system",
+                `strategy-reviewer: archived ${escArch.archived.length} dormant terminal ` +
+                  `escalation(s) (${escArch.archived.map(a => `${a.room}/${a.actionType}`).join(",")})`,
               );
             }
           }

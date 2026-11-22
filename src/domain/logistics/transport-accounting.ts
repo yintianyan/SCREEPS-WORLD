@@ -24,15 +24,25 @@ export interface TransportAccounting {
   cost: number;
   /** ROI = delivered / cost。 */
   roi: number;
+  /**
+   * 首次在册 tick（2026-11-22 加列）：logistics-health 用它区分「新请求还没来得及交付」
+   * 与「真的饿死无人服务」—— 线上实证 2 条在途请求把交付率打成 0% ⇒ level=critical，
+   * 与 empireHealth 的 logistics=1.0 互相打脸。旧快照无此列按 undefined 处理（视为已过宽限）。
+   */
+  createdAt?: number;
 }
 
 // ─── 创建 ──────────────────────────────────────────────────
 
 /**
  * 创建空 Transport Accounting。
- * 纯函数。
+ * 纯函数。tick = 首次在册拍（deliver 宽限判定的锚点；缺省 undefined 保持旧形状兼容）。
  */
-export function createAccounting(requestId: string, requestedAmount: number): TransportAccounting {
+export function createAccounting(
+  requestId: string,
+  requestedAmount: number,
+  tick?: number,
+): TransportAccounting {
   return {
     requestId,
     requested: Math.max(0, Math.floor(requestedAmount)),
@@ -43,6 +53,7 @@ export function createAccounting(requestId: string, requestedAmount: number): Tr
     remaining: Math.max(0, Math.floor(requestedAmount)),
     cost: 0,
     roi: 0,
+    ...(tick !== undefined ? { createdAt: tick } : {}),
   };
 }
 

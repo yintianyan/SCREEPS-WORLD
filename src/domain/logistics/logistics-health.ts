@@ -51,6 +51,13 @@ export function averageLatency(samples: readonly number[]): number {
 }
 
 /**
+ * 新请求的交付宽限（tick）：一趟搬运（认领→取货→送达）的最短耗时量级。
+ * 宽限内且零证据（delivered=0 && lost=0）的请求是「在途」，不算交付率的分母；
+ * 超过宽限仍零证据 ⇒ 真饿死，照常入分母（饿死不会被本宽限掩盖）。
+ */
+export const LOGISTICS_DELIVERY_GRACE_TICKS = 200;
+
+/**
  * 计算 Logistics Health。
 
  * 与 network-health.ts 的区别：
@@ -63,12 +70,28 @@ export function computeLogisticsHealth(
   accounting: readonly TransportAccounting[],
   activeRequests: readonly TransportRequestV2[],
   avgLatency: number,
-  _tick: number,
+  tick: number,
 ): LogisticsHealthResult {
-  // 基本统计
-  const totalRequested = accounting.reduce((s, a) => s + a.requested, 0);
-  const totalDelivered = accounting.reduce((s, a) => s + a.delivered, 0);
-  const totalLost = accounting.reduce((s, a) => s + a.lost, 0);
+  // 基本统计 —— 分母只收「有结论或已过宽限」的请求；零证据的在途请求单列。
+  // 线上实证（2026-11-22）：2 条刚在册的请求把 dRate 打成 0% ⇒ level=critical/score=0，
+  // 与 empireHealth 的 logistics=1.0 互相打脸。宽限 = 一趟搬运（认领→取货→送达）的
+  // 最短耗时量级；超宽限仍零证据 ⇒ 真饿死，照常入分母。
+  const GRACE = LOGISTICS_DELIVERY_GRACE_TICKS;
+  let totalRequested = 0;
+  let totalDelivered = 0;
+  let totalLost = 0;
+  let inFlightCount = 0;
+  for (const a of accounting) {
+    const hasEvidence = a.delivered > 0 || a.lost > 0;
+    const pastGrace = a.createdAt === undefined || tick - a.createdAt >= GRACE;
+    if (!hasEvidence && !pastGrace) {
+      inFlightCount++;
+      continue;
+    }
+    totalRequested += a.requested;
+    totalDelivered += a.delivered;
+    totalLost += a.lost;
+  }
 
   const dRate = totalRequested > 0 ? totalDelivered / totalRequested : 1;
   const lRate = totalRequested > 0 ? totalLost / totalRequested : 0;
@@ -105,6 +128,7 @@ export function computeLogisticsHealth(
   parts.push(`latency=${avgLatency}t`);
   parts.push(`backlog=${backlogCount}`);
   parts.push(`completed=${completedCount}`);
+  if (inFlightCount > 0) parts.push(`inFlight=${inFlightCount}`);
   const message = parts.join(", ");
 
   return {

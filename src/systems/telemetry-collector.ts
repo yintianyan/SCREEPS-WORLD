@@ -701,6 +701,11 @@ function sampleMemorySize(_tick: number): void {
         why: "零容量遗留盲点（blindFiltered/snapshotTicks 为率）",
       },
       { heap: "tradeLedger", memory: "trade", why: "贸易决策现场快照：判被闸挡还是跑了不交易" },
+      {
+        heap: "wallBudgets",
+        memory: "wallBudget",
+        why: "和平期修墙速率预算池水位（房→能量）：线上验证 rate≤2 e/t 的唯一读数",
+      },
     ];
     for (const m of plainMirrors) {
       const v = g[m.heap] as Record<string, unknown> | undefined;

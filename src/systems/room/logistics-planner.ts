@@ -438,7 +438,7 @@ function collectAccountingWithTracking(plan: TransportPlan, tick: number): Trans
   // 1. 为新 requests 创建初始 Accounting
   for (const req of plan.requests) {
     if (!accountingByRequestId.has(req.requestId)) {
-      accountingByRequestId.set(req.requestId, createAccounting(req.requestId, req.amount));
+      accountingByRequestId.set(req.requestId, createAccounting(req.requestId, req.amount, tick));
     }
   }
 

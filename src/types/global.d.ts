@@ -1498,12 +1498,12 @@ declare global {
     roadHeatTiles?: number;
     roadReaped?: number;
     /**
-     * 线外 road site 的冻结计时器（roadStaleReapTicks 窗口）。
-     * roadStaleProgressSum = 上一轮「不在热度线上的 road site」进度和；本轮仍然相等即开始/继续
-     * 计时（冻满才回收），不等则重新起表。两者同为 undefined 表示上一轮线外没有格。
+     * road site 逐格冻结观察表（2026-11-22 重构，替换 roadStaleProgressSum/roadStaleSince 和式计时）：
+     * siteId → { p: 上次所见进度, t: 该进度首次出现的 tick }。进度变 ⇒ 拨钟；
+     * halo 外冻满 roadStaleReapTicks、halo 内（规划器自产物）冻满 roadStaleReapOnlineTicks ⇒ 回收。
+     * 表体积 ≤ 本 op 挂起 site 数；site 消失（建成/被收）即清条目，op abandoned 整表摘除。
      */
-    roadStaleProgressSum?: number;
-    roadStaleSince?: number;
+    roadSiteWatch?: Record<string, { p: number; t: number }>;
     /**
      * v33 空转止损计时：编队全员空转（idle/flee 或 stuckTicks ≥ stallStuckTicks）
      * 的起始 tick；任一成员恢复工作立即清除。持续超过 CONFIG.remote.stallAbandonTicks

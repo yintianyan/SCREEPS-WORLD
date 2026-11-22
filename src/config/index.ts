@@ -1079,6 +1079,12 @@ export const CONFIG = {
      * 真在建的格不可能 20 次经过都碰不到。
      */
     roadStaleReapTicks: 2000,
+    /** 线内格（规划器自己铺的、在热度 halo 内）的冻结回收窗。
+     * 2026-11-22 立案：原「线外进度和」式计时对规划器自己的产物永不武装 —— E7 实测
+     * W36S58 19 格 noProg=10900 拍、车道 20/20 锁死。逐格冻结钟下，在线格 6000 拍
+     * 无人施工即证明这条线已不是现行走线，回收并同时把该格热度减半（自纠正降温）。
+     * 取 3× roadStaleReapTicks：给前沿格留足「排队等施工」的余量，又不至于无限期豁免。 */
+    roadStaleReapOnlineTicks: 6000,
     /** 单个远矿 op 同时挂起的 road site 上限（铺完自然回落）。 */
     maxRoadSitesPerOp: 20,
     /** 全帝国待建 road site 总上限 —— 独立于 maxNormalLaneSites 的基建车道

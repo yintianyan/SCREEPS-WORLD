@@ -241,6 +241,7 @@ export function planRemotePathRoads(
       // 热度账是本房独有的 Memory 体积大户，而这条线不会再有通勤腿 → 随手摘掉。
       if (op.roadHeat) delete op.roadHeat;
       if (op.roadHeatAt) delete op.roadHeatAt;
+      if (op.roadSiteWatch) delete op.roadSiteWatch;
       continue;
     }
     const room = Game.rooms[rn];
@@ -327,28 +328,44 @@ export function planRemotePathRoads(
     // 已被 14+6 占满，热度规划器于是铺不进任何一格。而有进度又不肯长的格，恰恰是最该走的：
     // 它证明有人站到过射程内，但那已经是另一条线、另一批 creep 的事了。
     //
-    // 于是判据换成「冻住多久」：线外格的进度和每轮比对一次，有变化说明施工还在发生（此刻的
-    // 热度可能只是没攒够，不能删），无变化才计时；连续冻满 roadStaleReapTicks 才收。删掉的
-    // 进度不退钱、也确实浪费，但 500 点封顶的成本换回的是整条通勤走廊的铺路权。
-    const offCorridor = allSites.filter(
-      s => s.structureType === STRUCTURE_ROAD && !nearEvidence(walked, s.pos),
-    );
-    const offProgressSum = offCorridor.reduce((sum, s) => sum + s.progress, 0);
+    // 判据（2026-11-22 重构为**逐格冻结钟**）：原「线外进度和」式计时有两处盲区 ——
+    // ① 任意一格在推进就会重置全房计时，一个活的掩盖其余死的；② 规划器自己铺的格
+    // 天然在热度 halo 内 ⇒ 被豁免，E7 实测 W36S58 19 格 noProg=10900 拍也永不回收，
+    // 车道被锁死（与 E7 siteStaleWorkerIdle 双仪器交叉证实）。逐格规则：
+    //   - 进度变 → 拨钟（施工在发生，绝不回收）；
+    //   - halo 外格冻满 roadStaleReapTicks（2000）→ 收；
+    //   - halo 内格（规划器自己的产物）冻满 roadStaleReapOnlineTicks（6000）→ 也收 ——
+    //     在线格 6000 拍无人施工即证明这条线已不是现行走线；
+    //   - 回收同时把该格热度减半：死线热量尽快跌破 minWalks，规划器不再原地重铺
+    //    （原实现只收不降温 ⇒ 原地重建-再冻-再收循环）。
+    // 删掉的进度不退钱，但 300 点封顶换回整条通勤走廊的铺路权；re-placed 后若真被
+    // 施工，进度变即拨钟自证存活。
+    const watch = (op.roadSiteWatch ??= {});
     let releasedNow = 0;
-    if (offCorridor.length === 0) {
-      if (op.roadStaleSince !== undefined) delete op.roadStaleSince;
-      if (op.roadStaleProgressSum !== undefined) delete op.roadStaleProgressSum;
-    } else if (offProgressSum !== op.roadStaleProgressSum) {
-      op.roadStaleProgressSum = offProgressSum;
-      op.roadStaleSince = ctx.tick;
-    } else if (ctx.tick - (op.roadStaleSince ?? ctx.tick) >= CONFIG.remote.roadStaleReapTicks) {
-      for (const s of offCorridor) {
-        s.remove();
-        releasedNow++;
+    const liveRoadSiteIds = new Set<string>();
+    for (const s of allSites) {
+      if (s.structureType !== STRUCTURE_ROAD) continue;
+      liveRoadSiteIds.add(s.id);
+      const w = watch[s.id];
+      if (w && w.p === s.progress) {
+        const frozenFor = ctx.tick - w.t;
+        const online = nearEvidence(walked, s.pos);
+        const limit = online
+          ? CONFIG.remote.roadStaleReapOnlineTicks
+          : CONFIG.remote.roadStaleReapTicks;
+        if (frozenFor >= limit) {
+          s.remove();
+          releasedNow++;
+          delete watch[s.id];
+          suppressRoadHeat(op.roadHeat, s.pos.x, s.pos.y);
+        }
+      } else {
+        watch[s.id] = { p: s.progress, t: ctx.tick };
       }
-      // 计时随残骸一起清零：下一轮若又出现线外格，重新给一个冻结窗口。
-      op.roadStaleSince = ctx.tick;
-      op.roadStaleProgressSum = undefined;
+    }
+    // 观察条目只跟随现存 site：建成/被收的格立即清条目（表体积 ≤ 挂起 site 数）。
+    for (const id of Object.keys(watch)) {
+      if (!liveRoadSiteIds.has(id)) delete watch[id];
     }
     released += releasedNow;
     roadSitesPending -= releasedNow;
@@ -444,6 +461,19 @@ export function walkedHeatKeys(
     keys.add(`${Math.floor(n / 50)},${n % 50}`);
   }
   return keys;
+}
+
+/**
+ * 回收死 site 时把该格热度减半 —— 逐格自纠正（语义见 planRemotePathRoads 冻结钟注释）。
+ * 只减不清零：若这条线真的还有人走，下一合并窗口的热量增量会把它抬回 minWalks 之上，
+ * 铺路自然恢复；若无人走，热量沿 0.7 衰减归零，规划器不再原地重铺。
+ */
+function suppressRoadHeat(heat: Record<string, number> | undefined, x: number, y: number): void {
+  if (!heat) return;
+  const key = `${x * 50 + y}`;
+  const v = heat[key];
+  if (v === undefined || v <= 0) return;
+  heat[key] = Math.floor(v / 2);
 }
 
 /**
