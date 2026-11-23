@@ -171,13 +171,8 @@ export class CpuBudget implements Budget {
       return false;
     }
     // 前馈预测：历史 CPU 持续高位时收紧非 P0 任务的通过率。
-    // 批次 4 #14（2026-11-21）：前馈口径从 avg10/cpuMax10 改为 **rate 口径**
-    // （cpuRate.total/windowTicks，复用 capacity.pickCpuUsagePerTick 的信任规则——
-    // 窗未建立/漏采/超龄退回 avg10）。依据：① avg10 采样系统性偏高 ~2.6/t
-    // （REPAIR-PLAN §11 实测），基线闸拿着偏高的尺拒绝 P3；② cpuMax10 峰值口径
-    // 让任何一次尖峰（行情调用/战斗 tick）在 10 样本窗里长期占位 —— 审计修复
-    // （W37S58 P3 全族饥饿 ~13h）已把峰值判据收窄到 max10 ≥ hardLimit，但只要
-    // 它还在，一次触顶仍惩罚整整一个采样窗。rate 是逐拍实测均量，天然免疫单点尖峰。
+    // 前馈改用逐拍 rate 口径：avg10 在遥测重活拍上系统性偏高约 2.6/t，会误拒 P3；
+    // cpuMax10 又会让单次尖峰占据整个 10 样本窗。rate 用真实逐拍均量，避免这两类偏差。
     // 守卫：rate ≤ 0（stats 未初始化/退回 avg10 也为 0）不启用前馈 ——
     // 测试环境或 reset 首 tick 不应凭空拒绝低优先级任务。
     if (priority >= 2 && !p3Escape) {
