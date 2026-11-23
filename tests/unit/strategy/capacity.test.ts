@@ -29,16 +29,52 @@ describe("evaluateCapacity — 分档", () => {
   });
 
   it("comfortable / tight / constrained 边界", () => {
-    // 40% 占用：介于 abundant(35%) 与 tight(60%) 之间 → comfortable
+    // 40% 占用：介于 abundant(35%) 与 comfortable(50%) 之间 → comfortable
     expect(evaluateCapacity(input({ cpuUsagePerTick: 8 }), undefined, TICK).tier).toBe(
       "comfortable",
     );
-    // 70% 占用：介于 tight(60%) 与 constrained(80%) 之间 → tight
+    // 70% 占用：介于 comfortable(50%) 与 constrained(80%) 之间 → tight
     expect(evaluateCapacity(input({ cpuUsagePerTick: 14 }), undefined, TICK).tier).toBe("tight");
     // 90% 占用 → constrained
     expect(evaluateCapacity(input({ cpuUsagePerTick: 18 }), undefined, TICK).tier).toBe(
       "constrained",
     );
+  });
+
+  it("峰值独立裁决：均值舒适但 P95 越线时不许扩张", () => {
+    const r = evaluateCapacity(input({ cpuUsagePerTick: 8, cpuP95: 15 }), undefined, TICK);
+    expect(r.tier).toBe("tight");
+    expect(r.limitedBy).toBe("peak");
+    expect(r.headroom).toBeCloseTo(0.6);
+    expect(r.peakHeadroom).toBeCloseTo(0.25);
+  });
+
+  it("P95 与 max10 取更保守值，缺 P95 时退回 max10", () => {
+    expect(
+      evaluateCapacity(input({ cpuUsagePerTick: 8, cpuP95: 12, cpuMax10: 16 }), undefined, TICK)
+        .tier,
+    ).toBe("tight");
+    expect(
+      evaluateCapacity(input({ cpuUsagePerTick: 8, cpuMax10: 16 }), undefined, TICK).tier,
+    ).toBe("tight");
+  });
+
+  it("峰值超过 constrained 线立即收紧，均值很低也不能豁免", () => {
+    const r = evaluateCapacity(input({ cpuUsagePerTick: 2, cpuP95: 18 }), undefined, TICK);
+    expect(r.tier).toBe("constrained");
+    expect(r.limitedBy).toBe("peak");
+  });
+
+  it("comfortable 边界同时卡均值 50% 与 P95 70%", () => {
+    expect(evaluateCapacity(input({ cpuUsagePerTick: 10, cpuP95: 14 }), undefined, TICK).tier).toBe(
+      "comfortable",
+    );
+    expect(
+      evaluateCapacity(input({ cpuUsagePerTick: 10.1, cpuP95: 14 }), undefined, TICK).tier,
+    ).toBe("tight");
+    expect(
+      evaluateCapacity(input({ cpuUsagePerTick: 10, cpuP95: 14.1 }), undefined, TICK).tier,
+    ).toBe("tight");
   });
 
   it("有效上限取 min(cpuLimit, tickLimit) — 不写死 20 CPU", () => {
@@ -88,6 +124,17 @@ describe("evaluateCapacity — 滞回", () => {
     expect(r2.since).toBe(TICK);
   });
 
+  it("升档也要求峰值同时满足，不能被均值单独放行", () => {
+    const prev = { tier: "tight" as const, since: TICK - 500, upgradeTicks: 0 };
+    const blocked = evaluateCapacity(input({ cpuUsagePerTick: 8, cpuP95: 15 }), prev, TICK);
+    expect(blocked.tier).toBe("tight");
+    expect(blocked.upgradeTicks).toBe(0);
+
+    const allowed = evaluateCapacity(input({ cpuUsagePerTick: 8, cpuP95: 13 }), prev, TICK);
+    expect(allowed.tier).toBe("tight");
+    expect(allowed.upgradeTicks).toBe(1);
+  });
+
   it("同档保持 since 与计数归零", () => {
     const r = evaluateCapacity(
       input({ cpuUsagePerTick: 2 }),
@@ -106,17 +153,17 @@ describe("evaluateCapacity — 滞回", () => {
 });
 
 describe("pickCpuUsagePerTick — 用哪一份 CPU 均值分档", () => {
-  // 线上实测形状：逐拍均量 10.56（窗 420 拍、unsampledTicks=0）vs 同一时刻
-  // cpuAvg10=13.2。门槛 comfortable 需要 ≤12 ⇒ 喂后者会把有 47% 余量的帝国判成 tight。
+  // 同一帝国：逐拍均量 8.56（窗 420 拍、unsampledTicks=0）vs 同一时刻
+  // cpuAvg10=13.2。门槛 comfortable 需要 ≤10 ⇒ 喂后者会把有 57% 余量的帝国判成 tight。
   it("三份窗内读数一致时可采信逐拍均量", () => {
     expect(
       pickCpuUsagePerTick({
         avg10: 13.2,
-        rateTotal: 10.56,
+        rateTotal: 8.56,
         rateWindowTicks: 420,
         rateUnsampledTicks: 0,
       }),
-    ).toBe(10.56);
+    ).toBe(8.56);
   });
 
   it("窗未建立（新 Memory／首次采样前）退回偏高的 avg10 —— 保守侧", () => {
@@ -163,14 +210,14 @@ describe("pickCpuUsagePerTick — 用哪一份 CPU 均值分档", () => {
   });
 
   it("接进分档：同一帝国用逐拍均量判 comfortable、用 avg10 判 tight", () => {
-    const base = { cpuLimit: 20, tickLimit: 500, bucket: 10000, cpuMax10: 15.2 };
+    const base = { cpuLimit: 20, tickLimit: 500, bucket: 10000, cpuMax10: 13.2 };
     expect(
       evaluateCapacity(
         {
           ...base,
           cpuUsagePerTick: pickCpuUsagePerTick({
             avg10: 13.2,
-            rateTotal: 10.56,
+            rateTotal: 8.56,
             rateWindowTicks: 420,
             rateUnsampledTicks: 0,
           }),
@@ -246,7 +293,7 @@ describe("evaluateCapacity — elapsedTicks 按真实拍数累加", () => {
     for (let i = 0; i < 59; i++) {
       tick += 5;
       state = evaluateCapacity(
-        input({ cpuUsagePerTick: 11 }),
+        input({ cpuUsagePerTick: 8 }),
         state,
         tick,
         DEFAULT_CAPACITY_OPTIONS,
@@ -256,7 +303,7 @@ describe("evaluateCapacity — elapsedTicks 按真实拍数累加", () => {
     expect(state.tier).toBe("tight"); // 295/300
     tick += 5;
     state = evaluateCapacity(
-      input({ cpuUsagePerTick: 11 }),
+      input({ cpuUsagePerTick: 8 }),
       state,
       tick,
       DEFAULT_CAPACITY_OPTIONS,
@@ -267,7 +314,7 @@ describe("evaluateCapacity — elapsedTicks 按真实拍数累加", () => {
 
   it("不给 elapsedTicks 时仍按 1 拍（旧调用方零改动）", () => {
     const r = evaluateCapacity(
-      input({ cpuUsagePerTick: 11 }),
+      input({ cpuUsagePerTick: 8 }),
       { tier: "tight", since: TICK - 100, upgradeTicks: 10 },
       TICK + 1,
     );

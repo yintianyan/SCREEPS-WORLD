@@ -22,6 +22,7 @@ export const TUNABLE_ROLES = [
   "remoteHauler",
   "reserver",
   "distributor",
+  "linkKeeper",
   "worker",
   "defender",
   "remoteDefender",

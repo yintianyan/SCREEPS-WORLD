@@ -7,6 +7,7 @@
  */
 
 import { CONFIG } from "../../config";
+import type { RoomSnapshot } from "../../kernel/contracts";
 
 /** 引擎传输损耗率（官方文档：3%）。 */
 export const LINK_LOSS_RATE = 0.03;
@@ -22,7 +23,7 @@ export function sendForNeeds(needs: number): number {
 }
 
 /** Link 角色分类 — 由系统层根据 link 与 source/controller/storage 的距离判定。 */
-export type LinkRole = "source" | "controller" | "storage" | "hub";
+export type LinkRole = "source" | "controller" | "storage" | "spawn" | "hub";
 
 /**
  * 需求驱动的 controller link 目标水位：旧实现 RCL8 满级后仍被喂满、
@@ -122,6 +123,8 @@ export interface LinkTransferOptions {
    * （link-system）按升级需求计算（RCL8 停供 / 保级 / RCL<8 分级）。
    */
   controllerTargetEnergy?: number;
+  /** spawn link 目标水位；现金池有缺口时由 link-system 注入。 */
+  spawnTargetEnergy?: number;
   /**
    * source→storage 的最小目标空闲量（缺省 0 = 旧行为）。storage link 只剩 1-2 格时
    * 不发小额传输：私服 link 每 tick 一次 + 3-14 tick cooldown，用一次冷却换 1-2 单位
@@ -147,11 +150,14 @@ export function planLinkTransfers(
     .sort((a, b) => b.energy - a.energy);
   const controllerLink = links.find(l => l.role === "controller");
   const storageLink = links.find(l => l.role === "storage");
+  const spawnLink = links.find(l => l.role === "spawn");
 
   const controllerTarget =
     opts.controllerTargetEnergy ?? (controllerLink ? controllerLink.energyCapacity : 0);
+  const spawnTarget = opts.spawnTargetEnergy ?? 0;
   // controller 目标缺口（考虑传输损耗：需要发送 sendForNeeds(needs) 才能填满缺口）。
   let controllerNeeds = controllerLink ? Math.max(0, controllerTarget - controllerLink.energy) : 0;
+  let spawnNeeds = spawnLink ? Math.max(0, spawnTarget - spawnLink.energy) : 0;
 
   // controller 急需：目标>0 且能量低于 min(目标, minTransfer) → 豁免 source 阈值。
   // target=0 时永不 urgent（停供）。
@@ -210,6 +216,38 @@ export function planLinkTransfers(
     const sendAmount = Math.min(storageLink.energy, targetFree, sendForNeeds(controllerNeeds));
     if (sendAmount > 0) {
       transfers.push({ fromId: storageLink.id, toId: controllerLink.id, amount: sendAmount });
+      sent.add(storageLink.id);
+    }
+  }
+
+  // 2.5 source → spawn：孵化现金池是生存链，优先级高于入库溢出。
+  if (spawnLink && spawnNeeds > 0) {
+    for (const src of sourceLinks) {
+      if (sent.has(src.id) || spawnNeeds <= 0) continue;
+      if (!meetsThreshold(src)) continue;
+      const targetFree = spawnLink.energyCapacity - spawnLink.energy;
+      const sendAmount = Math.min(src.energy, targetFree, sendForNeeds(spawnNeeds));
+      if (sendAmount <= 0) continue;
+      transfers.push({ fromId: src.id, toId: spawnLink.id, amount: sendAmount });
+      sent.add(src.id);
+      spawnNeeds -= receivedAfterLoss(sendAmount);
+    }
+  }
+
+  // 2.75 storage → spawn：source 冷却或不足时由 storage link 补孵化现金池。
+  if (
+    storageLink &&
+    !sent.has(storageLink.id) &&
+    storageLink.cooldown === 0 &&
+    storageLink.energy > 0 &&
+    spawnLink &&
+    spawnNeeds > 0
+  ) {
+    const targetFree = spawnLink.energyCapacity - spawnLink.energy;
+    const sendAmount = Math.min(storageLink.energy, targetFree, sendForNeeds(spawnNeeds));
+    if (sendAmount > 0) {
+      transfers.push({ fromId: storageLink.id, toId: spawnLink.id, amount: sendAmount });
+      sent.add(storageLink.id);
     }
   }
 
@@ -257,39 +295,48 @@ export interface LinkRoleRanges {
   readonly source: number;
   readonly controller: number;
   readonly storage: number;
+  readonly spawn: number;
 }
 
 /**
- * source/controller 取 2：harvester 站 container（贴 source）上仍能 range1 够到隔一格的 link。
+ * source/controller/spawn 取 2：source harvester 与 spawn keeper 都能在锚点旁找到可站格；
  * storage 取其上界 +1：link 槽位由引擎按 RCL 门控（5:2／6:3／7:4／8:6），而道路与 extension
  * 从 RCL1 就开始占地 —— 等 storage link 拿到槽位（RCL6+）时，storage 的 ≤2 邻域往往已被铺满。
  * 线上实证：W8N3 的 storage (21,15) 的 24 格邻域全是 extension/road/lab ⇒ `linkStorage:1`
  * 成了永久不可满足缺口，并把布局规划器钉在 gap-force 慢速重试上。放到 3 格即可满足
  * （(22,18)／(24,18) 空闲且不密封），代价只是 hauler 多走两格。
  */
-export const DEFAULT_LINK_ROLE_RANGES: LinkRoleRanges = { source: 2, controller: 2, storage: 3 };
+export const DEFAULT_LINK_ROLE_RANGES: LinkRoleRanges = {
+  source: 2,
+  controller: 2,
+  storage: 3,
+  spawn: 2,
+};
 
 /** 由 CONFIG.economy.link 形状解析角色半径 —— 唯一映射点，调用方不得自行拼装。 */
 export function resolveLinkRoleRanges(cfg?: {
   anchorRange?: number;
   storageAnchorRange?: number;
+  spawnAnchorRange?: number;
 }): LinkRoleRanges {
   const base = cfg?.anchorRange ?? DEFAULT_LINK_ROLE_RANGES.source;
   return {
     source: base,
     controller: base,
     storage: cfg?.storageAnchorRange ?? DEFAULT_LINK_ROLE_RANGES.storage,
+    spawn: cfg?.spawnAnchorRange ?? DEFAULT_LINK_ROLE_RANGES.spawn,
   };
 }
 
 /**
  * 按「最近锚获胜」分类 link 角色（纯函数）：Chebyshev 距离最近且落在**该角色自己的**半径内的
- * 锚定角色胜出；等距按 controller > storage > source 裁决（专属单例不被 source 抢占）；
+ * 锚定角色胜出；等距按 controller > storage > spawn > source 裁决（专属单例不被 source 抢占）；
  * 均不在范围内 → hub。替代旧「source 固定最高优先级 + 短路」— 旧版会把紧邻
  * controller/storage 却落在 source range≤2 的 link 误判为 source（优先级劫持），
  * 令 controller/storage link 从传输拓扑消失、升级链/排空链断裂。
  *
- * 入参兼容旧的单一数字（三角色同值）；新代码传 LinkRoleRanges。
+ * 入参兼容旧的单一数字（四角色同值）；新代码传 LinkRoleRanges。spawns 缺省为空，
+ * 旧调用方保持三角色拓扑。
  */
 export function classifyLinkRole(
   link: LinkAnchorPoint,
@@ -297,9 +344,12 @@ export function classifyLinkRole(
   controller: LinkAnchorPoint | undefined,
   storage: LinkAnchorPoint | undefined,
   ranges: number | LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
+  spawns: readonly LinkAnchorPoint[] = [],
 ): LinkRole {
   const r: LinkRoleRanges =
-    typeof ranges === "number" ? { source: ranges, controller: ranges, storage: ranges } : ranges;
+    typeof ranges === "number"
+      ? { source: ranges, controller: ranges, storage: ranges, spawn: ranges }
+      : ranges;
   const cheb = (a: LinkAnchorPoint, b: LinkAnchorPoint): number =>
     Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
@@ -310,13 +360,19 @@ export function classifyLinkRole(
   }
   const dController = controller ? cheb(link, controller) : Infinity;
   const dStorage = storage ? cheb(link, storage) : Infinity;
+  let dSpawn = Infinity;
+  for (const spawn of spawns) {
+    const d = cheb(link, spawn);
+    if (d < dSpawn) dSpawn = d;
+  }
 
   // 候选：范围内的锚定角色，(距离, tie-break 优先级 pri 越大越优先)。
   const candidates: { role: LinkRole; dist: number; pri: number }[] = [];
   if (dSource <= r.source) candidates.push({ role: "source", dist: dSource, pri: 0 });
-  if (dStorage <= r.storage) candidates.push({ role: "storage", dist: dStorage, pri: 1 });
+  if (dSpawn <= r.spawn) candidates.push({ role: "spawn", dist: dSpawn, pri: 1 });
+  if (dStorage <= r.storage) candidates.push({ role: "storage", dist: dStorage, pri: 2 });
   if (dController <= r.controller)
-    candidates.push({ role: "controller", dist: dController, pri: 2 });
+    candidates.push({ role: "controller", dist: dController, pri: 3 });
   if (candidates.length === 0) return "hub";
 
   candidates.sort((a, b) => a.dist - b.dist || b.pri - a.pri);
@@ -338,6 +394,7 @@ export function findStorageLink<T extends { pos: { x: number; y: number } }>(
     storage?: { pos: { x: number; y: number } } | undefined;
     controller?: { pos: { x: number; y: number } } | undefined;
     sources: readonly { pos: { x: number; y: number } }[];
+    spawns?: readonly { pos: { x: number; y: number } }[];
     links: readonly T[];
   },
   ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
@@ -345,7 +402,130 @@ export function findStorageLink<T extends { pos: { x: number; y: number } }>(
   const st = view.storage;
   if (!st) return undefined;
   const sourcePoints = view.sources.map(s => s.pos);
+  const spawnPoints = (view.spawns ?? []).map(s => s.pos);
   return view.links.find(
-    l => classifyLinkRole(l.pos, sourcePoints, view.controller?.pos, st.pos, ranges) === "storage",
+    l =>
+      classifyLinkRole(l.pos, sourcePoints, view.controller?.pos, st.pos, ranges, spawnPoints) ===
+      "storage",
   );
+}
+
+/** 从快照中找出 spawn 角色的 link；RCL8 孵化现金池的瞬移入口。 */
+export function findSpawnLink<T extends { pos: { x: number; y: number } }>(
+  view: {
+    storage?: { pos: { x: number; y: number } } | undefined;
+    controller?: { pos: { x: number; y: number } } | undefined;
+    sources: readonly { pos: { x: number; y: number } }[];
+    spawns: readonly { pos: { x: number; y: number } }[];
+    links: readonly T[];
+  },
+  ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
+): T | undefined {
+  const sourcePoints = view.sources.map(s => s.pos);
+  const spawnPoints = view.spawns.map(s => s.pos);
+  return view.links.find(
+    l =>
+      classifyLinkRole(
+        l.pos,
+        sourcePoints,
+        view.controller?.pos,
+        view.storage?.pos,
+        ranges,
+        spawnPoints,
+      ) === "spawn",
+  );
+}
+
+/** keeper 站位是否被障碍结构占用；container/road 可站，故不列入阻塞。 */
+export function isLinkKeeperStandBlocked(snapshot: RoomSnapshot, x: number, y: number): boolean {
+  for (const list of [
+    snapshot.spawns,
+    snapshot.extensions,
+    snapshot.towers,
+    snapshot.links,
+    snapshot.labs,
+  ]) {
+    for (const structure of list) {
+      if (structure.pos.x === x && structure.pos.y === y) return true;
+    }
+  }
+  for (const structure of [
+    snapshot.storage,
+    snapshot.terminal,
+    snapshot.factory,
+    snapshot.observer,
+    snapshot.powerSpawn,
+  ]) {
+    if (structure?.pos.x === x && structure.pos.y === y) return true;
+  }
+  return false;
+}
+
+/** 放置、需求与执行共用的 keeper 几何谓词：服务格必须同时贴 Link 与锚点。 */
+export function findLinkKeeperStand(
+  snapshot: RoomSnapshot,
+  link: { pos: { x: number; y: number } },
+  anchor: { pos: { x: number; y: number } },
+  terrainGet: (x: number, y: number) => number = () => 0,
+  origin?: { x: number; y: number },
+): { x: number; y: number } | undefined {
+  let best: { x: number; y: number } | undefined;
+  let bestDistance = Infinity;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = link.pos.x + dx;
+      const y = link.pos.y + dy;
+      if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+      if (terrainGet(x, y) === TERRAIN_MASK_WALL || isLinkKeeperStandBlocked(snapshot, x, y)) {
+        continue;
+      }
+      if (Math.max(Math.abs(x - anchor.pos.x), Math.abs(y - anchor.pos.y)) > 1) continue;
+      if (!origin) return { x, y };
+      const distance = Math.max(Math.abs(x - origin.x), Math.abs(y - origin.y));
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { x, y };
+      }
+    }
+  }
+  return best;
+}
+
+/** 旧物流角色只在 keeper 已实际站到服务格时让位；通勤中的 keeper 不算可用。 */
+export function hasLinkKeeperAtPost(
+  snapshot: RoomSnapshot,
+  refs: readonly {
+    role: string;
+    home: string;
+    roomName?: string;
+    x?: number;
+    y?: number;
+    linkKeeperPost?: "storage" | "spawn";
+    recycle?: boolean;
+    spawning?: boolean;
+  }[],
+  post: "storage" | "spawn",
+): boolean {
+  const link = post === "storage" ? findStorageLink(snapshot) : findSpawnLink(snapshot);
+  const anchor = post === "storage" ? snapshot.storage : snapshot.spawns[0];
+  if (!link || !anchor) return false;
+  return refs.some(c => {
+    const x = c.x;
+    const y = c.y;
+    if (
+      c.role !== "linkKeeper" ||
+      c.home !== snapshot.roomName ||
+      c.roomName !== snapshot.roomName ||
+      c.linkKeeperPost !== post ||
+      c.recycle ||
+      c.spawning ||
+      x === undefined ||
+      y === undefined
+    ) {
+      return false;
+    }
+    const cheb = (p: { x: number; y: number }) => Math.max(Math.abs(x - p.x), Math.abs(y - p.y));
+    return cheb(link.pos) <= 1 && cheb(anchor.pos) <= 1;
+  });
 }

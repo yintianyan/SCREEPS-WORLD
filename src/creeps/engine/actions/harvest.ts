@@ -171,6 +171,7 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
 /**
  * source link 是否有可用的下游出口（2026-08-02 死锁修复，与 link-system 传输计划同口径）：
  *   - storage link 存在 → true（能量瞬移进 hub，hauler 排空最后一公里）
+ *   - spawn link 存在且有空位 → true（keeper 排空到孵化现金池）；
  *   - 否则 controller link 存在且 computeControllerLinkTarget > 0 → true。即使 controller link
  *     暂时充满也返回 true：upgrader 持续消耗，停倒会造成「controller link 满 → 停倒 → source
  *     link 空 → 无法补给」死锁。
@@ -192,6 +193,19 @@ function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
       return true;
     }
   }
+  const spawnLink = snap.links.find(
+    l =>
+      l.id !== link.id &&
+      classifyLinkRole(
+        l.pos,
+        snap.sources.map(s => s.pos),
+        snap.controller?.pos,
+        snap.storage?.pos,
+        CONFIG.economy.link.anchorRange,
+        snap.spawns.map(s => s.pos),
+      ) === "spawn",
+  );
+  if (spawnLink && spawnLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return true;
   const ctrl = snap.controller;
   if (!ctrl || !ctrl.my) return false;
   const ctrlLink = snap.links.find(l => l.id !== link.id && l.pos.getRangeTo(ctrl.pos) <= 2);
@@ -273,7 +287,14 @@ function sourceAdjacentLink(ac: ActionContext, source: Source): StructureLink | 
   return ac.snapshot.links.find(
     l =>
       l.pos.getRangeTo(source.pos) <= range &&
-      classifyLinkRole(l.pos, sourcePts, ctrlPt, storagePt, range) === "source",
+      classifyLinkRole(
+        l.pos,
+        sourcePts,
+        ctrlPt,
+        storagePt,
+        range,
+        ac.snapshot.spawns.map(s => s.pos),
+      ) === "source",
   );
 }
 

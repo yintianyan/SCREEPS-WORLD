@@ -1,6 +1,6 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
-import { findStorageLink } from "../../domain/economy/links";
+import { findStorageLink, hasLinkKeeperAtPost } from "../../domain/economy/links";
 import { globalCache, tickCacheEntry } from "../../kernel/global-cache";
 import { classifyThreats } from "../../domain/defense/threat";
 import { getObjectById } from "./obj-cache";
@@ -308,6 +308,7 @@ export function storageLinkForControllerFeed(
   snapshot: RoomSnapshot,
   exclude: StructureLink,
 ): StructureLink | undefined {
+  if (hasLinkKeeperAtPost(snapshot, globalCache().creepRefs ?? [], "storage")) return undefined;
   // 与布局分类同源：旧 range<=2 找不到距 3 格的 storage link（W8N3 的 (22,18)），
   // distributor 因此无法把 storage 能量灌入中继 link，controller 补给少一条道。
   const link = findStorageLink(snapshot);

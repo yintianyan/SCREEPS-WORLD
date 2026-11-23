@@ -1,5 +1,10 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { sampleCpu, sampleEconomy } from "../../../src/kernel/timeseries";
+import {
+  sampleCpu,
+  sampleEconomy,
+  summarizeCpuPeak,
+  type CpuSample,
+} from "../../../src/kernel/timeseries";
 
 // Mock Game object for sampleCpu
 const mockGame = {
@@ -107,6 +112,25 @@ describe("Timeseries — sampleCpu", () => {
     });
 
     expect(sample.v1).toBe(2.1);
+  });
+});
+
+describe("Timeseries — summarizeCpuPeak", () => {
+  const sample = (t: number, cpu: number): CpuSample => ({ t, cpu }) as CpuSample;
+
+  it("P95 忽略顶部 5% 尖峰，max 单独保留", () => {
+    const samples = Array.from({ length: 100 }, (_, i) => sample(i * 10, i < 95 ? 10 : 20));
+    expect(summarizeCpuPeak(samples)).toEqual({
+      p95: 10,
+      max: 20,
+      samples: 100,
+      spanTicks: 990,
+    });
+  });
+
+  it("过滤无效样本；空窗口返回 undefined", () => {
+    expect(summarizeCpuPeak([])).toBeUndefined();
+    expect(summarizeCpuPeak([sample(0, Number.NaN)] as CpuSample[])).toBeUndefined();
   });
 });
 

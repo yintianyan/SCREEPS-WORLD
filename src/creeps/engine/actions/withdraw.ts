@@ -3,7 +3,11 @@ import type { ActionCandidate, ActionContext } from "../action-types";
 import { ACTION_RANGE_NEAR, runAction } from "./helpers";
 import { globalCache } from "../../../kernel/global-cache";
 import { findClosestContainerWithEnergy, findRichestContainer } from "../../support/targeting";
-import { computeControllerLinkTarget, findStorageLink } from "../../../domain/economy/links";
+import {
+  computeControllerLinkTarget,
+  findStorageLink,
+  hasLinkKeeperAtPost,
+} from "../../../domain/economy/links";
 import { resolveControllerDowngradeRisk } from "../../../domain/economy/downgrade-risk";
 import { CONFIG } from "../../../config";
 
@@ -176,6 +180,9 @@ export function withdrawStorageLink(): ActionCandidate<StructureLink> {
   return {
     name: "withdraw:storage-link",
     resolve: ac => {
+      if (hasLinkKeeperAtPost(ac.snapshot, globalCache().creepRefs ?? [], "storage")) {
+        return undefined;
+      }
       // controller 真缺能时保留 storage link 给 link-system Step2（storage→controller），
       // 不让 hauler 把最后这管油抽走 —— 否则 storage 90 万库存也补不到 controller。
       //

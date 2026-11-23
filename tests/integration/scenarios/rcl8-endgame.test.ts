@@ -12,7 +12,12 @@ beforeAll(async () => {
 
 // ─── 辅助：构建 RCL8 世界 ───────────────────────────────────
 
-function rcl8World(opts?: { cpuBucket?: number; creepCount?: number }): TestWorld {
+function rcl8World(opts?: {
+  cpuBucket?: number;
+  creepCount?: number;
+  storageLinkEnergy?: number;
+  controllerLinkEnergy?: number;
+}): TestWorld {
   const builder = new ScenarioBuilder("W1N1")
     .rcl(8, 10935000)
     .flat()
@@ -27,8 +32,8 @@ function rcl8World(opts?: { cpuBucket?: number; creepCount?: number }): TestWorl
     .tower(24, 25, 900)
     .tower(26, 24, 900)
     .link(10, 8, 600)
-    .link(29, 42, 200)
-    .link(27, 25, 0) // storage link：RCL8 完整网络（source + controller + storage hub）
+    .link(29, 42, opts?.controllerLinkEnergy ?? 200)
+    .link(27, 25, opts?.storageLinkEnergy ?? 0) // storage link：RCL8 完整网络（source + controller + storage hub）
     .extensions(
       Array.from({ length: 30 }, (_, i) => ({
         x: 19 + (i % 6) * 2,
@@ -83,6 +88,23 @@ describe("RCL8 End Game — 终局", () => {
 
     // 性能：每 tick 平均不超过 50ms（测试环境）
     expect(result.avgTickMs).toBeLessThan(50);
+  });
+
+  it("storage Link 满时自动孵 keeper 并排空，不让 container 成为常规溢流", () => {
+    const world = rcl8World({
+      creepCount: 4,
+      storageLinkEnergy: 800,
+      controllerLinkEnergy: 800,
+    });
+    const runner = new TickRunner();
+    runner.setLoop(loop);
+    const result = runner.run(world, 400);
+    const assertions = new Assertions(world, result.records);
+
+    assertions.assertNoRuntimeError("RCL8 storage link keeper");
+    expect(world.creeps.some(c => c.memory.role === "linkKeeper")).toBe(true);
+    const storageLink = world.links.find(l => l.pos.x === 27 && l.pos.y === 25);
+    expect(storageLink?.store.getUsedCapacity(RESOURCE_ENERGY)).toBeLessThan(800);
   });
 
   it("CPU bucket=500 时 P0/P1 正常运行", () => {

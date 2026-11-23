@@ -728,6 +728,14 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
+  linkKeeper: [
+    // 固定岗位只搬 200/趟：4C1M 足够在 Link 冷却前排空一轮，且孵化便宜。
+    {
+      parts: ["carry", "carry", "carry", "carry", "move"],
+      minCapacity: 300,
+    },
+    { parts: ["carry", "carry", "move"], minCapacity: 200 },
+  ],
   upgrader: [
     // 站桩升级：1 CARRY 承接 withdraw、2 MOVE 通勤，其余全 WORK。
     // RCL<8 无引擎升级上限，大 body 直接提升升速（每 WORK = 1 energy/tick）。

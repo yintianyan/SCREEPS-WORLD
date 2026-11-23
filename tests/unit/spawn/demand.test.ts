@@ -385,6 +385,68 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     expect(haulers).toHaveLength(2);
   });
 
+  it("storage Link 几何合格时补一只固定 keeper，并标记 storage 岗位", () => {
+    const snap = linkSnapshot({ rcl: 8, storageLinkEnergy: 700 });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+    );
+    const keepers = requests.filter(r => r.role === "linkKeeper");
+    expect(keepers).toHaveLength(1);
+    expect(keepers[0]!.memory.linkKeeperPost).toBe("storage");
+  });
+
+  it("storage Link 距 storage=3 时几何不合格，不孵 keeper，保留 hauler 回退", () => {
+    const snap = linkSnapshot({ rcl: 8, storageLinkEnergy: 700 });
+    snap.links[0]!.pos = mockPos(13, 10) as never;
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+    );
+    expect(requests.some(r => r.role === "linkKeeper")).toBe(false);
+  });
+
+  it("RCL8 spawn Link 到位时补 spawn 岗位 keeper", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    storage.pos = mockPos(10, 10);
+    const spawn = mockStructure("spawn", { id: "sp", energy: 0, capacity: 300 });
+    spawn.pos = mockPos(20, 20);
+    const spawnLink = mockStructure("link", { id: "spl", energy: 700, capacity: 800 });
+    spawnLink.pos = mockPos(21, 20);
+    const controller = mockController({ level: 8 });
+    controller.pos = mockPos(35, 35);
+    const snap = mockSnapshot({
+      rcl: 8,
+      storage,
+      spawns: [spawn],
+      links: [spawnLink],
+      controller,
+      energyCapacityAvailable: 2300,
+    });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+    );
+    const keepers = requests.filter(r => r.role === "linkKeeper");
+    expect(keepers).toHaveLength(1);
+    expect(keepers[0]!.memory.linkKeeperPost).toBe("spawn");
+  });
+
   it("container 积压 + storage link 积压 → 信号叠加（两处都需要 hauler）", () => {
     // 容量 600 → 道路档 8C=400 运力，保持叠加信号在归一化后仍可区分：
     // 单信号 +2 → ceil(2×300/400)=2（= minCount 地板）；叠加 4 → ceil(4×300/400)=3。

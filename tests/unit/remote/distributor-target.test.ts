@@ -11,9 +11,11 @@ import {
   mockCreep,
   mockPos,
 } from "../../support/factories";
+import { globalCache } from "../../../src/kernel/global-cache";
 
 beforeEach(() => {
   resetGlobals();
+  globalCache().creepRefs = [];
 });
 
 /** 构建带指定位置与能量的结构 mock（位置可控，便于断言选择结果）。 */
@@ -278,6 +280,25 @@ describe("distributor storage-link 灌能 controller-link（②b 0通勤升级�
   it("同场景构成取能需求（hasDistributorFillDemand=true，防携能 idle）", () => {
     const { snap } = feedSnap(0, 0);
     expect(hasDistributorFillDemand(snap, 0)).toBe(true);
+  });
+
+  it("storage keeper 在岗时 distributor 不再重复灌 storage link", () => {
+    const { snap, storageLink } = feedSnap(0, 0);
+    (globalCache() as any).creepRefs = [
+      {
+        name: "keeper",
+        role: "linkKeeper",
+        home: snap.roomName,
+        roomName: snap.roomName,
+        x: 30,
+        y: 31,
+        linkKeeperPost: "storage",
+        recycle: false,
+      },
+    ];
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+    expect(getDistributorFillTarget(creep as any, snap)?.id).not.toBe(storageLink.id);
+    expect(hasDistributorFillDemand(snap, 0)).toBe(false);
   });
 
   it("controller link 已满(不缺能) → 不灌 storage link（升级链无需补给）", () => {

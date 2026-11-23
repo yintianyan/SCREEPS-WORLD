@@ -93,6 +93,34 @@ describe("Links — planLinkTransfers", () => {
     ]);
   });
 
+  it("spawn 现金池有缺口时，source 优先送 spawn Link 而不是 storage", () => {
+    const links = [
+      link("s1", "source", 500),
+      link("c1", "controller", 800),
+      link("st", "storage", 0),
+      link("sp", "spawn", 0),
+    ];
+    const transfers = planLinkTransfers(links, {
+      controllerTargetEnergy: 0,
+      spawnTargetEnergy: 800,
+    });
+    expect(transfers).toEqual([{ fromId: "s1", toId: "sp", amount: 500 }]);
+  });
+
+  it("source 无能量时 storage Link 补 spawn 现金池", () => {
+    const links = [
+      link("s1", "source", 0),
+      link("c1", "controller", 800),
+      link("st", "storage", 700),
+      link("sp", "spawn", 0),
+    ];
+    const transfers = planLinkTransfers(links, {
+      controllerTargetEnergy: 0,
+      spawnTargetEnergy: 800,
+    });
+    expect(transfers).toEqual([{ fromId: "st", toId: "sp", amount: 700 }]);
+  });
+
   it("controllerTargetEnergy=0 且无 storage link → 不传输（controller 停供、无处可去）", () => {
     const links = [link("s1", "source", 500), link("c1", "controller", 100)];
     expect(planLinkTransfers(links, { controllerTargetEnergy: 0 })).toHaveLength(0);
@@ -263,6 +291,18 @@ describe("Links — classifyLinkRole（最近锚获胜，根除优先级劫持�
     expect(classifyLinkRole(pt(40, 44), [pt(12, 31), pt(41, 46)], pt(39, 12), pt(33, 29))).toBe(
       "source",
     );
+  });
+
+  it("spawn Link：距 spawn=1 且远离其它锚 → spawn", () => {
+    expect(
+      classifyLinkRole(pt(1, -1), [pt(20, 20)], pt(30, 30), pt(0, 2), undefined, [pt(0, 0)]),
+    ).toBe("spawn");
+  });
+
+  it("spawn 与 storage 等距时保留 storage 角色，避免抢走模板 (1,1) Link", () => {
+    expect(
+      classifyLinkRole(pt(1, 1), [pt(20, 20)], pt(30, 30), pt(0, 2), undefined, [pt(0, 0)]),
+    ).toBe("storage");
   });
 
   it("都超出 anchorRange(2) → hub", () => {

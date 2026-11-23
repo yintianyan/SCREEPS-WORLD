@@ -694,7 +694,7 @@ export const CONFIG = {
        *  否则 5000 容量的 ext 长期只有 40–50%，大 body（4200）请求被 degradeGateClosed
        *  卡死（线上 W8N3 累计 105,795 次）。ext 接近满后才允许给升级链留一只。 */
       distributorLinkMinCashGap: 2000,
-      /** link 角色分类的锚定半径（Chebyshev）：source／controller 用此值。
+      /** link 角色分类的锚定半径（Chebyshev）：source／controller／spawn 用此值。
        * 取 2：harvester 站 container（贴 source）上仍能 range1 够到隔一格的 link，
        * 故 source link 放 range≤2 内均可被灌能。
        * ⚠️不得在此之外再抄一份数字 —— 放置侧与分类侧一律经
@@ -708,6 +708,13 @@ export const CONFIG = {
        * 全是 extension/road/lab ⇒ `layoutGaps.linkStorage` 恒红 + 规划器被钉在慢速重试）。
        */
       storageAnchorRange: 3,
+      /** spawn 能量 Link 的锚定半径；RCL8 第一个空位服务孵化现金池。 */
+      spawnAnchorRange: 2,
+      /** 固定 keeper 的低/高水位带；broker 在带内不动，避免每拍倒手。 */
+      keeperLowWater: 300,
+      keeperHighWater: 500,
+      /** keeper 从 storage 灌 Link 时保留的最低库存。 */
+      keeperStorageFloor: 20000,
       /**
        * RCL8 满级保级水位（2026-08-01）：controller link 的目标能量。满级后升级零收益
        * （controller.progress=0），默认停供（target=0）；仅降级风险
@@ -844,6 +851,8 @@ export const CONFIG = {
     // 长期只有 378–2209，大 body（upgrader 4200）请求反复 degradeGateClosed（累计 106k）。
     // 3 只 6C6M（carry 300）= 900/趟，填满 5600 需 6 趟；4 只把并行运力提到 1200/趟。
     distributor: { minCount: 1, maxCount: 4 },
+    /** Link Keeper：storage/spawn 两个固定岗位各一只，几何不合格时不孵。 */
+    linkKeeper: { minCount: 0, maxCount: 2 },
     upgrader: { minCount: 1, maxCount: 3 },
     builder: { minCount: 1, maxCount: 4 },
     worker: { minCount: 0, maxCount: 2 },
@@ -1631,11 +1640,19 @@ export const CONFIG = {
   capacity: {
     /** avg/limit ≤ 此比例 → abundant（可扩雄心：远矿/扩张加码）。 */
     abundantRatio: 0.35,
-    /** 超过此比例 → tight（收缩雄心）。 */
-    tightRatio: 0.6,
-    /** 超过此比例 → constrained（只保生存与恢复）。 */
+    /** avg/limit 超过此比例 → tight；comfortable 均值线只花一半配额。 */
+    tightRatio: 0.5,
+    /** avg/limit 超过此比例 → constrained（只保生存与恢复）。 */
     constrainedRatio: 0.8,
-    /** 升档滞回窗口：余量需持续满足该 tick 数才升档（降档立即）。 */
+    /** P95/limit ≤ 此比例 → abundant。 */
+    abundantPeakRatio: 0.45,
+    /** P95/limit 超过此比例 → tight；至少留 30% 峰值余量给战斗、重活与未启用业务。 */
+    tightPeakRatio: 0.7,
+    /** P95/limit 超过此比例 → constrained。 */
+    constrainedPeakRatio: 0.85,
+    /** P95 最少样本数；不足时扩张闸退回更保守的 cpuMax10，不把短窗当稳定峰值。 */
+    peakMinSamples: 30,
+    /** 升档滞回窗口：均值与峰值都满足目标档位并持续该 tick 数才升档。 */
     upgradeWindowTicks: 300,
   },
 } as const;

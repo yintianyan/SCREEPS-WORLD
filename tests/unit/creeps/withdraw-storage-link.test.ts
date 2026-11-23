@@ -7,6 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { withdrawStorageLink } from "../../../src/creeps/engine/actions/withdraw";
+import { globalCache } from "../../../src/kernel/global-cache";
 import type { ActionContext } from "../../../src/creeps/engine/action-types";
 import { CONFIG } from "../../../src/config";
 import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
@@ -20,6 +21,7 @@ function setGclUpgrade(enabled: boolean): void {
 
 beforeEach(() => {
   resetGlobals();
+  globalCache().creepRefs = [];
   (globalThis as any).Memory = { rooms: {} };
 });
 
@@ -84,6 +86,42 @@ function makeAc(opts: {
 }
 
 describe("withdrawStorageLink — controller 补能守卫", () => {
+  it("同房 storage keeper 已到岗时 hauler 让位", () => {
+    const ac = makeAc({ rcl: 8, ctrlLinkEnergy: 600 });
+    ac.snapshot.storage!.pos = mockPos(21, 17) as never;
+    (globalCache() as any).creepRefs = [
+      {
+        name: "keeper",
+        role: "linkKeeper",
+        home: "W8N3",
+        roomName: "W8N3",
+        x: 22,
+        y: 17,
+        linkKeeperPost: "storage",
+        recycle: false,
+      },
+    ];
+    expect(withdrawStorageLink().resolve(ac)).toBeUndefined();
+  });
+
+  it("keeper 仍在通勤、未到服务格时 hauler 保留排空回退", () => {
+    const ac = makeAc({ rcl: 8, ctrlLinkEnergy: 600 });
+    ac.snapshot.storage!.pos = mockPos(21, 17) as never;
+    (globalCache() as any).creepRefs = [
+      {
+        name: "keeper",
+        role: "linkKeeper",
+        home: "W8N3",
+        roomName: "W8N3",
+        x: 25,
+        y: 25,
+        linkKeeperPost: "storage",
+        recycle: false,
+      },
+    ];
+    expect((withdrawStorageLink().resolve(ac) as any)?.id).toBe("link-22-18");
+  });
+
   it("GCL 关闭 + RCL8 无降级风险 → 不抑制，hauler 正常排空 storage link", () => {
     setGclUpgrade(false);
     const ac = makeAc({ rcl: 8, ctrlLinkEnergy: 200 });

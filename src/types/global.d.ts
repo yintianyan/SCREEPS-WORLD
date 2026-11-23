@@ -86,6 +86,10 @@ declare global {
      * per-creep 运行时状态，无需迁移（同 lastRepathAt 先例）。
      */
     lastRebindAt?: number;
+    /** linkKeeper 固定岗位：storage 或 spawn 能量 Link。 */
+    linkKeeperPost?: "storage" | "spawn";
+    /** linkKeeper 当前搬运方向。 */
+    keeperCargo?: "storage" | "link" | "core";
     /** 当前紧凑任务分配。 */
     assignment?: CreepAssignment;
     /** 用于稳定孵化 key 生成和替换跟踪的索引。 */
@@ -613,6 +617,13 @@ declare global {
       };
       /** 最近 10 采样点峰值 CPU。 */
       cpuMax10: number;
+      /** 最近 CPU 环（最多 300 点／3000 拍）P95；扩张容量闸的峰值输入。 */
+      cpuP95Window?: number;
+      /** 同一峰值窗口的最大值；用于诊断单次尖峰，不单独决定扩张档位。 */
+      cpuMaxWindow?: number;
+      /** P95 窗口的有效样本数与拍跨度；样本不足时容量闸退回 cpuMax10。 */
+      cpuPeakSamples?: number;
+      cpuPeakSpanTicks?: number;
       /** 最近 10 采样点最低 bucket。 */
       bucketMin10: number;
       /** 累计进入 crisis 的次数。 */
@@ -977,7 +988,7 @@ declare global {
      * 按 min(cpuLimit, tickLimit) 动态计算，消费者据此缩放远矿/扩张雄心。
      *
      * ⚠语义契约（tier 双口径，2026-11-18 审查立案②改名澄清）：
-     *   - 本字段是 **usage 负载口径**（avg/limit 比率 + 300t 滞回，见 domain/strategy/capacity.ts），
+     *   - 本字段是 **usage 负载口径**（600 拍均值与 CPU 环 P95 取更保守档位 + 300t 滞回），
      *     G6/远矿扩编门消费的是它；
      *   - `Memory.kernel.tier`（CpuTier）是 **bucket 档位口径**（bucket→healthy/conserve/recovery
      *     映射，scheduler createBudget 写入），调度优先级消费的是它。
@@ -990,8 +1001,12 @@ declare global {
       since: number;
       /** 升档候选连续满足余量的 tick 数（滞回防抖）。 */
       upgradeTicks: number;
-      /** 判定那拍的余量（`1 − usage/limit`），与 tier 同源同拍。 */
+      /** 均值余量（`1 − usage/limit`）。 */
       headroom?: number;
+      /** 峰值余量（`1 − max(P95, max10)/limit`）；扩张准入必须同时看两条余量。 */
+      peakHeadroom?: number;
+      /** 最终档位受均值还是峰值限制。 */
+      limitedBy?: "mean" | "peak";
       /**
        * `tier` 是 G6 唯一读的词，而"要削多少 CPU 才放行扩张"需要它的**输入**。
        * 这几枚标量原先只存在于决策那一拍的 heap（同 `gclLevel`/`bucket`、`params`）。
@@ -1011,6 +1026,14 @@ declare global {
         limit: number;
         bucket: number;
         tightRatio: number;
+        /** 峰值闸实际采用的 P95；样本不足时为 undefined，调用方已退回 cpuMax10。 */
+        cpuP95?: number;
+        cpuMax10: number;
+        cpuPeakSamples?: number;
+        cpuPeakSpanTicks?: number;
+        abundantPeakRatio: number;
+        tightPeakRatio: number;
+        constrainedPeakRatio: number;
       };
     };
     /**

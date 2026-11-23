@@ -13,8 +13,10 @@ export interface CapacityInput {
    * 不要把 stats.cpuAvg10 直接接进来：它的采样点系统性偏高，见该函数注释。
    */
   cpuUsagePerTick: number;
-  /** telemetry 的 10 采样峰值（供调用方观察，本函数不参与分档）。 */
+  /** 最近 10 采样点峰值 CPU；与窗口 P95 一起取更保守值。 */
   cpuMax10: number;
+  /** 最近 300 采样点 P95；样本不足时由调用方回退 cpuMax10。 */
+  cpuP95?: number;
 }
 
 /** 两份 CPU 均值读数，交给 pickCpuUsagePerTick 裁决用哪一份。 */
@@ -56,9 +58,9 @@ const MIN_RATE_WINDOW_TICKS = 100;
  * 选喂给分档的「每 tick 平均 CPU」。
  *
  * 优先逐拍均量。cpuAvg10 的 10 个采样点恰好落在遥测+刷段都在跑的重活拍上，
- * 官服实测稳定偏高约 2.6/t（同一帝国：avg10=13.2 vs 逐拍=10.6，unsampledTicks=0），
- * 于是有 47% 余量的帝国被判成 tight，升档滞回只能在边界上被重置回 0 ——
- * tier=tight 已持续约 9300 拍、upgradeTicks 读 0，而真实均值从未接近过门槛。
+ * 官服实测稳定偏高约 2.6/t（同一帝国：avg10=13.2 vs 逐拍=10.6，unsampledTicks=0）。
+ * 均值闸若直接吃 avg10，会把同一批拍里更便宜的真实负载误判成高档位；峰值余量另由
+ * cpuP95/cpuMax10 独立裁决，不能用偏高的均值样本替代逐拍均量。
  *
  * 四种情况退回 avg10（偏高即保守）：
  * - 窗还没建立（新 Memory／首次采样前）；
@@ -82,18 +84,27 @@ export function pickCpuUsagePerTick(m: CpuUsageMeasurement): number {
 export interface CapacityOptions {
   /** avg/limit ≤ 此比例 → abundant（可扩雄心：更多远矿/扩张）。 */
   abundantRatio: number;
-  /** 超过此比例 → tight（收缩雄心）。 */
+  /** avg/limit 超过此比例 → tight（收缩雄心）。 */
   tightRatio: number;
-  /** 超过此比例 → constrained（只保生存与恢复）。 */
+  /** avg/limit 超过此比例 → constrained（只保生存与恢复）。 */
   constrainedRatio: number;
+  /** P95/limit ≤ 此比例 → abundant；峰值余量独立于均值裁决。 */
+  abundantPeakRatio: number;
+  /** P95/limit 超过此比例 → tight；comfortable 必须同时满足均值与峰值两条线。 */
+  tightPeakRatio: number;
+  /** P95/limit 超过此比例 → constrained。 */
+  constrainedPeakRatio: number;
   /** 升档滞回窗口：余量需持续满足该 tick 数才升档。 */
   upgradeWindowTicks: number;
 }
 
 export const DEFAULT_CAPACITY_OPTIONS: CapacityOptions = {
   abundantRatio: 0.35,
-  tightRatio: 0.6,
+  tightRatio: 0.5,
   constrainedRatio: 0.8,
+  abundantPeakRatio: 0.45,
+  tightPeakRatio: 0.7,
+  constrainedPeakRatio: 0.85,
   upgradeWindowTicks: 300,
 };
 
@@ -106,8 +117,12 @@ export interface CapacityState {
 }
 
 export interface CapacityResult extends CapacityState {
-  /** 余量 = 1 − avg/limit（0..1）。 */
+  /** 均值余量 = 1 − avg/limit（0..1）。 */
   headroom: number;
+  /** 峰值余量 = 1 − max(P95, max10)/limit；缺峰值读数时回退均值余量。 */
+  peakHeadroom: number;
+  /** 最终档位由哪一侧限制：mean 或 peak。 */
+  limitedBy: "mean" | "peak";
 }
 
 const TIER_RANK: Record<CapacityTier, number> = {
@@ -130,28 +145,46 @@ export function evaluateCapacity(
   const limit = Math.max(1, Math.min(input.cpuLimit, input.tickLimit));
   const usage = Math.min(Math.max(0, input.cpuUsagePerTick), limit);
   const headroom = 1 - usage / limit;
+  const p95 = Number.isFinite(input.cpuP95) ? Math.max(0, input.cpuP95 as number) : undefined;
+  const max10 = Number.isFinite(input.cpuMax10) ? Math.max(0, input.cpuMax10) : undefined;
+  const peak = Math.min(limit, Math.max(usage, p95 ?? 0, max10 ?? 0));
+  const peakHeadroom = 1 - peak / limit;
 
-  let target: CapacityTier;
-  if (headroom >= 1 - options.abundantRatio) target = "abundant";
-  else if (headroom >= 1 - options.tightRatio) target = "comfortable";
-  else if (headroom >= 1 - options.constrainedRatio) target = "tight";
-  else target = "constrained";
+  const meanTier: CapacityTier =
+    usage / limit <= options.abundantRatio
+      ? "abundant"
+      : usage / limit <= options.tightRatio
+        ? "comfortable"
+        : usage / limit <= options.constrainedRatio
+          ? "tight"
+          : "constrained";
+  const peakTier: CapacityTier =
+    peak / limit <= options.abundantPeakRatio
+      ? "abundant"
+      : peak / limit <= options.tightPeakRatio
+        ? "comfortable"
+        : peak / limit <= options.constrainedPeakRatio
+          ? "tight"
+          : "constrained";
+  const target = TIER_RANK[peakTier] > TIER_RANK[meanTier] ? peakTier : meanTier;
+  const limitedBy =
+    peakTier === target && TIER_RANK[peakTier] > TIER_RANK[meanTier] ? "peak" : "mean";
 
   const prevTier = prev?.tier ?? target;
   const since = prev?.since ?? tick;
   const upgradeTicks = prev?.upgradeTicks ?? 0;
 
   if (target === prevTier) {
-    return { tier: target, since, upgradeTicks: 0, headroom };
+    return { tier: target, since, upgradeTicks: 0, headroom, peakHeadroom, limitedBy };
   }
   // 升档（abundant ← …）需持续窗口；降档（… → constrained）立即。
   const isUpgrade = TIER_RANK[target] < TIER_RANK[prevTier];
   if (isUpgrade) {
     const next = upgradeTicks + Math.max(1, elapsedTicks);
     if (next < options.upgradeWindowTicks) {
-      return { tier: prevTier, since, upgradeTicks: next, headroom };
+      return { tier: prevTier, since, upgradeTicks: next, headroom, peakHeadroom, limitedBy };
     }
-    return { tier: target, since: tick, upgradeTicks: 0, headroom };
+    return { tier: target, since: tick, upgradeTicks: 0, headroom, peakHeadroom, limitedBy };
   }
-  return { tier: target, since: tick, upgradeTicks: 0, headroom };
+  return { tier: target, since: tick, upgradeTicks: 0, headroom, peakHeadroom, limitedBy };
 }

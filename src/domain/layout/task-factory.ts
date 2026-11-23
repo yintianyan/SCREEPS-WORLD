@@ -11,6 +11,7 @@ import { validateBuildCell, wouldSeal, type ValidationOptions } from "./validati
 import {
   classifyLinkRole,
   DEFAULT_LINK_ROLE_RANGES,
+  findLinkKeeperStand,
   type LinkRole,
   type LinkRoleRanges,
 } from "../economy/links";
@@ -276,6 +277,7 @@ function linkRoleMatch(
       : undefined,
     snapshot.storage ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y } : undefined,
     ranges,
+    snapshot.spawns.map(s => ({ x: s.pos.x, y: s.pos.y })),
   );
   return role === expected;
 }
@@ -294,8 +296,15 @@ function countLinksByRole(
   snapshot: RoomSnapshot,
   ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
 ): Record<LinkRole, number> {
-  const counts: Record<LinkRole, number> = { source: 0, controller: 0, storage: 0, hub: 0 };
+  const counts: Record<LinkRole, number> = {
+    source: 0,
+    controller: 0,
+    storage: 0,
+    spawn: 0,
+    hub: 0,
+  };
   const sources = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+  const spawns = snapshot.spawns.map(s => ({ x: s.pos.x, y: s.pos.y }));
   const ctrl = snapshot.controller
     ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
     : undefined;
@@ -304,7 +313,7 @@ function countLinksByRole(
     : undefined;
   const sites = snapshot.constructionSites.filter(s => s.structureType === STRUCTURE_LINK);
   for (const l of [...snapshot.links, ...sites]) {
-    counts[classifyLinkRole({ x: l.pos.x, y: l.pos.y }, sources, ctrl, stor, ranges)]++;
+    counts[classifyLinkRole({ x: l.pos.x, y: l.pos.y }, sources, ctrl, stor, ranges, spawns)]++;
   }
   return counts;
 }
@@ -525,10 +534,11 @@ export function createStorageLinkTask(
   queuedLinkCount = 0,
 ): BuildTaskCandidate | undefined {
   if (!shouldHaveStorageLink(snapshot, queuedLinkCount, options.linkRoleRanges)) return undefined;
-  const storage = snapshot.storage!;
+  const storage = snapshot.storage;
+  if (!storage) return undefined;
   const ranges = options.linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
 
-  // 角色感知：只接受运行时分类为 storage 的邻格（link 无需站桩位）。
+  // 角色感知：只接受运行时分类为 storage 的邻格；固定 keeper 还要求服务格同时贴住两者。
   const adjacentPos = findAdjacentBuildable(
     storage.pos,
     room,
@@ -542,6 +552,13 @@ export function createStorageLinkTask(
   if (
     options.obstacleSet &&
     wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)
+  ) {
+    return undefined;
+  }
+  if (
+    !findLinkKeeperStand(snapshot, { pos: adjacentPos }, storage, (x, y) =>
+      room.getTerrain().get(x, y),
+    )
   ) {
     return undefined;
   }
@@ -573,6 +590,66 @@ export function shouldHaveStorageLink(
   if (!snapshot.storage) return false;
   const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
   if (countLinksByRole(snapshot, ranges).storage > 0) return false;
+  const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
+  const existingLinks = snapshot.links.length;
+  const linkSites = snapshot.constructionSites.filter(
+    s => s.structureType === STRUCTURE_LINK,
+  ).length;
+  return existingLinks + linkSites + queuedLinkCount < maxLinks;
+}
+
+/** RCL8 spawn 能量 Link：把 source/storage 能量直接送到孵化现金池旁。 */
+export function createSpawnLinkTask(
+  snapshot: RoomSnapshot,
+  room: Room,
+  options: ValidationOptions,
+  queuedLinkCount = 0,
+): BuildTaskCandidate | undefined {
+  if (!shouldHaveSpawnLink(snapshot, queuedLinkCount, options.linkRoleRanges)) return undefined;
+  const spawn = snapshot.spawns[0];
+  if (!spawn) return undefined;
+  const ranges = options.linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
+  const adjacentPos = findAdjacentBuildable(
+    spawn.pos,
+    room,
+    snapshot,
+    options,
+    linkRolePredicate(snapshot, "spawn", ranges),
+    ranges.spawn,
+  );
+  if (!adjacentPos) return undefined;
+  if (
+    options.obstacleSet &&
+    wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)
+  ) {
+    return undefined;
+  }
+  if (
+    !findLinkKeeperStand(snapshot, { pos: adjacentPos }, spawn, (x, y) =>
+      room.getTerrain().get(x, y),
+    )
+  ) {
+    return undefined;
+  }
+  return {
+    key: "logistics.link.spawn",
+    pos: adjacentPos,
+    structureType: STRUCTURE_LINK,
+    priority: 1,
+    phase: "rcl8",
+    validation: "ok",
+  };
+}
+
+/** 是否应有 spawn Link：RCL8、有 spawn、该角色尚无 Link 且槽位未满。 */
+export function shouldHaveSpawnLink(
+  snapshot: RoomSnapshot,
+  queuedLinkCount = 0,
+  linkRoleRanges?: LinkRoleRanges,
+): boolean {
+  if (snapshot.rcl < 8 || snapshot.spawns.length === 0) return false;
+  const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
+  if (countLinksByRole(snapshot, ranges).spawn > 0) return false;
   const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
   const existingLinks = snapshot.links.length;
   const linkSites = snapshot.constructionSites.filter(

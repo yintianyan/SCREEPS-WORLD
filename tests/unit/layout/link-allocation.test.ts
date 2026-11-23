@@ -4,6 +4,8 @@ import {
   createSourceLinkTasks,
   createStorageLinkTask,
   createControllerLinkTask,
+  createSpawnLinkTask,
+  shouldHaveSpawnLink,
   hasSourceLinkFeedStand,
   shouldHaveStorageLink,
 } from "../../../src/domain/layout/task-factory";
@@ -17,7 +19,7 @@ import {
   buildObstaclePositionSet,
   type ValidationOptions,
 } from "../../../src/domain/layout/validation";
-import { mockPos, resetGlobals } from "../../support/factories";
+import { mockPos, mockStructure, resetGlobals } from "../../support/factories";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 
 beforeEach(() => {
@@ -59,7 +61,7 @@ function snapshotAt(rcl: number, overrides: Partial<RoomSnapshot> = {}): RoomSna
     spawns: [
       {
         id: "spawn1",
-        pos: mockPos(25, 25),
+        pos: mockPos(20, 20),
         structureType: "spawn",
         store: {
           getUsedCapacity: () => 0,
@@ -490,6 +492,7 @@ function runtimeRole(snap: RoomSnapshot, x: number, y: number) {
     snap.controller ? { x: snap.controller.pos.x, y: snap.controller.pos.y } : undefined,
     snap.storage ? { x: snap.storage.pos.x, y: snap.storage.pos.y } : undefined,
     2,
+    snap.spawns.map(s => ({ x: s.pos.x, y: s.pos.y })),
   );
 }
 
@@ -581,27 +584,44 @@ function paveRing(cx: number, cy: number, radius: number): any[] {
   return out;
 }
 
-/** 与产线同口径的运行时角色（读 resolver，不再抄常量）。 */
-function runtimeRoleResolved(snap: RoomSnapshot, x: number, y: number) {
-  return classifyLinkRole(
-    { x, y },
-    snap.sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
-    snap.controller ? { x: snap.controller.pos.x, y: snap.controller.pos.y } : undefined,
-    snap.storage ? { x: snap.storage.pos.x, y: snap.storage.pos.y } : undefined,
-    resolveLinkRoleRanges(CONFIG.economy.link),
-  );
-}
+describe("RCL8 spawn Link 分配", () => {
+  it("RCL8 第一空位生成 spawn 能量 Link，且运行时角色为 spawn", () => {
+    const snap = snapshotAt(8);
+    const candidate = createSpawnLinkTask(snap, roomWith(), optionsFor(snap));
+    expect(candidate).toBeDefined();
+    if (!candidate) throw new Error("spawn Link candidate missing");
+    expect(
+      classifyLinkRole(
+        candidate.pos,
+        snap.sources.map(s => s.pos),
+        snap.controller!.pos,
+        snap.storage!.pos,
+        resolveLinkRoleRanges(CONFIG.economy.link),
+        snap.spawns.map(s => s.pos),
+      ),
+    ).toBe("spawn");
+  });
+
+  it("RCL7 不生成；已有 spawn Link 不重复生成", () => {
+    const rcl7 = snapshotAt(7);
+    expect(createSpawnLinkTask(rcl7, roomWith(), optionsFor(rcl7))).toBeUndefined();
+
+    const existing = mockStructure("link", { id: "spawnLink", energy: 0, capacity: 800 });
+    existing.pos = mockPos(21, 20);
+    const rcl8 = snapshotAt(8, { links: [existing] });
+    expect(shouldHaveSpawnLink(rcl8)).toBe(false);
+    expect(createSpawnLinkTask(rcl8, roomWith(), optionsFor(rcl8))).toBeUndefined();
+  });
+});
 
 describe("storage 角色半径：放置侧与分类侧单一真源", () => {
-  it("≤2 环铺满、3 格空闲 ⇒ 仍生成 storage link 且落在距 storage 3 的格", () => {
+  it("≤2 环铺满、只剩 3 格候选且无 keeper 服务格 ⇒ 不生成 storage link", () => {
     const snap = snapshotAt(6, { extensions: paveRing(26, 25, 2) });
     const candidate = createStorageLinkTask(snap, roomWith(), optionsFor(snap));
 
-    expect(candidate).toBeDefined();
-    const dist = Math.max(Math.abs(candidate!.pos.x - 26), Math.abs(candidate!.pos.y - 25));
-    expect(dist).toBe(3);
-    // 建出来必须仍被运行时认成 storage —— 否则是无消费者的死资产（hub）。
-    expect(runtimeRoleResolved(snap, candidate!.pos.x, candidate!.pos.y)).toBe("storage");
+    // 距 storage 3 格的 Link 无法让固定 keeper 同时贴住两者；继续建只会造出
+    // hauler 已让位、keeper 又到不了岗的空窗，因此保留 hauler 回退并拒绝该候选。
+    expect(candidate).toBeUndefined();
   });
 
   it("3 格处已有分类为 storage 的 link ⇒ 不再重提，缺口不再恒红", () => {
@@ -669,6 +689,7 @@ describe("storage 角色半径：放置侧与分类侧单一真源", () => {
       source: 4,
       controller: 4,
       storage: 5,
+      spawn: 2,
     });
   });
 });

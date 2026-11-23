@@ -226,13 +226,20 @@ export const empireStrategySystem: System = {
     const lastEval = g.__capacityLastEvalTick;
     const elapsedTicks = lastEval === undefined ? 1 : Math.max(1, ctx.tick - lastEval);
     g.__capacityLastEvalTick = ctx.tick;
+    const cpuPeakSamples = Memory.kernel.stats?.cpuPeakSamples ?? 0;
+    const cpuP95 =
+      cpuPeakSamples >= CONFIG.capacity.peakMinSamples
+        ? Memory.kernel.stats?.cpuP95Window
+        : undefined;
+    const cpuMax10 = Memory.kernel.stats?.cpuMax10 ?? 0;
     const capacity = evaluateCapacity(
       {
         cpuLimit: Game.cpu.limit,
         tickLimit: Game.cpu.tickLimit,
         bucket: Game.cpu.bucket ?? 10000,
         cpuUsagePerTick,
-        cpuMax10: Memory.kernel.stats?.cpuMax10 ?? 0,
+        cpuMax10,
+        cpuP95,
       },
       Memory.kernel.capacity,
       ctx.tick,
@@ -240,6 +247,9 @@ export const empireStrategySystem: System = {
         abundantRatio: CONFIG.capacity.abundantRatio,
         tightRatio: CONFIG.capacity.tightRatio,
         constrainedRatio: CONFIG.capacity.constrainedRatio,
+        abundantPeakRatio: CONFIG.capacity.abundantPeakRatio,
+        tightPeakRatio: CONFIG.capacity.tightPeakRatio,
+        constrainedPeakRatio: CONFIG.capacity.constrainedPeakRatio,
         upgradeWindowTicks: CONFIG.capacity.upgradeWindowTicks,
       },
       elapsedTicks,
@@ -297,7 +307,9 @@ export const empireStrategySystem: System = {
       log.info(
         "empire-strategy",
         `capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +
-          ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${capacityLimit})`,
+          ` (meanHeadroom=${Math.round(capacity.headroom * 100)}%, peakHeadroom=${Math.round(
+            capacity.peakHeadroom * 100,
+          )}%, limitedBy=${capacity.limitedBy}, limit=${capacityLimit})`,
       );
     }
     // 原先这里有 `if (strategy?.posture !== undefined) postureChangedAt = Game.time`，
@@ -312,6 +324,8 @@ export const empireStrategySystem: System = {
       since: capacity.since,
       upgradeTicks: capacity.upgradeTicks,
       headroom: capacity.headroom,
+      peakHeadroom: capacity.peakHeadroom,
+      limitedBy: capacity.limitedBy,
       inputs: {
         at: ctx.tick,
         usage: cpuUsagePerTick,
@@ -325,6 +339,13 @@ export const empireStrategySystem: System = {
         limit: capacityLimit,
         bucket: Game.cpu.bucket ?? 10000,
         tightRatio: CONFIG.capacity.tightRatio,
+        cpuP95,
+        cpuMax10,
+        cpuPeakSamples: Memory.kernel.stats?.cpuPeakSamples,
+        cpuPeakSpanTicks: Memory.kernel.stats?.cpuPeakSpanTicks,
+        abundantPeakRatio: CONFIG.capacity.abundantPeakRatio,
+        tightPeakRatio: CONFIG.capacity.tightPeakRatio,
+        constrainedPeakRatio: CONFIG.capacity.constrainedPeakRatio,
       },
     };
 

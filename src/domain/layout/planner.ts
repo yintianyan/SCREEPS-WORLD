@@ -11,6 +11,7 @@ import {
   createControllerContainerTask,
   createSourceLinkTasks,
   createStorageLinkTask,
+  createSpawnLinkTask,
   createControllerLinkTask,
   shouldHaveStorageLink,
   shouldHaveControllerLink,
@@ -577,6 +578,8 @@ export function planLogisticsStage(input: {
   )) {
     addLink(candidate);
   }
+  // RCL8 第一个空位给 spawn 现金池；第六个槽位不设虚假 hub 需求。
+  addLink(createSpawnLinkTask(snapshot, room, validationOptions, result.queuedLinks));
 
   // Extractor 任务（RCL6+）与 mineral container 任务（RCL6+，需 extractor）。
   const extractor = createExtractorTask(snapshot);

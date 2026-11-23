@@ -118,6 +118,31 @@ export function summarizeRoles(
   return { n, rl };
 }
 
+/** CPU 窗口峰值摘要；P95 用 nearest-rank，避免插值把临界样本抹平。 */
+export function summarizeCpuPeak(samples: readonly CpuSample[]):
+  | {
+      p95: number;
+      max: number;
+      samples: number;
+      spanTicks: number;
+    }
+  | undefined {
+  const valid = samples.filter(s => Number.isFinite(s.cpu) && Number.isFinite(s.t));
+  const first = valid[0];
+  const last = valid[valid.length - 1];
+  if (!first || !last) return undefined;
+  const values = valid.map(s => s.cpu).sort((a, b) => a - b);
+  const index = Math.max(0, Math.ceil(values.length * 0.95) - 1);
+  const p95 = values[index] ?? values[values.length - 1] ?? 0;
+  const max = values[values.length - 1] ?? 0;
+  return {
+    p95: Math.round(p95 * 10) / 10,
+    max: Math.round(max * 10) / 10,
+    samples: values.length,
+    spanTicks: last.t - first.t,
+  };
+}
+
 export interface PopulationSnapshot {
   /** 采样 tick。 */
   t: number;

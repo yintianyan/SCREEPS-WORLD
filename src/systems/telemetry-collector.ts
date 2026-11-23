@@ -17,6 +17,7 @@ import {
 import {
   sampleCpu,
   sampleEconomy,
+  summarizeCpuPeak,
   summarizeRoles,
   type PopulationSnapshot,
   type HeapSample,
@@ -1027,6 +1028,13 @@ function updateStatsSummary(tick: number): void {
   if (stats.skipHotspot === undefined) stats.skipHotspot = "";
   const seg = readCpuSegment();
   const cpuSamples = ringToArray(seg.cpu);
+  const peak = summarizeCpuPeak(cpuSamples);
+  if (peak) {
+    stats.cpuP95Window = peak.p95;
+    stats.cpuMaxWindow = peak.max;
+    stats.cpuPeakSamples = peak.samples;
+    stats.cpuPeakSpanTicks = peak.spanTicks;
+  }
 
   // 取最近 10 个采样点
   const recent = cpuSamples.slice(-10);

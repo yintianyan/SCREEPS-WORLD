@@ -3,6 +3,7 @@ import type { LinkInfo, LinkRole } from "../../domain/economy/links";
 import {
   planLinkTransfers,
   classifyLinkRole,
+  findStorageLink,
   resolveLinkRoleRanges,
   computeControllerLinkTarget,
 } from "../../domain/economy/links";
@@ -15,6 +16,7 @@ import {
   LINK_CONSTRAINED_RETRY_INTERVAL,
 } from "../../domain/layout/dismantle";
 import { globalCache } from "../../kernel/global-cache";
+import { findSurplusControllerLinks } from "../../domain/layout/gaps";
 import { CONFIG } from "../../config";
 
 /** re-export（纯函数已下沉 domain 层，保持 link-system 导入面兼容）。 */
@@ -58,13 +60,21 @@ function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
   const linkMap = new Map<string, StructureLink>();
   for (const l of links) linkMap.set(l.id, l);
 
-  const infos: LinkInfo[] = links.map(l => ({
-    id: l.id,
-    energy: l.store.getUsedCapacity(RESOURCE_ENERGY),
-    energyCapacity: l.store.getCapacity(RESOURCE_ENERGY),
-    cooldown: l.cooldown,
-    role: classifyLink(l, snapshot),
-  }));
+  // 多 controller link 是历史超配。先把多余 Link 的能量排进主 controller link 或
+  // storage link，布局系统随后只拆空壳，避免 destroy 直接烧掉最多 800 能量。
+  drainSurplusControllerLinks(snapshot);
+  const surplusIds = new Set(
+    findSurplusControllerLinks(snapshot, resolveLinkRoleRanges(CONFIG.economy.link)),
+  );
+  const infos: LinkInfo[] = links
+    .filter(l => !surplusIds.has(l.id))
+    .map(l => ({
+      id: l.id,
+      energy: l.store.getUsedCapacity(RESOURCE_ENERGY),
+      energyCapacity: l.store.getCapacity(RESOURCE_ENERGY),
+      cooldown: l.cooldown,
+      role: classifyLink(l, snapshot),
+    }));
 
   // 死资产检测：每 tick 更新 deadAssetSince 计时器。
   updateDeadAssetTracking(infos, tick);
@@ -83,9 +93,15 @@ function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
         ),
       )
     : undefined;
+  const spawnInfo = infos.find(i => i.role === "spawn");
+  const spawnTargetEnergy =
+    spawnInfo && snapshot.energyAvailable < snapshot.energyCapacityAvailable
+      ? spawnInfo.energyCapacity
+      : 0;
   const transfers = planLinkTransfers(infos, {
     minTransfer: CONFIG.economy.link.minTransfer,
     controllerTargetEnergy,
+    spawnTargetEnergy,
     storageSinkMinFree: CONFIG.economy.link.storageSinkMinFree,
   });
   for (const t of transfers) {
@@ -93,6 +109,53 @@ function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
     const to = linkMap.get(t.toId);
     if (!from || !to) continue;
     from.transferEnergy(to, t.amount);
+  }
+}
+
+/** 排空多余 controller link；保留距 controller 最近的一条作为升级入口。 */
+function drainSurplusControllerLinks(snapshot: RoomSnapshot): void {
+  const controller = snapshot.controller;
+  if (!controller) return;
+  const ranges = resolveLinkRoleRanges(CONFIG.economy.link);
+  const sourcePoints = snapshot.sources.map(s => s.pos);
+  const spawnPoints = snapshot.spawns.map(s => s.pos);
+  const controllers = snapshot.links
+    .filter(
+      l =>
+        classifyLinkRole(
+          l.pos,
+          sourcePoints,
+          controller.pos,
+          snapshot.storage?.pos,
+          ranges,
+          spawnPoints,
+        ) === "controller",
+    )
+    .sort(
+      (a, b) =>
+        a.pos.getRangeTo(controller.pos) - b.pos.getRangeTo(controller.pos) ||
+        a.id.localeCompare(b.id),
+    );
+  if (controllers.length <= 1) return;
+  const primary = controllers[0];
+  if (!primary) return;
+  const storageLink = findStorageLink(snapshot);
+  for (const extra of controllers.slice(1)) {
+    if (extra.cooldown > 0 || extra.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) continue;
+    const primaryFree = primary.store.getFreeCapacity(RESOURCE_ENERGY);
+    const storageFree = storageLink?.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0;
+    const target =
+      primaryFree > 0
+        ? primary
+        : storageFree >= CONFIG.economy.link.storageSinkMinFree
+          ? storageLink
+          : undefined;
+    if (!target) continue;
+    const amount = Math.min(
+      extra.store.getUsedCapacity(RESOURCE_ENERGY),
+      target.store.getFreeCapacity(RESOURCE_ENERGY),
+    );
+    if (amount > 0) extra.transferEnergy(target, amount);
   }
 }
 
@@ -265,7 +328,7 @@ export function clearDismantlePlan(deadLinkId: string): void {
 // transitionDismantlePlan and isRoomInDefense are re-exported from domain/layout/dismantle
 
 /**
- * 根据可与 source/controller/storage 的距离分类（委托纯函数 classifyLinkRole）。
+ * 根据可与 source/controller/storage/spawn 的距离分类（委托纯函数 classifyLinkRole）。
 
  * 采用「最近锚获胜」而非旧的「source 固定最高优先级」：后者会把紧邻 controller/storage、
  * 却恰好落在某 source range≤2 内的 link 误判为 source（优先级劫持），令 controller/storage
@@ -282,5 +345,6 @@ function classifyLink(link: StructureLink, snapshot: RoomSnapshot): LinkRole {
     snapshot.controller?.pos,
     snapshot.storage?.pos,
     resolveLinkRoleRanges(CONFIG.economy.link),
+    snapshot.spawns.map(s => s.pos),
   );
 }

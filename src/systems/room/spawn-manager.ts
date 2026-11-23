@@ -21,6 +21,7 @@ import {
 import {
   classifyLinkRole,
   findStorageLink,
+  hasLinkKeeperAtPost,
   resolveLinkRoleRanges,
 } from "../../domain/economy/links";
 import { energyReserveFor } from "../../domain/spawn/reserve";
@@ -127,19 +128,27 @@ export function computeUpgradeFeedCap(
   const sourcePoints = snapshot.sources.map(s => s.pos);
   const hasSourceLink = snapshot.links.some(
     l =>
-      classifyLinkRole(l.pos, sourcePoints, ctrl.pos, snapshot.storage!.pos, ranges) === "source",
+      classifyLinkRole(
+        l.pos,
+        sourcePoints,
+        ctrl.pos,
+        snapshot.storage!.pos,
+        ranges,
+        snapshot.spawns.map(s => s.pos),
+      ) === "source",
   );
   const externalSupply =
     hasSourceLink && ctrlLink !== undefined
       ? snapshot.sources.length * CONFIG.economy.harvestWorkingParts * 2
       : 0;
   const distributorCount = creeps.filter(c => c.role === "distributor").length;
+  const hasStorageKeeper = hasLinkKeeperAtPost(snapshot, creeps, "storage");
 
   return estimateUpgradeFeed({
     linkDeliveredRate: linkDelivered,
     externalSupplyPerTick: externalSupply,
     distributorCount,
-    feederCarrierCount: feederCarriers,
+    feederCarrierCount: hasStorageKeeper ? 0 : feederCarriers,
     carry,
     creepRoundTripTicks: creepRoundTrip,
   });
@@ -983,6 +992,10 @@ function collectCreepSummaries(): CreepSummary[] {
         bodyLength: creep.body.length,
         sourceId: creep.memory.sourceId,
         spawnIndex: creep.memory.spawnIndex,
+        roomName: creep.room.name,
+        x: creep.pos?.x,
+        y: creep.pos?.y,
+        linkKeeperPost: creep.memory.linkKeeperPost,
         recycle: creep.memory.recycle === true,
       });
     }
@@ -998,6 +1011,10 @@ function collectCreepSummaries(): CreepSummary[] {
       bodyLength: r.bodyLength,
       sourceId: r.sourceId,
       spawnIndex: r.spawnIndex,
+      roomName: r.roomName,
+      x: r.x,
+      y: r.y,
+      linkKeeperPost: r.linkKeeperPost,
       recycle: r.recycle,
     }));
 }
@@ -1017,6 +1034,7 @@ function collectSpawningSummaries(): SpawningSummary[] {
         name: spawning.name,
         role: mem.role ?? "unknown",
         home: mem.home ?? spawn.room.name,
+        linkKeeperPost: mem.linkKeeperPost,
       });
       continue;
     }
@@ -1032,6 +1050,8 @@ function collectSpawningSummaries(): SpawningSummary[] {
       name: spawning.name,
       role: parts[0] || "unknown",
       home: parts[1] || spawn.room.name,
+      linkKeeperPost:
+        parts[0] === "linkKeeper" ? (parts[2] === "1" ? "spawn" : "storage") : undefined,
     });
   }
   return result;

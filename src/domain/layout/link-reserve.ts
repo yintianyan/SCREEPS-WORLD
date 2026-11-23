@@ -1,6 +1,11 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { packPos } from "./types";
-import { classifyLinkRole, DEFAULT_LINK_ROLE_RANGES, type LinkRoleRanges } from "../economy/links";
+import {
+  classifyLinkRole,
+  DEFAULT_LINK_ROLE_RANGES,
+  findLinkKeeperStand,
+  type LinkRoleRanges,
+} from "../economy/links";
 import { auditLinkRoleGaps } from "./gaps";
 
 /**
@@ -12,8 +17,8 @@ import { auditLinkRoleGaps } from "./gaps";
  * 不可满足缺口，并把规划器钉在 gap-force 慢速重试上。
  *
  * 本模块的做法不是「按模板锁死一批格子」，而是**按放置侧当前的选择结果**预留：
- * 对每条未满足的 link 角色需求，用与 `createStorageLinkTask` / `createControllerLinkTask`
- * / `createSourceLinkTasks` 完全相同的几何口径（同一 `LinkRoleRanges`、同一角色分类函数）
+ * 对每条未满足的 link 角色需求，用与 `createStorageLinkTask` / `createControllerLinkTask` /
+ * `createSourceLinkTasks` / `createSpawnLinkTask` 完全相同的几何口径（同一 `LinkRoleRanges`、同一角色分类函数）
  * 找出它今天会挑中的那一格，只把那一格从道路候选里摘掉。
  * 于是三条性质天然成立：
  * 1. **需求满足即释放** —— link 建好或已在队列里 ⇒ `auditLinkRoleGaps` 该项归零 ⇒ 预留集为空，
@@ -52,6 +57,7 @@ export function computeLinkReserveCells(input: LinkReserveInput): Set<number> {
 
   const gaps = auditLinkRoleGaps(snapshot, queue, ranges);
   const sources = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+  const spawnPoints = snapshot.spawns.map(s => ({ x: s.pos.x, y: s.pos.y }));
   const controllerPoint = snapshot.controller
     ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
     : undefined;
@@ -61,18 +67,23 @@ export function computeLinkReserveCells(input: LinkReserveInput): Set<number> {
 
   // 需求 → 锚点列表：storage/controller 各一枚单例；source 每个 source 一枚
   // （放置侧就是按 source 逐条生成的）。
-  const demands: { role: "storage" | "controller" | "source"; anchors: Point[]; count: number }[] =
-    [
-      { role: "storage", anchors: storagePoint ? [storagePoint] : [], count: gaps.storage },
-      {
-        role: "controller",
-        anchors: controllerPoint ? [controllerPoint] : [],
-        count: gaps.controller,
-      },
-      { role: "source", anchors: sources, count: gaps.source },
-    ];
+  const demands: {
+    role: "storage" | "controller" | "source" | "spawn";
+    anchors: Point[];
+    count: number;
+  }[] = [
+    { role: "storage", anchors: storagePoint ? [storagePoint] : [], count: gaps.storage },
+    {
+      role: "controller",
+      anchors: controllerPoint ? [controllerPoint] : [],
+      count: gaps.controller,
+    },
+    { role: "source", anchors: sources, count: gaps.source },
+    { role: "spawn", anchors: spawnPoints.slice(0, 1), count: gaps.spawn },
+  ];
 
-  const roleAt = (p: Point) => classifyLinkRole(p, sources, controllerPoint, storagePoint, ranges);
+  const roleAt = (p: Point) =>
+    classifyLinkRole(p, sources, controllerPoint, storagePoint, ranges, spawnPoints);
 
   for (const demand of demands) {
     let remaining = demand.count;
@@ -96,10 +107,19 @@ export function computeLinkReserveCells(input: LinkReserveInput): Set<number> {
           candidates.push({ x, y });
         }
       }
-      // 与放置侧一致：离锚点越近越优先。
+      // 与放置侧一致：离锚点越近越优先。storage/spawn 还必须满足 keeper 服务格，
+      // 否则预留了一个放置侧必然拒绝的候选，只会白挡道路。
       candidates.sort((a, b) => cheb(a, anchor) - cheb(b, anchor));
-      if (candidates.length === 0) continue;
-      reserved.add(packPos(candidates[0]!.x, candidates[0]!.y));
+      const viable =
+        demand.role === "storage" || demand.role === "spawn"
+          ? candidates.filter(c =>
+              findLinkKeeperStand(snapshot, { pos: c }, { pos: anchor }, (x, y) =>
+                terrain.get(x, y),
+              ),
+            )
+          : candidates;
+      if (viable.length === 0) continue;
+      reserved.add(packPos(viable[0]!.x, viable[0]!.y));
       remaining--;
     }
   }

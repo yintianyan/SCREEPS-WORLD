@@ -7,6 +7,7 @@ import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
 import { mineralMinerRole } from "./creeps/roles/mineral-miner";
 import { labTenderRole } from "./creeps/roles/lab-tender";
+import { linkKeeperRole } from "./creeps/roles/link-keeper";
 import { attackerRole } from "./creeps/roles/attacker";
 import { rangedAttackerRole } from "./creeps/roles/ranged-attacker";
 import { dismantlerRole } from "./creeps/roles/dismantler";
@@ -211,6 +212,8 @@ export const registry = new Registry()
   // P1：harvester/hauler（能量链）
   .registerRole(harvesterRole)
   .registerRole(haulerRole)
+  // P1：Link Keeper（storage/spawn Link 固定双向转运）
+  .registerRole(linkKeeperRole)
   // P1：distributor（storage→sink，RCL4+）
   .registerRole(distributorRole)
   // P1：远矿角色（采集 + 穿梭搬运）

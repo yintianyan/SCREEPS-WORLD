@@ -256,6 +256,7 @@ describe("v3 合约 — storage 漂移时的动态 storage-link（W38S56 回归�
       spawns: [],
       extensions: [],
       towers: [],
+      labs: [],
       sources: [],
       controller: undefined,
       minerals: [],

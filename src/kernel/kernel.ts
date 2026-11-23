@@ -454,6 +454,10 @@ export class Kernel {
           remoteTarget: creep.memory.remoteTarget,
           mode: typeof mem.mode === "string" ? mem.mode : undefined,
           mission: typeof mem.mission === "string" ? mem.mission : undefined,
+          linkKeeperPost:
+            mem.linkKeeperPost === "storage" || mem.linkKeeperPost === "spawn"
+              ? mem.linkKeeperPost
+              : undefined,
           assignment: a
             ? {
                 id: a.id as string,

@@ -21,7 +21,9 @@ import { energyReserveFor } from "../../domain/spawn/reserve";
 import type { FlowLinkNode, FlowSinkDemand, RoomFlowPlan } from "../../domain/logistics/flow-types";
 import {
   classifyLinkRole,
+  findSpawnLink,
   findStorageLink,
+  hasLinkKeeperAtPost,
   resolveLinkRoleRanges,
 } from "../../domain/economy/links";
 
@@ -71,6 +73,9 @@ export const flowPlannerSystem: System = {
       const storage = snapshot.storage;
       const distributorCount = liveDistributorCount(refs, roomName);
       if (distributorCount <= 0) continue;
+      const hasStorageKeeper = hasLinkKeeperAtPost(snapshot, refs, "storage");
+      const hasSpawnKeeper = hasLinkKeeperAtPost(snapshot, refs, "spawn");
+      const spawnLink = findSpawnLink(snapshot);
 
       // 低储回血期不喂升级车道 —— upgrader 已被角色闸停，继续往 controller
       // link/container 灌能只会把 storage 抽成 link 里的死库存。降级风险豁免。
@@ -106,7 +111,7 @@ export const flowPlannerSystem: System = {
         horizonTicks: 60,
       });
       // 低于 5 e/t 的涓流不值得占一只承运人；等缺口变大再补。
-      if (coreRate >= 5) {
+      if (coreRate >= 5 && !(spawnLink && hasSpawnKeeper)) {
         sinks.push({
           groupId: "core",
           lane: "core",
@@ -140,13 +145,23 @@ export const flowPlannerSystem: System = {
         const demand = computeUpgradeDemand(workParts, workParts, linkTargetCapacity);
         const creepRoundTrip = 2 * CHEB(storage.pos, station.pos) + 4;
         const feederRoundTrip =
-          storageLink !== undefined ? 2 * CHEB(storage.pos, storageLink.pos) + 4 : undefined;
+          storageLink !== undefined && !hasStorageKeeper
+            ? 2 * CHEB(storage.pos, storageLink.pos) + 4
+            : undefined;
 
         // source link 直供 controller：存在 source link 时，按 2×source 的采集量估算。
         const ranges = resolveLinkRoleRanges(CONFIG.economy.link);
         const sourcePoints = snapshot.sources.map(s => s.pos);
         const hasSourceLink = snapshot.links.some(
-          l => classifyLinkRole(l.pos, sourcePoints, ctrl.pos, storage.pos, ranges) === "source",
+          l =>
+            classifyLinkRole(
+              l.pos,
+              sourcePoints,
+              ctrl.pos,
+              storage.pos,
+              ranges,
+              snapshot.spawns.map(s => s.pos),
+            ) === "source",
         );
         const externalSupply =
           storageLink !== undefined && ctrlLink !== undefined && hasSourceLink

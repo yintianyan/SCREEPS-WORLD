@@ -834,6 +834,8 @@ export interface CreepRef {
   mode?: string;
   /** memory.mission — 任务标记（powerBank/powerCollect）；lab-system 给 PB healer 抬 lab 优先级。 */
   mission?: string;
+  /** memory.linkKeeperPost — 固定 Link 岗位，供旧物流角色让位。 */
+  linkKeeperPost?: "storage" | "spawn";
   assignment?: {
     id: string;
     kind: string;

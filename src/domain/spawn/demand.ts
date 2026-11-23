@@ -4,7 +4,12 @@ import { degradeBody, minimalBodyFor, RECOVERY_BODY, selectBody } from "../../co
 import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, hasRequest, spawnKey, buildSpawnRequest } from "./queue";
-import { classifyLinkRole, findStorageLink } from "../economy/links";
+import {
+  classifyLinkRole,
+  findLinkKeeperStand,
+  findSpawnLink,
+  findStorageLink,
+} from "../economy/links";
 import {
   upgradeBrakeAllows,
   upgradeBrakeFloor,
@@ -16,6 +21,7 @@ import { demandElasticity, logisticsElasticity } from "../economy/energy-price";
 export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>> = {
   hauler: ["carry", "move"],
   distributor: ["carry", "move"],
+  linkKeeper: ["carry", "move"],
   remoteHarvester: ["work", "carry", "move"],
   remoteHauler: ["carry", "move"],
   reserver: ["claim", "move"],
@@ -33,6 +39,12 @@ export interface CreepSummary {
   bodyLength: number;
   sourceId?: Id<Source>;
   spawnIndex?: number;
+  /** 当前位置（共享快照总线）；keeper 让位判据要求已实际到岗。 */
+  roomName?: string;
+  x?: number;
+  y?: number;
+  /** linkKeeper 固定岗位；同角色可按 storage/spawn 各一只。 */
+  linkKeeperPost?: "storage" | "spawn";
   /** 是否已标记为待回收（上一 tick 或更早被 recyclePass 标记）。 */
   recycle?: boolean;
 }
@@ -42,6 +54,7 @@ export interface SpawningSummary {
   name: string;
   role: string;
   home: string;
+  linkKeeperPost?: "storage" | "spawn";
 }
 
 /** 房间经济上下文 — 适配层从 Memory/Game 收集的标志位，供纯函数消费。 */
@@ -607,6 +620,7 @@ export function evaluateDemand(
             snapshot.controller?.pos,
             snapshot.storage?.pos,
             CONFIG.economy.link.anchorRange,
+            snapshot.spawns.map(p => p.pos),
           ) === "source",
       );
       if (hasLink) sourceWithLink.add(s.id);
@@ -741,6 +755,64 @@ export function evaluateDemand(
         );
       }
     }
+  }
+
+  // P1：Link Keeper — storage/spawn Link 的固定双向转运。几何不合格时不孵，
+  // hauler/distributor 继续走原回退；同岗位只保留一只，临死提前补位。
+  const keeperPosts: {
+    post: "storage" | "spawn";
+    index: number;
+    link: StructureLink | undefined;
+    anchor: { pos: RoomPosition } | undefined;
+  }[] = [
+    {
+      post: "storage",
+      index: 0,
+      link: findStorageLink(snapshot),
+      anchor: snapshot.storage,
+    },
+    {
+      post: "spawn",
+      index: 1,
+      link: findSpawnLink(snapshot),
+      anchor: snapshot.spawns[0],
+    },
+  ];
+  for (const job of keeperPosts) {
+    if (!job.link || !job.anchor || job.link.pos.getRangeTo(job.anchor.pos) > 2) continue;
+    if (!findLinkKeeperStand(snapshot, job.link, job.anchor)) continue;
+    if (job.post === "storage" && snapshot.rcl < 5) continue;
+    if (job.post === "spawn" && snapshot.rcl < 8) continue;
+    if (colonyState !== "normal" && colonyState !== "recovery") continue;
+    const healthy = creeps.filter(
+      c =>
+        c.role === "linkKeeper" &&
+        c.linkKeeperPost === job.post &&
+        (c.ticksToLive ?? 0) >= CONFIG.spawn.upgraderReplaceHorizon,
+    ).length;
+    const hatching = spawning.filter(
+      s => s.role === "linkKeeper" && s.linkKeeperPost === job.post,
+    ).length;
+    const queued = queue.filter(
+      r => r.role === "linkKeeper" && r.memory.linkKeeperPost === job.post,
+    ).length;
+    if (healthy + hatching + queued > 0) continue;
+    const key = spawnKey("linkKeeper", home, job.index);
+    if (hasRequest(queue, key)) continue;
+    const request = createRequest(
+      "linkKeeper",
+      home,
+      job.index,
+      key,
+      1,
+      energyCapacity,
+      roomCtx.energyAvailable,
+      colonyState,
+      snapshot.rcl,
+      tick,
+    );
+    request.memory.linkKeeperPost = job.post;
+    requests.push(request);
   }
 
   // P1：Distributor — 仅在有 storage 时创建（RCL4+）：storage→sink 分发

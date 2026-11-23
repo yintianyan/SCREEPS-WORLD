@@ -74,12 +74,12 @@ describe("empire-strategy — 容量发布", () => {
     (globalThis as any).Memory.kernel = {};
     (globalThis as any).Memory.kernel.stats = {
       cpuAvg10: 14, // 偏高读数 → tight
-      cpuMax10: 15,
+      cpuMax10: 13.2,
       cpuRate: {
         windowTicks: 420,
         sampledTicks: 420,
         unsampledTicks: 0,
-        total: 10.56,
+        total: 8.56,
         // 新鲜度：这份读数假定是「本拍刚采的」，缺 at 会被选择器当旧窗口拒绝。
         at: (globalThis as any).Game.time,
       }, // 真值 → comfortable
@@ -94,6 +94,55 @@ describe("empire-strategy — 容量发布", () => {
     empireStrategySystem.run(makeContext(snap));
 
     expect((globalThis as any).Memory.kernel.capacity?.tier).toBe("comfortable");
+  });
+
+  it("P95 越线时峰值压过均值：均值 comfortable 但容量保持 tight", () => {
+    (globalThis as any).Memory.kernel = {};
+    (globalThis as any).Memory.kernel.stats = {
+      cpuAvg10: 8,
+      cpuMax10: 12,
+      cpuP95Window: 15,
+      cpuPeakSamples: 300,
+      cpuPeakSpanTicks: 2990,
+    };
+    (globalThis as any).Game.cpu = {
+      limit: 20,
+      tickLimit: 500,
+      bucket: 10000,
+      getUsed: () => 0,
+    };
+    const snap = setupRoom({ hostileAgo: 99999 });
+    empireStrategySystem.run(makeContext(snap));
+
+    const cap = (globalThis as any).Memory.kernel.capacity;
+    expect(cap.tier).toBe("tight");
+    expect(cap.limitedBy).toBe("peak");
+    expect(cap.inputs.cpuP95).toBe(15);
+    expect(cap.peakHeadroom).toBeCloseTo(0.25);
+  });
+
+  it("P95 样本不足时退回 cpuMax10，不把短窗当稳定峰值", () => {
+    (globalThis as any).Memory.kernel = {};
+    (globalThis as any).Memory.kernel.stats = {
+      cpuAvg10: 8,
+      cpuMax10: 12,
+      cpuP95Window: 19,
+      cpuPeakSamples: CONFIG.capacity.peakMinSamples - 1,
+      cpuPeakSpanTicks: 280,
+    };
+    (globalThis as any).Game.cpu = {
+      limit: 20,
+      tickLimit: 500,
+      bucket: 10000,
+      getUsed: () => 0,
+    };
+    const snap = setupRoom({ hostileAgo: 99999 });
+    empireStrategySystem.run(makeContext(snap));
+
+    const cap = (globalThis as any).Memory.kernel.capacity;
+    expect(cap.tier).toBe("comfortable");
+    expect(cap.inputs.cpuP95).toBeUndefined();
+    expect(cap.inputs.cpuMax10).toBe(12);
   });
 
   it("有效上限取 min(cpuLimit, tickLimit)", () => {

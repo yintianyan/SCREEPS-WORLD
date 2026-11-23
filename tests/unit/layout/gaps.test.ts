@@ -4,6 +4,7 @@ import {
   auditStructureGaps,
   auditLinkRoleGaps,
   expectedLinkRoleCounts,
+  findSurplusControllerLinks,
   mergeLinkRoleGaps,
 } from "../../../src/domain/layout/gaps";
 import {
@@ -18,6 +19,7 @@ import {
   mockConstructionSite,
   mockSource,
   mockController,
+  mockPos,
 } from "../../support/factories";
 
 /** constraint-placer 负责放置的类型（与模块内 CONSTRAint_PLACED_TYPES 对齐）。 */
@@ -234,31 +236,83 @@ describe("expectedLinkRoleCounts — MVC link 角色期望表", () => {
   it("RCL<5：全 0（link 未解锁）", () => {
     for (let rcl = 0; rcl < 5; rcl++) {
       const e = expectedLinkRoleCounts(rcl, 2);
-      expect(e).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+      expect(e).toEqual({ source: 0, controller: 0, storage: 0, spawn: 0, hub: 0 });
     }
   });
 
   it("RCL5 双 source：source=1, controller=1, storage=0, hub=0", () => {
-    expect(expectedLinkRoleCounts(5, 2)).toEqual({ source: 1, controller: 1, storage: 0, hub: 0 });
+    expect(expectedLinkRoleCounts(5, 2)).toEqual({
+      source: 1,
+      controller: 1,
+      storage: 0,
+      spawn: 0,
+      hub: 0,
+    });
   });
 
   it("RCL6 双 source：+storage=1", () => {
-    expect(expectedLinkRoleCounts(6, 2)).toEqual({ source: 1, controller: 1, storage: 1, hub: 0 });
+    expect(expectedLinkRoleCounts(6, 2)).toEqual({
+      source: 1,
+      controller: 1,
+      storage: 1,
+      spawn: 0,
+      hub: 0,
+    });
   });
 
   it("RCL8 双 source：source=2，hub 恒 0（剩余槽位不是缺口）", () => {
     // 旧表在此处要求 hub=2；W37S58 实证该要求不可满足且有害——见 gaps.ts 注释。
-    expect(expectedLinkRoleCounts(8, 2)).toEqual({ source: 2, controller: 1, storage: 1, hub: 0 });
+    expect(expectedLinkRoleCounts(8, 2)).toEqual({
+      source: 2,
+      controller: 1,
+      storage: 1,
+      spawn: 0,
+      hub: 0,
+    });
   });
 
   it("RCL8 单 source：source 期望受 min(2, sources) 约束 → 1", () => {
-    expect(expectedLinkRoleCounts(8, 1)).toEqual({ source: 1, controller: 1, storage: 1, hub: 0 });
+    expect(expectedLinkRoleCounts(8, 1)).toEqual({
+      source: 1,
+      controller: 1,
+      storage: 1,
+      spawn: 0,
+      hub: 0,
+    });
+  });
+
+  it("RCL8 有 spawn 时额外期望一个 spawn Link；RCL7 不期望", () => {
+    expect(expectedLinkRoleCounts(8, 2, 3).spawn).toBe(1);
+    expect(expectedLinkRoleCounts(7, 2, 3).spawn).toBe(0);
   });
 
   it("任意 RCL 都不期望 hub 角色（无创建器也无消费者，故不得进期望表）", () => {
     for (let rcl = 5; rcl <= 8; rcl++) {
       expect(expectedLinkRoleCounts(rcl, 2).hub).toBe(0);
     }
+  });
+});
+
+describe("findSurplusControllerLinks — 冗余 controller Link 回收", () => {
+  it("保留距 controller 最近的一条，其余按距离/id 稳定返回", () => {
+    const controller = mockController({ level: 8 });
+    controller.pos = mockPos(20, 20);
+    const storage = mockStructure("storage", { id: "st" });
+    storage.pos = mockPos(35, 35);
+    const links = [
+      Object.assign(mockStructure("link", { id: "far" }), { pos: mockPos(22, 22) }),
+      Object.assign(mockStructure("link", { id: "keep" }), { pos: mockPos(21, 20) }),
+      Object.assign(mockStructure("link", { id: "near" }), { pos: mockPos(21, 21) }),
+    ];
+    const snap = mockSnapshot({
+      rcl: 8,
+      controller,
+      storage,
+      sources: [mockSource("s1")],
+      spawns: [],
+      links,
+    });
+    expect(findSurplusControllerLinks(snap)).toEqual(["near", "far"]);
   });
 });
 
@@ -292,7 +346,7 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
   it("空房 RCL5：source=1, controller=1 缺口（无任何 link）", () => {
     const snap = snapshotWithAnchors(5, []);
     const gaps = auditLinkRoleGaps(snap, []);
-    expect(gaps).toEqual({ source: 1, controller: 1, storage: 0, hub: 0 });
+    expect(gaps).toEqual({ source: 1, controller: 1, storage: 0, spawn: 0, hub: 0 });
   });
 
   it("W3N7 死资产场景：RCL5 有 2 source link，controller link 缺失 → controller 缺口 1", () => {
@@ -303,7 +357,7 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     const gaps = auditLinkRoleGaps(snap, []);
     // source 期望 1，已有 2 → max(0, 1-2)=0（不报负数）
     // controller 期望 1，已有 0 → 缺口 1（暴露真实需求）
-    expect(gaps).toEqual({ source: 0, controller: 1, storage: 0, hub: 0 });
+    expect(gaps).toEqual({ source: 0, controller: 1, storage: 0, spawn: 0, hub: 0 });
   });
 
   it("RCL5 完美配置：1 source + 1 controller → 全 0 缺口", () => {
@@ -311,7 +365,7 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     const ctrlLink = linkAt(20, 21, "link_ctrl");
     const snap = snapshotWithAnchors(5, [srcLink, ctrlLink]);
     const gaps = auditLinkRoleGaps(snap, []);
-    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, spawn: 0, hub: 0 });
   });
 
   it("RCL6 缺 storage link → storage 缺口 1", () => {
@@ -319,7 +373,7 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     const ctrlLink = linkAt(20, 21, "link_ctrl");
     const snap = snapshotWithAnchors(6, [srcLink, ctrlLink]);
     const gaps = auditLinkRoleGaps(snap, []);
-    expect(gaps).toEqual({ source: 0, controller: 0, storage: 1, hub: 0 });
+    expect(gaps).toEqual({ source: 0, controller: 0, storage: 1, spawn: 0, hub: 0 });
   });
 
   it("W8N3 现场：4 link 坐标分类正确 ⇒ 全部缺口为 0（linkStorage 误报回归）", () => {
@@ -346,8 +400,8 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
       ] as any,
     });
     // 与生产调用同一组半径：source/controller=2、storage=3。
-    const gaps = auditLinkRoleGaps(snap, [], { source: 2, controller: 2, storage: 3 });
-    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+    const gaps = auditLinkRoleGaps(snap, [], { source: 2, controller: 2, storage: 3, spawn: 2 });
+    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, spawn: 0, hub: 0 });
   });
 
   it("队列中 queued link 任务计入 have（按 pos 几何分类）", () => {
@@ -367,7 +421,7 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     ];
     const gaps = auditLinkRoleGaps(snap, queue);
     // controller 缺口已由 queued 任务闭合 → 0
-    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, spawn: 0, hub: 0 });
   });
 
   it("队列中 done/site 状态任务不计入（避免双计，与 auditStructureGaps 同口径）", () => {
@@ -421,7 +475,7 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     ];
     const snap = snapshotWithAnchors(8, links);
     const roleGaps = auditLinkRoleGaps(snap, []);
-    expect(roleGaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+    expect(roleGaps).toEqual({ source: 0, controller: 0, storage: 0, spawn: 0, hub: 0 });
     // 这条是 shouldPlan 实际消费的形态：auditStructureGaps 的期望表不含 link
     // （constraint-placer 排除 link），merge 后必须得到空字典。
     const gaps: Record<string, number> = {};
@@ -433,26 +487,26 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
 describe("mergeLinkRoleGaps — 合并角色缺口到 StructureGaps", () => {
   it("角色缺口全 0：保持 STRUCTURE_LINK 总缺口不变", () => {
     const gaps: Record<string, number> = { [STRUCTURE_LINK]: 1 };
-    mergeLinkRoleGaps(gaps, { source: 0, controller: 0, storage: 0, hub: 0 });
+    mergeLinkRoleGaps(gaps, { source: 0, controller: 0, storage: 0, spawn: 0, hub: 0 });
     expect(gaps).toEqual({ [STRUCTURE_LINK]: 1 });
   });
 
   it("角色缺口存在：删除 STRUCTURE_LINK 总缺口，加入 linkXxx key（避免双重计数）", () => {
     const gaps: Record<string, number> = { [STRUCTURE_LINK]: 1 };
-    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, hub: 0 });
+    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, spawn: 0, hub: 0 });
     expect(gaps[STRUCTURE_LINK]).toBeUndefined();
     expect(gaps.linkController).toBe(1);
   });
 
   it("死资产场景：gaps 空字典 + controller 缺口 → 暴露 linkController", () => {
     const gaps: Record<string, number> = {};
-    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, hub: 0 });
+    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, spawn: 0, hub: 0 });
     expect(gaps).toEqual({ linkController: 1 });
   });
 
   it("多角色缺口同时存在：全部收录", () => {
     const gaps: Record<string, number> = { [STRUCTURE_LINK]: 2 };
-    mergeLinkRoleGaps(gaps, { source: 1, controller: 1, storage: 0, hub: 0 });
+    mergeLinkRoleGaps(gaps, { source: 1, controller: 1, storage: 0, spawn: 0, hub: 0 });
     expect(gaps[STRUCTURE_LINK]).toBeUndefined();
     expect(gaps.linkSource).toBe(1);
     expect(gaps.linkController).toBe(1);
@@ -460,7 +514,7 @@ describe("mergeLinkRoleGaps — 合并角色缺口到 StructureGaps", () => {
 
   it("不收录 0 值角色缺口（缺口字典只收 >0）", () => {
     const gaps: Record<string, number> = {};
-    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, hub: 0 });
+    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, spawn: 0, hub: 0 });
     expect(gaps).not.toHaveProperty("linkSource");
     expect(gaps).not.toHaveProperty("linkStorage");
     expect(gaps).not.toHaveProperty("linkHub");

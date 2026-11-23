@@ -11,6 +11,7 @@ describe("linkHasOutlet — source link 出口判定", () => {
   it("非 source link 永远返回 true（不需要 outlet）", () => {
     expect(linkHasOutlet("controller", [])).toBe(true);
     expect(linkHasOutlet("storage", [])).toBe(true);
+    expect(linkHasOutlet("spawn", [])).toBe(true);
     expect(linkHasOutlet("hub", [])).toBe(true);
   });
 
@@ -30,6 +31,11 @@ describe("linkHasOutlet — source link 出口判定", () => {
 
   it("source link + storage link → 有 outlet", () => {
     const others = [makeLink("stor1", "storage")];
+    expect(linkHasOutlet("source", others)).toBe(true);
+  });
+
+  it("source link + spawn link → 有 outlet", () => {
+    const others = [makeLink("spawn1", "spawn")];
     expect(linkHasOutlet("source", others)).toBe(true);
   });
 

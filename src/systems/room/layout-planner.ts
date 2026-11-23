@@ -21,6 +21,7 @@ import {
   auditStructureGaps,
   auditLinkRoleGaps,
   auditLinkRoleSurplus,
+  findSurplusControllerLinks,
   mergeLinkRoleGaps,
   type StructureGaps,
 } from "../../domain/layout/gaps";
@@ -30,6 +31,7 @@ import {
   getDeadAssetLinks,
   markLinkConstrained,
   createDismantlePlan,
+  recordDismantleStart,
   isLinkConstrained,
 } from "./link-system";
 import {
@@ -443,7 +445,7 @@ function planStage1Core(
 
  * Link 槽位按 RCL 分级分配（2026-08-02 修订）：
  *   RCL5 source+controller（controller 优先于 storage，避免 storage 几何失败连累升级链）
- *   RCL6 +storage, RCL7 维持, RCL8 +source2+2hub
+ *   RCL6 +storage, RCL7 维持, RCL8 +source2+spawn（第六槽不设虚假 hub 需求）
  * 推进到 stage 3。
  */
 function planStage2Logistics(
@@ -527,6 +529,31 @@ function planStage2Logistics(
             `replacement at (${replacementTask.pos.x},${replacementTask.pos.y})`,
         );
       }
+    }
+  }
+
+  // RCL8 历史超配：controller 旁多余 Link 先由 link-system 排空，这里只拆空壳。
+  // 每房沿用 1000t 拆改冷却，一次一条，保留距 controller 最近的有效入口。
+  if (
+    snapshot.rcl >= 8 &&
+    !isRoomInDefense(Memory.rooms[snapshot.roomName]?.colonyState) &&
+    !isDismantleOnCooldownDomain(globalCache().lastDismantleTick, snapshot.roomName, ctx.tick)
+  ) {
+    const surplusIds = findSurplusControllerLinks(
+      snapshot,
+      resolveLinkRoleRanges(CONFIG.economy.link),
+    );
+    for (const id of surplusIds) {
+      const link = snapshot.links.find(l => l.id === id);
+      if (!link || link.store.getUsedCapacity(RESOURCE_ENERGY) > 0) continue;
+      if (link.destroy() === OK) {
+        recordDismantleStart(snapshot.roomName, ctx.tick);
+        log.info(
+          "layout-planner",
+          `[layout] removed surplus controller link ${id} in ${snapshot.roomName}`,
+        );
+      }
+      break;
     }
   }
 

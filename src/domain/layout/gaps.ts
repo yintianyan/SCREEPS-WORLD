@@ -11,6 +11,7 @@ export interface LinkRoleGaps {
   source: number;
   controller: number;
   storage: number;
+  spawn: number;
   hub: number;
 }
 
@@ -19,31 +20,29 @@ export interface LinkRoleGaps {
  * （min(MVC, sources.length)）：单 source 房不会因 MVC 表硬要
  * 2 个 source link 而虚报缺口。纯函数。
  *
- * hub 期望恒为 0（2026-10-02，W37S58 实证）：hub 不是"应有而未建"的结构，而是
- * 「未被 source/controller/storage 占用的剩余槽位」——把容量当缺口是不可满足的虚报：
- * 放置侧只有 source/controller/storage 三个创建器（planner.ts 的 planLogisticsStage），
- * 传输侧只路由这三个角色（links.ts planLinkTransfers：源=role"source"，目标=单只
- * controller/storage），role"hub" 既无创建器也无消费者。三只的排空通道各是：source link
- * 由 planLinkTransfers 本身发出传输、controller link 由 withdrawControllerLink/站桩
- * upgrader 取能、storage link 由 withdrawStorageLink（hauler）取能。真建出 hub link 的
- * 坏处是潜在而非现行：harvester 站桩在 source（range≤2）而 hub 定义就是离三个锚都 >2，
- * 碰不到；但 harvester 离岗移动时 dumpToNearbyLink（harvester.ts:36，只按距离+空位选目标）
- * 会把能量倒进一个传输拓扑永不排空的 link。旧表在 RCL8 硬要 hub=2，于是 6/6 槽位建满的核心房永远报
- * `linkHub:2`；该虚缺口经 shouldPlan 的 gap-force 把布局规划器永久钉在
- * GAP_RETRY_INTERVAL(500) 慢速重试（同二进制控制组：无缺口的幼房 nextPlanTick 仅 +79），
- * 真实新缺口要等 ~450 拍才被排产，且 layoutGaps 恒红会淹掉同通道的真信号。
- * 某角色建得比期望多（如 3 只 controller 角色 link）不由本表报缺口，
- * 那是放置侧/死资产检测的口径。
+ * hub 期望恒为 0：hub 不是"应有而未建"的结构，而是「未被 source/controller/storage/spawn
+ * 占用的剩余槽位」。放置侧只有这四个角色创建器，传输侧也只路由这些角色；role"hub" 既无
+ * 创建器也无消费者。source link 由 planLinkTransfers 发出，controller link 由站桩 upgrader
+ * 取能，storage/spawn link 由固定 keeper 排空。旧表在 RCL8 硬要 hub=2，会把 6/6 槽位建满的
+ * 核心房永久钉在 gap-force 慢速重试上，并淹掉同通道的真实缺口。RCL8 现在只额外期望一个
+ * spawn Link，第六个槽位保持未建。某角色建得比期望多（如 3 只 controller link）由超配审计
+ * 与受限拆除通道处理，不伪装成缺口。
  */
-export function expectedLinkRoleCounts(rcl: number, sourceCount: number): LinkRoleGaps {
-  if (rcl < 5) return { source: 0, controller: 0, storage: 0, hub: 0 };
+export function expectedLinkRoleCounts(
+  rcl: number,
+  sourceCount: number,
+  spawnCount = 0,
+): LinkRoleGaps {
+  if (rcl < 5) return { source: 0, controller: 0, storage: 0, spawn: 0, hub: 0 };
   const sourceExpected = rcl >= 8 ? Math.min(2, sourceCount) : Math.min(1, sourceCount);
   const controllerExpected = 1; // RCL5+ 恒为 1
   const storageExpected = rcl >= 6 ? 1 : 0;
+  const spawnExpected = rcl >= 8 && spawnCount > 0 ? 1 : 0;
   return {
     source: sourceExpected,
     controller: controllerExpected,
     storage: storageExpected,
+    spawn: spawnExpected,
     hub: 0,
   };
 }
@@ -92,11 +91,16 @@ export function auditLinkRoleGaps(
   queue: readonly BuildTask[],
   linkRoleRanges?: LinkRoleRanges,
 ): LinkRoleGaps {
-  const expected = expectedLinkRoleCounts(snapshot.rcl, snapshot.sources.length);
+  const expected = expectedLinkRoleCounts(
+    snapshot.rcl,
+    snapshot.sources.length,
+    snapshot.spawns.length,
+  );
   const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
 
   // 锚点坐标视图（classifyLinkRole 接受纯坐标，不依赖 RoomPosition）。
   const sourcePoints = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+  const spawnPoints = snapshot.spawns.map(s => ({ x: s.pos.x, y: s.pos.y }));
   const controllerPoint = snapshot.controller
     ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
     : undefined;
@@ -104,9 +108,16 @@ export function auditLinkRoleGaps(
     ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y }
     : undefined;
 
-  const have: LinkRoleGaps = { source: 0, controller: 0, storage: 0, hub: 0 };
+  const have: LinkRoleGaps = { source: 0, controller: 0, storage: 0, spawn: 0, hub: 0 };
   const tally = (pos: { x: number; y: number }): void => {
-    const role = classifyLinkRole(pos, sourcePoints, controllerPoint, storagePoint, ranges);
+    const role = classifyLinkRole(
+      pos,
+      sourcePoints,
+      controllerPoint,
+      storagePoint,
+      ranges,
+      spawnPoints,
+    );
     have[role]++;
   };
 
@@ -121,6 +132,7 @@ export function auditLinkRoleGaps(
     source: Math.max(0, expected.source - have.source),
     controller: Math.max(0, expected.controller - have.controller),
     storage: Math.max(0, expected.storage - have.storage),
+    spawn: Math.max(0, expected.spawn - have.spawn),
     hub: Math.max(0, expected.hub - have.hub),
   };
 }
@@ -136,6 +148,7 @@ export function mergeLinkRoleGaps(gaps: StructureGaps, linkRoleGaps: LinkRoleGap
     linkRoleGaps.source > 0 ||
     linkRoleGaps.controller > 0 ||
     linkRoleGaps.storage > 0 ||
+    linkRoleGaps.spawn > 0 ||
     linkRoleGaps.hub > 0;
   if (!hasRoleGap) return;
 
@@ -144,6 +157,7 @@ export function mergeLinkRoleGaps(gaps: StructureGaps, linkRoleGaps: LinkRoleGap
   if (linkRoleGaps.source > 0) gaps.linkSource = linkRoleGaps.source;
   if (linkRoleGaps.controller > 0) gaps.linkController = linkRoleGaps.controller;
   if (linkRoleGaps.storage > 0) gaps.linkStorage = linkRoleGaps.storage;
+  if (linkRoleGaps.spawn > 0) gaps.linkSpawn = linkRoleGaps.spawn;
   if (linkRoleGaps.hub > 0) gaps.linkHub = linkRoleGaps.hub;
 }
 
@@ -153,7 +167,7 @@ export function mergeLinkRoleGaps(gaps: StructureGaps, linkRoleGaps: LinkRoleGap
  * 为什么需要它：`auditLinkRoleGaps` 只报缺口（`Math.max(0, expected - have)`），
  * 超配被截成 0 ⇒ "6 个名额建满、其中 3 只挤在 controller range≤2 内"这种现场形状
  * 在缺口账上完全隐形；摘掉虚期望之前，它还被误报成 `linkHub:2`。
- * 只统计**有创建器的角色**（source/controller/storage）——hub 不是需求（无常驻消费者）。
+ * 只统计**有创建器的角色**（source/controller/storage/spawn）——hub 不是需求（无常驻消费者）。
  *
  * ⚠️输出只供仪表（layoutMetrics.linkRoleSurplus）：**不得**并进 shouldPlan 消费的缺口字典，
  * 否则等于把刚拆掉的 gap-force 钉重新钉回去。
@@ -163,18 +177,30 @@ export function auditLinkRoleSurplus(
   queue: readonly BuildTask[],
   linkRoleRanges?: LinkRoleRanges,
 ): number {
-  const expected = expectedLinkRoleCounts(snapshot.rcl, snapshot.sources.length);
+  const expected = expectedLinkRoleCounts(
+    snapshot.rcl,
+    snapshot.sources.length,
+    snapshot.spawns.length,
+  );
   const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
   const sourcePoints = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+  const spawnPoints = snapshot.spawns.map(s => ({ x: s.pos.x, y: s.pos.y }));
   const controllerPoint = snapshot.controller
     ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
     : undefined;
   const storagePoint = snapshot.storage
     ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y }
     : undefined;
-  const have = { source: 0, controller: 0, storage: 0 };
+  const have = { source: 0, controller: 0, storage: 0, spawn: 0 };
   const tally = (pos: { x: number; y: number }): void => {
-    const role = classifyLinkRole(pos, sourcePoints, controllerPoint, storagePoint, ranges);
+    const role = classifyLinkRole(
+      pos,
+      sourcePoints,
+      controllerPoint,
+      storagePoint,
+      ranges,
+      spawnPoints,
+    );
     if (role in have) have[role as keyof typeof have]++;
   };
   for (const link of snapshot.links) tally({ x: link.pos.x, y: link.pos.y });
@@ -186,6 +212,37 @@ export function auditLinkRoleSurplus(
   return (
     Math.max(0, have.source - expected.source) +
     Math.max(0, have.controller - expected.controller) +
-    Math.max(0, have.storage - expected.storage)
+    Math.max(0, have.storage - expected.storage) +
+    Math.max(0, have.spawn - expected.spawn)
   );
+}
+
+/** 返回可拆的 controller Link 超配 id；保留距 controller 最近的一条。 */
+export function findSurplusControllerLinks(
+  snapshot: RoomSnapshot,
+  linkRoleRanges?: LinkRoleRanges,
+): string[] {
+  const controller = snapshot.controller;
+  if (!controller) return [];
+  const ranges = linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
+  const sourcePoints = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+  const spawnPoints = snapshot.spawns.map(s => ({ x: s.pos.x, y: s.pos.y }));
+  const controllers = snapshot.links
+    .filter(
+      l =>
+        classifyLinkRole(
+          l.pos,
+          sourcePoints,
+          controller.pos,
+          snapshot.storage?.pos,
+          ranges,
+          spawnPoints,
+        ) === "controller",
+    )
+    .sort(
+      (a, b) =>
+        a.pos.getRangeTo(controller.pos) - b.pos.getRangeTo(controller.pos) ||
+        a.id.localeCompare(b.id),
+    );
+  return controllers.slice(1).map(l => l.id);
 }

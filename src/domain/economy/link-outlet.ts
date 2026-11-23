@@ -7,5 +7,7 @@ import type { LinkInfo, LinkRole } from "./links";
  */
 export function linkHasOutlet(linkRole: LinkRole, otherLinks: readonly LinkInfo[]): boolean {
   if (linkRole !== "source") return true;
-  return otherLinks.some(l => l.role === "controller" || l.role === "storage");
+  return otherLinks.some(
+    l => l.role === "controller" || l.role === "storage" || l.role === "spawn",
+  );
 }
