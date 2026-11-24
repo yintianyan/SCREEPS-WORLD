@@ -44,27 +44,41 @@ export const linkSystem: System = {
   priority: 1 as Priority,
   run(ctx: TickContext): void {
     for (const snapshot of ctx.snapshots()) {
-      if (snapshot.links.length === 0) continue;
-      runRoomLinks(snapshot, ctx.tick);
+      const links = getLiveLinks(snapshot);
+      if (links.length === 0) continue;
+      runRoomLinks(snapshot, links, ctx.tick);
     }
   },
 };
+
+/** 快照里的 Link 可能在同拍被拆改；执行前按 id 重取，避免访问陈旧对象。 */
+export function getLiveLinks(snapshot: RoomSnapshot): StructureLink[] {
+  const live: StructureLink[] = [];
+  for (const candidate of snapshot.links) {
+    try {
+      const link = Game.getObjectById(candidate.id) as StructureLink | null;
+      if (link?.structureType === STRUCTURE_LINK && link.my) live.push(link);
+    } catch {
+      continue;
+    }
+  }
+  return live;
+}
 
 /**
  * 执行单房 link 传输：分类 → 死资产检测 → 规划 → 执行。
  * 死资产检测（2026-08-02）：三重校验（role=source + energy=0 + !linkHasOutlet）
  * 持续 500t → 死资产，id 暴露给 layout-planner 触发拆改规划（受限拆改通道）。
  */
-function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
-  const links = snapshot.links;
+function runRoomLinks(snapshot: RoomSnapshot, links: StructureLink[], tick: number): void {
   const linkMap = new Map<string, StructureLink>();
   for (const l of links) linkMap.set(l.id, l);
 
   // 多 controller link 是历史超配。先把多余 Link 的能量排进主 controller link 或
   // storage link，布局系统随后只拆空壳，避免 destroy 直接烧掉最多 800 能量。
-  drainSurplusControllerLinks(snapshot);
+  drainSurplusControllerLinks(snapshot, links);
   const surplusIds = new Set(
-    findSurplusControllerLinks(snapshot, resolveLinkRoleRanges(CONFIG.economy.link)),
+    findSurplusControllerLinks({ ...snapshot, links }, resolveLinkRoleRanges(CONFIG.economy.link)),
   );
   const infos: LinkInfo[] = links
     .filter(l => !surplusIds.has(l.id))
@@ -113,13 +127,13 @@ function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
 }
 
 /** 排空多余 controller link；保留距 controller 最近的一条作为升级入口。 */
-function drainSurplusControllerLinks(snapshot: RoomSnapshot): void {
+function drainSurplusControllerLinks(snapshot: RoomSnapshot, links: StructureLink[]): void {
   const controller = snapshot.controller;
   if (!controller) return;
   const ranges = resolveLinkRoleRanges(CONFIG.economy.link);
   const sourcePoints = snapshot.sources.map(s => s.pos);
   const spawnPoints = snapshot.spawns.map(s => s.pos);
-  const controllers = snapshot.links
+  const controllers = links
     .filter(
       l =>
         classifyLinkRole(
@@ -139,7 +153,7 @@ function drainSurplusControllerLinks(snapshot: RoomSnapshot): void {
   if (controllers.length <= 1) return;
   const primary = controllers[0];
   if (!primary) return;
-  const storageLink = findStorageLink(snapshot);
+  const storageLink = findStorageLink({ ...snapshot, links });
   for (const extra of controllers.slice(1)) {
     if (extra.cooldown > 0 || extra.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) continue;
     const primaryFree = primary.store.getFreeCapacity(RESOURCE_ENERGY);

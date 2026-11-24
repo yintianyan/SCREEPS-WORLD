@@ -29,6 +29,7 @@ import { computeLayoutMetrics } from "../../domain/layout/metrics";
 import { MINCUT_ALGO_VERSION } from "../../domain/layout/min-cut-defense";
 import {
   getDeadAssetLinks,
+  getLiveLinks,
   markLinkConstrained,
   createDismantlePlan,
   recordDismantleStart,
@@ -506,8 +507,10 @@ function planStage2Logistics(
       for (const deadLinkId of deadAssets) {
         if (existingPlans.has(deadLinkId)) continue;
         // 死资产 link 必须属于本房（跨房死资产由各自 layout-planner 处理）。
-        const deadLink = snapshot.links.find(l => l.id === deadLinkId);
-        if (!deadLink) continue;
+        if (!snapshot.links.some(l => l.id === deadLinkId)) continue;
+        const candidate = Game.getObjectById(deadLinkId) as StructureLink | null;
+        if (candidate?.structureType !== STRUCTURE_LINK || !candidate.my) continue;
+        const deadLink = candidate;
         // 在 queue 中找到紧邻同一 source 的 queued 状态替代任务。
         // 安全性：死资产 link 是已建成 structure，不会有对应 queued 任务；
         // 若替代任务已 done（建成）且灌能，死资产已被清除不会走到这里；
@@ -539,12 +542,13 @@ function planStage2Logistics(
     !isRoomInDefense(Memory.rooms[snapshot.roomName]?.colonyState) &&
     !isDismantleOnCooldownDomain(globalCache().lastDismantleTick, snapshot.roomName, ctx.tick)
   ) {
+    const liveLinks = getLiveLinks(snapshot);
     const surplusIds = findSurplusControllerLinks(
-      snapshot,
+      { ...snapshot, links: liveLinks },
       resolveLinkRoleRanges(CONFIG.economy.link),
     );
     for (const id of surplusIds) {
-      const link = snapshot.links.find(l => l.id === id);
+      const link = liveLinks.find(l => l.id === id);
       if (!link || link.store.getUsedCapacity(RESOURCE_ENERGY) > 0) continue;
       if (link.destroy() === OK) {
         recordDismantleStart(snapshot.roomName, ctx.tick);
