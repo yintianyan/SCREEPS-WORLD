@@ -12,6 +12,7 @@ import {
   classifyLinkRole,
   DEFAULT_LINK_ROLE_RANGES,
   findLinkKeeperStand,
+  findSpawnLinkAnchor,
   type LinkRole,
   type LinkRoleRanges,
 } from "../economy/links";
@@ -606,39 +607,45 @@ export function createSpawnLinkTask(
   queuedLinkCount = 0,
 ): BuildTaskCandidate | undefined {
   if (!shouldHaveSpawnLink(snapshot, queuedLinkCount, options.linkRoleRanges)) return undefined;
-  const spawn = snapshot.spawns[0];
-  if (!spawn) return undefined;
   const ranges = options.linkRoleRanges ?? DEFAULT_LINK_ROLE_RANGES;
-  const adjacentPos = findAdjacentBuildable(
-    spawn.pos,
-    room,
-    snapshot,
-    options,
-    linkRolePredicate(snapshot, "spawn", ranges),
-    ranges.spawn,
-  );
-  if (!adjacentPos) return undefined;
-  if (
-    options.obstacleSet &&
-    wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)
-  ) {
-    return undefined;
+  for (const spawn of snapshot.spawns) {
+    const adjacentPos = findAdjacentBuildable(
+      spawn.pos,
+      room,
+      snapshot,
+      options,
+      linkRolePredicate(snapshot, "spawn", ranges),
+      ranges.spawn,
+    );
+    if (!adjacentPos) continue;
+    if (
+      options.obstacleSet &&
+      wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)
+    ) {
+      continue;
+    }
+    if (
+      findSpawnLinkAnchor({ ...snapshot, links: [{ pos: adjacentPos }] }, ranges)?.anchor !== spawn
+    ) {
+      continue;
+    }
+    if (
+      !findLinkKeeperStand(snapshot, { pos: adjacentPos }, spawn, (x, y) =>
+        room.getTerrain().get(x, y),
+      )
+    ) {
+      continue;
+    }
+    return {
+      key: "logistics.link.spawn",
+      pos: adjacentPos,
+      structureType: STRUCTURE_LINK,
+      priority: 1,
+      phase: "rcl8",
+      validation: "ok",
+    };
   }
-  if (
-    !findLinkKeeperStand(snapshot, { pos: adjacentPos }, spawn, (x, y) =>
-      room.getTerrain().get(x, y),
-    )
-  ) {
-    return undefined;
-  }
-  return {
-    key: "logistics.link.spawn",
-    pos: adjacentPos,
-    structureType: STRUCTURE_LINK,
-    priority: 1,
-    phase: "rcl8",
-    validation: "ok",
-  };
+  return undefined;
 }
 
 /** 是否应有 spawn Link：RCL8、有 spawn、该角色尚无 Link 且槽位未满。 */

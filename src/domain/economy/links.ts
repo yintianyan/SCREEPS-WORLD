@@ -436,6 +436,38 @@ export function findSpawnLink<T extends { pos: { x: number; y: number } }>(
   );
 }
 
+/** spawn Link 与其实际服务的最近 spawn；放置、demand、执行共用同一锚点。 */
+export function findSpawnLinkAnchor<
+  T extends { pos: { x: number; y: number } },
+  A extends { pos: { x: number; y: number } },
+>(
+  view: {
+    storage?: { pos: { x: number; y: number } } | undefined;
+    controller?: { pos: { x: number; y: number } } | undefined;
+    sources: readonly { pos: { x: number; y: number } }[];
+    spawns: readonly A[];
+    links: readonly T[];
+  },
+  ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
+): { link: T; anchor: A } | undefined {
+  const link = findSpawnLink(view, ranges);
+  const first = view.spawns[0];
+  if (!link || !first) return undefined;
+  let anchor = first;
+  let best = Math.max(Math.abs(link.pos.x - anchor.pos.x), Math.abs(link.pos.y - anchor.pos.y));
+  for (const spawn of view.spawns.slice(1)) {
+    const distance = Math.max(
+      Math.abs(link.pos.x - spawn.pos.x),
+      Math.abs(link.pos.y - spawn.pos.y),
+    );
+    if (distance < best) {
+      anchor = spawn;
+      best = distance;
+    }
+  }
+  return { link, anchor };
+}
+
 /** keeper 站位是否被障碍结构占用；container/road 可站，故不列入阻塞。 */
 export function isLinkKeeperStandBlocked(snapshot: RoomSnapshot, x: number, y: number): boolean {
   for (const list of [
@@ -507,8 +539,9 @@ export function hasLinkKeeperAtPost(
   }[],
   post: "storage" | "spawn",
 ): boolean {
-  const link = post === "storage" ? findStorageLink(snapshot) : findSpawnLink(snapshot);
-  const anchor = post === "storage" ? snapshot.storage : snapshot.spawns[0];
+  const spawnLink = post === "spawn" ? findSpawnLinkAnchor(snapshot) : undefined;
+  const link = post === "storage" ? findStorageLink(snapshot) : spawnLink?.link;
+  const anchor = post === "storage" ? snapshot.storage : spawnLink?.anchor;
   if (!link || !anchor) return false;
   return refs.some(c => {
     const x = c.x;

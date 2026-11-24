@@ -7,7 +7,7 @@ import { countPending, hasRequest, spawnKey, buildSpawnRequest } from "./queue";
 import {
   classifyLinkRole,
   findLinkKeeperStand,
-  findSpawnLink,
+  findSpawnLinkAnchor,
   findStorageLink,
 } from "../economy/links";
 import {
@@ -759,6 +759,7 @@ export function evaluateDemand(
 
   // P1：Link Keeper — storage/spawn Link 的固定双向转运。几何不合格时不孵，
   // hauler/distributor 继续走原回退；同岗位只保留一只，临死提前补位。
+  const spawnLink = findSpawnLinkAnchor(snapshot);
   const keeperPosts: {
     post: "storage" | "spawn";
     index: number;
@@ -774,8 +775,8 @@ export function evaluateDemand(
     {
       post: "spawn",
       index: 1,
-      link: findSpawnLink(snapshot),
-      anchor: snapshot.spawns[0],
+      link: spawnLink?.link,
+      anchor: spawnLink?.anchor,
     },
   ];
   for (const job of keeperPosts) {

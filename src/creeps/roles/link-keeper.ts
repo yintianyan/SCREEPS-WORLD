@@ -1,7 +1,11 @@
 /** Link Keeper — storage/spawn Link 的固定双向转运岗位。 */
 import type { Priority, RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
-import { findLinkKeeperStand, findSpawnLink, findStorageLink } from "../../domain/economy/links";
+import {
+  findLinkKeeperStand,
+  findSpawnLinkAnchor,
+  findStorageLink,
+} from "../../domain/economy/links";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
@@ -33,8 +37,9 @@ function keeperStep(): ActionCandidate<KeeperTarget> {
     resolve: ac => {
       const post = ac.creep.memory.linkKeeperPost;
       if (post !== "storage" && post !== "spawn") return undefined;
-      const link = post === "storage" ? findStorageLink(ac.snapshot) : findSpawnLink(ac.snapshot);
-      const anchor = post === "storage" ? ac.snapshot.storage : ac.snapshot.spawns[0];
+      const spawnLink = post === "spawn" ? findSpawnLinkAnchor(ac.snapshot) : undefined;
+      const link = post === "storage" ? findStorageLink(ac.snapshot) : spawnLink?.link;
+      const anchor = post === "storage" ? ac.snapshot.storage : spawnLink?.anchor;
       if (!link || !anchor || link.pos.getRangeTo(anchor.pos) > 2) return undefined;
       const terrain = ac.creep.room.getTerrain();
       const standPoint = findLinkKeeperStand(

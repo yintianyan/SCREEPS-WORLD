@@ -423,6 +423,8 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     storage.pos = mockPos(10, 10);
     const spawn = mockStructure("spawn", { id: "sp", energy: 0, capacity: 300 });
     spawn.pos = mockPos(20, 20);
+    const otherSpawn = mockStructure("spawn", { id: "other", energy: 300, capacity: 300 });
+    otherSpawn.pos = mockPos(5, 5);
     const spawnLink = mockStructure("link", { id: "spl", energy: 700, capacity: 800 });
     spawnLink.pos = mockPos(21, 20);
     const controller = mockController({ level: 8 });
@@ -430,7 +432,7 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     const snap = mockSnapshot({
       rcl: 8,
       storage,
-      spawns: [spawn],
+      spawns: [otherSpawn, spawn],
       links: [spawnLink],
       controller,
       energyCapacityAvailable: 2300,

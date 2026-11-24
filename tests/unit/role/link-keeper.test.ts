@@ -126,6 +126,17 @@ describe("linkKeeper — spawn 岗位", () => {
     expect(loaded.creep.transfer).toHaveBeenCalledWith(loaded.spawn, "energy");
   });
 
+  it("多 spawn 时围绕 Link 的实际最近 spawn 服务", () => {
+    const { creep, snap, link } = spawnSetup({ linkEnergy: 800 });
+    const other = mockStructure("spawn", { id: "other", energy: 300, capacity: 300 });
+    other.pos = mockPos(10, 10);
+    const multi = { ...snap, spawns: [other, ...snap.spawns] };
+
+    linkKeeperRole.run(creep, mockContext(multi));
+
+    expect(creep.withdraw).toHaveBeenCalledWith(link, "energy", 200);
+  });
+
   it("现金池满时抱能等待，不随地丢弃", () => {
     const { creep, ctx } = spawnSetup({ used: 200, linkEnergy: 600, coreFull: true });
     linkKeeperRole.run(creep, ctx);

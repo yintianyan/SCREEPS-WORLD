@@ -12,6 +12,8 @@ import {
 import {
   classifyLinkRole,
   DEFAULT_LINK_ROLE_RANGES,
+  findLinkKeeperStand,
+  findSpawnLinkAnchor,
   resolveLinkRoleRanges,
 } from "../../../src/domain/economy/links";
 import { CONFIG } from "../../../src/config";
@@ -600,6 +602,30 @@ describe("RCL8 spawn Link 分配", () => {
         snap.spawns.map(s => s.pos),
       ),
     ).toBe("spawn");
+  });
+
+  it("第一只 spawn 邻域铺满时改试其它 spawn，并绑定实际服务锚点", () => {
+    const base = snapshotAt(8);
+    const first = base.spawns[0];
+    if (!first) throw new Error("spawn missing");
+    const second = mockStructure("spawn", { id: "spawn2", energy: 0, capacity: 300 });
+    second.pos = mockPos(30, 30);
+    const snap = snapshotAt(8, {
+      spawns: [first, second],
+      extensions: paveRing(20, 20, 2),
+    });
+    const ranges = resolveLinkRoleRanges(CONFIG.economy.link);
+
+    const candidate = createSpawnLinkTask(snap, roomWith(), optionsFor(snap));
+
+    expect(candidate).toBeDefined();
+    if (!candidate) throw new Error("spawn Link candidate missing");
+    expect(
+      Math.max(Math.abs(candidate.pos.x - 30), Math.abs(candidate.pos.y - 30)),
+    ).toBeLessThanOrEqual(2);
+    expect(findLinkKeeperStand(snap, candidate, second)).toBeDefined();
+    const located = findSpawnLinkAnchor({ ...snap, links: [{ pos: candidate.pos }] }, ranges);
+    expect(located?.anchor).toBe(second);
   });
 
   it("RCL7 不生成；已有 spawn Link 不重复生成", () => {
