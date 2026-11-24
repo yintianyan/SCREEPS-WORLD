@@ -5,7 +5,7 @@ import {
   classifyLinkRole,
   findStorageLink,
   resolveLinkRoleRanges,
-  computeControllerLinkTarget,
+  computeLinkTransferTargets,
 } from "../../domain/economy/links";
 import { linkHasOutlet } from "../../domain/economy/link-outlet";
 import { resolveControllerDowngradeRisk } from "../../domain/economy/downgrade-risk";
@@ -93,29 +93,18 @@ function runRoomLinks(snapshot: RoomSnapshot, links: StructureLink[], tick: numb
   // 死资产检测：每 tick 更新 deadAssetSince 计时器。
   updateDeadAssetTracking(infos, tick);
 
-  // 需求驱动的 controller 目标水位（RCL8 停供 / 保级 / RCL<8 分级）。
-  const controllerInfo = infos.find(i => i.role === "controller");
-  const controllerTargetEnergy = controllerInfo
-    ? computeControllerLinkTarget(
-        snapshot.rcl,
-        snapshot.controller,
-        snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
-        controllerInfo.energyCapacity,
-        resolveControllerDowngradeRisk(
-          Memory.rooms[snapshot.roomName]?.controllerDowngradeRisk,
-          snapshot.controller,
-        ),
-      )
-    : undefined;
-  const spawnInfo = infos.find(i => i.role === "spawn");
-  const spawnTargetEnergy =
-    spawnInfo && snapshot.energyAvailable < snapshot.energyCapacityAvailable
-      ? spawnInfo.energyCapacity
-      : 0;
+  // 需求驱动的 controller/spawn 目标水位；keeper 回填也复用同一口径。
+  const targets = computeLinkTransferTargets(
+    snapshot,
+    infos,
+    resolveControllerDowngradeRisk(
+      Memory.rooms[snapshot.roomName]?.controllerDowngradeRisk,
+      snapshot.controller,
+    ),
+  );
   const transfers = planLinkTransfers(infos, {
     minTransfer: CONFIG.economy.link.minTransfer,
-    controllerTargetEnergy,
-    spawnTargetEnergy,
+    ...targets,
     storageSinkMinFree: CONFIG.economy.link.storageSinkMinFree,
   });
   for (const t of transfers) {

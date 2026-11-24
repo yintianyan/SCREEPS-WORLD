@@ -3,6 +3,7 @@ import { linkKeeperRole } from "../../../src/creeps/roles/link-keeper";
 import { findLinkKeeperStand, findStorageLink } from "../../../src/domain/economy/links";
 import {
   mockContext,
+  mockController,
   mockCreep,
   mockPos,
   mockSnapshot,
@@ -11,18 +12,30 @@ import {
 } from "../../support/factories";
 
 function storageSetup(
-  opts: { linkEnergy?: number; used?: number; cargo?: "storage" | "link" } = {},
+  opts: {
+    linkEnergy?: number;
+    used?: number;
+    cargo?: "storage" | "link";
+    downstreamDemand?: boolean;
+  } = {},
 ) {
   const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
   storage.pos = mockPos(10, 10);
   const link = mockStructure("link", { id: "sl", energy: opts.linkEnergy ?? 800, capacity: 800 });
   link.pos = mockPos(11, 10);
+  const controller = opts.downstreamDemand ? mockController({ level: 7 }) : undefined;
+  if (controller) controller.pos = mockPos(30, 30);
+  const controllerLink = opts.downstreamDemand
+    ? mockStructure("link", { id: "cl", energy: 0, capacity: 800 })
+    : undefined;
+  if (controllerLink) controllerLink.pos = mockPos(29, 30);
   const snap = mockSnapshot({
+    rcl: opts.downstreamDemand ? 7 : 3,
     storage,
-    links: [link],
+    controller,
+    links: controllerLink ? [link, controllerLink] : [link],
     sources: [],
     spawns: [],
-    controller: undefined,
     fillTargets: [],
   });
   const creep = mockCreep({
@@ -88,12 +101,22 @@ describe("linkKeeper — storage 岗位", () => {
     expect(storage).toBeDefined();
   });
 
-  it("Link 低水位时从 storage 灌入，受保留库存限制", () => {
-    const { creep, ctx, storage, link } = storageSetup({ linkEnergy: 100 });
+  it("Link 低水位且下游有缺口时从 storage 灌入，受保留库存限制", () => {
+    const { creep, ctx, storage, link } = storageSetup({
+      linkEnergy: 100,
+      downstreamDemand: true,
+    });
     linkKeeperRole.run(creep, ctx);
     expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 200);
     expect(creep.memory.keeperCargo).toBe("link");
     expect(link).toBeDefined();
+  });
+
+  it("Link 低水位但下游无需求时不回填，避免白占 Link 空间", () => {
+    const { creep, ctx } = storageSetup({ linkEnergy: 100 });
+    linkKeeperRole.run(creep, ctx);
+    expect(creep.withdraw).not.toHaveBeenCalled();
+    expect(creep.transfer).not.toHaveBeenCalled();
   });
 
   it("滞回带内不动作", () => {

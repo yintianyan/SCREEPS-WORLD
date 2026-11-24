@@ -276,6 +276,69 @@ export function planLinkTransfers(
   return transfers;
 }
 
+/** link-system 与 keeper 共用的下游目标水位，避免两套需求口径漂移。 */
+export function computeLinkTransferTargets(
+  snapshot: Pick<
+    RoomSnapshot,
+    "rcl" | "controller" | "storage" | "energyAvailable" | "energyCapacityAvailable"
+  >,
+  links: readonly Pick<LinkInfo, "role" | "energyCapacity">[],
+  downgradeRisk: boolean,
+): { controllerTargetEnergy: number | undefined; spawnTargetEnergy: number } {
+  const controllerInfo = links.find(l => l.role === "controller");
+  const spawnInfo = links.find(l => l.role === "spawn");
+  return {
+    controllerTargetEnergy: controllerInfo
+      ? computeControllerLinkTarget(
+          snapshot.rcl,
+          snapshot.controller,
+          snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+          controllerInfo.energyCapacity,
+          downgradeRisk,
+        )
+      : undefined,
+    spawnTargetEnergy:
+      spawnInfo && snapshot.energyAvailable < snapshot.energyCapacityAvailable
+        ? spawnInfo.energyCapacity
+        : 0,
+  };
+}
+
+/** 只有 storage Link 当前会参与下游传输时才值得回填；source 已覆盖需求则不占库容。 */
+export function storageLinkHasDownstreamDemand(
+  snapshot: RoomSnapshot,
+  downgradeRisk: boolean,
+  ranges: LinkRoleRanges = DEFAULT_LINK_ROLE_RANGES,
+): boolean {
+  const sourcePoints = snapshot.sources.map(s => s.pos);
+  const spawnPoints = snapshot.spawns.map(s => s.pos);
+  const infos: LinkInfo[] = snapshot.links.map(l => ({
+    id: l.id,
+    energy: l.store.getUsedCapacity(RESOURCE_ENERGY),
+    energyCapacity: l.store.getCapacity(RESOURCE_ENERGY),
+    cooldown: l.cooldown,
+    role: classifyLinkRole(
+      l.pos,
+      sourcePoints,
+      snapshot.controller?.pos,
+      snapshot.storage?.pos,
+      ranges,
+      spawnPoints,
+    ),
+  }));
+  const storageLink = infos.find(l => l.role === "storage");
+  if (!storageLink) return false;
+  const targets = computeLinkTransferTargets(snapshot, infos, downgradeRisk);
+  const probe = infos.map(l =>
+    l.id === storageLink.id ? { ...l, energy: l.energyCapacity, cooldown: 0 } : l,
+  );
+  return planLinkTransfers(probe, {
+    minTransfer: CONFIG.economy.link.minTransfer,
+    ...targets,
+    storageSinkMinFree: CONFIG.economy.link.storageSinkMinFree,
+  }).some(t => t.fromId === storageLink.id);
+}
+
 /** 二维坐标视图 — 供 classifyLinkRole 纯几何计算，不依赖 Screeps RoomPosition。 */
 export interface LinkAnchorPoint {
   x: number;

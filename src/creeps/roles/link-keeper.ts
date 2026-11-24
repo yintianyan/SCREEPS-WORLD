@@ -5,7 +5,9 @@ import {
   findLinkKeeperStand,
   findSpawnLinkAnchor,
   findStorageLink,
+  storageLinkHasDownstreamDemand,
 } from "../../domain/economy/links";
+import { resolveControllerDowngradeRisk } from "../../domain/economy/downgrade-risk";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
@@ -94,7 +96,14 @@ function keeperStep(): ActionCandidate<KeeperTarget> {
       if (
         linkEnergy < CONFIG.economy.link.keeperLowWater &&
         storageEnergy > CONFIG.economy.link.keeperStorageFloor &&
-        linkFree > 0
+        linkFree > 0 &&
+        storageLinkHasDownstreamDemand(
+          ac.snapshot,
+          resolveControllerDowngradeRisk(
+            Memory.rooms[ac.snapshot.roomName]?.controllerDowngradeRisk,
+            ac.snapshot.controller,
+          ),
+        )
       ) {
         return {
           kind: "withdraw-storage",
