@@ -401,6 +401,46 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     expect(keepers[0]?.memory.linkKeeperPost).toBe("storage");
   });
 
+  it("keeper 只在 15 拍孵化窗口补位，不受 upgrader 400 拍窗口影响", () => {
+    const snap = linkSnapshot({ rcl: 8, storageLinkEnergy: 700 });
+    const oldKeeper = {
+      name: "keeper-old",
+      role: "linkKeeper",
+      home: "W7N4",
+      ticksToLive: CONFIG.spawn.keeperReplaceHorizon - 1,
+      bodyLength: 5,
+      spawnIndex: 0,
+      linkKeeperPost: "storage" as const,
+    };
+    const healthyKeeper = {
+      ...oldKeeper,
+      name: "keeper-healthy",
+      ticksToLive: CONFIG.spawn.keeperReplaceHorizon,
+    };
+
+    const dying = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      [...livingHarvester(), oldKeeper],
+      [],
+      normalCtx(0),
+      1000,
+    );
+    expect(dying.requests.filter(r => r.role === "linkKeeper")).toHaveLength(1);
+
+    const healthy = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      [...livingHarvester(), healthyKeeper],
+      [],
+      normalCtx(0),
+      1000,
+    );
+    expect(healthy.requests.filter(r => r.role === "linkKeeper")).toHaveLength(0);
+  });
+
   it("storage Link 距 storage=3 时几何不合格，不孵 keeper，保留 hauler 回退", () => {
     const snap = linkSnapshot({ rcl: 8, storageLinkEnergy: 700 });
     const link = snap.links[0];

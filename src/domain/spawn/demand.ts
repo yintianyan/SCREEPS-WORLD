@@ -789,7 +789,7 @@ export function evaluateDemand(
       c =>
         c.role === "linkKeeper" &&
         c.linkKeeperPost === job.post &&
-        (c.ticksToLive ?? 0) >= CONFIG.spawn.upgraderReplaceHorizon,
+        (c.ticksToLive ?? 0) >= CONFIG.spawn.keeperReplaceHorizon,
     ).length;
     const hatching = spawning.filter(
       s => s.role === "linkKeeper" && s.linkKeeperPost === job.post,

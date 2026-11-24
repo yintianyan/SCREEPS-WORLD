@@ -254,6 +254,8 @@ export const CONFIG = {
      *  提前请求替补，避免同批死亡后集中补员造成 129 拍孵化 + 通勤的升级断档。
      *  取值 400 ≈ 3 个孵化周期（body 43 件 × 3 = 129）＋通勤余量；重叠期最多 1-2 只。 */
     upgraderReplaceHorizon: 400,
+    /** linkKeeper 固定核心区，5 件身体孵化 15 拍；补位窗口只覆盖孵化，不制造长期双 keeper。 */
+    keeperReplaceHorizon: 15,
   },
 
   /**
