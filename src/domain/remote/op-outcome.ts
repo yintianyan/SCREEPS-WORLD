@@ -38,8 +38,6 @@ export const REMOTE_ABANDON = {
   Stalled: 7,
   /** 主房被主动放弃（territory-manager 释放流程）—— 与目标房本身的质量无关。 */
   HomeReleased: 8,
-  /** 人工目标策略停用（CONFIG.remote.targetPolicies）—— 回收现役并禁止重选。 */
-  PolicyDisabled: 9,
 } as const;
 
 /** 原因码 → 可读名（日志与墓地对照用；长度受控，只活在这份表里）。 */
@@ -53,7 +51,6 @@ export const REMOTE_ABANDON_LABEL: Record<number, string> = {
   [REMOTE_ABANDON.PausedTimeout]: "长期失明转弃",
   [REMOTE_ABANDON.Stalled]: "编队空转止损",
   [REMOTE_ABANDON.HomeReleased]: "主房释放",
-  [REMOTE_ABANDON.PolicyDisabled]: "目标策略停用",
 };
 
 /** 一块墓碑：一次废弃事件的最小可归因记录。 */

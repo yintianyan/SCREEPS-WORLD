@@ -989,10 +989,6 @@ export const CONFIG = {
   },
 
   remote: {
-    /** 逐 home→target 的停用策略；删除条目即可恢复评选与运营。 */
-    targetPolicies: {
-      "W37S58>W37S57": { disabled: true },
-    } as Record<string, { disabled: boolean }>,
     /** 远矿管理器运行间隔（tick）。 */
     managerInterval: 10,
     /** 最大同时运营远矿目标数（CPU 预算保护）。 */

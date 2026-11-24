@@ -3,14 +3,6 @@
 import { isHostilePlayerReservation, INVADER_USERNAME, type RoomIntel } from "../intel";
 import { CONFIG } from "../../config";
 
-export function remoteTargetKey(homeRoom: string, targetRoom: string): string {
-  return `${homeRoom}>${targetRoom}`;
-}
-
-export function isRemoteTargetDisabled(homeRoom: string, targetRoom: string): boolean {
-  return CONFIG.remote.targetPolicies[remoteTargetKey(homeRoom, targetRoom)]?.disabled === true;
-}
-
 export interface RemoteCandidate {
   roomName: string;
   /** intel 中记录的 source 数（无视野时 undefined）。 */
@@ -185,7 +177,6 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
 
   for (const [roomName, info] of Object.entries(intel)) {
     if (roomName === homeRoom) continue;
-    if (isRemoteTargetDisabled(homeRoom, roomName)) continue;
     // 排除我方殖民地（权威 controller.my）— intel owner 常滞后，防新占殖民地被误选 churn。
     if (input.ownedRooms?.has(roomName)) continue;
     if (activeTargets.has(roomName)) continue;

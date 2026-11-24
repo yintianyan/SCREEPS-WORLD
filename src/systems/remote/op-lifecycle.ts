@@ -16,7 +16,6 @@ import {
   type RemoteOpLedgerSnapshot,
 } from "../../domain/remote/op-ledger";
 import {
-  isRemoteTargetDisabled,
   shouldPauseOperation,
   scoreRemoteCandidate,
   roomLinearDistance,
@@ -82,21 +81,6 @@ function abandonOp(
       rec.d ? `（${rec.d.join(", ")}）` : ""
     }${rec.w ? ` by ${rec.w}` : ""}`,
   );
-}
-
-/** 人工停用目标：首次转 abandoned 并留墓碑；现役回收由后续 recycleExcess 统一执行。 */
-export function enforceRemoteTargetPolicies(
-  remoteOps: Record<string, RemoteOp>,
-  homeRoom: string,
-  tick: number,
-): number {
-  let disabled = 0;
-  for (const [target, op] of Object.entries(remoteOps)) {
-    if (op.state === "abandoned" || !isRemoteTargetDisabled(homeRoom, target)) continue;
-    abandonOp(op, homeRoom, target, REMOTE_ABANDON.PolicyDisabled, tick);
-    disabled++;
-  }
-  return disabled;
 }
 
 /**

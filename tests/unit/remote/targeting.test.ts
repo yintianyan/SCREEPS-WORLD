@@ -8,7 +8,6 @@ import {
   roomLinearDistance,
 } from "../../../src/domain/remote/targeting";
 import type { RoomIntel } from "../../../src/domain/intel";
-import { CONFIG } from "../../../src/config";
 
 const tick = 100000;
 const staleThreshold = 5000;
@@ -53,31 +52,6 @@ describe("remote targeting — selectRemoteTargets", () => {
       globalActiveTargets: new Set(), // abandoned 不入集合。
     });
     expect(result.map(c => c.roomName)).toEqual(["W36S58"]);
-  });
-
-  it("人工停用的 home→target 永不重选，其它目标不受影响", () => {
-    const original = CONFIG.remote.targetPolicies;
-    try {
-      (
-        CONFIG.remote as unknown as { targetPolicies: Record<string, { disabled: boolean }> }
-      ).targetPolicies = { "W37S58>W37S57": { disabled: true } };
-      const result = selectRemoteTargets({
-        homeRoom: "W37S58",
-        intel: {
-          W37S57: makeIntel({ sources: 2 }),
-          W36S58: makeIntel({ sources: 2 }),
-        },
-        existingOps: { W37S57: { state: "abandoned" } },
-        tick,
-        staleThreshold,
-        haulerCapacity: 800,
-      });
-      expect(result.map(c => c.roomName)).toEqual(["W36S58"]);
-    } finally {
-      (
-        CONFIG.remote as unknown as { targetPolicies: Record<string, { disabled: boolean }> }
-      ).targetPolicies = original;
-    }
   });
 
   it("无 intel 时返回空列表", () => {
