@@ -16,6 +16,8 @@ import {
   type RemoteOpLedgerSnapshot,
 } from "../../domain/remote/op-ledger";
 import {
+  isRemoteTargetDisabled,
+  isRemoteTargetReactivationRequested,
   shouldPauseOperation,
   scoreRemoteCandidate,
   roomLinearDistance,
@@ -81,6 +83,47 @@ function abandonOp(
       rec.d ? `（${rec.d.join(", ")}）` : ""
     }${rec.w ? ` by ${rec.w}` : ""}`,
   );
+}
+
+/** 人工停用目标：首次转 abandoned 并留墓碑；现役回收由后续 recycleExcess 统一执行。 */
+export function enforceRemoteTargetPolicies(
+  remoteOps: Record<string, RemoteOp>,
+  homeRoom: string,
+  tick: number,
+  globalActiveTargets?: Set<string>,
+): number {
+  let disabled = 0;
+  for (const [target, op] of Object.entries(remoteOps)) {
+    if (op.state === "abandoned" || !isRemoteTargetDisabled(homeRoom, target)) continue;
+    abandonOp(op, homeRoom, target, REMOTE_ABANDON.PolicyDisabled, tick);
+    globalActiveTargets?.delete(target);
+    disabled++;
+  }
+  return disabled;
+}
+
+/** 人工恢复目标：从已有 abandoned 记录直接激活，避开已丢失的 intel 与重新评选。 */
+export function reactivateRemoteTargetPolicies(
+  remoteOps: Record<string, RemoteOp>,
+  homeRoom: string,
+  tick: number,
+  slots: number,
+  globalActiveTargets?: Set<string>,
+): number {
+  let reactivated = 0;
+  for (const [target, op] of Object.entries(remoteOps)) {
+    if (reactivated >= slots) break;
+    if (op.state !== "abandoned" || !isRemoteTargetReactivationRequested(homeRoom, target)) {
+      continue;
+    }
+    if (globalActiveTargets?.has(target)) continue;
+    setRemoteOpState(op, "active", tick);
+    op.lastSeen = tick;
+    globalActiveTargets?.add(target);
+    log.info("remote-mining-manager", `remote/${homeRoom}: 人工恢复 ${target}`);
+    reactivated++;
+  }
+  return reactivated;
 }
 
 /**

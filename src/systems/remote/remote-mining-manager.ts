@@ -40,6 +40,8 @@ import {
 import { log } from "../../kernel/log";
 import {
   maintainExistingOps,
+  enforceRemoteTargetPolicies,
+  reactivateRemoteTargetPolicies,
   censusStalledOps,
   countActiveOps,
   roomReadyForNewRemote,
@@ -148,6 +150,10 @@ export const remoteMiningManagerSystem: System = {
           snapshot.controller?.owner?.username,
         );
 
+      // 人工停用策略在维护之后强制收口，防止 Invader 重开路径把目标重新激活；
+      // 现役 crew 由本周期后续 recycleExcessRemoteCreeps 统一回收。
+      enforceRemoteTargetPolicies(remoteOps, snapshot.roomName, ctx.tick, globalActiveTargets);
+
       // 1b. v33 空转止损：编队全员空转超时的 op 废弃（物理上无法作业或
       //     全员卡死 — 线上实证 W36S58 墙线困编队空转 44k tick 无产出）。
       censusStalledOps(remoteOps, snapshot.roomName, ctx.tick);
@@ -155,7 +161,7 @@ export const remoteMiningManagerSystem: System = {
       // 2. 如果 active 运营数不足，从 intel 评选新目标。
       //    战略门禁：开辟新远矿点须获 empire-strategy 姿态授权
       //    （fortify/war 时收缩战线不铺新点）；现役运营不受影响。
-      const activeCount = countActiveOps(remoteOps);
+      let activeCount = countActiveOps(remoteOps);
       const newOpsAllowed = Memory.kernel?.strategy?.newRemoteOpsAllowed === true;
       // 上限 = 消化能力（storage 有无）与生产能力（spawn 数）取最小。
       const maxOps = effectiveMaxOperations(snapshot.storage !== undefined, snapshot.spawns.length);
@@ -163,6 +169,13 @@ export const remoteMiningManagerSystem: System = {
       // constrained/tight 不额外收紧（本地收缩已由 tier 看门狗与 posture 处理）。
       const capacityTier = Memory.kernel?.capacity?.tier;
       const maxOpsWithCapacity = capacityTier === "abundant" ? maxOps + 1 : maxOps;
+      activeCount += reactivateRemoteTargetPolicies(
+        remoteOps,
+        snapshot.roomName,
+        ctx.tick,
+        Math.max(0, maxOpsWithCapacity - activeCount),
+        globalActiveTargets,
+      );
       // 扩张推进态下，CPU 档位差于 comfortable 时不再新开远矿 —— 新线常驻
       // 0.5–0.9 CPU，会把 G6（扩张门）自己顶死（线上实证：W38S58 重开后 34→43 只、
       // usage 11.6→13.0）。现役 op 的维护/替换不受影响。

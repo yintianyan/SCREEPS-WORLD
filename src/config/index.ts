@@ -989,6 +989,11 @@ export const CONFIG = {
   },
 
   remote: {
+    /** 逐 home→target 的人工策略：disabled 停用并禁选，reactivate 从已有记录恢复。 */
+    targetPolicies: {
+      "W37S58>W39S57": { disabled: true },
+      "W37S58>W37S57": { reactivate: true },
+    } as Record<string, { disabled?: boolean; reactivate?: boolean }>,
     /** 远矿管理器运行间隔（tick）。 */
     managerInterval: 10,
     /** 最大同时运营远矿目标数（CPU 预算保护）。 */
