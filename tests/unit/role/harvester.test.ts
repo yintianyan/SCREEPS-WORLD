@@ -44,6 +44,22 @@ describe("harvester — acquire 模式", () => {
     expect(creep.memory.mode).toBe("idle");
   });
 
+  it("空 source 且站在 container 旁时不签发站桩 harvest", () => {
+    const source = mockSource("s1", 0);
+    const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
+    container.pos = mockPos(25, 26);
+    const snap = mockSnapshot({
+      sources: [source],
+      containers: [container],
+      sourceOccupancy: new Map([["s1", 1]]),
+    });
+    const creep = mockCreep({ used: 0, capacity: 50, sourceId: "s1" });
+
+    harvesterRole.run(creep, mockContext(snap));
+
+    expect(creep.harvest).not.toHaveBeenCalled();
+  });
+
   it("拥挤迁移：当前 source 超过公平份额时重分配到更空闲的 source", () => {
     const s1 = mockSource("s1");
     const s2 = mockSource("s2");

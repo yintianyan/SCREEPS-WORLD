@@ -92,7 +92,10 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       ) {
         if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
           countedIntent("repair", () => ac.creep.repair(container));
-        } else if (countedIntent("harvest", () => ac.creep.harvest(source)) === ERR_NOT_IN_RANGE) {
+        } else if (
+          source.energy > 0 &&
+          countedIntent("harvest", () => ac.creep.harvest(source)) === ERR_NOT_IN_RANGE
+        ) {
           moveToTarget(ac.creep, standTarget);
         }
         return;
@@ -119,9 +122,12 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       // harvester 每拍仍付 harvest+drop ≈0.8 CPU）。其余分支（倒能/drop/站位）保持原样，
       // 世界状态与 HEAD 逐字一致，只少一次失败 API 调用。
       const backpressured = !sinkOpen && ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
-      const harvestResult = backpressured
-        ? ERR_FULL
-        : countedIntent("harvest", () => ac.creep.harvest(source));
+      const harvestResult =
+        source.energy === 0
+          ? ERR_NOT_ENOUGH_RESOURCES
+          : backpressured
+            ? ERR_FULL
+            : countedIntent("harvest", () => ac.creep.harvest(source));
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, standTarget);
         return;

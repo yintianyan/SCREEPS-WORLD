@@ -5,8 +5,8 @@ import { roadBuildCounters } from "../../kernel/global-cache";
 import { classifyRoadBuildAttempt, roadBuildRangeBucket } from "../../domain/logistics/road-build";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { fillStorage, haulFillTarget } from "../engine/actions";
+import { ACTION_RANGE_NEAR, runAction } from "../engine/actions/helpers";
 import { defineRole } from "../engine/role-runner";
-import { moveToTarget } from "../movement";
 import {
   findDroppedEnergyCached,
   findMySitesCached,
@@ -141,10 +141,9 @@ function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
       if (amount <= 0) return;
-      const result = ac.creep.withdraw(container, RESOURCE_ENERGY, amount);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, container);
-      }
+      runAction(ac.creep, container, ACTION_RANGE_NEAR, () =>
+        ac.creep.withdraw(container, RESOURCE_ENERGY, amount),
+      );
     },
   };
 }
@@ -175,10 +174,9 @@ function lootRemoteRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
       if (amount <= 0) return;
-      const result = ac.creep.withdraw(remains, RESOURCE_ENERGY, amount);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, remains);
-      }
+      runAction(ac.creep, remains, ACTION_RANGE_NEAR, () =>
+        ac.creep.withdraw(remains, RESOURCE_ENERGY, amount),
+      );
     },
   };
 }
@@ -194,10 +192,7 @@ function pickupRemoteDropped(minAmount = 0): ActionCandidate<Resource> {
       return findDroppedEnergy(ac.creep, minAmount);
     },
     execute: (ac, dropped) => {
-      const result = ac.creep.pickup(dropped);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, dropped);
-      }
+      runAction(ac.creep, dropped, ACTION_RANGE_NEAR, () => ac.creep.pickup(dropped));
     },
   };
 }

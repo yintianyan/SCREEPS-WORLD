@@ -4,7 +4,8 @@ import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { roomHasInvaderCore } from "../support/invader-core";
 import { CONFIG } from "../../config";
-import { moveToTarget, registerAnchor, registerStaticBlocker } from "../movement";
+import { registerAnchor, registerStaticBlocker } from "../movement";
+import { ACTION_RANGE_FAR, runAction } from "../engine/actions/helpers";
 
 /**
  * InvaderCore 压制检测已收敛到 support/invader-core（全仓唯一写者，单一形状）。
@@ -37,10 +38,9 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
     execute: (ac, controller) => {
       // controller 有主且非自己 → 攻击 controller（降级敌方控制）。
       if (controller.owner && !controller.my) {
-        const result = ac.creep.attackController(controller);
-        if (result === ERR_NOT_IN_RANGE) {
-          moveToTarget(ac.creep, controller);
-        }
+        runAction(ac.creep, controller, ACTION_RANGE_FAR, () =>
+          ac.creep.attackController(controller),
+        );
         // attackController 有 cooldown — 成功时返回 OK 并触发 1000 tick cooldown。
         // ERR_TIRED = cooldown 中，下次 attackController 前不应盲试。
         return;
@@ -60,11 +60,11 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
         return;
       }
 
-      // 尝试预定。
-      const result = ac.creep.reserveController(controller);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, controller);
-      } else {
+      // 尝试预定。reserveController 射程 2；超出时只移动，不签发必被拒的预约。
+      const result = runAction(ac.creep, controller, 2, () =>
+        ac.creep.reserveController(controller),
+      );
+      if (result !== ERR_NOT_IN_RANGE) {
         // 在岗站桩 → 锚定 + 静态占位自报：reserver 常驻 controller 旁，
         // 若站到 source 相邻矿位，不登记则采集者的寻路矩阵看不见它，
         // 缓存路径反复指向该格、意图逐 tick 被拒绝 → 采集者锁死空转
@@ -81,10 +81,10 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
         const cooldownEnd = ac.creep.memory.attackCooldownEnd ?? 0;
         if (Game.time < cooldownEnd) return; // cooldown 未结束，跳过
 
-        const attackResult = ac.creep.attackController(controller);
-        if (attackResult === ERR_NOT_IN_RANGE) {
-          moveToTarget(ac.creep, controller);
-        } else if (attackResult === OK) {
+        const attackResult = runAction(ac.creep, controller, ACTION_RANGE_FAR, () =>
+          ac.creep.attackController(controller),
+        );
+        if (attackResult === OK) {
           // 成功攻击 — 记录 cooldown 截止 tick（attackController cooldown = 1000）。
           ac.creep.memory.attackCooldownEnd = Game.time + 1000;
         }

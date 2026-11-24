@@ -132,6 +132,20 @@ describe("remoteHarvester — 站桩锚定与占位自报", () => {
     expect(creep.harvest).not.toHaveBeenCalled();
   });
 
+  it("空 source 站桩时不签发 harvest，保留原位等待再生", () => {
+    const s1 = mockSource("s1", 0);
+    s1.pos = { x: 10, y: 10, roomName: targetRoom };
+    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1" });
+    creep.memory.home = homeRoom;
+    creep.memory.remoteTarget = targetRoom;
+    placeCreep(creep, 11, 10);
+    creep.room = makeRoom(creep, [s1]);
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.harvest).not.toHaveBeenCalled();
+  });
+
   it("带能且被挤离矿位（work + range>1）：move-and-mine 归位，不落入 idle 趴窝", () => {
     // 线上实证 W36S58：采集者被占位挤到 range 2 且携带 25 能量 — 原 work 链
     // 三候选（自建/站桩/drop）全部 resolve 失败 → 「无匹配 → idle + park」，
@@ -156,8 +170,8 @@ describe("remoteHarvester — 站桩锚定与占位自报", () => {
     remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
 
     // 修复前：全部候选失败 → mode=idle（趴窝）。修复后：move-and-mine 匹配，
-    // harvest 尝试 + 移动意图登记，mode 保持 work。
-    expect(creep.harvest).toHaveBeenCalledWith(s1);
+    // 距离不足时只登记移动意图，不再 harvest 一次必被拒的动作，mode 保持 work。
+    expect(creep.harvest).not.toHaveBeenCalled();
     expect(creep.memory.mode).toBe("work");
   });
 });

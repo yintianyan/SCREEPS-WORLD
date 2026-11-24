@@ -11,6 +11,7 @@ import {
   findMySitesCached,
 } from "../support/room-scans";
 import { roadBuildCounters } from "../../kernel/global-cache";
+import { ACTION_RANGE_NEAR, countedIntent, runAction } from "../engine/actions/helpers";
 
 /** 改绑阈值：连续 stuck 达到此值时重评绑定（stuckThreshold=2/repathLimit=2 →
  * L3 在 stuck≥4 重置，此值取 3 = 每个 L3 周期恰好在重置前查一次，零额外节流）。 */
@@ -273,7 +274,10 @@ function remoteStationaryMine(): ActionCandidate<Source> {
       // anchorMiner(90) 仅低于 flee(100)：逃命可推挤站桩矿工，工作/空载均不可。
       registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorMiner);
       registerStaticBlocker(ac.creep.room.name, ac.creep.pos);
-      const harvestResult = ac.creep.harvest(source);
+      const harvestResult =
+        source.energy === 0
+          ? ERR_NOT_ENOUGH_RESOURCES
+          : countedIntent("harvest", () => ac.creep.harvest(source));
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, source);
         return;
@@ -321,7 +325,7 @@ function remoteHarvestSource(): ActionCandidate<Source> {
     name: "remote-harvest:move-and-mine",
     resolve: ac => {
       const source = getRemoteSource(ac.creep);
-      if (!source) return undefined;
+      if (!source || source.energy === 0) return undefined;
       // range≤1 时让位：acquire 链由前置 stationaryMine 接管；work 链必须
       // 让位给 dropEnergy（否则满载在位者被本候选截停，harvest 徒劳
       // ERR_FULL，drop 永远轮不到 — 满载停摆在另一候选重演）。
@@ -329,12 +333,11 @@ function remoteHarvestSource(): ActionCandidate<Source> {
       return source;
     },
     execute: (ac, source) => {
-      const result = ac.creep.harvest(source);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, source);
-      } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
-        ac.creep.memory.mode = "idle";
-      }
+      runAction(ac.creep, source, ACTION_RANGE_NEAR, () => ac.creep.harvest(source), {
+        [ERR_NOT_ENOUGH_RESOURCES]: () => {
+          ac.creep.memory.mode = "idle";
+        },
+      });
     },
   };
 }

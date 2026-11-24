@@ -159,7 +159,6 @@ function keeperStep(): ActionCandidate<KeeperTarget> {
 }
 
 const policy: RolePolicy = {
-  noIdleCadence: true,
   recoveryEligible: true,
   isLifeLine: true,
   executionOrder: 2,
