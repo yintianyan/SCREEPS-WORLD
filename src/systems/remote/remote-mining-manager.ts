@@ -40,6 +40,7 @@ import {
 import { log } from "../../kernel/log";
 import {
   maintainExistingOps,
+  enforceRemoteTargetPolicies,
   censusStalledOps,
   countActiveOps,
   roomReadyForNewRemote,
@@ -147,6 +148,10 @@ export const remoteMiningManagerSystem: System = {
           ctx.tick,
           snapshot.controller?.owner?.username,
         );
+
+      // 人工停用策略在维护之后强制收口，防止 Invader 重开路径把目标重新激活；
+      // 现役 crew 由本周期后续 recycleExcessRemoteCreeps 统一回收。
+      enforceRemoteTargetPolicies(remoteOps, snapshot.roomName, ctx.tick);
 
       // 1b. v33 空转止损：编队全员空转超时的 op 废弃（物理上无法作业或
       //     全员卡死 — 线上实证 W36S58 墙线困编队空转 44k tick 无产出）。
