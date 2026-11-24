@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { withdrawStorageLink } from "../../../src/creeps/engine/actions/withdraw";
-import { globalCache } from "../../../src/kernel/global-cache";
+import { globalCache, type CreepRef } from "../../../src/kernel/global-cache";
 import type { ActionContext } from "../../../src/creeps/engine/action-types";
 import { CONFIG } from "../../../src/config";
 import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
@@ -85,41 +85,40 @@ function makeAc(opts: {
   return { creep, snapshot, assignment: undefined, budget: {} as any, ctx: {} as any };
 }
 
+function keeperRef(x: number, y: number): CreepRef {
+  return {
+    name: "keeper",
+    role: "linkKeeper",
+    home: "W8N3",
+    roomName: "W8N3",
+    spawning: false,
+    recycle: false,
+    bodyLength: 0,
+    body: [],
+    x,
+    y,
+    energyCarried: 0,
+    linkKeeperPost: "storage",
+  };
+}
+
 describe("withdrawStorageLink — controller 补能守卫", () => {
   it("同房 storage keeper 已到岗时 hauler 让位", () => {
     const ac = makeAc({ rcl: 8, ctrlLinkEnergy: 600 });
-    ac.snapshot.storage!.pos = mockPos(21, 17) as never;
-    (globalCache() as any).creepRefs = [
-      {
-        name: "keeper",
-        role: "linkKeeper",
-        home: "W8N3",
-        roomName: "W8N3",
-        x: 22,
-        y: 17,
-        linkKeeperPost: "storage",
-        recycle: false,
-      },
-    ];
+    const storage = ac.snapshot.storage;
+    if (!storage) throw new Error("storage missing");
+    storage.pos = mockPos(21, 17) as never;
+    globalCache().creepRefs = [keeperRef(22, 17)];
     expect(withdrawStorageLink().resolve(ac)).toBeUndefined();
   });
 
   it("keeper 仍在通勤、未到服务格时 hauler 保留排空回退", () => {
     const ac = makeAc({ rcl: 8, ctrlLinkEnergy: 600 });
-    ac.snapshot.storage!.pos = mockPos(21, 17) as never;
-    (globalCache() as any).creepRefs = [
-      {
-        name: "keeper",
-        role: "linkKeeper",
-        home: "W8N3",
-        roomName: "W8N3",
-        x: 25,
-        y: 25,
-        linkKeeperPost: "storage",
-        recycle: false,
-      },
-    ];
-    expect((withdrawStorageLink().resolve(ac) as any)?.id).toBe("link-22-18");
+    const storage = ac.snapshot.storage;
+    if (!storage) throw new Error("storage missing");
+    storage.pos = mockPos(21, 17) as never;
+    globalCache().creepRefs = [keeperRef(25, 25)];
+    expect(withdrawStorageLink().resolve(ac)?.id).toBe("link-22-18");
   });
 
   it("GCL 关闭 + RCL8 无降级风险 → 不抑制，hauler 正常排空 storage link", () => {

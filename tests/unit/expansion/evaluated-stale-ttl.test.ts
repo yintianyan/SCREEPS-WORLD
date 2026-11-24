@@ -42,9 +42,9 @@ describe("cancelStaleEvaluatedPlans", () => {
       1000 + TTL,
     );
     expect(cancelled).toBe(1);
-    expect(plans[0]!.status).toBe("CANCELLED");
-    expect(plans[0]!.cancelReason).toBe("stale-evaluated");
-    expect(plans[0]!.updatedAt).toBe(1000 + TTL);
+    expect(plans[0]?.status).toBe("CANCELLED");
+    expect(plans[0]?.cancelReason).toBe("stale-evaluated");
+    expect(plans[0]?.updatedAt).toBe(1000 + TTL);
   });
 
   it("EVALUATED 滞留 < TTL ⇒ 原样保留（含差 1 拍的边界）", () => {
@@ -53,8 +53,8 @@ describe("cancelStaleEvaluatedPlans", () => {
       1000 + TTL - 1,
     );
     expect(cancelled).toBe(0);
-    expect(plans[0]!.status).toBe("EVALUATED");
-    expect(plans[0]!.cancelReason).toBeUndefined();
+    expect(plans[0]?.status).toBe("EVALUATED");
+    expect(plans[0]?.cancelReason).toBeUndefined();
   });
 
   it("只有 EVALUATED 受 TTL 约束：READY 等升档中的计划、EXECUTING 在途计划、终态计划一律不动", () => {
@@ -89,13 +89,13 @@ describe("cancelStaleEvaluatedPlans", () => {
     } as ExpansionPlan;
     const { plans, cancelled } = cancelStaleEvaluatedPlans([young], 10000);
     expect(cancelled).toBe(0);
-    expect(plans[0]!.status).toBe("EVALUATED");
-    expect(plans[0]!.readySince).toBe(9800);
+    expect(plans[0]?.status).toBe("EVALUATED");
+    expect(plans[0]?.readySince).toBe(9800);
   });
 
   it("作废后的计划在 rebuildCooldown 内挡同房重建，期满放行（防「作废→立即重建」抖动）", () => {
     const { plans } = cancelStaleEvaluatedPlans([planWith("W1N1", "EVALUATED", 1000)], 1000 + TTL);
-    const cancelledAt = plans[0]!.updatedAt;
+    const cancelledAt = plans[0]?.updatedAt ?? -1;
     expect(isRebuildBlocked(plans, "W1N1", cancelledAt + 1)).toBe(true);
     expect(
       isRebuildBlocked(plans, "W1N1", cancelledAt + DEFAULT_LIFECYCLE_OPTIONS.rebuildCooldown),

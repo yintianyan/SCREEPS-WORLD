@@ -20,12 +20,18 @@ import {
 } from "../../../src/domain/economy/supply-contract";
 import type { SupplyNode } from "../../../src/domain/operation/supply-node";
 import type { DemandNode } from "../../../src/domain/operation/demand-node";
+import type { NetworkSnapshot } from "../../../src/domain/operation/network-snapshot";
 import { resetGlobals } from "../../support/factories";
+import type { TickContext } from "../../../src/kernel/contracts";
+
+// 测试夹具只构造部分引擎对象。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const g = (): any => globalThis as any;
 
 const T0 = 84_000_000;
 
-function makeCtx(tick: number): any {
-  return { tick, budget: { canStart: () => true }, snapshots: () => [] };
+function makeCtx(tick: number): TickContext {
+  return { tick, budget: { canStart: () => true }, snapshots: () => [] } as unknown as TickContext;
 }
 
 function supplyNode(room: string, resource = "energy"): SupplyNode {
@@ -90,8 +96,19 @@ function contractSnapshot(
   return serializeContract(c) as ContractMemorySnapshot;
 }
 
-function seedMemory(contracts: ContractMemorySnapshot[], pbBoostDemand?: any): void {
-  (globalThis as any).Memory = {
+function seedMemory(
+  contracts: ContractMemorySnapshot[],
+  pbBoostDemand?: Record<
+    string,
+    {
+      attackUnits: number;
+      healUnits: number;
+      until: number;
+      compounds: { attack: string; heal: string };
+    }
+  >,
+): void {
+  g().Memory = {
     rooms: {},
     creep: {},
     flags: {},
@@ -103,13 +120,13 @@ function seedMemory(contracts: ContractMemorySnapshot[], pbBoostDemand?: any): v
 }
 
 function loadLedger(): SupplyContract[] {
-  const raw = (globalThis as any).Memory.kernel?.supplyContracts ?? [];
+  const raw = g().Memory.kernel?.supplyContracts ?? [];
   return (raw as ContractMemorySnapshot[]).map(deserializeContract);
 }
 
 beforeEach(() => {
   resetGlobals();
-  const g = globalCache() as any;
+  const g = globalCache() as { networkSnapshot?: unknown };
   delete g.networkSnapshot;
 });
 
@@ -119,7 +136,7 @@ describe("supply contract 契约活性（批次 3 #6）", () => {
     globalCache().networkSnapshot = {
       supplyNodes: [supplyNode("W37S58")],
       demandNodes: [demandNode("W38S56", 20000)],
-    } as any;
+    } as unknown as NetworkSnapshot;
 
     runSpecializationPlanning(makeCtx(T0));
     runSpecializationPlanning(makeCtx(T0 + 100));
@@ -127,8 +144,8 @@ describe("supply contract 契约活性（批次 3 #6）", () => {
 
     const ledger = loadLedger();
     expect(ledger).toHaveLength(1);
-    expect(ledger[0]!.lastMatchedAt).toBe(T0 + 200); // 最后一趟 pass 盖章
-    expect(ledger[0]!.status).toBe("active");
+    expect(ledger[0]?.lastMatchedAt).toBe(T0 + 200); // 最后一趟 pass 盖章
+    expect(ledger[0]?.status).toBe("active");
   });
 
   it("核心回归：networkSnapshot 缺失（heap 空窗）→ stale 清理照常执行", () => {
@@ -143,7 +160,7 @@ describe("supply contract 契约活性（批次 3 #6）", () => {
 
     const ledger = loadLedger();
     expect(ledger).toHaveLength(1); // 过期者被清、年轻者存活
-    expect(ledger[0]!.sourceRoom).toBe("W39S55");
+    expect(ledger[0]?.sourceRoom).toBe("W39S55");
   });
 
   it("线上僵尸合同复现：ca=ua 无 lm、存活 100 万拍 → 首趟 pass 即清", () => {
@@ -152,7 +169,7 @@ describe("supply contract 契约活性（批次 3 #6）", () => {
     globalCache().networkSnapshot = {
       supplyNodes: [supplyNode("W37S58")],
       demandNodes: [], // 需求端已消失 ⇒ 无匹配、无新签发（隔离清理断言）
-    } as any;
+    } as unknown as NetworkSnapshot;
 
     runSpecializationPlanning(makeCtx(84_316_316));
 
@@ -164,13 +181,13 @@ describe("supply contract 契约活性（批次 3 #6）", () => {
     globalCache().networkSnapshot = {
       supplyNodes: [supplyNode("W37S58")],
       demandNodes: [demandNode("W38S56", 20000)],
-    } as any;
+    } as unknown as NetworkSnapshot;
     runSpecializationPlanning(makeCtx(T0)); // 匹配、盖章
 
-    delete (globalCache() as any).networkSnapshot; // 部署/预算饿死 → heap 空窗
+    delete globalCache().networkSnapshot; // 部署/预算饿死 → heap 空窗
     runSpecializationPlanning(makeCtx(T0 + 100));
     expect(loadLedger()).toHaveLength(1); // 宽限内不误杀
-    expect(loadLedger()[0]!.lastMatchedAt).toBe(T0); // 不推进但也没清
+    expect(loadLedger()[0]?.lastMatchedAt).toBe(T0); // 不推进但也没清
 
     runSpecializationPlanning(makeCtx(T0 + SUPPLY_CONTRACT_STALE_TICKS + 200));
     expect(loadLedger()).toHaveLength(0); // 连续超窗 → 确实无法再验证 → 清
@@ -178,22 +195,32 @@ describe("supply contract 契约活性（批次 3 #6）", () => {
 
   it("pbBoostDemand 过期残留无条件清扫（快照缺失也清）", () => {
     seedMemory([contractSnapshot("W37S58", "W38S56", T0 - 200)], {
-      W37S58: { attackUnits: 4, healUnits: 2, until: T0 - 1, compounds: {} }, // 过期
-      W38S56: { attackUnits: 4, healUnits: 2, until: T0 + 500, compounds: {} }, // 现行
+      W37S58: {
+        attackUnits: 4,
+        healUnits: 2,
+        until: T0 - 1,
+        compounds: { attack: "XGH2O", heal: "XGH2O" },
+      },
+      W38S56: {
+        attackUnits: 4,
+        healUnits: 2,
+        until: T0 + 500,
+        compounds: { attack: "XGH2O", heal: "XGH2O" },
+      },
     });
-    delete (globalCache() as any).networkSnapshot;
+    delete globalCache().networkSnapshot;
 
     runSpecializationPlanning(makeCtx(T0));
 
-    const demand = (globalThis as any).Memory.kernel.pbBoostDemand;
+    const demand = g().Memory.kernel.pbBoostDemand;
     expect(demand.W37S58).toBeUndefined();
     expect(demand.W38S56).toBeDefined();
   });
 
   it("pbBoostDemand 无残留时不写 Memory（卫生段零写放大）", () => {
     seedMemory([], undefined);
-    delete (globalCache() as any).networkSnapshot;
+    delete globalCache().networkSnapshot;
     runSpecializationPlanning(makeCtx(T0));
-    expect((globalThis as any).Memory.kernel.pbBoostDemand).toBeUndefined();
+    expect(g().Memory.kernel.pbBoostDemand).toBeUndefined();
   });
 });

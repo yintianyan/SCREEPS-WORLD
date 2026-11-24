@@ -11,7 +11,7 @@ import {
   mockCreep,
   mockPos,
 } from "../../support/factories";
-import { globalCache } from "../../../src/kernel/global-cache";
+import { globalCache, type CreepRef } from "../../../src/kernel/global-cache";
 
 beforeEach(() => {
   resetGlobals();
@@ -284,20 +284,23 @@ describe("distributor storage-link 灌能 controller-link（②b 0通勤升级�
 
   it("storage keeper 在岗时 distributor 不再重复灌 storage link", () => {
     const { snap, storageLink } = feedSnap(0, 0);
-    (globalCache() as any).creepRefs = [
-      {
-        name: "keeper",
-        role: "linkKeeper",
-        home: snap.roomName,
-        roomName: snap.roomName,
-        x: 30,
-        y: 31,
-        linkKeeperPost: "storage",
-        recycle: false,
-      },
-    ];
+    const keeper: CreepRef = {
+      name: "keeper",
+      role: "linkKeeper",
+      home: snap.roomName,
+      roomName: snap.roomName,
+      spawning: false,
+      recycle: false,
+      bodyLength: 0,
+      body: [],
+      x: 30,
+      y: 31,
+      energyCarried: 0,
+      linkKeeperPost: "storage",
+    };
+    globalCache().creepRefs = [keeper];
     const creep = mockCreep({ pos: mockPos(25, 25) });
-    expect(getDistributorFillTarget(creep as any, snap)?.id).not.toBe(storageLink.id);
+    expect(getDistributorFillTarget(creep, snap)?.id).not.toBe(storageLink.id);
     expect(hasDistributorFillDemand(snap, 0)).toBe(false);
   });
 

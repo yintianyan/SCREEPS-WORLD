@@ -101,6 +101,7 @@ export function computeUpgradeFeedCap(
 ): number | undefined {
   if (snapshot.storage === undefined || snapshot.controller === undefined) return undefined;
   const ctrl = snapshot.controller;
+  const storage = snapshot.storage;
   const ctrlLink = snapshot.links.find(l => l.pos.getRangeTo(ctrl.pos) <= 2);
   const storageLink = findStorageLink(snapshot);
   const station = snapshot.controllerContainer ?? ctrlLink;
@@ -132,7 +133,7 @@ export function computeUpgradeFeedCap(
         l.pos,
         sourcePoints,
         ctrl.pos,
-        snapshot.storage!.pos,
+        storage.pos,
         ranges,
         snapshot.spawns.map(s => s.pos),
       ) === "source",

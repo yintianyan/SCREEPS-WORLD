@@ -119,7 +119,9 @@ export function computeLinkReserveCells(input: LinkReserveInput): Set<number> {
             )
           : candidates;
       if (viable.length === 0) continue;
-      reserved.add(packPos(viable[0]!.x, viable[0]!.y));
+      const first = viable[0];
+      if (!first) continue;
+      reserved.add(packPos(first.x, first.y));
       remaining--;
     }
   }

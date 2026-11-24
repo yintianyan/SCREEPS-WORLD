@@ -305,7 +305,7 @@ export const towerDefenseSystem: System = {
             const spend =
               wallBudgetExempt || !wallBudgetTracked
                 ? { granted: TOWER_ENERGY_COST, pool: wallBudgetPool ?? 0 }
-                : spendWallBudget(wallBudgetPool!, TOWER_ENERGY_COST);
+                : spendWallBudget(wallBudgetPool ?? 0, TOWER_ENERGY_COST);
             if (spend.granted >= TOWER_ENERGY_COST) {
               if (!wallBudgetExempt && wallBudgetTracked) {
                 (globalCache().wallBudgets ??= {})[snapshot.roomName] = spend.pool;

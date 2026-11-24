@@ -4,6 +4,10 @@ import { factoryManagerSystem } from "../../../src/systems/room/factory-manager"
 import { CONFIG } from "../../../src/config";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 
+// 测试夹具只构造部分引擎对象。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const g = (): any => globalThis as any;
+
 /** 资源感知 store mock（方法不可枚举，与引擎 store 语义一致）。 */
 function resStore(resources: Record<string, number>, _capacity = 5000): any {
   const store: Record<string, number> = { ...resources };
@@ -45,7 +49,7 @@ describe("factory-manager — processPower 调度接线", () => {
 
     expect(processPower).toHaveBeenCalledTimes(1);
     // 实扣能量 50 记入工业桶（只观测，不进消费合计）。
-    const ledger = (globalThis as any).energyLedger?.rooms?.W7N4;
+    const ledger = g().energyLedger?.rooms?.W7N4;
     expect(ledger?.industrialSpend).toBe(50);
   });
 
@@ -59,7 +63,7 @@ describe("factory-manager — processPower 调度接线", () => {
     factoryManagerSystem.run(makeCtx([room]));
 
     expect(processPower).toHaveBeenCalledTimes(1);
-    expect((globalThis as any).energyLedger?.rooms?.W7N4?.industrialSpend).toBeUndefined();
+    expect(g().energyLedger?.rooms?.W7N4?.industrialSpend).toBeUndefined();
   });
 
   it("storage 低于地板 → 暂停（投资让位 spawn/tower）", () => {
@@ -91,7 +95,7 @@ describe("factory-manager — processPower 调度接线", () => {
     factoryManagerSystem.run(makeCtx([room]));
 
     expect(processPower).toHaveBeenCalledTimes(1);
-    const ledger = (globalThis as any).energyLedger?.rooms?.W7N4;
+    const ledger = g().energyLedger?.rooms?.W7N4;
     expect(ledger?.industrialSpend).toBe(50);
   });
 

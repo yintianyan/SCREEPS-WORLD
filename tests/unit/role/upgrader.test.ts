@@ -13,6 +13,10 @@ import {
 } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 
+// 测试夹具只构造部分引擎对象。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const g = (): any => globalThis as any;
+
 const ORIGINAL_GCL = CONFIG.economy.upgrade.gclUpgrade;
 
 /** CONFIG 为 readonly 声明，测试需临时覆盖开关（用断言绕开只读修饰）。 */
@@ -48,10 +52,10 @@ describe("upgrader — work 模式", () => {
   });
 
   it("帝国净流之和为负 → 成熟房暂停升级（失血闸）", () => {
-    (globalThis as any).Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
+    g().Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
     // 单写者契约：storage 5K < 10K 档 → room-state 落盘 latch=false；
     // 空载 upgrader 直接 idle（背能个体才按「先烧完再停」豁免）。
-    (globalThis as any).Memory.rooms = { W7N4: { upgradeActive: false } };
+    g().Memory.rooms = { W7N4: { upgradeActive: false } };
     const controller = mockController();
     const storage = mockStructure("storage", { id: "st1", energy: 5000, capacity: 100000 });
     const snap = mockSnapshot({ controller, rcl: 4, storage });
@@ -69,7 +73,7 @@ describe("upgrader — work 模式", () => {
   });
 
   it("帝国净流之和为负 → 早期房（无 storage）仍升级", () => {
-    (globalThis as any).Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
+    g().Memory.kernel = { gateNetFlow: { A: -5, B: -1 } };
     const controller = mockController();
     const snap = mockSnapshot({ controller, rcl: 3, storage: undefined });
     const creep = mockCreep({
@@ -86,7 +90,7 @@ describe("upgrader — work 模式", () => {
   });
 
   it("帝国净流之和为正 → 正常升级（控制组）", () => {
-    (globalThis as any).Memory.kernel = { gateNetFlow: { A: 2, B: 3 } };
+    g().Memory.kernel = { gateNetFlow: { A: 2, B: 3 } };
     const controller = mockController();
     const snap = mockSnapshot({ controller });
     const creep = mockCreep({
@@ -205,7 +209,7 @@ describe("upgrader — RCL8 满级停烧（W7N4 存不下能量主因修复）",
  */
 describe("upgrader — 降级风险与 room-state 共用一把尺（迟滞带内必须干完这一棒）", () => {
   it("带内：ttd=12000 且标志已置位 → 继续保级（旧判据在此拍停手，把 ttd 钉死在 10000）", () => {
-    (globalThis as any).Memory.rooms.W7N4.controllerDowngradeRisk = true;
+    g().Memory.rooms.W7N4.controllerDowngradeRisk = true;
     const controller = mockController({ level: 8, ticksToDowngrade: 12000 });
     const snap = mockSnapshot({ rcl: 8, controller });
     const creep = mockCreep({
@@ -225,7 +229,7 @@ describe("upgrader — 降级风险与 room-state 共用一把尺（迟滞带内
 
   it("带内反向：ttd=12000 但标志已清零 + GCL 关闭 → RCL8 停烧（标志说了算）", () => {
     setGclUpgrade(false);
-    (globalThis as any).Memory.rooms.W7N4.controllerDowngradeRisk = false;
+    g().Memory.rooms.W7N4.controllerDowngradeRisk = false;
     const controller = mockController({ level: 8, ticksToDowngrade: 12000 });
     const snap = mockSnapshot({ rcl: 8, controller });
     const creep = mockCreep({
@@ -745,7 +749,7 @@ describe("upgrader — claim-secure 护栏（脆弱新房放宽取能地板）",
   it("claimSecure=true 时即使 energyAvailable 低于地板也放行 acquire（保级优先）", () => {
     // 模拟 W38S59 类新房：RCL3、无任何替代能量源、energyAvailable 偏低、ttd 远高于
     // 紧急阈值（20000）—— 正常地板门禁会拦截，但 claimSecure 应放行让 upgrader 喂 controller。
-    (globalThis as any).Memory.rooms.W7N4.claimSecure = true;
+    g().Memory.rooms.W7N4.claimSecure = true;
     const controller = mockController({ ticksToDowngrade: 20000 });
     const source = mockSource("s1");
     const snap = mockSnapshot({
@@ -781,7 +785,7 @@ describe("upgrader — claim-secure 护栏（脆弱新房放宽取能地板）",
 // EVALUATED/READY/APPROVED 是纸面候选、零占用，不再构成推进态。
 describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
   it("推进态(EXECUTING) 且 RCL7、净流 1<2 ⇒ 暂停升级（2026-11-08 门槛 5→2）", () => {
-    (globalThis as any).Memory.kernel = {
+    g().Memory.kernel = {
       gateNetFlow: { A: 1, B: 0 },
       expansionPlans: [{ st: "EXECUTING" }],
     };
@@ -795,7 +799,7 @@ describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
   it("回归（立案①）：纸面候选(EVALUATED) 同净流 1 ⇒ 放行——EVALUATED 不再构成推进态，升级道不被幽灵计划锁死", () => {
     // 线上病灶复现：W38S56 RCL7 挂着两张永停 EVALUATED 的计划（被 G6 挡住），
     // 旧实现据此把升级道按冲刺语义关死 40 万 tick。
-    (globalThis as any).Memory.kernel = {
+    g().Memory.kernel = {
       gateNetFlow: { A: 1, B: 0 },
       expansionPlans: [{ st: "EVALUATED" }],
     };
@@ -807,7 +811,7 @@ describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
   });
 
   it("无计划时同净流 3 ⇒ 按原语义放行（控制组）", () => {
-    (globalThis as any).Memory.kernel = { gateNetFlow: { A: 2, B: 1 } };
+    g().Memory.kernel = { gateNetFlow: { A: 2, B: 1 } };
     const controller = mockController();
     const snap = mockSnapshot({ controller, rcl: 7 });
     const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
@@ -816,7 +820,7 @@ describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
   });
 
   it("推进态(EXECUTING)且净流达 2≥2 ⇒ 放行（预留地板的边界）", () => {
-    (globalThis as any).Memory.kernel = {
+    g().Memory.kernel = {
       gateNetFlow: { A: 1, B: 1 },
       expansionPlans: [{ st: "EXECUTING" }],
     };
@@ -831,7 +835,7 @@ describe("upgrader — 扩张推进态的升级预留（限定版）", () => {
 // 扩张推进态 + CPU 无余量时，连“净流够”的升级也停。
 describe("upgrader — 扩张推进态的 CPU 余量闸", () => {
   it("推进态(EXECUTING)且 tier=tight ⇒ 即使净流 6≥2 也暂停升级", () => {
-    (globalThis as any).Memory.kernel = {
+    g().Memory.kernel = {
       gateNetFlow: { A: 3, B: 3 },
       expansionPlans: [{ st: "EXECUTING" }],
       capacity: { tier: "tight" },
@@ -844,7 +848,7 @@ describe("upgrader — 扩张推进态的 CPU 余量闸", () => {
   });
 
   it("回归（立案①）：纸面候选(EVALUATED) + tier=tight ⇒ 放行——CPU 闸只对真实推进态生效", () => {
-    (globalThis as any).Memory.kernel = {
+    g().Memory.kernel = {
       gateNetFlow: { A: 3, B: 3 },
       expansionPlans: [{ st: "EVALUATED" }],
       capacity: { tier: "tight" },
@@ -857,7 +861,7 @@ describe("upgrader — 扩张推进态的 CPU 余量闸", () => {
   });
 
   it("推进态(EXECUTING)且 tier=comfortable ⇒ 放行（控制组）", () => {
-    (globalThis as any).Memory.kernel = {
+    g().Memory.kernel = {
       gateNetFlow: { A: 3, B: 3 },
       expansionPlans: [{ st: "EXECUTING" }],
       capacity: { tier: "comfortable" },

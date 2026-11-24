@@ -398,12 +398,14 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     );
     const keepers = requests.filter(r => r.role === "linkKeeper");
     expect(keepers).toHaveLength(1);
-    expect(keepers[0]!.memory.linkKeeperPost).toBe("storage");
+    expect(keepers[0]?.memory.linkKeeperPost).toBe("storage");
   });
 
   it("storage Link 距 storage=3 时几何不合格，不孵 keeper，保留 hauler 回退", () => {
     const snap = linkSnapshot({ rcl: 8, storageLinkEnergy: 700 });
-    snap.links[0]!.pos = mockPos(13, 10) as never;
+    const link = snap.links[0];
+    if (!link) throw new Error("storage link missing");
+    link.pos = mockPos(13, 10) as never;
     const { requests } = evaluateDemand(
       snap,
       [],
@@ -444,7 +446,7 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     );
     const keepers = requests.filter(r => r.role === "linkKeeper");
     expect(keepers).toHaveLength(1);
-    expect(keepers[0]!.memory.linkKeeperPost).toBe("spawn");
+    expect(keepers[0]?.memory.linkKeeperPost).toBe("spawn");
   });
 
   it("container 积压 + storage link 积压 → 信号叠加（两处都需要 hauler）", () => {

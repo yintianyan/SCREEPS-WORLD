@@ -594,8 +594,8 @@ describe("RCL8 spawn Link 分配", () => {
       classifyLinkRole(
         candidate.pos,
         snap.sources.map(s => s.pos),
-        snap.controller!.pos,
-        snap.storage!.pos,
+        snap.controller?.pos,
+        snap.storage?.pos,
         resolveLinkRoleRanges(CONFIG.economy.link),
         snap.spawns.map(s => s.pos),
       ),

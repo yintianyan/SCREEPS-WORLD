@@ -430,7 +430,20 @@ export function planRemotePathRoads(
   // 插桩落盘（批次 4 #7）：本轮 createConstructionSite 返回码分布 + 各道闸止步处。
   // 与车道口径（pendingTotal/saturated）并排，一套读数分清「车道挤占 / per-op 帽 /
   // 每轮限速 / 无候选格 / 地形失败」—— 修哪道闸由数据说了算。
-  const laneStats = (Memory.kernel?.stats as any)?.remoteRoadLane;
+  const laneStats = (
+    Memory.kernel?.stats as
+      | {
+          remoteRoadLane?: {
+            created: number;
+            released: number;
+            createAttempts: number;
+            createErrFull: number;
+            createErrOther: number;
+            blockedBy: string;
+          };
+        }
+      | undefined
+  )?.remoteRoadLane;
   if (laneStats) {
     laneStats.created = created;
     laneStats.released = released;

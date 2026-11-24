@@ -111,7 +111,7 @@ function seedHeat(tiles: [number, number][], walks = 5): void {
  * 未预置的用例走的是「本轮起表、下轮才可能收」那条路。
  */
 function watchFor(
-  sites: any[],
+  sites: { id: string; progress: number }[],
   tick: number,
   frozenAgo: number,
 ): Record<string, { p: number; t: number }> {
@@ -202,9 +202,9 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
 
     planRemotePathRoads(HOME, ops, mockContext());
 
-    expect(sites[0]!.remove).toHaveBeenCalledTimes(1); // 20,40 — halo 外，冻满 2000
-    expect(sites[2]!.remove).toHaveBeenCalledTimes(1); // 20,30 — 有进度但冻住了：正是 970 那个形状
-    expect(sites[1]!.remove).not.toHaveBeenCalled(); // 20,21 — 线内格走 6000 长窗，未满
+    expect(sites[0]?.remove).toHaveBeenCalledTimes(1); // 20,40 — halo 外，冻满 2000
+    expect(sites[2]?.remove).toHaveBeenCalledTimes(1); // 20,30 — 有进度但冻住了：正是 970 那个形状
+    expect(sites[1]?.remove).not.toHaveBeenCalled(); // 20,21 — 线内格走 6000 长窗，未满
     expect(op.roadReaped).toBe(2);
   });
 
@@ -222,32 +222,34 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
 
     planRemotePathRoads(HOME, ops, mockContext());
 
-    expect(sites[0]!.remove).toHaveBeenCalledTimes(1); // 在线格冻满 6000 长窗 → 收
+    expect(sites[0]?.remove).toHaveBeenCalledTimes(1); // 在线格冻满 6000 长窗 → 收
     expect(op.roadReaped).toBe(1);
-    expect(op.roadHeat![packed(20, 22)]).toBe(407); // 814 → 407：回收即降温，不再原地重铺
+    expect(op.roadHeat?.[packed(20, 22)]).toBe(407); // 814 → 407：回收即降温，不再原地重铺
   });
 
   it("逐格钟：一格在推进不掩盖另一格的冻结（和式计时的盲区）", () => {
     const sites = [roadSite(20, 40, 50), roadSite(30, 40, 0)];
     // watch 预置的是旧进度：A 实际长到 50（施工在发生），B 仍是 0（真死格）
     const op = activeOp({ roadSiteWatch: watchFor(sites, 5001, 2000) });
-    op.roadSiteWatch!["site_20_40"] = { p: 0, t: 3001 }; // 覆写为旧进度：p=0 ≠ 实际 50
+    op.roadSiteWatch ??= {};
+    op.roadSiteWatch["site_20_40"] = { p: 0, t: 3001 }; // 覆写为旧进度：p=0 ≠ 实际 50
     const ops = { [T]: op };
     seed(5001, ops, { [T]: targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]) });
     seedHeat([[20, 22]]);
 
     planRemotePathRoads(HOME, ops, mockContext());
 
-    expect(sites[0]!.remove).not.toHaveBeenCalled(); // A 进度变 ⇒ 拨钟存活
-    expect(op.roadSiteWatch!["site_20_40"]).toEqual({ p: 50, t: 5001 });
-    expect(sites[1]!.remove).toHaveBeenCalledTimes(1); // B 冻满 ⇒ 收（和式下会被 A 掩盖）
+    expect(sites[0]?.remove).not.toHaveBeenCalled(); // A 进度变 ⇒ 拨钟存活
+    expect(op.roadSiteWatch?.["site_20_40"]).toEqual({ p: 50, t: 5001 });
+    expect(sites[1]?.remove).toHaveBeenCalledTimes(1); // B 冻满 ⇒ 收（和式下会被 A 掩盖）
     expect(op.roadReaped).toBe(1);
   });
 
   it("格子的进度还在变 → 施工仍在发生，不回收且拨钟", () => {
     const sites = [roadSite(20, 40, 100)];
     const op = activeOp({ roadSiteWatch: watchFor(sites, 9000, 2000) });
-    op.roadSiteWatch!["site_20_40"] = { p: 50, t: 8800 }; // 上轮记的是 50，这一轮长成 100 了
+    op.roadSiteWatch ??= {};
+    op.roadSiteWatch["site_20_40"] = { p: 50, t: 8800 }; // 上轮记的是 50，这一轮长成 100 了
     const ops = { [T]: op };
     const room = targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]);
     seed(9000, ops, { [T]: room });
@@ -255,8 +257,8 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
 
     planRemotePathRoads(HOME, ops, mockContext());
 
-    expect(sites[0]!.remove).not.toHaveBeenCalled();
-    expect(op.roadSiteWatch!["site_20_40"]).toEqual({ p: 100, t: 9000 }); // 拨钟到本轮
+    expect(sites[0]?.remove).not.toHaveBeenCalled();
+    expect(op.roadSiteWatch?.["site_20_40"]).toEqual({ p: 100, t: 9000 }); // 拨钟到本轮
     expect(op.roadReaped).toBe(0);
     expect(room.createConstructionSite).toHaveBeenCalledWith(20, 22, STRUCTURE_ROAD);
   });
@@ -285,8 +287,8 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
 
     planRemotePathRoads(HOME, ops, mockContext());
 
-    expect(sites[0]!.remove).not.toHaveBeenCalled();
-    expect(sites[1]!.remove).not.toHaveBeenCalled();
+    expect(sites[0]?.remove).not.toHaveBeenCalled();
+    expect(sites[1]?.remove).not.toHaveBeenCalled();
     expect(room.createConstructionSite).not.toHaveBeenCalled();
   });
 
@@ -325,7 +327,7 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
     // 计数记「清扫后」口径：残骸当场让出车道。
     expect(op.roadSiteCount).toBe(4);
     // roadLaid 留痕列已删（批次 4 #15）——铺路数量改由 stats.remoteRoadLane.created 承担。
-    expect((g().Memory.kernel?.stats as any)?.remoteRoadLane?.created).toBe(1);
+    expect(g().Memory.kernel?.stats?.remoteRoadLane?.created).toBe(1);
   });
 
   it("帽是跨主房口径：别的 home 挂满 20 时本房不建（但仍清扫）", () => {
@@ -342,10 +344,10 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
     planRemotePathRoads(HOME, ops, mockContext());
 
     expect(room.createConstructionSite).not.toHaveBeenCalled();
-    expect(sites[0]!.remove).toHaveBeenCalledTimes(1);
+    expect(sites[0]?.remove).toHaveBeenCalledTimes(1);
     // roadLaid 已删（#15）；闸关着的证据改读 stats.remoteRoadLane.blockedBy。
-    expect((g().Memory.kernel?.stats as any)?.remoteRoadLane?.blockedBy).toBe("lane-cap");
-    expect((g().Memory.kernel?.stats as any)?.remoteRoadLane?.created).toBe(0);
+    expect(g().Memory.kernel?.stats?.remoteRoadLane?.blockedBy).toBe("lane-cap");
+    expect(g().Memory.kernel?.stats?.remoteRoadLane?.created).toBe(0);
   });
 
   it("反向实验：上一趟铺了 2，被跨主房帽挡住这一趟读回 0 而不是 2", () => {
@@ -363,8 +365,8 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
 
     planRemotePathRoads(HOME, ops, mockContext());
 
-    expect((g().Memory.kernel?.stats as any)?.remoteRoadLane?.blockedBy).toBe("lane-cap");
-    expect(sites[0]!.remove).toHaveBeenCalledTimes(1);
+    expect(g().Memory.kernel?.stats?.remoteRoadLane?.blockedBy).toBe("lane-cap");
+    expect(sites[0]?.remove).toHaveBeenCalledTimes(1);
   });
 
   it("abandoned op → 计数归零让出车道，且不碰该房", () => {
@@ -399,7 +401,7 @@ describe("planRemotePathRoads — 热度账跨进程续账", () => {
     planRemotePathRoads(HOME, { [T]: op }, mockContext());
 
     expect(op.roadHeatTiles).toBe(2);
-    expect(sites[0]!.remove).toHaveBeenCalledTimes(1); // 残骸照收 —— 证据不依赖本次进程
+    expect(sites[0]?.remove).toHaveBeenCalledTimes(1); // 残骸照收 —— 证据不依赖本次进程
     expect(room.createConstructionSite).toHaveBeenCalledWith(20, 21, STRUCTURE_ROAD);
     expect(room.createConstructionSite).toHaveBeenCalledWith(20, 40, STRUCTURE_ROAD);
   });
@@ -443,7 +445,7 @@ describe("planRemotePathRoads — 热度账跨进程续账", () => {
     planRemotePathRoads(HOME, { [T]: op }, mockContext());
     expect(op.roadHeat[packed(20, 22)]).toBe(5);
     expect(Object.keys(g().roomTraffic[T])).toHaveLength(0);
-    expect((g().Memory.kernel?.stats as any)?.remoteRoadLane?.created).toBe(1);
+    expect(g().Memory.kernel?.stats?.remoteRoadLane?.created).toBe(1);
 
     g().roomTraffic[T][packed(20, 22)] = 1; // 新窗口里只又踩了 1 次
     seed(6600, { [T]: op }, { [T]: room });

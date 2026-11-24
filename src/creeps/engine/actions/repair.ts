@@ -306,11 +306,9 @@ export function repairFortifications(): ActionCandidate<Fortification> {
           Memory.kernel?.strategy?.posture ?? "develop",
         );
         const pools = globalCache().wallBudgets;
-        if (!exempt && isWallBudgetTracked(pools, ac.snapshot.roomName)) {
-          pools![ac.snapshot.roomName] = spendWallBudget(
-            pools![ac.snapshot.roomName],
-            energyIntent,
-          ).pool;
+        const pool = pools?.[ac.snapshot.roomName];
+        if (!exempt && pools && pool !== undefined) {
+          pools[ac.snapshot.roomName] = spendWallBudget(pool, energyIntent).pool;
         }
       }
     },

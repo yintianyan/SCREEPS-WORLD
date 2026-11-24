@@ -176,7 +176,7 @@ describe("CpuBudget — 前馈预测", () => {
             total: 19.5,
             windowTicks: 200,
             unsampledTicks: 0,
-            at: (globalThis as any).Game.time,
+            at: Game.time,
           },
         },
       },
@@ -198,7 +198,7 @@ describe("CpuBudget — 前馈预测", () => {
             total: 12,
             windowTicks: 200,
             unsampledTicks: 0,
-            at: (globalThis as any).Game.time,
+            at: Game.time,
           },
         },
       },
@@ -217,7 +217,7 @@ describe("CpuBudget — 前馈预测", () => {
             total: 18,
             windowTicks: 200,
             unsampledTicks: 0,
-            at: (globalThis as any).Game.time,
+            at: Game.time,
           },
         },
       },
@@ -275,7 +275,7 @@ describe("CpuBudget — 前馈预测", () => {
     // 轮到它时 spent() 已≈本 tick 终值（实测 17.5~18.1）≥ softLimit(17.5) ——
     // 实时软上限对它是恒真闸，旁路若只解前馈则逃生口对它要救的系统打不开。
     const budget = new CpuBudget("healthy");
-    (globalThis as any).Game.time = 82450000;
+    Game.time = 82450000;
     (globalThis as any).Memory = {
       kernel: { stats: { cpuMax10: 5, cpuAvg10: 5 }, p3StarveBypassUntil: 82450600 },
     };

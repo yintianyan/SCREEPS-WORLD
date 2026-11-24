@@ -4,7 +4,12 @@ import { empireStrategySystem } from "../../../src/systems/empire/empire-strateg
 import { globalCache } from "../../../src/kernel/global-cache";
 import { EventKind } from "../../../src/kernel/event-log";
 import { CONFIG } from "../../../src/config";
+import type { TickContext } from "../../../src/kernel/contracts";
 import { mockBudget, mockController, mockSnapshot, resetGlobals } from "../../support/factories";
+
+// 测试夹具只构造部分引擎对象。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const g = (): any => globalThis as any;
 
 beforeEach(() => {
   resetGlobals();
@@ -14,7 +19,7 @@ function makeContext(snapshot?: any): any {
   const snap = snapshot ?? mockSnapshot();
   const b = mockBudget("healthy");
   return {
-    tick: (globalThis as any).Game.time,
+    tick: g().Game.time,
     budget: b,
     globalSiteCount: 0,
     getSnapshot: () => snap,
@@ -35,14 +40,12 @@ function setupRoom(
     storage: { store: { getUsedCapacity: () => storage } } as any,
     controller,
   });
-  (globalThis as any).Memory.rooms.W7N4 = {
+  g().Memory.rooms.W7N4 = {
     spawnQueue: [],
     buildQueue: [],
     colonyState: "normal",
     economyPressure: pressure,
-    ...(hostileAgo !== undefined
-      ? { lastHostileAt: (globalThis as any).Game.time - hostileAgo }
-      : {}),
+    ...(hostileAgo !== undefined ? { lastHostileAt: g().Game.time - hostileAgo } : {}),
   };
   return snap;
 }
@@ -52,10 +55,10 @@ function events(kind: number): any[] {
 }
 
 describe("empire-strategy — 容量发布", () => {
-  it("按 cpuAvg10/limit 分档写入 Memory.kernel.capacity", () => {
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
-    (globalThis as any).Game.cpu = {
+  it("按 cpuAvg10/limit 分档写入 g().Memory.kernel.capacity", () => {
+    g().Memory.kernel = {};
+    g().Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
+    g().Game.cpu = {
       limit: 20,
       tickLimit: 500,
       bucket: 10000,
@@ -64,15 +67,15 @@ describe("empire-strategy — 容量发布", () => {
     const snap = setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
 
-    expect((globalThis as any).Memory.kernel.capacity?.tier).toBe("abundant");
-    expect((globalThis as any).Memory.kernel.capacity?.since).toBe((globalThis as any).Game.time);
+    expect(g().Memory.kernel.capacity?.tier).toBe("abundant");
+    expect(g().Memory.kernel.capacity?.since).toBe(g().Game.time);
   });
 
   it("接线：stats.cpuRate 存在时用它分档，不是 cpuAvg10", () => {
     // 这条只守一个静默失效点：字段名写错时 pickCpuUsagePerTick 会「退回 cpuAvg10」并
     // 照常出一个 tier —— 前一条（只有 cpuAvg10）看不出接错，必须让两份读数故意不同档。
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = {
+    g().Memory.kernel = {};
+    g().Memory.kernel.stats = {
       cpuAvg10: 14, // 偏高读数 → tight
       cpuMax10: 13.2,
       cpuRate: {
@@ -81,10 +84,10 @@ describe("empire-strategy — 容量发布", () => {
         unsampledTicks: 0,
         total: 8.56,
         // 新鲜度：这份读数假定是「本拍刚采的」，缺 at 会被选择器当旧窗口拒绝。
-        at: (globalThis as any).Game.time,
+        at: g().Game.time,
       }, // 真值 → comfortable
     };
-    (globalThis as any).Game.cpu = {
+    g().Game.cpu = {
       limit: 20,
       tickLimit: 500,
       bucket: 10000,
@@ -93,19 +96,19 @@ describe("empire-strategy — 容量发布", () => {
     const snap = setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
 
-    expect((globalThis as any).Memory.kernel.capacity?.tier).toBe("comfortable");
+    expect(g().Memory.kernel.capacity?.tier).toBe("comfortable");
   });
 
   it("P95 越线时峰值压过均值：均值 comfortable 但容量保持 tight", () => {
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = {
+    g().Memory.kernel = {};
+    g().Memory.kernel.stats = {
       cpuAvg10: 8,
       cpuMax10: 12,
       cpuP95Window: 15,
       cpuPeakSamples: 300,
       cpuPeakSpanTicks: 2990,
     };
-    (globalThis as any).Game.cpu = {
+    g().Game.cpu = {
       limit: 20,
       tickLimit: 500,
       bucket: 10000,
@@ -114,7 +117,7 @@ describe("empire-strategy — 容量发布", () => {
     const snap = setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
 
-    const cap = (globalThis as any).Memory.kernel.capacity;
+    const cap = g().Memory.kernel.capacity;
     expect(cap.tier).toBe("tight");
     expect(cap.limitedBy).toBe("peak");
     expect(cap.inputs.cpuP95).toBe(15);
@@ -122,15 +125,15 @@ describe("empire-strategy — 容量发布", () => {
   });
 
   it("P95 样本不足时退回 cpuMax10，不把短窗当稳定峰值", () => {
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = {
+    g().Memory.kernel = {};
+    g().Memory.kernel.stats = {
       cpuAvg10: 8,
       cpuMax10: 12,
       cpuP95Window: 19,
       cpuPeakSamples: CONFIG.capacity.peakMinSamples - 1,
       cpuPeakSpanTicks: 280,
     };
-    (globalThis as any).Game.cpu = {
+    g().Game.cpu = {
       limit: 20,
       tickLimit: 500,
       bucket: 10000,
@@ -139,16 +142,16 @@ describe("empire-strategy — 容量发布", () => {
     const snap = setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
 
-    const cap = (globalThis as any).Memory.kernel.capacity;
+    const cap = g().Memory.kernel.capacity;
     expect(cap.tier).toBe("comfortable");
     expect(cap.inputs.cpuP95).toBeUndefined();
     expect(cap.inputs.cpuMax10).toBe(12);
   });
 
   it("有效上限取 min(cpuLimit, tickLimit)", () => {
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 4, cpuMax10: 4 };
-    (globalThis as any).Game.cpu = {
+    g().Memory.kernel = {};
+    g().Memory.kernel.stats = { cpuAvg10: 4, cpuMax10: 4 };
+    g().Game.cpu = {
       limit: 100,
       tickLimit: 10,
       bucket: 10000,
@@ -158,20 +161,20 @@ describe("empire-strategy — 容量发布", () => {
     empireStrategySystem.run(makeContext(snap));
 
     // avg 4 / min(100,10)=10 → 40% → comfortable（非 abundant）。
-    expect((globalThis as any).Memory.kernel.capacity?.tier).toBe("comfortable");
+    expect(g().Memory.kernel.capacity?.tier).toBe("comfortable");
   });
 });
 
 describe("empire-strategy — 议程归因（AgendaOutcome）", () => {
   it("退出 rcl-push 时记录进度增量与窗口时长", () => {
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.agenda = {
+    g().Memory.kernel = {};
+    g().Memory.kernel.agenda = {
       initiative: "rcl-push",
-      since: (globalThis as any).Game.time - 500,
+      since: g().Game.time - 500,
       progressBase: 10000,
     };
-    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
-    (globalThis as any).Game.cpu = {
+    g().Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
+    g().Game.cpu = {
       limit: 20,
       tickLimit: 500,
       bucket: 10000,
@@ -181,7 +184,7 @@ describe("empire-strategy — 议程归因（AgendaOutcome）", () => {
     const snap = setupRoom({ storage: 5000, progress: 12500, hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
 
-    expect((globalThis as any).Memory.kernel.agenda?.initiative).toBe("develop");
+    expect(g().Memory.kernel.agenda?.initiative).toBe("develop");
     const outcome = events(29)[0];
     expect(outcome?.d).toEqual([2, 2500, 500]); // [rcl-push, progressGained, duration]
     // 切换事件仍记录。
@@ -189,9 +192,9 @@ describe("empire-strategy — 议程归因（AgendaOutcome）", () => {
   });
 
   it("进入 rcl-push 时记录 progressBase；未退出不记录 AgendaOutcome", () => {
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
-    (globalThis as any).Game.cpu = {
+    g().Memory.kernel = {};
+    g().Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
+    g().Game.cpu = {
       limit: 20,
       tickLimit: 500,
       bucket: 10000,
@@ -201,7 +204,7 @@ describe("empire-strategy — 议程归因（AgendaOutcome）", () => {
     const snap = setupRoom({ storage: 90000, progress: 8000, hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
 
-    const agenda = (globalThis as any).Memory.kernel.agenda;
+    const agenda = g().Memory.kernel.agenda;
     expect(agenda?.initiative).toBe("rcl-push");
     expect(agenda?.progressBase).toBe(8000);
     expect(events(29)).toHaveLength(0);
@@ -220,13 +223,18 @@ describe("empire-strategy — 议程归因（AgendaOutcome）", () => {
  */
 describe("empire-strategy — 决策标量落盘", () => {
   function runWith(cpu: Record<string, unknown>, gcl: unknown): any {
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
-    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, getUsed: () => 0, ...cpu };
-    (globalThis as any).Game.gcl = gcl;
+    g().Memory.kernel = {};
+    g().Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
+    g().Game.cpu = {
+      limit: 20,
+      tickLimit: 500,
+      getUsed: () => 0,
+      ...cpu,
+    };
+    g().Game.gcl = gcl;
     const snap = setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
-    return (globalThis as any).Memory.kernel.strategy;
+    return g().Memory.kernel.strategy;
   }
 
   it("两键都写，且等于本次判定实际用到的值", () => {
@@ -262,7 +270,7 @@ describe("situation 的截断前留痕列", () => {
   it("跑一轮就落 adversariesTotal／conditionsTotal，且条数 >= 榜宽内实际条目数", () => {
     setupRoom();
     empireStrategySystem.run(makeContext());
-    const sit = (globalThis as any).Memory.kernel.situation;
+    const sit = g().Memory.kernel.situation;
     expect(typeof sit.adversariesTotal).toBe("number");
     expect(typeof sit.conditionsTotal).toBe("number");
     // 本夹具没有威胁 ⇒ 全集应为 0；两列同时在场才说明写者接上了（缺席＝没接）
@@ -280,7 +288,7 @@ describe("situation 的截断前留痕列", () => {
       threatCreeps: owners.map((o, i) => ({ owner: { username: o }, name: `c${i}` })) as any,
     });
     empireStrategySystem.run(makeContext(snap));
-    const sit = (globalThis as any).Memory.kernel.situation;
+    const sit = g().Memory.kernel.situation;
     expect(sit.adversariesTotal).toBe(10);
     expect(Object.keys(sit.adversaries).length).toBe(8);
     expect(Object.keys(sit.adversaries)).toEqual(owners.slice(0, 8));
@@ -293,16 +301,16 @@ describe("situation 的截断前留痕列", () => {
     // 两类的 severity：newborn 取 2（无 spawn + 敌情、TTD 未到 800）／controllerUnderAttack 取 3，
     // 排序 `b.severity - a.severity` ⇒ 七条 3 在前、七条 2 在后 ⇒ 被切掉的 2 条全是 severity 2，
     // 也就是「榜里的最低档不完整」——没有 conditionsTotal 就只能读成「帝国只有 12 个条件」。
-    (globalThis as any).Memory.kernel = {};
-    const tick = (globalThis as any).Game.time;
+    g().Memory.kernel = {};
+    const tick = g().Game.time;
     const snaps: any[] = [];
     for (let i = 0; i < 7; i++) {
       const name = `R${i}`;
       const controller: any = mockController({ my: true });
       controller.ticksToDowngrade = 1000; // < CONTROLLER_PRESSURE_TTD(2000)
       controller.progress = 12000;
-      (globalThis as any).Game.rooms[name] = { controller, name };
-      (globalThis as any).Memory.rooms[name] = {
+      g().Game.rooms[name] = { controller, name };
+      g().Memory.rooms[name] = {
         spawnQueue: [],
         buildQueue: [],
         colonyState: "normal",
@@ -324,7 +332,7 @@ describe("situation 的截断前留痕列", () => {
     ctx.snapshots = () => snaps[Symbol.iterator]();
     ctx.getSnapshot = (n: string) => snaps.find(s => s.roomName === n);
     empireStrategySystem.run(ctx);
-    const sit = (globalThis as any).Memory.kernel.situation;
+    const sit = g().Memory.kernel.situation;
     expect(sit.conditionsTotal).toBe(14);
     expect(sit.conditions.length).toBe(12);
     expect(sit.conditions.filter((c: any) => c.severity === 3).length).toBe(7);
@@ -334,14 +342,19 @@ describe("situation 的截断前留痕列", () => {
 
 describe("empire-strategy — 生效参数集落盘（params）", () => {
   function runOnce(envProfile?: Record<string, unknown>): any {
-    (globalThis as any).Memory.kernel = {};
-    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
-    if (envProfile) (globalThis as any).Memory.kernel.environment = envProfile;
-    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, getUsed: () => 0, bucket: 9000 };
-    (globalThis as any).Game.gcl = { level: 5 };
+    g().Memory.kernel = {};
+    g().Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
+    if (envProfile) g().Memory.kernel.environment = envProfile;
+    g().Game.cpu = {
+      limit: 20,
+      tickLimit: 500,
+      getUsed: () => 0,
+      bucket: 9000,
+    };
+    g().Game.gcl = { level: 5 };
     setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext());
-    return (globalThis as any).Memory.kernel.strategy;
+    return g().Memory.kernel.strategy;
   }
 
   it("环境画像缺席 ⇒ 中性档，params 存在且 threatWindow 等于合并后的值", () => {
@@ -379,21 +392,26 @@ describe("empire-strategy — 生效参数集落盘（params）", () => {
 
 describe("empire-strategy — 容量闸的输入落盘（capacity.inputs）", () => {
   function runWithStats(stats: Record<string, unknown>): any {
-    (globalThis as any).Memory.kernel = {};
+    g().Memory.kernel = {};
     // 这里的用例都在测「窗长/漏采」这一维；新鲜度单独由 capacity 单测覆盖。
     // 这里统一把 at 盖成当前拍，避免每份夹具都重复一行（显式 at 优先）。
     const withFreshRate = stats.cpuRate
       ? {
           ...stats,
-          cpuRate: { at: (globalThis as any).Game.time, ...(stats.cpuRate as object) },
+          cpuRate: { at: g().Game.time, ...(stats.cpuRate as object) },
         }
       : stats;
-    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 16, ...withFreshRate };
-    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, getUsed: () => 0, bucket: 9000 };
-    (globalThis as any).Game.gcl = { level: 5 };
+    g().Memory.kernel.stats = { cpuAvg10: 16, ...withFreshRate };
+    g().Game.cpu = {
+      limit: 20,
+      tickLimit: 500,
+      getUsed: () => 0,
+      bucket: 9000,
+    };
+    g().Game.gcl = { level: 5 };
     setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext());
-    return (globalThis as any).Memory.kernel.capacity;
+    return g().Memory.kernel.capacity;
   }
 
   it("落盘的 usage 就是闸用的那一个数（可信窗取 rateTotal，而不是偏高的 cpuAvg10）", () => {
@@ -439,34 +457,44 @@ describe("empire-strategy — 容量闸的输入落盘（capacity.inputs）", ()
 
 describe("empire-strategy — 姿态转换事件", () => {
   it("fortify→develop 那一拍写 PostureTransition=[2,0,6]，t 与单格同拍", () => {
-    const now = (globalThis as any).Game.time;
-    (globalThis as any).Memory.kernel = {
+    const now = g().Game.time;
+    g().Memory.kernel = {
       strategy: { posture: "fortify", since: now - 2000 },
       stats: { cpuAvg10: 2, cpuMax10: 4 },
     };
-    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, bucket: 10000, getUsed: () => 0 };
+    g().Game.cpu = {
+      limit: 20,
+      tickLimit: 500,
+      bucket: 10000,
+      getUsed: () => 0,
+    };
     const snap = setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
 
     const ev = events(EventKind.PostureTransition)[0];
     expect(ev?.t).toBe(now);
     expect(ev?.d).toEqual([2, 0, 6]);
-    expect((globalThis as any).Memory.kernel.postureTransition).toEqual({
+    expect(g().Memory.kernel.postureTransition).toEqual({
       from: "fortify",
       to: "develop",
       reason: "silence-elapsed",
       tick: now,
     });
-    expect((globalThis as any).Memory.kernel.strategy.since).toBe(now);
+    expect(g().Memory.kernel.strategy.since).toBe(now);
   });
 
   it("没有转换的那一拍不写 PostureTransition", () => {
-    const now = (globalThis as any).Game.time;
-    (globalThis as any).Memory.kernel = {
+    const now = g().Game.time;
+    g().Memory.kernel = {
       strategy: { posture: "develop", since: now - 2000 },
       stats: { cpuAvg10: 2, cpuMax10: 4 },
     };
-    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, bucket: 10000, getUsed: () => 0 };
+    g().Game.cpu = {
+      limit: 20,
+      tickLimit: 500,
+      bucket: 10000,
+      getUsed: () => 0,
+    };
     const snap = setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
 
@@ -498,21 +526,24 @@ describe("empire-strategy — 低频尾段门（cadence 共存，2026-11-21 事�
 
   beforeEach(() => {
     // heap 距离钟跨测试残留（globalCache 不随 resetGlobals 清空）—— 每组从头起表。
-    const clocks = globalCache() as any;
+    const clocks = globalCache() as {
+      __envLastSampleTick?: number;
+      __specLastRunTick?: number;
+    };
     delete clocks.__envLastSampleTick;
     delete clocks.__specLastRunTick;
   });
 
   function runOverRunTicks(startTick: number, count: number): void {
     const snap = mockSnapshot();
-    (globalThis as any).Memory.rooms.W7N4 = {
+    g().Memory.rooms.W7N4 = {
       spawnQueue: [],
       buildQueue: [],
       colonyState: "normal",
     };
     for (let i = 0; i < count; i++) {
       const t = startTick + i * 5; // G6 cadence：运行拍 ≡ startTick (mod 5)
-      (globalThis as any).Game.time = t;
+      g().Game.time = t;
       empireStrategySystem.run({
         tick: t,
         budget: mockBudget("healthy"),
@@ -521,35 +552,35 @@ describe("empire-strategy — 低频尾段门（cadence 共存，2026-11-21 事�
         *snapshots() {
           yield snap;
         },
-      } as any);
+      } as unknown as TickContext);
     }
   }
 
   it("G6 节律（≡4 mod 5）下环境画像照常采样（旧绝对门在本节律下永无命中）", () => {
-    (globalThis as any).Memory = { rooms: {}, kernel: { bootTick: 0 } };
-    (globalThis as any).Game.time = 83816504; // ≡4 mod 5，事故现场附近的运行拍
+    g().Memory = { rooms: {}, kernel: { bootTick: 0 } };
+    g().Game.time = 83816504; // ≡4 mod 5，事故现场附近的运行拍
     runOverRunTicks(83816504, 3);
-    const envTick = (globalThis as any).Memory.kernel?.environment?.tick;
+    const envTick = g().Memory.kernel?.environment?.tick;
     expect(envTick).toBe(83816504); // boot 即采样（旧门：83816504 % 100 = 4 ≠ 0，永不写）
   });
 
   it("距离钟：boot 采样后 100 拍内不重复采样，跨过 100 拍的运行拍再采", () => {
-    (globalThis as any).Memory = { rooms: {}, kernel: { bootTick: 0 } };
+    g().Memory = { rooms: {}, kernel: { bootTick: 0 } };
     runOverRunTicks(83816504, 1);
-    expect((globalThis as any).Memory.kernel?.environment?.tick).toBe(83816504);
+    expect(g().Memory.kernel?.environment?.tick).toBe(83816504);
     runOverRunTicks(83816509, 19); // 推进 95 拍（19 个运行拍）— 仍在间隔内
-    expect((globalThis as any).Memory.kernel?.environment?.tick).toBe(83816504);
+    expect(g().Memory.kernel?.environment?.tick).toBe(83816504);
     runOverRunTicks(83816604, 1); // 距上次 100 拍
-    expect((globalThis as any).Memory.kernel?.environment?.tick).toBe(83816604);
+    expect(g().Memory.kernel?.environment?.tick).toBe(83816604);
   });
 
   it("供给合同僵尸在 G6 节律下被清理（专业化规划恢复运行；旧门下永不清）", () => {
-    (globalThis as any).Memory = {
+    g().Memory = {
       rooms: {},
       kernel: { bootTick: 0, supplyContracts: [{ ...ZOMBIE }] },
     };
     runOverRunTicks(84402884, 3);
-    const kept = (globalThis as any).Memory.kernel?.supplyContracts ?? [];
+    const kept = g().Memory.kernel?.supplyContracts ?? [];
     expect(kept).toHaveLength(0); // ca=83316316 距今 > 宽限窗 ⇒ 清
   });
 });

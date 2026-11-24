@@ -6,6 +6,10 @@ import { globalCache } from "../../../src/kernel/global-cache";
 import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 
+// 测试夹具只构造部分引擎对象。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const g = (): any => globalThis as any;
+
 const TICK = 1000;
 
 beforeEach(() => {
@@ -14,7 +18,7 @@ beforeEach(() => {
 });
 
 function setPosture(expansionAllowed: boolean): void {
-  (globalThis as any).Memory.kernel.strategy = {
+  g().Memory.kernel.strategy = {
     posture: expansionAllowed ? "expand" : "develop",
     since: 900,
     expansionAllowed,
@@ -24,10 +28,10 @@ function setPosture(expansionAllowed: boolean): void {
 
 /** 建 sponsor 房 + 一条无视野候选 intel（观察交接播种 → intelligence 采用）。 */
 function setupIntel(): void {
-  (globalThis as any).Game.rooms = {
+  g().Game.rooms = {
     W7N4: { controller: { my: true, owner: { username: "Me" } } },
   };
-  (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: [] };
+  g().Memory.rooms.W7N4 = { spawnQueue: [] };
   __resetIntelStateForTests();
   globalCache().intelHandoff = [
     {
@@ -48,7 +52,7 @@ function makeContext(snapshot?: any): any {
   const snap = snapshot ?? mockSnapshot();
   const map: Record<string, any> = { W7N4: snap };
   return {
-    tick: (globalThis as any).Game.time,
+    tick: g().Game.time,
     budget: mockBudget("healthy"),
     globalSiteCount: 0,
     getSnapshot: (name: string) => map[name],
@@ -64,51 +68,51 @@ function prospectEvents(): any[] {
 
 describe("prospect-manager — 任务开启", () => {
   it("expansionAllowed + 无视野候选 → 发布任务并推 1 个 scout 请求（spawned=1）", () => {
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(true);
-    (globalThis as any).Game.cpu.bucket = 10000;
+    g().Game.cpu.bucket = 10000;
 
     prospectManagerSystem.run(makeContext());
 
-    const mission = (globalThis as any).Memory.kernel.prospect;
+    const mission = g().Memory.kernel.prospect;
     expect(mission.target).toBe("W6N4");
     expect(mission.sponsor).toBe("W7N4");
     expect(mission.spawned).toBe(1);
-    const queue = (globalThis as any).Memory.rooms.W7N4.spawnQueue;
+    const queue = g().Memory.rooms.W7N4.spawnQueue;
     expect(queue).toHaveLength(1);
     expect(queue[0].role).toBe("scout");
     expect(queue[0].memory.remoteTarget).toBe("W6N4");
   });
 
   it("姿态未授权 → 不开任务", () => {
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(false);
-    (globalThis as any).Game.cpu.bucket = 10000;
+    g().Game.cpu.bucket = 10000;
 
     prospectManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospect).toBeUndefined();
   });
 
   it("bucket 低于门槛 → 不开任务", () => {
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(true);
-    (globalThis as any).Game.cpu.bucket = 1000;
+    g().Game.cpu.bucket = 1000;
 
     prospectManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospect).toBeUndefined();
   });
 
   it("进行中的扩张行动 → 侦察让位", () => {
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(true);
-    (globalThis as any).Game.cpu.bucket = 10000;
-    (globalThis as any).Memory.kernel.expansion = {
+    g().Game.cpu.bucket = 10000;
+    g().Memory.kernel.expansion = {
       state: "claiming",
       target: "W8N4",
       sponsor: "W7N4",
@@ -118,30 +122,30 @@ describe("prospect-manager — 任务开启", () => {
 
     prospectManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospect).toBeUndefined();
   });
 });
 
 describe("prospect-manager — 侦察任务的 CPU 闸", () => {
   function setup(expansionPlans: boolean, tier?: string, planStatus = "EXECUTING"): void {
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(true);
-    (globalThis as any).Game.cpu.bucket = 10000;
-    if (tier) (globalThis as any).Memory.kernel.capacity = { tier };
-    if (expansionPlans) (globalThis as any).Memory.kernel.expansionPlans = [{ st: planStatus }];
+    g().Game.cpu.bucket = 10000;
+    if (tier) g().Memory.kernel.capacity = { tier };
+    if (expansionPlans) g().Memory.kernel.expansionPlans = [{ st: planStatus }];
   }
 
   it("推进态(EXECUTING) + tier tight → 不开新侦察任务（侦察会把 G6 顶死）", () => {
     setup(true, "tight");
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospect).toBeUndefined();
   });
 
   it("推进态(EXECUTING) + tier constrained → 不开新侦察任务", () => {
     setup(true, "constrained");
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospect).toBeUndefined();
   });
 
   it("回归（立案①）：纸面候选(EVALUATED) + tier tight → 照常开任务——侦察评估是扩张的前置情报，纸面计划不该冻结它", () => {
@@ -149,43 +153,43 @@ describe("prospect-manager — 侦察任务的 CPU 闸", () => {
     // 最终升档 EXECUTING 的必要输入——锁侦察 = 锁死整条扩张管道的情报源。
     setup(true, "tight", "EVALUATED");
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+    expect(g().Memory.kernel.prospect?.target).toBe("W6N4");
   });
 
   it("推进态(EXECUTING) + tier comfortable → 照常开任务", () => {
     setup(true, "comfortable");
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+    expect(g().Memory.kernel.prospect?.target).toBe("W6N4");
   });
 
   it("无推进计划（非推进态）+ tier tight → 不拦（正常找候选）", () => {
     setup(false, "tight");
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+    expect(g().Memory.kernel.prospect?.target).toBe("W6N4");
   });
 
   it("在途任务不受此闸影响（只拦开新任务）", () => {
     setup(true, "tight");
-    (globalThis as any).Memory.kernel.prospect = {
+    g().Memory.kernel.prospect = {
       target: "W6N4",
       sponsor: "W7N4",
       startedAt: 990,
       spawned: 1,
     };
-    (globalThis as any).Game.creeps = {
+    g().Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
     syncSquadIndex();
 
     prospectManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+    expect(g().Memory.kernel.prospect?.target).toBe("W6N4");
   });
 });
 
 describe("prospect-manager — 生命周期与止损", () => {
   function missionFixture(overrides: Record<string, any> = {}): void {
-    (globalThis as any).Memory = {
+    g().Memory = {
       schemaVersion: 29,
       creeps: {},
       rooms: {
@@ -213,11 +217,11 @@ describe("prospect-manager — 生命周期与止损", () => {
       },
     };
     syncSquadIndex();
-    (globalThis as any).Game.rooms = {
+    g().Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
     };
     syncSquadIndex();
-    (globalThis as any).Game.cpu.bucket = 10000;
+    g().Game.cpu.bucket = 10000;
   }
 
   it("成功：目标 intel 新鲜且 sources 已知 → 收摊 + 事件 success + 短冷却（successCooldownTicks）", () => {
@@ -237,21 +241,21 @@ describe("prospect-manager — 生命周期与止损", () => {
       budget: mockBudget(),
     } as never);
     syncSquadIndex();
-    (globalThis as any).Game.creeps = {
+    g().Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
     syncSquadIndex();
 
     prospectManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospect).toBeUndefined();
     // SUCCESS 也必须挂短冷却：observer 覆盖重叠时（本用例 source 即 "observer"），
     // intel 会在 cooldown 前再次过期，无冷却则同一目标每 intelFreshness(50t) 重选
     // 一次、每轮孵出的 scout 都被下一轮 SUCCESS 回收（线上 50t 跑步机实证）。
-    expect((globalThis as any).Memory.kernel.prospectCooldown.W6N4).toBe(
+    expect(g().Memory.kernel.prospectCooldown.W6N4).toBe(
       TICK + CONFIG.prospect.successCooldownTicks,
     );
-    expect((globalThis as any).Game.creeps.s1.memory.recycle).toBe(true);
+    expect(g().Game.creeps.s1?.memory.recycle).toBe(true);
     expect(prospectEvents()[0]?.d?.[0]).toBe(0);
   });
 
@@ -261,17 +265,15 @@ describe("prospect-manager — 生命周期与止损", () => {
 
   it("超时 → 收摊 + 目标冷却", () => {
     missionFixture({ startedAt: TICK - CONFIG.prospect.maxMissionTicks - 100 });
-    (globalThis as any).Game.creeps = {
+    g().Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
     syncSquadIndex();
 
     prospectManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
-    expect((globalThis as any).Memory.kernel.prospectCooldown.W6N4).toBe(
-      TICK + CONFIG.prospect.cooldownTicks,
-    );
+    expect(g().Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospectCooldown.W6N4).toBe(TICK + CONFIG.prospect.cooldownTicks);
     expect(prospectEvents()[0]?.d?.[0]).toBe(1);
   });
 
@@ -280,21 +282,19 @@ describe("prospect-manager — 生命周期与止损", () => {
     // live=0、pending=0 → 视为死亡，补派第 2 只。
     prospectManagerSystem.run(makeContext());
 
-    const mission = (globalThis as any).Memory.kernel.prospect;
+    const mission = g().Memory.kernel.prospect;
     expect(mission.spawned).toBe(2);
-    expect((globalThis as any).Memory.rooms.W7N4.spawnQueue).toHaveLength(1);
+    expect(g().Memory.rooms.W7N4.spawnQueue).toHaveLength(1);
   });
 
   it("死亡达 maxSpawns → 失败 + 冷却", () => {
     missionFixture({ spawned: CONFIG.prospect.maxSpawns });
-    (globalThis as any).Memory.rooms.W7N4.spawnQueue = []; // 无 pending
+    g().Memory.rooms.W7N4.spawnQueue = []; // 无 pending
 
     prospectManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
-    expect((globalThis as any).Memory.kernel.prospectCooldown.W6N4).toBe(
-      TICK + CONFIG.prospect.cooldownTicks,
-    );
+    expect(g().Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospectCooldown.W6N4).toBe(TICK + CONFIG.prospect.cooldownTicks);
     expect(prospectEvents()[0]?.d?.[0]).toBe(2);
   });
 
@@ -302,18 +302,18 @@ describe("prospect-manager — 生命周期与止损", () => {
     // Opt B：瞬时翻转不再秒撤；仅当非 expand 持续超过 postureGraceTicks 才收摊。
     // 预设 postureExitSince 已越过 grace 窗口 → 视为真实战略撤退，果断中止。
     missionFixture({ postureExitSince: TICK - CONFIG.prospect.postureGraceTicks - 1 });
-    (globalThis as any).Memory.kernel.strategy.expansionAllowed = false;
-    (globalThis as any).Memory.kernel.strategy.posture = "develop";
-    (globalThis as any).Game.creeps = {
+    g().Memory.kernel.strategy.expansionAllowed = false;
+    g().Memory.kernel.strategy.posture = "develop";
+    g().Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
     syncSquadIndex();
 
     prospectManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
-    expect((globalThis as any).Memory.kernel.prospectCooldown).toBeUndefined();
-    expect((globalThis as any).Game.creeps.s1.memory.recycle).toBe(true);
+    expect(g().Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospectCooldown).toBeUndefined();
+    expect(g().Game.creeps.s1?.memory.recycle).toBe(true);
     expect(prospectEvents()[0]?.d?.[0]).toBe(3);
   });
 
@@ -321,10 +321,10 @@ describe("prospect-manager — 生命周期与止损", () => {
     // 复现线上 bug：generatePixel() 周期清空 bucket → posture 翻 develop → 旧逻辑秒撤任务。
     // Opt B 脱敏：非 expand 仍在 grace 窗口内 → 任务保留、scout 不回收。
     missionFixture({ spawned: 1 });
-    (globalThis as any).Memory.kernel.strategy.expansionAllowed = false;
-    (globalThis as any).Memory.kernel.strategy.posture = "develop";
-    (globalThis as any).Game.cpu.bucket = 0; // 模拟 pixel 放血后 bucket 清零
-    (globalThis as any).Game.creeps = {
+    g().Memory.kernel.strategy.expansionAllowed = false;
+    g().Memory.kernel.strategy.posture = "develop";
+    g().Game.cpu.bucket = 0; // 模拟 pixel 放血后 bucket 清零
+    g().Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
     syncSquadIndex();
@@ -332,26 +332,26 @@ describe("prospect-manager — 生命周期与止损", () => {
     const ctx = makeContext();
     prospectManagerSystem.run(ctx);
 
-    const mission = (globalThis as any).Memory.kernel.prospect;
+    const mission = g().Memory.kernel.prospect;
     expect(mission).toBeDefined(); // 任务未被撤
     expect(mission.postureExitSince).toBe(TICK); // 脱敏计时已起
-    expect((globalThis as any).Game.creeps.s1.memory.recycle).toBeUndefined(); // scout 未被回收
+    expect(g().Game.creeps.s1?.memory.recycle).toBeUndefined(); // scout 未被回收
     expect(prospectEvents()).toHaveLength(0); // 无中止事件
 
     // 下一 tick bucket 回血、posture 翻回 expand → 脱敏计时清零、任务继续存活。
-    (globalThis as any).Memory.kernel.strategy.expansionAllowed = true;
-    (globalThis as any).Memory.kernel.strategy.posture = "expand";
-    (globalThis as any).Game.cpu.bucket = 10000;
+    g().Memory.kernel.strategy.expansionAllowed = true;
+    g().Memory.kernel.strategy.posture = "expand";
+    g().Game.cpu.bucket = 10000;
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect?.postureExitSince).toBeUndefined();
+    expect(g().Memory.kernel.prospect?.postureExitSince).toBeUndefined();
   });
 
   it("现场有活敌（hasLiveThreat）→ 绕过 grace 即时中止（无冷却）", () => {
     // Opt B：真实战争威胁优先级最高，即便在 grace 窗口内也立即撤任务回收 scout。
     missionFixture({ spawned: 1 });
-    (globalThis as any).Memory.kernel.strategy.expansionAllowed = false;
-    (globalThis as any).Memory.kernel.strategy.posture = "develop";
-    (globalThis as any).Game.creeps = {
+    g().Memory.kernel.strategy.expansionAllowed = false;
+    g().Memory.kernel.strategy.posture = "develop";
+    g().Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
     syncSquadIndex();
@@ -359,8 +359,8 @@ describe("prospect-manager — 生命周期与止损", () => {
     const ctx = makeContext(mockSnapshot({ threatCreeps: [{ id: "x" }] as any }));
     prospectManagerSystem.run(ctx);
 
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
-    expect((globalThis as any).Game.creeps.s1.memory.recycle).toBe(true);
+    expect(g().Memory.kernel.prospect).toBeUndefined();
+    expect(g().Game.creeps.s1?.memory.recycle).toBe(true);
     expect(prospectEvents()[0]?.d?.[0]).toBe(3);
   });
 });
@@ -368,38 +368,38 @@ describe("prospect-manager — 生命周期与止损", () => {
 describe("prospect-manager — 冷却管理", () => {
   it("冷却期内的目标不被重选；转而探前沿房，到期恢复资格", () => {
     // Part 1：W6N4 冷却中 → 不重选 W6N4，视野外扩去探前沿未知房。
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(true);
-    (globalThis as any).Game.cpu.bucket = 10000;
-    (globalThis as any).Memory.kernel.prospectCooldown = { W6N4: TICK + 10000 };
+    g().Game.cpu.bucket = 10000;
+    g().Memory.kernel.prospectCooldown = { W6N4: TICK + 10000 };
 
     prospectManagerSystem.run(makeContext());
-    const cooled = (globalThis as any).Memory.kernel.prospect;
+    const cooled = g().Memory.kernel.prospect;
     expect(cooled).toBeDefined();
     expect(cooled.target).not.toBe("W6N4"); // 冷却阻止重选 W6N4
     expect(cooled.sponsor).toBe("W7N4");
 
     // Part 2：重置 + 冷却到期 → W6N4 恢复资格，被选中。
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(true);
-    (globalThis as any).Game.cpu.bucket = 10000;
-    (globalThis as any).Memory.kernel.prospectCooldown = { W6N4: TICK - 1 };
+    g().Game.cpu.bucket = 10000;
+    g().Memory.kernel.prospectCooldown = { W6N4: TICK - 1 };
 
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+    expect(g().Memory.kernel.prospect?.target).toBe("W6N4");
   });
 });
 
 describe("prospect-manager — 视野外扩（horizon）", () => {
   it("已知房全不可殖民 → 改探前沿未知房（打破视野锁死）", () => {
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
-    (globalThis as any).Game.rooms = {
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
     };
     syncSquadIndex();
-    (globalThis as any).Memory.rooms.W7N4 = {
+    g().Memory.rooms.W7N4 = {
       spawnQueue: [],
       intel: {
         // 已知房有主 → 侦察/扩张均跳过；帝国须外扩找干净中立房。
@@ -408,16 +408,16 @@ describe("prospect-manager — 视野外扩（horizon）", () => {
     };
     syncSquadIndex();
     setPosture(true);
-    (globalThis as any).Game.cpu.bucket = 10000;
+    g().Game.cpu.bucket = 10000;
 
     prospectManagerSystem.run(makeContext());
 
-    const mission = (globalThis as any).Memory.kernel.prospect;
+    const mission = g().Memory.kernel.prospect;
     expect(mission).toBeDefined();
     expect(mission.sponsor).toBe("W7N4");
     // 选中的是前沿未知房（mock describeExits 返回 W7N3/W7N5），而非有主的 W6N4。
     expect(mission.target).not.toBe("W6N4");
-    const queue = (globalThis as any).Memory.rooms.W7N4.spawnQueue;
+    const queue = g().Memory.rooms.W7N4.spawnQueue;
     expect(queue).toHaveLength(1);
     expect(queue[0].role).toBe("scout");
     expect(queue[0].memory.remoteTarget).toBe(mission.target);
@@ -426,11 +426,11 @@ describe("prospect-manager — 视野外扩（horizon）", () => {
 
 describe("prospect-manager — 选点侦察补位", () => {
   function setupVetting(wallRatio?: number): void {
-    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
-    (globalThis as any).Game.rooms = {
+    g().Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    g().Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
     };
-    (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: [] };
+    g().Memory.rooms.W7N4 = { spawnQueue: [] };
     __resetIntelStateForTests();
     // 采一条 W6N4 intel：有 sources（候选可立项）、地形字段按参数给。
     globalCache().intelHandoff = [
@@ -449,16 +449,14 @@ describe("prospect-manager — 选点侦察补位", () => {
     ];
     intelligenceSystem.run({ tick: 1000, snapshots: () => [], budget: mockBudget() } as never);
     setPosture(false); // ea=false
-    (globalThis as any).Game.cpu.bucket = 10000;
-    (globalThis as any).Memory.kernel.expansionPlans = [
-      { rn: "W6N4", sr: "W7N4", st: "EVALUATED" },
-    ];
+    g().Game.cpu.bucket = 10000;
+    g().Memory.kernel.expansionPlans = [{ rn: "W6N4", sr: "W7N4", st: "EVALUATED" }];
   }
 
   it("ea=false + 计划缺 wallRatio ⇒ 开一次定向侦察（vetting=true）", () => {
     setupVetting(undefined);
     prospectManagerSystem.run(makeContext());
-    const mission = (globalThis as any).Memory.kernel.prospect;
+    const mission = g().Memory.kernel.prospect;
     expect(mission?.target).toBe("W6N4");
     expect(mission?.vetting).toBe(true);
   });
@@ -466,16 +464,15 @@ describe("prospect-manager — 选点侦察补位", () => {
   it("ea=false + 已有 wallRatio ⇒ 不开侦察", () => {
     setupVetting(0.2);
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+    expect(g().Memory.kernel.prospect).toBeUndefined();
   });
 
   it("vetting 任务在 ea 持续 false 超过 grace 也不中止", () => {
     setupVetting(undefined);
     prospectManagerSystem.run(makeContext());
-    const mission = (globalThis as any).Memory.kernel.prospect;
-    mission.postureExitSince =
-      (globalThis as any).Game.time - CONFIG.prospect.postureGraceTicks - 10;
+    const mission = g().Memory.kernel.prospect;
+    mission.postureExitSince = g().Game.time - CONFIG.prospect.postureGraceTicks - 10;
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect?.vetting).toBe(true);
+    expect(g().Memory.kernel.prospect?.vetting).toBe(true);
   });
 });
