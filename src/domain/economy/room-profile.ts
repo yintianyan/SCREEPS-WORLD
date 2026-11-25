@@ -3,6 +3,7 @@
 import type { RoomSnapshot, ColonyState } from "../../kernel/contracts";
 import type { ColonyPhase } from "./phase";
 import type { EmpireRoomRole } from "./empire-role";
+import { ECONOMY_SNAPSHOT_SCALE, type EconomyMemorySnapshot } from "./accounting";
 
 /**
  * Economy 查询结果接口（镜像 systems/economy.ts EconomyQuery）。
@@ -21,6 +22,23 @@ export interface EconomyQueryInput {
   drift: number;
   estimatedIncome: number;
   efficiency: number;
+}
+
+/** 从 Memory 瘦快照读取经济剖面输入，缩放只在此边界还原。 */
+export function readEconomyQuery(
+  mem: EconomyMemorySnapshot | undefined,
+): EconomyQueryInput | undefined {
+  if (!mem) return undefined;
+  return {
+    tick: mem.t,
+    netFlow: mem.nf / ECONOMY_SNAPSHOT_SCALE.nf,
+    capexFlow: (mem.cx ?? 0) / ECONOMY_SNAPSHOT_SCALE.cx,
+    contractReserve: mem.cr,
+    riskBuffer: mem.rb / ECONOMY_SNAPSHOT_SCALE.rb,
+    drift: mem.dr,
+    estimatedIncome: mem.ei / ECONOMY_SNAPSHOT_SCALE.ei,
+    efficiency: mem.ef / ECONOMY_SNAPSHOT_SCALE.ef,
+  };
 }
 
 // ─── Room Economic Classification ──────────────────────────
@@ -407,4 +425,9 @@ export function needsEnergyAid(profile: RoomEconomicProfile): boolean {
   if (!profile.netFlowPositive && profile.riskBuffer < 400) return true;
   if (profile.storageRatio < 0.1 && profile.estimatedIncome < 5) return true;
   return false;
+}
+
+/** 任一自有房仍需援助时，停止把能量作为盈余变卖。 */
+export function empireAllowsEnergySale(profiles: readonly RoomEconomicProfile[]): boolean {
+  return !profiles.some(needsEnergyAid);
 }

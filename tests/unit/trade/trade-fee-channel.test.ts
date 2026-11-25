@@ -7,8 +7,12 @@
  * 合计格 `tradeFee`（买料 / 卖矿 / 互济 / 卖能量全混在一起）⇒ "卖能量是不是在
  * 拿盈余买信用顺路烧盈余"这个问题在账上无法回答。
  */
-import { beforeEach, describe, expect, it } from "vitest";
-import { executeDeal } from "../../../src/systems/trade/terminal-market";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  executeDeal,
+  toSummaries,
+  trySellSurplusEnergy,
+} from "../../../src/systems/trade/terminal-market";
 import {
   emptyLedger,
   ledgerConsumption,
@@ -52,6 +56,35 @@ const order = {
 beforeEach(() => {
   resetGlobals();
   stubMarket(OK);
+});
+
+describe("toSummaries — 自有订单隔离", () => {
+  it("撮合摘要移除自有订单，保留其他玩家订单", () => {
+    g().Game.market.orders = { own: { id: "own" } };
+    const summaries = toSummaries([
+      { id: "own", price: 1, amount: 100, roomName: "W1N1" },
+      { id: "other", price: 1, amount: 100, roomName: "W2N2" },
+    ] as any);
+    expect(summaries.map(summary => summary.id)).toEqual(["other"]);
+  });
+});
+
+describe("trySellSurplusEnergy — 帝国援助闸", () => {
+  it("援助闸关闭时不成交，放行后才执行", () => {
+    const deal = vi.fn(() => OK);
+    g().Game.market.deal = deal;
+    g().Game.market.calcTransactionCost = () => 0;
+    g().Game.market.getAllOrders = () => [{ id: "bid", price: 1, amount: 5000, roomName: "W1N1" }];
+    const snapshot = {
+      roomName: "W37S58",
+      storage: { store: { getUsedCapacity: () => 120_000 } },
+    } as any;
+
+    expect(trySellSurplusEnergy(snapshot, terminalWith(10_000), false)).toBe(false);
+    expect(deal).not.toHaveBeenCalled();
+    expect(trySellSurplusEnergy(snapshot, terminalWith(10_000), true)).toBe(true);
+    expect(deal).toHaveBeenCalledOnce();
+  });
 });
 
 describe("executeDeal — 运费通道分桶", () => {

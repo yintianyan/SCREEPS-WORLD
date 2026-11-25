@@ -69,3 +69,39 @@ export function pickBestBuyOrder(
   }
   return best;
 }
+
+export interface EnergySalePlan {
+  order: MarketOrderSummary;
+  amount: number;
+  fee: number;
+  proceeds: number;
+  netPrice: number;
+}
+
+/** 按扣除能量运费后的实际出货量挑选买单；运费吃光货量时放弃成交。 */
+export function planEnergySale(
+  orders: readonly MarketOrderSummary[],
+  requestedAmount: number,
+  terminalEnergy: number,
+  minPrice: number,
+  transactionCost: (amount: number, roomName: string) => number,
+): EnergySalePlan | undefined {
+  let best: EnergySalePlan | undefined;
+  for (const order of orders) {
+    if (order.price < minPrice || order.amount <= 0 || !order.roomName) continue;
+    let amount = Math.min(requestedAmount, order.amount);
+    if (amount <= 0) continue;
+    let fee = transactionCost(amount, order.roomName);
+    if (amount + fee > terminalEnergy) {
+      amount = terminalEnergy - fee;
+      if (amount <= 0) continue;
+      fee = transactionCost(amount, order.roomName);
+    }
+    const proceeds = amount * order.price;
+    const netPrice = proceeds / (amount + fee);
+    if (!best || netPrice > best.netPrice || (netPrice === best.netPrice && fee < best.fee)) {
+      best = { order, amount, fee, proceeds, netPrice };
+    }
+  }
+  return best;
+}

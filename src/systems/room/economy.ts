@@ -25,6 +25,7 @@ import {
 } from "../../domain/economy/accounting";
 import { CONFIG } from "../../config";
 import { collectRoomResourceStocks, diffResourceStocks } from "../../domain/economy/resource-stock";
+import { readEconomyQuery } from "../../domain/economy/room-profile";
 import {
   evaluateResourceFlows,
   toResourceFlowMemory,
@@ -182,18 +183,8 @@ export interface EconomyQuery {
 }
 
 export function queryEconomy(roomName: string): EconomyQuery | undefined {
-  const mem = Memory.rooms[roomName]?.economy;
-  if (!mem) return undefined;
-  return {
-    tick: mem.t,
-    netFlow: mem.nf / 100,
-    capexFlow: (mem.cx ?? 0) / ECONOMY_SNAPSHOT_SCALE.cx,
-    contractReserve: mem.cr,
-    riskBuffer: mem.rb / 10,
-    drift: mem.dr,
-    estimatedIncome: mem.ei / 10,
-    efficiency: mem.ef / 100,
-  };
+  const query = readEconomyQuery(Memory.rooms[roomName]?.economy);
+  return query ? { ...query, capexFlow: query.capexFlow ?? 0 } : undefined;
 }
 
 /**

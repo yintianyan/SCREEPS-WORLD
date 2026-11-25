@@ -10,6 +10,7 @@ import {
   getMineralDeficits,
   pickBestBuyOrder,
   pickBestSellOrder,
+  planEnergySale,
   type MarketOrderSummary,
 } from "../../domain/industry/terminal-policy";
 import { collectFullInventory } from "../../domain/industry/inventory";
@@ -25,12 +26,15 @@ import { BOOST_EFFECTS, type Compound } from "../../domain/industry/types";
 
 /** 把 Game.market 的订单对象裁剪为纯函数可消费的摘要。 */
 export function toSummaries(orders: readonly Order[]): MarketOrderSummary[] {
-  return orders.map(o => ({
-    id: o.id,
-    price: o.price,
-    amount: o.remainingAmount ?? o.amount,
-    roomName: o.roomName,
-  }));
+  const ownOrderIds = new Set(Object.keys(Game.market?.orders ?? {}));
+  return orders
+    .filter(o => !ownOrderIds.has(o.id))
+    .map(o => ({
+      id: o.id,
+      price: o.price,
+      amount: o.remainingAmount ?? o.amount,
+      roomName: o.roomName,
+    }));
 }
 
 /**
@@ -100,7 +104,12 @@ export function executeDeal(
 }
 
 /** 能量溢出卖：storage 高于 energySellFloor 时向市场卖能量（terminal 现货出货）。 */
-export function trySellSurplusEnergy(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
+export function trySellSurplusEnergy(
+  snapshot: RoomSnapshot,
+  terminal: StructureTerminal,
+  allowSale: boolean,
+): boolean {
+  if (!allowSale) return false;
   const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
   const amount = energySellAmount(
     storageEnergy,
@@ -112,22 +121,18 @@ export function trySellSurplusEnergy(snapshot: RoomSnapshot, terminal: Structure
   const orders =
     getCachedOrders(ORDER_BUY, RESOURCE_ENERGY) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_ENERGY }));
-  const best = pickBestBuyOrder(orders, CONFIG.energy.minEnergySellPrice);
-  if (!best || !best.roomName) return false;
-
-  // 卖能量时「货」与「运费」同源 —— 都从本房 terminal 的能量里扣。只核 `held >= amount`
-  // 会在 amount+fee 越界时白跑一次 deal（引擎回 ERR_NOT_ENOUGH_RESOURCES ⇒ 本轮那唯一的
-  // 成交窗口作废，而 executeBestCandidate 已经把 true/false 当成"窗口用掉了没有"）。
-  // maxDealAmount 由 1,000 抬到 5,000 后这个洞从"几乎不可能"变成"terminal 能量落在
-  // 5,000~5,200 之间时必踩"（energyTarget 只有 10,000），所以在这里把量夹到运费之后。
   const held = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
-  const fee = Game.market.calcTransactionCost(amount, snapshot.roomName, best.roomName);
-  const sellable = Math.min(amount, held - fee);
-  if (sellable <= 0) return false;
+  const plan = planEnergySale(
+    orders,
+    amount,
+    held,
+    CONFIG.energy.minEnergySellPrice,
+    (quantity, roomName) => Game.market.calcTransactionCost(quantity, snapshot.roomName, roomName),
+  );
+  if (!plan) return false;
 
-  // 【审计修复 Phase 4-5】卖出能量入 L1 账本 — 记 sold。
-  if (executeDeal(best, sellable, terminal, snapshot.roomName, "energySell")) {
-    bumpEnergyCounter(snapshot.roomName, "sold", sellable);
+  if (executeDeal(plan.order, plan.amount, terminal, snapshot.roomName, "energySell")) {
+    bumpEnergyCounter(snapshot.roomName, "sold", plan.amount);
     return true;
   }
   return false;

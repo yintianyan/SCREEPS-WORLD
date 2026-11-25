@@ -6,6 +6,7 @@ import {
   buildRoomEconomicProfile,
   canExportEnergy,
   needsEnergyAid,
+  empireAllowsEnergySale,
   type RoomEconomicProfile,
   type RoomEconomicMemory,
 } from "../../../src/domain/economy/room-profile";
@@ -424,6 +425,19 @@ describe("needsEnergyAid", () => {
           estimatedIncome: 8,
         }),
       ),
+    ).toBe(false);
+  });
+
+  it("帝国所有房间都不求助 → 允许外卖", () => {
+    expect(empireAllowsEnergySale([profile(), profile({ roomName: "W8N8" })])).toBe(true);
+  });
+
+  it("任一房间求助 → 禁止外卖，即使另一房有大量 storage", () => {
+    expect(
+      empireAllowsEnergySale([
+        profile({ storageEnergy: 500_000, storageRatio: 0.5 }),
+        profile({ roomName: "W8N8", netFlowPositive: false, riskBuffer: 300 }),
+      ]),
     ).toBe(false);
   });
 });

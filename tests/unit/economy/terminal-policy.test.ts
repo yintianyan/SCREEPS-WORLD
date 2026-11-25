@@ -4,6 +4,7 @@ import {
   getMineralDeficits,
   pickBestSellOrder,
   pickBestBuyOrder,
+  planEnergySale,
   type MarketOrderSummary,
 } from "../../../src/domain/industry/terminal-policy";
 
@@ -68,5 +69,41 @@ describe("terminal-policy — pickBestBuyOrder（卖出用）", () => {
   it("低于价格底线的订单被剔除（不贱卖）", () => {
     const best = pickBestBuyOrder([order({ price: 0.1 })], 0.3);
     expect(best).toBeUndefined();
+  });
+});
+
+describe("terminal-policy — planEnergySale", () => {
+  const cost = (_amount: number, roomName: string) => (roomName === "far" ? 900 : 0);
+
+  it("高单价但高运费的订单，净收益可能低于低价近单", () => {
+    const plan = planEnergySale(
+      [
+        order({ id: "far", price: 1, roomName: "far" }),
+        order({ id: "near", price: 2, roomName: "near" }),
+      ],
+      1000,
+      10_000,
+      0.01,
+      cost,
+    );
+    expect(plan?.order.id).toBe("near");
+    expect(plan?.proceeds).toBe(2000);
+  });
+
+  it("运费吃光可出货量 → 放弃成交", () => {
+    const plan = planEnergySale([order({ price: 10, roomName: "far" })], 1000, 900, 0.01, cost);
+    expect(plan).toBeUndefined();
+  });
+
+  it("实际出货量同时受订单余量和 terminal 能量约束", () => {
+    const plan = planEnergySale(
+      [order({ amount: 300, roomName: "far" })],
+      1000,
+      250,
+      0.01,
+      () => 100,
+    );
+    expect(plan?.amount).toBe(150);
+    expect(plan?.fee).toBe(100);
   });
 });

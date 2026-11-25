@@ -16,6 +16,12 @@ import { ensureTradeLedger, type TradeLedger } from "../../domain/industry/trade
 import { globalCache } from "../../kernel/global-cache";
 import type { TransportPlan } from "../../domain/logistics/transport-plan";
 import {
+  buildRoomEconomicProfile,
+  empireAllowsEnergySale,
+  readEconomyQuery,
+  type RoomEconomicMemory,
+} from "../../domain/economy/room-profile";
+import {
   executeBestCandidate,
   type DealCandidate,
   SELL_PRIORITY_CAP,
@@ -121,6 +127,15 @@ export const terminalManagerSystem: System = {
       );
     }
 
+    const energyProfiles = Array.from(ctx.snapshots()).flatMap(snapshot => {
+      const roomMem = Memory.rooms[snapshot.roomName] as RoomEconomicMemory | undefined;
+      if (!roomMem?.economy) return [];
+      return [
+        buildRoomEconomicProfile(snapshot, roomMem, readEconomyQuery(roomMem.economy), ctx.tick),
+      ];
+    });
+    const allowEnergySale = empireAllowsEnergySale(energyProfiles);
+
     for (const snapshot of ctx.snapshots()) {
       const terminal = snapshot.terminal;
       if (!terminal) continue;
@@ -168,7 +183,7 @@ export const terminalManagerSystem: System = {
       candidates.push({
         type: "sell-energy",
         priority: 19,
-        execute: () => trySellSurplusEnergy(snapshot, terminal),
+        execute: () => trySellSurplusEnergy(snapshot, terminal, allowEnergySale),
       });
       candidates.push({
         type: "sell-mineral",
