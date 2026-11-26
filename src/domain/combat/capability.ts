@@ -320,6 +320,76 @@ export function evaluateCombatCapability(creep: CreepSnapshot): CombatCapability
   };
 }
 
+/** 战术运行时使用的最小 Creep 输入。 */
+export interface TacticalCreepInput {
+  readonly body: readonly { readonly type: BodyPartConstant; readonly boost?: string | number }[];
+  readonly hits: number;
+}
+
+/** 保留战术运行时简化口径：boost 存在即 ×4，不剔除受损部件，effectiveHP=hits。 */
+export function buildTacticalCombatCapability(creep: TacticalCreepInput): CombatCapability {
+  let attack = 0;
+  let rangedAttack = 0;
+  let heal = 0;
+  let rangedHeal = 0;
+  let dismantle = 0;
+  let claim = 0;
+  let support = 0;
+  let toughParts = 0;
+  const totalParts = creep.body.length;
+  let activeParts = 0;
+  let maxBoostTier: 0 | 1 | 2 | 3 = 0;
+  const boosted = creep.body.some(p => p.boost !== undefined);
+
+  for (const part of creep.body) {
+    if (part.type === TOUGH) toughParts++;
+    activeParts++;
+    const tier = part.boost ? 3 : 0;
+    if (tier > maxBoostTier) maxBoostTier = tier;
+    const mult = part.boost ? 4 : 1;
+    switch (part.type) {
+      case ATTACK:
+        attack += ATTACK_POWER * mult;
+        break;
+      case RANGED_ATTACK:
+        rangedAttack += RANGED_ATTACK_POWER * mult;
+        break;
+      case HEAL:
+        heal += HEAL_POWER * mult;
+        rangedHeal += RANGED_HEAL_POWER * mult;
+        break;
+      case WORK:
+        dismantle += DISMANTLE_POWER * mult;
+        support += 1;
+        break;
+      case CLAIM:
+        claim += mult;
+        break;
+    }
+  }
+
+  const moveParts = creep.body.filter(p => p.type === MOVE).length;
+  const bodyWeight = creep.body.filter(p => p.type !== MOVE && p.type !== CARRY).length;
+  const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
+
+  return {
+    attack,
+    rangedAttack,
+    heal,
+    rangedHeal,
+    dismantle,
+    claim,
+    effectiveHP: creep.hits,
+    mobility,
+    support,
+    toughParts,
+    boosted,
+    maxBoostTier,
+    totalParts,
+    activeParts,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════
 // 编队聚合
 // ═══════════════════════════════════════════════════════════

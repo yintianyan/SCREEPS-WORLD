@@ -37,10 +37,6 @@ interface SquadMovementCache {
   prevAnchorPos?: Map<string, number>;
   /** Anchor 连续未前进 tick 数。key = squadId。 */
   anchorStuckTicks?: Map<string, number>;
-  /** 共享路径缓存（per-tick）。key = squadId。 */
-  squadSharedPaths?: Map<string, RoomPosition[]>;
-  /** 上次运行 tick。 */
-  squadMovementLastRunTick?: number;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -61,32 +57,21 @@ export const squadMovementSystem: System = {
     if (!g.squadMovementIntents) g.squadMovementIntents = new Map();
     if (!g.prevAnchorPos) g.prevAnchorPos = new Map();
     if (!g.anchorStuckTicks) g.anchorStuckTicks = new Map();
-    if (!g.squadSharedPaths) g.squadSharedPaths = new Map();
 
     // 每 tick 重置 per-tick 数据
     g.squadMovementIntents.clear();
-    g.squadSharedPaths.clear();
 
     // ── 2. 无 warPlan 时跳过 ──
     const plan = Memory.kernel?.warPlan;
-    if (!plan) {
-      g.squadMovementLastRunTick = tick;
-      return;
-    }
+    if (!plan) return;
 
     // ── 3. 构建 SquadPlan（复用 tactical-runtime 的构建逻辑） ──
     const squadPlan = buildSquadPlanFromWarPlan(plan, tick);
-    if (!squadPlan) {
-      g.squadMovementLastRunTick = tick;
-      return;
-    }
+    if (!squadPlan) return;
 
     // ── 4. 采集成员运行时数据 ──
     const runtimeMembers = collectRuntimeMembers(squadPlan);
-    if (runtimeMembers.length === 0) {
-      g.squadMovementLastRunTick = tick;
-      return;
-    }
+    if (runtimeMembers.length === 0) return;
 
     // ── 5. 构建 SquadSnapshot ──
     const targetRoom = plan.targetRoom;
@@ -114,8 +99,6 @@ export const squadMovementSystem: System = {
 
     // ── 8. Stuck Recovery ──
     if (stuckDetection.level === "SQUAD_HEAVY" || stuckDetection.level === "SQUAD_BLOCKED") {
-      // 严重卡位 — 清除共享路径，下 tick 重算
-      g.squadSharedPaths.delete(squadPlan.squadId);
       recordSkip("squad-movement/stuck");
       log.info(
         "squad-movement-runtime",
@@ -129,8 +112,6 @@ export const squadMovementSystem: System = {
 
     // ── 10. 写入缓存供角色层消费 ──
     g.squadMovementIntents.set(squadPlan.squadId, intent);
-
-    g.squadMovementLastRunTick = tick;
   },
 };
 

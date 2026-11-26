@@ -1321,18 +1321,6 @@ declare global {
     reason: string;
   }
 
-  /** L2 体外建议暂存条目（tuning-intake-system 写入，strategy-reviewer 复核后清空）。 */
-  interface IntakePendingEntry {
-    /** 经钳制后的建议值。 */
-    value: number;
-    /** LLM 原始建议值（钳制前，诊断用）。 */
-    originalValue: number;
-    /** 建议理由。 */
-    reason: string;
-    /** 摄入 tick。 */
-    receivedAt: number;
-  }
-
   /** 参数自调优的持久化状态。 */
   interface TuningMemory {
     /** 上次调优 tick。 */
@@ -1343,13 +1331,6 @@ declare global {
      * 消费方：empire-strategy.ts 合并到 CONFIG.posture 之上。
      */
     strategyOverrides?: Record<string, StrategyOverrideEntry>;
-    /**
-     * L2 体外建议暂存（自进化系统 L2）：tuning-intake-system 从 segment 6 读取
-     * 外部 LLM 建议包，经护栏校验后写入此字段。strategy-reviewer 在 100t 复盘窗口
-     * 复核后清空。不直接消费——需复核通过才写入 strategyOverrides。
-     * key = 参数路径，value = IntakePendingEntry。
-     */
-    intakePending?: Record<string, IntakePendingEntry>;
     /**
      * 生成 rooms 覆盖所基于的 CONFIG.tuning.baselineVersion：tuning-engine
      * 每次评估前比对，不匹配即清空 rooms 覆盖（旧值可能基于过时经济假设）从新基线

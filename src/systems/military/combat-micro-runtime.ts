@@ -15,7 +15,10 @@ import {
   type MicroMemberSnapshot,
   type MicroEnemySnapshot,
 } from "../../domain/tactical";
-import type { CombatCapability } from "../../domain/combat/capability";
+import {
+  buildTacticalCombatCapability,
+  type CombatCapability,
+} from "../../domain/combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../../domain/defense/terrain-context";
 import { getFocusFirePlan } from "./tactical-engagement-runtime";
 import { getSquadMovementIntent } from "./squad-movement-runtime";
@@ -34,8 +37,6 @@ interface CombatMicroCache {
   prevMicroDecisions?: Map<string, CombatMovementDecision>;
   /** TargetLock 状态（creepId → lockUntil tick）。 */
   targetLocks?: Map<string, number>;
-  /** 上次运行 tick。 */
-  combatMicroLastRunTick?: number;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -73,17 +74,11 @@ export const combatMicroSystem: System = {
 
     // ── 2. 无 warPlan 时跳过 ──
     const plan = Memory.kernel?.warPlan;
-    if (!plan) {
-      g.combatMicroLastRunTick = tick;
-      return;
-    }
+    if (!plan) return;
 
     // ── 3. 构建 MicroSnapshot ──
     const snapshot = buildMicroSnapshot(plan, tick, g);
-    if (!snapshot) {
-      g.combatMicroLastRunTick = tick;
-      return;
-    }
+    if (!snapshot) return;
 
     // ── 4. 调用纯函数产出 MicroPlan ──
     const microPlan = planCombatMicro(snapshot);
@@ -100,8 +95,6 @@ export const combatMicroSystem: System = {
         // 保持现有 lock（由 planCombatMicro 内部管理）
       }
     }
-
-    g.combatMicroLastRunTick = tick;
   },
 };
 
@@ -145,7 +138,7 @@ function buildMicroSnapshot(
       });
       continue;
     }
-    const capability = buildCreepCapability(creep);
+    const capability = buildTacticalCombatCapability(creep);
     const enemyMobility = 0.5; // 简化：后续从敌方快照取
     const bodyState = deriveBodyAwareState(capability, entry.role, enemyMobility);
     members.push({
@@ -233,70 +226,6 @@ function emptyCapability(): CombatCapability {
   };
 }
 
-function buildCreepCapability(creep: Creep): CombatCapability {
-  let attack = 0,
-    rangedAttack = 0,
-    heal = 0,
-    rangedHeal = 0;
-  let dismantle = 0,
-    claim = 0,
-    support = 0,
-    toughParts = 0;
-  const totalParts = creep.body.length;
-  let activeParts = 0;
-  let maxBoostTier: 0 | 1 | 2 | 3 = 0;
-  const boosted = creep.body.some(p => p.boost !== undefined);
-
-  for (const part of creep.body) {
-    if (part.type === TOUGH) toughParts++;
-    activeParts++;
-    const tier = part.boost ? 3 : 0;
-    if (tier > maxBoostTier) maxBoostTier = tier;
-    const mult = part.boost ? 4 : 1;
-    switch (part.type) {
-      case ATTACK:
-        attack += 30 * mult;
-        break;
-      case RANGED_ATTACK:
-        rangedAttack += 10 * mult;
-        break;
-      case HEAL:
-        heal += 12 * mult;
-        rangedHeal += 4 * mult;
-        break;
-      case WORK:
-        dismantle += 50 * mult;
-        support += 1;
-        break;
-      case CLAIM:
-        claim += mult;
-        break;
-    }
-  }
-
-  const effectiveHP = creep.hits;
-  const moveParts = creep.body.filter(p => p.type === MOVE).length;
-  const bodyWeight = creep.body.filter(p => p.type !== MOVE && p.type !== CARRY).length;
-  const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
-
-  return {
-    attack,
-    rangedAttack,
-    heal,
-    rangedHeal,
-    dismantle,
-    claim,
-    effectiveHP,
-    mobility,
-    support,
-    toughParts,
-    boosted,
-    maxBoostTier,
-    totalParts,
-    activeParts,
-  };
-}
-
 function collectEnemySnapshots(targetRoom: string): MicroEnemySnapshot[] {
   const room = Game.rooms[targetRoom];
   if (!room) return [];
@@ -311,7 +240,7 @@ function collectEnemySnapshots(targetRoom: string): MicroEnemySnapshot[] {
 
   const result: MicroEnemySnapshot[] = [];
   for (const hostile of hostiles) {
-    const capability = buildHostileCapability(hostile);
+    const capability = buildTacticalCombatCapability(hostile);
     const role = inferRole(capability);
     result.push({
       id: hostile.id as string,
@@ -326,70 +255,6 @@ function collectEnemySnapshots(targetRoom: string): MicroEnemySnapshot[] {
     });
   }
   return result;
-}
-
-function buildHostileCapability(hostile: Creep): CombatCapability {
-  let attack = 0,
-    rangedAttack = 0,
-    heal = 0,
-    rangedHeal = 0;
-  let dismantle = 0,
-    claim = 0,
-    support = 0,
-    toughParts = 0;
-  const totalParts = hostile.body.length;
-  let activeParts = 0;
-  let maxBoostTier: 0 | 1 | 2 | 3 = 0;
-  const boosted = hostile.body.some(p => p.boost !== undefined);
-
-  for (const part of hostile.body) {
-    if (part.type === TOUGH) toughParts++;
-    activeParts++;
-    const tier = part.boost ? 3 : 0;
-    if (tier > maxBoostTier) maxBoostTier = tier;
-    const mult = part.boost ? 4 : 1;
-    switch (part.type) {
-      case ATTACK:
-        attack += 30 * mult;
-        break;
-      case RANGED_ATTACK:
-        rangedAttack += 10 * mult;
-        break;
-      case HEAL:
-        heal += 12 * mult;
-        rangedHeal += 4 * mult;
-        break;
-      case WORK:
-        dismantle += 50 * mult;
-        support += 1;
-        break;
-      case CLAIM:
-        claim += mult;
-        break;
-    }
-  }
-
-  const effectiveHP = hostile.hits;
-  const moveParts = hostile.body.filter(p => p.type === MOVE).length;
-  const bodyWeight = hostile.body.filter(p => p.type !== MOVE && p.type !== CARRY).length;
-  const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
-
-  return {
-    attack,
-    rangedAttack,
-    heal,
-    rangedHeal,
-    dismantle,
-    claim,
-    effectiveHP,
-    mobility,
-    support,
-    toughParts,
-    boosted,
-    maxBoostTier,
-    totalParts,
-    activeParts,
-  };
 }
 
 function inferRole(cap: CombatCapability): string {

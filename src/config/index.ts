@@ -51,9 +51,7 @@ export const CONFIG = {
       // 4 预留。
       // 5: 情报玩家域冷存（月级 TTL，heap reset 后须存活）
       intelPlayers: { id: 5 },
-      // 6: L2 体外建议写入区（外部 LLM 写入，tuning-intake-system 只读）
-      l2Intake: { id: 6 },
-      // 7–9 预留。
+      // 6–9 预留。
     } as Record<string, { id: number } | number>,
   },
 

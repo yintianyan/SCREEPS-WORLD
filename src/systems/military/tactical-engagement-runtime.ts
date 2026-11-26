@@ -17,7 +17,10 @@ import {
   type FocusFireMemberSnapshot,
   type TargetCandidate,
 } from "../../domain/tactical";
-import type { CombatCapability } from "../../domain/combat/capability";
+import {
+  buildTacticalCombatCapability,
+  type CombatCapability,
+} from "../../domain/combat/capability";
 import type { SquadPlan, TargetScope } from "../../domain/tactical/types";
 import { getSquadMovementIntent } from "./squad-movement-runtime";
 
@@ -33,8 +36,6 @@ interface TacticalEngagementCache {
   attackIntents?: Map<string, AttackIntent>;
   /** 上 tick 的 FocusFirePlan（状态机连续性用）。key = squadId。 */
   prevFocusFirePlans?: Map<string, FocusFirePlan>;
-  /** 上次运行 tick。 */
-  tacticalEngagementLastRunTick?: number;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -62,25 +63,15 @@ export const tacticalEngagementSystem: System = {
 
     // ── 2. 无 warPlan 时跳过 ──
     const plan = Memory.kernel?.warPlan;
-    if (!plan) {
-      // 保存当前为 prev（下 tick 可用于连续性）
-      g.tacticalEngagementLastRunTick = tick;
-      return;
-    }
+    if (!plan) return;
 
     // ── 3. 构建 SquadPlan（复用 squad-movement 的构建逻辑） ──
     const squadPlan = buildSquadPlanFromWarPlan(plan, tick);
-    if (!squadPlan) {
-      g.tacticalEngagementLastRunTick = tick;
-      return;
-    }
+    if (!squadPlan) return;
 
     // ── 4. 采集成员运行时数据 ──
     const members = collectMemberSnapshots(squadPlan);
-    if (members.length === 0) {
-      g.tacticalEngagementLastRunTick = tick;
-      return;
-    }
+    if (members.length === 0) return;
 
     // ── 5. 采集目标候选 ──
     const targetRoom = plan.targetRoom;
@@ -140,8 +131,6 @@ export const tacticalEngagementSystem: System = {
     for (const intent of focusFirePlan.attackIntents) {
       g.attackIntents.set(intent.creepId, intent);
     }
-
-    g.tacticalEngagementLastRunTick = tick;
   },
 };
 
@@ -281,7 +270,7 @@ function collectMemberSnapshots(squad: SquadPlan): FocusFireMemberSnapshot[] {
     }
 
     // 从 body 构建 CombatCapability（消费 G2 — 不重新实现）
-    const capability = buildCreepCapability(creep);
+    const capability = buildTacticalCombatCapability(creep);
 
     result.push({
       name: member.name,
@@ -297,71 +286,6 @@ function collectMemberSnapshots(squad: SquadPlan): FocusFireMemberSnapshot[] {
   }
 
   return result;
-}
-
-/** 从 Creep body 构建 CombatCapability（与 tactical-runtime-system 同型）。 */
-function buildCreepCapability(creep: Creep): CombatCapability {
-  let attack = 0;
-  let rangedAttack = 0;
-  let heal = 0;
-  let rangedHeal = 0;
-  let dismantle = 0;
-  let claim = 0;
-  let support = 0;
-  let toughParts = 0;
-  const totalParts = creep.body.length;
-  let activeParts = 0;
-  let maxBoostTier: 0 | 1 | 2 | 3 = 0;
-  const boosted = creep.body.some(p => p.boost !== undefined);
-
-  for (const part of creep.body) {
-    if (part.type === TOUGH) toughParts++;
-    activeParts++;
-    const tier = part.boost ? 3 : 0;
-    if (tier > maxBoostTier) maxBoostTier = tier;
-    const mult = part.boost ? 4 : 1;
-    switch (part.type) {
-      case ATTACK:
-        attack += 30 * mult;
-        break;
-      case RANGED_ATTACK:
-        rangedAttack += 10 * mult;
-        break;
-      case HEAL:
-        heal += 12 * mult;
-        rangedHeal += 4 * mult;
-        break;
-      case WORK:
-        dismantle += 50 * mult;
-        support += 1;
-        break;
-      case CLAIM:
-        claim += mult;
-        break;
-    }
-  }
-
-  const effectiveHP = creep.hits;
-  const moveParts = creep.body.filter(p => p.type === MOVE).length;
-  const bodyWeight = creep.body.filter(p => p.type !== MOVE && p.type !== CARRY).length;
-  const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
-
-  return {
-    attack,
-    rangedAttack,
-    heal,
-    rangedHeal,
-    dismantle,
-    claim,
-    effectiveHP,
-    mobility,
-    support,
-    toughParts,
-    boosted,
-    maxBoostTier,
-    totalParts,
-    activeParts,
-  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -383,7 +307,7 @@ function collectTargetCandidates(targetRoom: string, _squad: SquadPlan): TargetC
   const candidates: TargetCandidate[] = [];
 
   for (const hostile of hostiles) {
-    const capability = buildHostileCapability(hostile);
+    const capability = buildTacticalCombatCapability(hostile);
     const threatScore = estimateThreatScore(capability);
 
     candidates.push(
@@ -404,71 +328,6 @@ function collectTargetCandidates(targetRoom: string, _squad: SquadPlan): TargetC
   }
 
   return candidates;
-}
-
-/** 从 hostile creep body 构建 CombatCapability — 消费 G2 同型逻辑。 */
-function buildHostileCapability(hostile: Creep): CombatCapability {
-  let attack = 0;
-  let rangedAttack = 0;
-  let heal = 0;
-  let rangedHeal = 0;
-  let dismantle = 0;
-  let claim = 0;
-  let support = 0;
-  let toughParts = 0;
-  const totalParts = hostile.body.length;
-  let activeParts = 0;
-  let maxBoostTier: 0 | 1 | 2 | 3 = 0;
-  const boosted = hostile.body.some(p => p.boost !== undefined);
-
-  for (const part of hostile.body) {
-    if (part.type === TOUGH) toughParts++;
-    activeParts++;
-    const tier = part.boost ? 3 : 0;
-    if (tier > maxBoostTier) maxBoostTier = tier;
-    const mult = part.boost ? 4 : 1;
-    switch (part.type) {
-      case ATTACK:
-        attack += 30 * mult;
-        break;
-      case RANGED_ATTACK:
-        rangedAttack += 10 * mult;
-        break;
-      case HEAL:
-        heal += 12 * mult;
-        rangedHeal += 4 * mult;
-        break;
-      case WORK:
-        dismantle += 50 * mult;
-        support += 1;
-        break;
-      case CLAIM:
-        claim += mult;
-        break;
-    }
-  }
-
-  const effectiveHP = hostile.hits;
-  const moveParts = hostile.body.filter(p => p.type === MOVE).length;
-  const bodyWeight = hostile.body.filter(p => p.type !== MOVE && p.type !== CARRY).length;
-  const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
-
-  return {
-    attack,
-    rangedAttack,
-    heal,
-    rangedHeal,
-    dismantle,
-    claim,
-    effectiveHP,
-    mobility,
-    support,
-    toughParts,
-    boosted,
-    maxBoostTier,
-    totalParts,
-    activeParts,
-  };
 }
 
 /** 粗略威胁评分（消费 G1 结果而非重新计算完整 ThreatAssessment）。 */

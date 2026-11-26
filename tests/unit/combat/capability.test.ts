@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateCombatCapability,
+  buildTacticalCombatCapability,
   aggregateCombatCapability,
   computeCombatPower,
   boostTier,
@@ -363,5 +364,45 @@ describe("G2 — T3 boost tough 编队（极限场景）", () => {
     // 5 × non-TOUGH (MOVE) = 5 × 100 = 500
     // total effectiveHP ≈ 2166
     expect(cap.effectiveHP).toBeGreaterThan(2000);
+  });
+});
+
+describe("战术运行时简化战斗能力", () => {
+  it("保留未 boost 的基础口径", () => {
+    const cap = buildTacticalCombatCapability({
+      body: [{ type: ATTACK }, { type: HEAL }, { type: MOVE }],
+      hits: 250,
+    });
+    expect(cap.attack).toBe(ATTACK_POWER);
+    expect(cap.heal).toBe(HEAL_POWER);
+    expect(cap.effectiveHP).toBe(250);
+    expect(cap.mobility).toBe(1 / 2);
+    expect(cap.activeParts).toBe(3);
+  });
+
+  it("任意 boost 存在仍按 ×4 与 tier3 的旧简化口径", () => {
+    const cap = buildTacticalCombatCapability({
+      body: [
+        { type: ATTACK, boost: "UH" },
+        { type: CLAIM, boost: 1 },
+      ],
+      hits: 200,
+    });
+    expect(cap.attack).toBe(ATTACK_POWER * 4);
+    expect(cap.claim).toBe(4);
+    expect(cap.maxBoostTier).toBe(3);
+    expect(cap.boosted).toBe(true);
+  });
+
+  it("不剔除受损部件，空 body 保持零能力", () => {
+    const damagedBody = [{ type: ATTACK, hits: 0, damaged: true }];
+    const damaged = buildTacticalCombatCapability({ body: damagedBody, hits: 0 });
+    expect(damaged.attack).toBe(ATTACK_POWER);
+    expect(damaged.activeParts).toBe(1);
+
+    const empty = buildTacticalCombatCapability({ body: [], hits: 0 });
+    expect(empty.attack).toBe(0);
+    expect(empty.mobility).toBe(0);
+    expect(empty.totalParts).toBe(0);
   });
 });

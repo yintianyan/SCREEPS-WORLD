@@ -137,10 +137,6 @@ export enum EventKind {
   StrategyReview = 43,
   /** P3 饥饿旁路失效（bucket < conserve 最低值，P3 系统长期冻结）。d = [bucket]。 */
   P3StarvationFrozen = 45,
-  /** L2 体外建议摄入（自进化系统 L2）：tuning-intake-system 每 1000t 从 segment 6
-   * 读取外部 LLM 建议包，经六层护栏校验后写入 intakePending。
-   * d = [acceptedCount, rejectedCount]；r = ""。 */
-  L2Intake = 44,
   /** 失守房账本清盘（maintainMemory 的 LOST_ROOM_GRACE 届满）。
    * d = [reasonCode(0=失守宽限期届满), tuningOverrideCount, pendingValidationCount,
    *      frozenParamCount, remoteOpCount, lostForTicks]；r = 房名。
@@ -390,10 +386,6 @@ export interface P3StarvationFrozenPayload {
   bucket: number;
   frozenDuration?: number;
 }
-export interface L2IntakePayload {
-  acceptedCount: number;
-  rejectedCount: number;
-}
 export interface LostRoomPurgePayload {
   reasonCode: number;
   tuningOverrideCount: number;
@@ -468,7 +460,6 @@ export interface EventPayloadMap {
   [EventKind.ThreatUnhandled]: ThreatUnhandledPayload;
   [EventKind.StrategyReview]: StrategyReviewPayload;
   [EventKind.P3StarvationFrozen]: P3StarvationFrozenPayload;
-  [EventKind.L2Intake]: L2IntakePayload;
   [EventKind.LostRoomPurge]: LostRoomPurgePayload;
   [EventKind.RoomReleased]: RoomReleasedPayload;
   [EventKind.RecoveryEscalation]: RecoveryEscalationPayload;
@@ -534,7 +525,6 @@ const EVENT_PACKERS: EventPackerMap = {
   [EventKind.StrategyReview]: p => [p.suggestionCount],
   [EventKind.P3StarvationFrozen]: p =>
     p.frozenDuration === undefined ? [p.bucket] : [p.bucket, p.frozenDuration],
-  [EventKind.L2Intake]: p => [p.acceptedCount, p.rejectedCount],
   [EventKind.LostRoomPurge]: p => [
     p.reasonCode,
     p.tuningOverrideCount,

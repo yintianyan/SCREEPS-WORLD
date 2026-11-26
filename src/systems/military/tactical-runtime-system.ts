@@ -31,7 +31,10 @@ import {
   type FormationType,
   type TacticalState,
 } from "../../domain/tactical";
-import type { CombatCapability, AggregateCapability } from "../../domain/combat/capability";
+import {
+  buildTacticalCombatCapability,
+  type AggregateCapability,
+} from "../../domain/combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../../domain/defense/terrain-context";
 import type { MultiDimensionalConfidence } from "../../domain/defense/confidence";
 import { validateAuthorization } from "../../domain/tactical/authorization";
@@ -56,8 +59,6 @@ interface TacticalRuntimeCache {
   tacticalReinforcementDemands?: Set<string>;
   /** 补给需求列表（供 logistics-planner 消费）。 */
   tacticalSupplyDemands?: SupplyDemand[];
-  /** 上次运行 tick（幂等去重）。 */
-  tacticalLastRunTick?: number;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -140,18 +141,11 @@ export const tacticalRuntimeSystem: System = {
     }
 
     // 非活跃 Objective 不产出决策（等待 squad 就绪）
-    if (!isObjectiveActive(objectiveRecord.state)) {
-      g.tacticalLastRunTick = tick;
-      return;
-    }
+    if (!isObjectiveActive(objectiveRecord.state)) return;
 
     // ── 5. 构建 TacticalSnapshot ──
     const squad = buildSquadPlan(plan, tick);
-    if (!squad) {
-      // 无编队成员 → 无法构建 snapshot
-      g.tacticalLastRunTick = tick;
-      return;
-    }
+    if (!squad) return;
 
     const objective = buildTacticalObjective(plan, posture, operationAborted, expiry, tick);
     const snapshot = buildTacticalSnapshot(squad, objective, plan, tick);
@@ -207,7 +201,6 @@ export const tacticalRuntimeSystem: System = {
     // 但存储 decision 的 newState 供下轮生命周期评估
 
     pruneSquadStates(tick);
-    g.tacticalLastRunTick = tick;
   },
 };
 
@@ -296,7 +289,7 @@ function buildSquadPlan(
     const creep = Game.creeps[entry.name];
     if (!creep) continue;
 
-    const capability = buildCreepCapability(creep);
+    const capability = buildTacticalCombatCapability(creep);
     members.push({
       name: entry.name,
       role: entry.role,
@@ -480,71 +473,6 @@ function buildTacticalSnapshot(
 // 6. 辅助：Creep 能力构建
 // ═══════════════════════════════════════════════════════════
 
-/** 从 Creep body 构建战斗能力快照。 */
-function buildCreepCapability(creep: Creep): CombatCapability {
-  let attack = 0;
-  let rangedAttack = 0;
-  let heal = 0;
-  let rangedHeal = 0;
-  let dismantle = 0;
-  let claim = 0;
-  let support = 0;
-  let toughParts = 0;
-  const totalParts = creep.body.length;
-  let activeParts = 0;
-  let maxBoostTier: 0 | 1 | 2 | 3 = 0;
-  const boosted = creep.body.some(p => p.boost !== undefined);
-
-  for (const part of creep.body) {
-    if (part.type === TOUGH) toughParts++;
-    activeParts++;
-    const tier = part.boost ? 3 : 0;
-    if (tier > maxBoostTier) maxBoostTier = tier;
-    const mult = part.boost ? 4 : 1;
-    switch (part.type) {
-      case ATTACK:
-        attack += 30 * mult;
-        break;
-      case RANGED_ATTACK:
-        rangedAttack += 10 * mult;
-        break;
-      case HEAL:
-        heal += 12 * mult;
-        rangedHeal += 4 * mult;
-        break;
-      case WORK:
-        dismantle += 50 * mult;
-        support += 1;
-        break;
-      case CLAIM:
-        claim += mult;
-        break;
-    }
-  }
-
-  const effectiveHP = creep.hits;
-  const moveParts = creep.body.filter(p => p.type === MOVE).length;
-  const bodyWeight = creep.body.filter(p => p.type !== MOVE && p.type !== CARRY).length;
-  const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
-
-  return {
-    attack,
-    rangedAttack,
-    heal,
-    rangedHeal,
-    dismantle,
-    claim,
-    effectiveHP,
-    mobility,
-    support,
-    toughParts,
-    boosted,
-    maxBoostTier,
-    totalParts,
-    activeParts,
-  };
-}
-
 // ═══════════════════════════════════════════════════════════
 // 7. 辅助：敌方单位/建筑采集
 // ═══════════════════════════════════════════════════════════
@@ -562,7 +490,7 @@ function collectEnemies(targetRoom: string, tick: number): EnemySnapshot[] {
     room: c.pos.roomName,
     hits: c.hits,
     hitsMax: c.hitsMax,
-    capability: buildCreepCapability(c),
+    capability: buildTacticalCombatCapability(c),
     lastSeenTick: tick,
     isNpc: c.owner.username === "Invader" || c.owner.username === "Source Keeper",
   }));

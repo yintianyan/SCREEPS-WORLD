@@ -1,7 +1,7 @@
 /** Demand Node */
 
 import type { RoomRegistryEntry } from "../strategy/room-registry";
-import { computeSafetyReserve } from "../economy/ownership";
+import { estimateDeficitAmount } from "./allocation";
 import type { OperationPriority, ResourceType } from "./agenda-item";
 
 /**
@@ -163,20 +163,6 @@ export function applyAging(node: DemandNode, tick: number, starvationThreshold =
 }
 
 // ── 内部工具函数 ──────────────────────────────────────────
-
-/**
- * 估算 deficit 需求量。
- * 基于 riskBuffer 和 estimatedIncome 推导。
- */
-function estimateDeficitAmount(deficit: RoomRegistryEntry, inTransit: number): number {
-  if (deficit.hasStorage && deficit.storageCapacity > 0) {
-    const safetyTarget = computeSafetyReserve(deficit.storageCapacity);
-    const need = Math.max(0, safetyTarget - deficit.storageEnergy - inTransit);
-    return Math.floor(need);
-  }
-  const seedNeed = Math.max(0, deficit.estimatedIncome * 500 - inTransit);
-  return Math.floor(Math.min(seedNeed, 10000));
-}
 
 /**
  * 从房间状态推导紧急度。

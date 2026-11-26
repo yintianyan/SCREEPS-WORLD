@@ -27,8 +27,6 @@ export const SEGMENT_EVENT_LOG = segId("eventLog", 2);
 export const SEGMENT_ECONOMY = segId("economy", 3);
 /** Segment 5: 情报玩家域冷存（月级 TTL 长记忆，heap reset 后须存活）。 */
 export const SEGMENT_INTEL_PLAYERS = segId("intelPlayers", 5);
-/** Segment 6: L2 体外建议写入区（外部 LLM 写入，tuning-intake-system 只读）。 */
-export const SEGMENT_L2_INTAKE = segId("l2Intake", 6);
 
 // ─── 容量常量 ───────────────────────────────────────────────
 
@@ -95,7 +93,6 @@ const ALL_SEGMENT_IDS = [
   SEGMENT_EVENT_LOG,
   SEGMENT_ECONOMY,
   SEGMENT_INTEL_PLAYERS,
-  SEGMENT_L2_INTAKE,
 ];
 
 /**

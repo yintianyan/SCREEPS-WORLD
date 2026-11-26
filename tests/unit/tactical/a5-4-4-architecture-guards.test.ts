@@ -293,11 +293,11 @@ describe("No Duplicate Systems (Guards 12-13)", () => {
     expect(src).toContain("CombatCapability");
   });
 
-  it("13b. tactical-engagement-runtime.ts 的 buildHostileCapability 不调用 evaluateCombatCapability", () => {
-    const code = codeLines(readFileSync(ENGAGEMENT_RUNTIME_FILE, "utf8"));
-    // buildHostileCapability is a local body parser that builds CombatCapability DTO
-    // It does NOT call evaluateCombatCapability (the canonical G2 function)
-    expect(code).not.toMatch(/\bevaluateCombatCapability\b/);
+  it("13b. tactical-engagement-runtime.ts 复用共享战术能力函数", () => {
+    const src = readFileSync(ENGAGEMENT_RUNTIME_FILE, "utf8");
+    expect(src).toContain("buildTacticalCombatCapability");
+    expect(src).not.toMatch(/function build(Creep|Hostile)Capability/);
+    expect(src).not.toMatch(/\bevaluateCombatCapability\b/);
   });
 });
 

@@ -57,7 +57,6 @@ const EXPECTED: Record<string, number> = {
   WarPlanCreated: 41,
   ThreatUnhandled: 42,
   StrategyReview: 43,
-  L2Intake: 44,
   P3StarvationFrozen: 45,
   LostRoomPurge: 46,
   RoomReleased: 47,
