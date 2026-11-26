@@ -52,10 +52,6 @@ vi.mock("../../../src/kernel/global-cache", () => ({
   globalCache: () => ({}),
   querySquad: () => squad.slice(),
 }));
-vi.mock("../../../src/telemetry", () => ({
-  recordExecution: vi.fn(),
-  recordAgendaChange: vi.fn(),
-}));
 vi.mock("../../../src/systems/room/economy", () => ({ queryEconomy: () => undefined }));
 vi.mock("../../../src/config/bodies", () => ({ selectBody: () => [] }));
 vi.mock("../../../src/domain/spawn/queue", () => ({

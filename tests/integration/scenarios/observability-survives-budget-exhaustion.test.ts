@@ -4,7 +4,7 @@
  * 线上实证两幕（shard3）：
  * ① 解冻把常态 CPU 抬到 healthy 档 softLimit(20×0.875=17.5) 之上，而 telemetry-collector
  *    当时是 post 段 P3 ⇒ 轮到它时 spent() 已≈tick 终值，实时软上限闸对它恒真：
- *    采样间隔从 10 tick 劣化到 1210~14500 tick，stats/事件环/经济环/Prometheus 全冻结。
+ *    采样间隔从 10 tick 劣化到 1210~14500 tick，stats/事件环/经济环全冻结。
  * ② 只把 E2 饥饿旁路接到实时闸上（commit b8d99ea）仍不够：旁路的开启条件就是"观测饥饿"，
  *    观测一恢复采样 E2 违例就清空、旁路随即撤销 ⇒ 占空比退化成约 1 样本 / grace(1530t)，
  *    线上唯一那条新样本记的正是 cpu=18.5 > softLimit 17.5。

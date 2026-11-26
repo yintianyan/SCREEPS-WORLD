@@ -20,7 +20,6 @@ import { EventKind } from "../../kernel/event-log";
 import { buildEmpireSituation, type SituationRoomInput } from "../../domain/strategy/situation";
 import { selectEnvBaseline } from "../../domain/strategy/posture-baseline";
 import { isStrategyOverrideLive } from "../../domain/strategy/strategy-reviewer";
-import { recordPlanningDecision, recordPlanningTime } from "../../telemetry";
 import { log } from "../../kernel/log";
 
 /** AgendaChange 事件的 initiative 编码（与 event-log 注释对齐）。 */
@@ -129,11 +128,7 @@ export const empireStrategySystem: System = {
         "",
         postureTransitionEventData(prev?.posture ?? "(none)", result.posture, result.reason),
       );
-      recordPlanningDecision("empire", true);
-    } else {
-      recordPlanningDecision("empire", false);
     }
-    recordPlanningTime("empire", 0.001);
 
     Memory.kernel.strategy = {
       posture: result.posture,
@@ -190,7 +185,6 @@ export const empireStrategySystem: System = {
         "empire-strategy",
         `agenda: ${prevAgenda?.initiative ?? "(none)"} → ${agenda.initiative}`,
       );
-      recordPlanningDecision("agenda", true);
       recordTyped(EventKind.AgendaChange, "", {
         initiativeCode: AGENDA_CODES[agenda.initiative] ?? 3,
       });

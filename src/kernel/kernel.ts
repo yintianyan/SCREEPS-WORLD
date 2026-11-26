@@ -33,22 +33,6 @@ import {
 } from "./expectations";
 import { EventKind } from "./event-log";
 import { emitSummary, initTelemetry } from "./telemetry";
-import {
-  collectRuntimeMetrics,
-  collectKernelMetrics,
-  collectSchedulerMetrics,
-  collectWorldMetrics,
-  collectRoomMetrics,
-  collectCreepMetrics,
-  collectSpawnMetrics,
-  collectEconomyMetrics,
-  collectEnergyAuditMetrics,
-  collectLogisticsMetrics,
-  collectEmpireMetrics,
-  collectExpansionMetrics,
-  collectDefenseMetrics,
-  runFlush,
-} from "../telemetry";
 import { type Registry } from "./registry";
 // buildRoomSnapshot 通过 Registry.registerWorldModelBuilder 注入，避免 kernel 直接 import systems 层。
 // kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反「内核不感知业务」。
@@ -249,39 +233,10 @@ export class Kernel {
         const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
         // 拍中采样：只留作尾差的被减数。**累计总量不再用它** —— 这一刻之后还有
         // flush-skips / segments-flush / baseline-telemetry / Memory 序列化要花钱，
-        // 拿拍中值 ÷ 拍数会得到一个"看起来自证、其实少了一段"的均值（线上实测
+        // 拿拍中值 ÷ 拍数会得到一个"看起来自证，其实少了一段"的均值（线上实测
         // cpuRate.total=10.7/t 而同一帝国独立采样的 cpuAvg10=14/t，差 3.3 无人解释）。
         // 权威分子改由 run() 末尾的 cpu/tick-tail 拍尾采样累加。
         cum.midLast = Game.cpu.getUsed();
-        const tel = g.telemetry;
-        const skipped = tel?.skipped ?? 0;
-        const errors = tel?.errors ?? 0;
-        // ctx.snapshots() 返回 Map iterator：被第一个消费者（RoomMetrics）耗尽后，
-        // EconomyMetrics/DefenseMetrics 拿到空流，遥测永久零样本。物化为数组供多消费者复用。
-        const snapshots = Array.from(ctx.snapshots());
-
-        collectRuntimeMetrics(budget, skipped, errors, 0);
-        collectKernelMetrics(skipped, errors);
-        collectSchedulerMetrics(budget, 0, 0, 0, 0, 0);
-        collectWorldMetrics();
-        collectRoomMetrics(snapshots);
-        collectCreepMetrics();
-        collectSpawnMetrics();
-        collectEconomyMetrics(snapshots);
-        collectEnergyAuditMetrics();
-        collectLogisticsMetrics();
-        collectDefenseMetrics(snapshots);
-        collectEmpireMetrics();
-        collectExpansionMetrics();
-      }),
-    );
-
-    measuredRun("system/telemetry-flush", () =>
-      safeRun("telemetry-flush", () => {
-        // 传调度器的硬上限：bucket 借用生效时 tick 可以合法地花过 Game.cpu.limit，
-        // 守卫若写死 limit 就会把"贴顶但合法"的 tick 判成超限 —— 观测通道被
-        // 自己的额度模型关掉（telemetry-collector 那次冻结的同型错误）。
-        runFlush(budget.tier, budget.hardLimit);
       }),
     );
 

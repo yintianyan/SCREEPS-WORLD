@@ -63,26 +63,6 @@ import { tuningEngineSystem } from "./systems/empire/tuning-engine";
 import { tuningIntakeSystem } from "./systems/empire/tuning-intake-system";
 import { towerDefenseSystem } from "./systems/military/tower-defense";
 
-import {
-  registerRuntimeMetrics,
-  registerKernelMetrics,
-  registerSchedulerMetrics,
-  registerWorldMetrics,
-  registerRoomMetrics,
-  registerCreepMetrics,
-  registerSpawnMetrics,
-  registerEconomyMetrics,
-  registerEnergyAuditMetrics,
-  registerLogisticsMetrics,
-  registerPlanningMetrics,
-  registerExecutionMetrics,
-  registerEmpireMetrics,
-  registerExpansionMetrics,
-  registerDefenseMetrics,
-  initTelemetryFlush,
-  resetFrequencyState,
-} from "./telemetry";
-
 /**
  * Bootstrap — 唯一组合根：新增系统/角色只改此文件并添加对应模块，不改 Kernel。
  * 硬约束：注册的每个角色名必须同时存在于 CONFIG.roles — roles 表兼任
@@ -92,24 +72,6 @@ import {
  * 失败时角色回退无 assignment 行为，避免 P0 永不冷却刷屏。
  */
 
-// ─── Telemetry SDK 初始化（幂等，global reset 后首 tick 重建）──────────
-resetFrequencyState();
-initTelemetryFlush();
-registerRuntimeMetrics();
-registerKernelMetrics();
-registerSchedulerMetrics();
-registerWorldMetrics();
-registerRoomMetrics();
-registerCreepMetrics();
-registerSpawnMetrics();
-registerEconomyMetrics();
-registerEnergyAuditMetrics();
-registerLogisticsMetrics();
-registerPlanningMetrics();
-registerExecutionMetrics();
-registerEmpireMetrics();
-registerExpansionMetrics();
-registerDefenseMetrics();
 /** 组合根注册表 — 导出仅供一致性测试（role-config-parity）检视。 */
 export const registry = new Registry()
   .registerWorldModelBuilder(buildRoomSnapshot)

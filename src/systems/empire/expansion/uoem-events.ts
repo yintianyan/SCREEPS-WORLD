@@ -16,11 +16,6 @@ import {
 } from "../../../domain/expansion/rhythm";
 import { querySquad, globalCache } from "../../../kernel/global-cache";
 import { cancelRequestsByHome } from "../../../domain/spawn/queue";
-import {
-  recordExpansionCompleted,
-  recordExpansionFailed,
-  recordPlanningDecision,
-} from "../../../telemetry";
 
 type ExpansionState = NonNullable<KernelMemory["expansion"]>;
 
@@ -113,14 +108,6 @@ export function enqueueTerminalOutcome(
   if (kind) {
     updateRhythmRing(kind, tick);
   }
-
-  // 遥测：扩张 Decision→Outcome 闭环
-  if (result === "COMPLETED" || result === "COMPLETED_FORCED") {
-    recordExpansionCompleted(tick - openedAt, expansion.reservedEnergy ?? 0);
-  } else {
-    recordExpansionFailed(result);
-  }
-  recordPlanningDecision("expansion", result === "COMPLETED" || result === "COMPLETED_FORCED");
 
   // 清理 globalCache().lastExpansionOutcome（兼容期：保留旧字段供未迁移消费者）
   // 接入 OutcomeChannel 后 experience-collector 从 channel drain 读取，不再依赖此字段

@@ -36,7 +36,6 @@ import { selectRecycleCandidates } from "../../domain/spawn/recycle";
 import { moveToTarget, moveTowardRoom } from "../../creeps/movement";
 import { recordSkip } from "../../kernel/memory";
 import { globalCache, bumpEnergyCounter, bumpRemoteOpLedger } from "../../kernel/global-cache";
-import { recordExecution } from "../../telemetry";
 import { log } from "../../kernel/log";
 
 /**
@@ -948,7 +947,6 @@ export function trySpawn(
       // 扣减本地能量预算，换下一个空闲 spawn 继续消费队列。
       energyBudget -= bodyCost(body);
       spawnIdx++;
-      recordExecution("spawn", "completed");
       // T3: 声明期望 — 孵化成功，期望该角色在 300 tick 内不因 starvation 死亡
       continue;
     }
@@ -969,7 +967,6 @@ export function trySpawn(
         `spawn/${snapshot.roomName}: spawnCreep returned ${result} for ${req.key} (retry ${req.retries})`,
       );
     }
-    recordExecution("spawn", "failed");
   }
 }
 

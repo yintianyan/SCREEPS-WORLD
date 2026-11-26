@@ -165,7 +165,7 @@ export class CpuBudget implements Budget {
     // 上限"（= limit×0.875）—— 常态 CPU 一旦爬到 softLimit 附近（线上实测 cpu 17.5~18.1
     // vs softLimit 17.5），这条闸对 post 段 P3 就**恒真**，E2 旁路只解开了前馈那一半、
     // 解不开实时闸，逃生口对它要救的那个系统正好打不开 ⇒ telemetry-collector 停摆
-    // 数千 tick（采样间隔从 10 tick 劣化到千级，stats/事件环/经济环/Prometheus 全冻结）。
+    // 数千 tick（采样间隔从 10 tick 劣化到千级，stats/事件环/经济环全冻结）。
     // P2 不豁免：它的活有真实产出，让位是调速器的本意；P3 里被救回的是观测与自调优。
     if (priority > 0 && !(p3Escape && priority >= 3) && this.spent() >= this.softLimit) {
       return false;

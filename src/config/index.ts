@@ -48,8 +48,7 @@ export const CONFIG = {
       cpu: { id: 1 },
       eventLog: { id: 2 },
       economy: { id: 3 },
-      // 4: Prometheus metrics segment（screeps-exporter 读取并暴露 /metrics）
-      prometheus: { id: 4 },
+      // 4 预留。
       // 5: 情报玩家域冷存（月级 TTL，heap reset 后须存活）
       intelPlayers: { id: 5 },
       // 6: L2 体外建议写入区（外部 LLM 写入，tuning-intake-system 只读）

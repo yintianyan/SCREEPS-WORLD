@@ -31,7 +31,6 @@ import {
 } from "../../domain/spawn/queue";
 import { selectBody } from "../../config/bodies";
 import { querySquad, globalCache, bumpEnergyCounter } from "../../kernel/global-cache";
-import { recordExecution, recordPlanningDecision } from "../../telemetry";
 import { log } from "../../kernel/log";
 
 /** 收摊原因编码（WarOutcome 事件 d[2]）。 */
@@ -463,14 +462,6 @@ export function demobilize(tick: number, reason: number): void {
     spawned: plan.spawned ?? 0,
     reasonCode: reason,
   });
-
-  // 遥测：战后核验 Decision→Outcome 闭环
-  if (outcome === "success") {
-    recordExecution("war", "completed");
-  } else {
-    recordExecution("war", "failed");
-  }
-  recordPlanningDecision("war", outcome === "success");
 
   // 从全局编队索引取编队成员，按 name 精确定位 Creep 对象标记 recycle。
   // 只需遍历编队子集（通常 ≤ 十几条），而非全量 Game.creeps。

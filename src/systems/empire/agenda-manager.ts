@@ -49,7 +49,6 @@ import {
 } from "../../domain/operation/verification";
 import { hasActiveOperation, pruneTerminal } from "../../domain/operation/dedup";
 import { computeOperationMetrics, formatOperationMetrics } from "../../domain/operation/metrics";
-import { recordExecution } from "../../telemetry";
 import { hasRoomRequest, submitRoomRequests } from "../../domain/spawn/queue";
 import { selectBody } from "../../config/bodies";
 
@@ -374,12 +373,10 @@ export const agendaManagerSystem: System = {
       if (op.status !== "verifying") return op;
       if (shouldAbortVerification(op, ctx.tick)) {
         const result = markFailed(op, ctx.tick, "verification timeout: 0 delivery");
-        recordExecution("carrier", "failed");
         return result.op;
       }
       if (shouldPartialComplete(op, ctx.tick)) {
         const result = markCompleted(op, ctx.tick);
-        recordExecution("carrier", "completed");
         return result.op;
       }
       return op;
@@ -394,7 +391,6 @@ export const agendaManagerSystem: System = {
         if (!failResult.ok) {
           reservations = releaseReservation(reservations, op.id);
         }
-        recordExecution("carrier", "failed");
         return failResult.op;
       }
       return op;
@@ -795,7 +791,6 @@ export const agendaManagerSystem: System = {
             operations[idx] = delivered;
             if (delivered.status === "completed") {
               reservations = releaseReservation(reservations, op.id);
-              recordExecution("carrier", "completed");
             }
           }
           delete (receiptCarrier.memory as { lastDelivery?: unknown }).lastDelivery;
@@ -872,7 +867,6 @@ export const agendaManagerSystem: System = {
                 operations[idx] = delivered;
                 if (delivered.status === "completed") {
                   reservations = releaseReservation(reservations, op.id);
-                  recordExecution("carrier", "completed");
                 }
               }
             }
