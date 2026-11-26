@@ -3,17 +3,12 @@ import resolve from "@rollup/plugin-node-resolve";
 import typescript from "@rollup/plugin-typescript";
 import terser from "@rollup/plugin-terser";
 
-// 函数名保留策略：**不再保留模块导出名**。
-//
-// 对外只暴露 `module.exports.loop`；Rollup 已在打包期把内部 import 静态解析成同一
-// 作用域里的标识符，运行时不靠名字查找任何模块导出。此前把每个模块的 renderedExports
-// 全塞进 `mangle.reserved`，等于禁止 terser 压缩这些顶层名 —— 实测多付约 49KB，
-// 正是把 bundle 顶出 819,200 B 预算的主因（854,786 → 约 805,000）。
-// 字符串型的系统名/角色名（bundle-parity 检查的 "traffic-manager" 等）是字面量，
-// 不受标识符压缩影响。
+// 函数名保留策略：内部标识符全部交给 terser；对外只暴露 module.exports.loop。
+// 字符串型的系统名/角色名不受标识符压缩影响。
 const terserOptions = {
-  keep_classnames: true,
-  compress: { passes: 2 },
+  keep_classnames: false,
+  // 启用 terser 对标准 JS 的等价压缩；CI 体积闸要求保留可部署余量。
+  compress: { passes: 4, unsafe: true },
   ecma: 2020,
   format: { ecma: 2020 },
   mangle: { reserved: [] },

@@ -93,6 +93,14 @@ export function collectDemands(
   return Array.from(merged.values()).sort((a, b) => b.priority - a.priority);
 }
 
+export function collectRoomDemands(
+  byRoom: Readonly<Record<string, ProcurementDemand[]>>,
+  roomName: string,
+  currentTick: number,
+): ProcurementDemand[] {
+  return collectDemands({ [roomName]: byRoom[roomName] ?? [] }, currentTick);
+}
+
 /**
  * 从反应链计划展开原料缺口需求（阶段 3 扩展：含中间产物）。
  *
@@ -116,19 +124,20 @@ export function expandReactionDemands(
   tick: number,
   deadlineOffset: number,
 ): ProcurementDemand[] {
-  const required = new Map<string, number>();
-  const plannedOutput = new Map<string, number>();
+  const required: Record<string, number> = {};
+  const plannedOutput: Record<string, number> = {};
 
   for (const step of reactionPlan.steps) {
     for (const input of [step.input1, step.input2]) {
-      required.set(input, (required.get(input) ?? 0) + step.amount);
+      required[input] = (required[input] ?? 0) + step.amount;
     }
-    plannedOutput.set(step.output, (plannedOutput.get(step.output) ?? 0) + step.amount);
+    plannedOutput[step.output] = (plannedOutput[step.output] ?? 0) + step.amount;
   }
 
   const demands: ProcurementDemand[] = [];
-  for (const [resource, grossNeed] of required) {
-    const covered = (inventory[resource] ?? 0) + (plannedOutput.get(resource) ?? 0);
+  for (const resource in required) {
+    const grossNeed = required[resource] ?? 0;
+    const covered = (inventory[resource] ?? 0) + (plannedOutput[resource] ?? 0);
     const deficit = grossNeed - covered;
     if (deficit <= 0) continue;
 

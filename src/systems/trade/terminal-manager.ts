@@ -11,7 +11,7 @@ import {
 } from "../../domain/industry/market-orders";
 import { pickBestBuyOrder } from "../../domain/industry/terminal-policy";
 import { computeDynamicSellPrice } from "../../domain/industry/market-pricing";
-import { collectDemands } from "../../domain/industry/procurement";
+import { collectDemands, collectRoomDemands } from "../../domain/industry/procurement";
 import { ensureTradeLedger, type TradeLedger } from "../../domain/industry/trade-ledger";
 import { globalCache } from "../../kernel/global-cache";
 import type { TransportPlan } from "../../domain/logistics/transport-plan";
@@ -242,10 +242,7 @@ export const terminalManagerSystem: System = {
         ledger.attemptedAt = attempted?.at ?? 0;
         if (demandsCache) {
           const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
-          const localDemands = collectDemands(
-            { [snapshot.roomName]: demandsCache.byRoom[snapshot.roomName] ?? [] },
-            ctx.tick,
-          );
+          const localDemands = collectRoomDemands(demandsCache.byRoom, snapshot.roomName, ctx.tick);
           // 采购侧读数写在**这里**（每轮都会走到），不是只写在 tryBuyDeficit 里：那个候选
           // 可能被更高优先级的 deal 或 terminal 冷却挤掉，于是"没人发布需求"和"发布了但这个
           // 候选没被执行"会读成同一个 0 —— 而这两种止步要修的是不同的模块。

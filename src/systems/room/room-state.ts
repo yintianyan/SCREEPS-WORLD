@@ -13,11 +13,7 @@ import {
 } from "../../domain/economy/phase";
 import { computeEnergyPrice } from "../../domain/economy/energy-price";
 import { accrueWallBudget } from "../../domain/economy/wall-budget";
-import {
-  nextLabActive,
-  nextStorageRichActive,
-  nextUpgradeActive,
-} from "../../domain/economy/storage-latch";
+import { nextStorageRichActive, nextUpgradeActive } from "../../domain/economy/storage-latch";
 import {
   HOME_MINERAL_STOP_STOCK,
   hasHomeMineralDemand,
@@ -106,7 +102,7 @@ export const roomStateSystem: System = {
           snapshot.rcl < 8
             ? CONFIG.economy.waterlines.sustainedStorage
             : CONFIG.economy.waterlines.sprintStorage;
-        labActive = nextLabActive(
+        labActive = nextUpgradeActive(
           roomMem.labActive,
           snapshot.rcl,
           storageEnergyNow,

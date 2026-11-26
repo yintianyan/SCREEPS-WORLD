@@ -14,7 +14,11 @@ import {
   type MarketOrderSummary,
 } from "../../domain/industry/terminal-policy";
 import { collectFullInventory } from "../../domain/industry/inventory";
-import { collectDemands, adjustMaxPrice } from "../../domain/industry/procurement";
+import {
+  collectDemands,
+  collectRoomDemands,
+  adjustMaxPrice,
+} from "../../domain/industry/procurement";
 import { ensureTradeLedger } from "../../domain/industry/trade-ledger";
 import {
   computeDynamicBuyPrice,
@@ -22,35 +26,7 @@ import {
   collectMarketPrices,
   type PriceTable,
 } from "../../domain/industry/market-pricing";
-import { BOOST_EFFECTS, type Compound } from "../../domain/industry/types";
-
-/** 反应链中间品：只能被生产计划消费，不能走 commodity 清仓通道。 */
-const REACTION_INTERMEDIATES = new Set([
-  "OH",
-  "ZK",
-  "UL",
-  "G",
-  "UH",
-  "UO",
-  "ZH",
-  "ZO",
-  "LH",
-  "LO",
-  "KH",
-  "KO",
-  "GH",
-  "GO",
-  "UH2O",
-  "UHO2",
-  "ZH2O",
-  "ZHO2",
-  "LH2O",
-  "LHO2",
-  "KH2O",
-  "KHO2",
-  "GH2O",
-  "GHO2",
-]);
+import { BOOST_EFFECTS, REACTIONS, type Compound } from "../../domain/industry/types";
 
 /** 把 Game.market 的订单对象裁剪为纯函数可消费的摘要。 */
 export function toSummaries(orders: readonly Order[]): MarketOrderSummary[] {
@@ -265,10 +241,7 @@ export function tryBuyDeficit(
     ledger.demandsLive = allDemands.length;
     // 采购必须落在需求所属房，避免“任意 terminal 买入但没有投递闭环”。
     // 姐妹房调拨由 terminal-selfaid / Plan 负责，市场只补本房需求。
-    const demands = collectDemands(
-      { [snapshot.roomName]: demandsCache.byRoom[snapshot.roomName] ?? [] },
-      ctx.tick,
-    );
+    const demands = collectRoomDemands(demandsCache.byRoom, snapshot.roomName, ctx.tick);
     if (demands.length === 0) {
       ledger.demandTop = allDemands.length > 0 ? "no-local-demand" : "";
       return false;
@@ -486,7 +459,7 @@ export function trySellCommodity(snapshot: RoomSnapshot, terminal: StructureTerm
     if (res === RESOURCE_BATTERY) continue;
     // boost 化合物由 trySellSurplusCompound 通道处理（有 BOOST_EFFECTS 映射）。
     if (BOOST_EFFECTS[res as Compound]) continue;
-    if (REACTION_INTERMEDIATES.has(res)) continue;
+    if (REACTIONS[res] && res[0] !== "X") continue;
     // 基础矿物由 trySellHomeMineral 通道处理。
     if (["H", "O", "U", "L", "K", "Z", "X"].includes(res)) continue;
     // G 由 tryBuyGhodium 通道管理（买入而非卖出）。

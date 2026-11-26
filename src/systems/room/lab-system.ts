@@ -20,7 +20,6 @@ import { computeBoostSurplus } from "../../domain/industry/boost-stockpile";
 import {
   evaluateReactionPlan,
   planReactionChain,
-  reserveGhodiumForNuker,
   selectReactionTrios,
   LAB_REACTION_AMOUNT,
 } from "../../domain/industry/reactions";
@@ -342,13 +341,6 @@ export const labSystem: System = {
         // 若存在可执行的 boost 请求，退出休眠并落到下方正常分支执行 boost；
         // 否则 idle 会持续跳过 boost，化合物永远进不了 lab，upgrader 只能裸奔。
         const idleInventory = collectCompoundInventory(snapshot);
-        const idleReservedInventory = snapshot.nuker
-          ? reserveGhodiumForNuker(
-              idleInventory,
-              snapshot.nuker.store[RESOURCE_GHODIUM] ?? 0,
-              CONFIG.nuker.ghodiumStockpile,
-            )
-          : idleInventory;
         const idleBoostRequests = evaluateBoostRequests(
           (globalCache().creepRefs ?? [])
             .filter(r => r.home === snapshot.roomName)
@@ -380,7 +372,7 @@ export const labSystem: System = {
           // 否则一条"可达但慢"的链会被永久钉在 blocked，反应与 boost 一起停摆。
           if (industryMem.blockedReason !== undefined) {
             const rescue = selectLocallyFeasibleTarget(
-              idleReservedInventory,
+              idleInventory,
               snapshot.minerals.map(m => m.mineralType as string),
               industryMem.reactionAmount ?? 300,
             );
@@ -399,25 +391,16 @@ export const labSystem: System = {
           // 重新开始一轮 600 拍缺料等待 + 幽灵采购。blocked 由市场恢复或
           // 显式目标切换解除（见 run 开头与 waitingInput 分支）。
           if (!industryMem.reactionTarget && industryMem.blockedReason === undefined) {
-            const idleGTotal =
-              (idleInventory[RESOURCE_GHODIUM] ?? 0) +
-              (snapshot.nuker?.store[RESOURCE_GHODIUM] ?? 0);
-            if (snapshot.nuker !== undefined && idleGTotal < CONFIG.nuker.ghodiumStockpile) {
-              industryMem.reactionTarget = "G";
-              industryMem.reactionAmount = CONFIG.nuker.ghodiumStockpile;
-            } else {
-              industryMem.reactionTarget = "XGH2O";
-              industryMem.reactionAmount = 300;
-            }
+            industryMem.reactionTarget = "XGH2O";
+            industryMem.reactionAmount = 300;
           }
           const idleTarget = industryMem.reactionTarget;
           if (
             idleTarget !== undefined &&
             (!industryMem.reactionPlan || industryMem.reactionPlan.target !== idleTarget)
           ) {
-            const planInventory = idleTarget === "G" ? idleInventory : idleReservedInventory;
             industryMem.reactionPlan =
-              planReactionChain(idleTarget, industryMem.reactionAmount ?? 300, planInventory) ??
+              planReactionChain(idleTarget, industryMem.reactionAmount ?? 300, idleInventory) ??
               undefined;
           }
 
@@ -445,13 +428,6 @@ export const labSystem: System = {
       }
 
       const inventory = collectCompoundInventory(snapshot);
-      const reactionInventory = snapshot.nuker
-        ? reserveGhodiumForNuker(
-            inventory,
-            snapshot.nuker.store[RESOURCE_GHODIUM] ?? 0,
-            CONFIG.nuker.ghodiumStockpile,
-          )
-        : inventory;
 
       // 清理已死亡 creep 的名字，防止 boostedCreeps 无限累积。
       // 复用 Game.creeps 判断存活，去重后仅保留仍在世的名字（无需 schema 迁移）。
@@ -649,11 +625,8 @@ export const labSystem: System = {
           industryMem.reactionPlan.target !== industryMem.reactionTarget
         ) {
           industryMem.reactionPlan =
-            planReactionChain(
-              industryMem.reactionTarget,
-              industryMem.reactionAmount,
-              industryMem.reactionTarget === "G" ? inventory : reactionInventory,
-            ) ?? undefined;
+            planReactionChain(industryMem.reactionTarget, industryMem.reactionAmount, inventory) ??
+            undefined;
         }
 
         // 需求发布必须在"不可执行 ⇒ 清空计划"**之前**。
@@ -680,10 +653,7 @@ export const labSystem: System = {
         }
 
         if (industryMem.reactionPlan) {
-          const state = evaluateReactionPlan(
-            industryMem.reactionPlan,
-            industryMem.reactionTarget === "G" ? inventory : reactionInventory,
-          );
+          const state = evaluateReactionPlan(industryMem.reactionPlan, inventory);
           if (state.status === "ready") {
             reactionStep = state.step;
             delete industryMem.reactionWait;
@@ -698,7 +668,7 @@ export const labSystem: System = {
             if (shouldAbandonReaction(industryMem.reactionWait, ctx.tick, marketAvailable)) {
               const ownMineralTypes = snapshot.minerals.map(m => m.mineralType as string);
               const fallback = selectLocallyFeasibleTarget(
-                reactionInventory,
+                inventory,
                 ownMineralTypes,
                 industryMem.reactionAmount ?? 300,
               );
