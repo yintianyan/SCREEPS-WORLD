@@ -112,14 +112,14 @@ export const terminalManagerSystem: System = {
     const planIsActive = logisticsPlan && logisticsPlan.plannedAt >= ctx.tick - 100;
     const planRequestRooms = collectPlanTerminalRooms(logisticsPlan);
 
-    if (!planIsActive) {
-      // DEGRADED MODE：Plan 不可用，自主互济作为 fallback。
+    if (!planIsActive || planRequestRooms.size === 0) {
+      // Plan 不存在、过期，或只有 storage→storage 请求时，自主互济仍是唯一跨房出口。
       // 0. 帝国能量互济：跨房救助优先于贸易（殖民生存 > 交易收入）。
       tryEmpireEnergyAid(ctx);
       // 0.5 帝国矿物互济：姐妹房 homeMineral 盈余先于市场买入（省 credits）。
       tryEmpireMineralAid(ctx);
-    } else if (planRequestRooms.size > 0) {
-      // Plan 存在且有 terminal 请求 — Plan 拥有 Decision Authority。
+    } else {
+      // Plan 存在且确有 terminal 请求 — Plan 拥有 Decision Authority。
       // 自主互济跳过，由 Plan 驱动的 tryPlanDrivenSend 执行。
       log.info(
         "terminal",
@@ -242,16 +242,22 @@ export const terminalManagerSystem: System = {
         ledger.attemptedAt = attempted?.at ?? 0;
         if (demandsCache) {
           const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
+          const localDemands = collectDemands(
+            { [snapshot.roomName]: demandsCache.byRoom[snapshot.roomName] ?? [] },
+            ctx.tick,
+          );
           // 采购侧读数写在**这里**（每轮都会走到），不是只写在 tryBuyDeficit 里：那个候选
           // 可能被更高优先级的 deal 或 terminal 冷却挤掉，于是"没人发布需求"和"发布了但这个
           // 候选没被执行"会读成同一个 0 —— 而这两种止步要修的是不同的模块。
           ledger.demandsLive = allDemands.length;
-          if (allDemands.length > 0) {
-            const top = allDemands[0]!;
+          const top = localDemands[0];
+          if (top) {
             ledger.demandTop = `${top.resource}:${top.amount}/p${top.priority}/${top.reason}`;
-            // 需求表存在时，取最高 priority 但不低于 SELL_PRIORITY_CAP+1，
+            // 本房需求存在时，取最高 priority 但不低于 SELL_PRIORITY_CAP+1，
             // 确保买入在 deal 竞争中胜过卖出候选。
             deficitPriority = Math.max(top.priority, SELL_PRIORITY_CAP + 1);
+          } else if (allDemands.length > 0) {
+            ledger.demandTop = "no-local-demand";
           }
         }
         // ★terminal 空闲不足时把买入降级 —— 「工业链原料买入是生产性投资，优先于日常

@@ -427,7 +427,7 @@ export function needsEnergyAid(profile: RoomEconomicProfile): boolean {
   return false;
 }
 
-/** 任一自有房仍需援助时，停止把能量作为盈余变卖。 */
+/** 任一自有房净流不为正或仍需援助时，停止把能量作为盈余变卖。 */
 export function empireAllowsEnergySale(profiles: readonly RoomEconomicProfile[]): boolean {
-  return !profiles.some(needsEnergyAid);
+  return !profiles.some(profile => !profile.netFlowPositive || needsEnergyAid(profile));
 }

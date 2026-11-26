@@ -20,6 +20,7 @@ import { computeBoostSurplus } from "../../domain/industry/boost-stockpile";
 import {
   evaluateReactionPlan,
   planReactionChain,
+  reserveGhodiumForNuker,
   selectReactionTrios,
   LAB_REACTION_AMOUNT,
 } from "../../domain/industry/reactions";
@@ -341,6 +342,13 @@ export const labSystem: System = {
         // 若存在可执行的 boost 请求，退出休眠并落到下方正常分支执行 boost；
         // 否则 idle 会持续跳过 boost，化合物永远进不了 lab，upgrader 只能裸奔。
         const idleInventory = collectCompoundInventory(snapshot);
+        const idleReservedInventory = snapshot.nuker
+          ? reserveGhodiumForNuker(
+              idleInventory,
+              snapshot.nuker.store[RESOURCE_GHODIUM] ?? 0,
+              CONFIG.nuker.ghodiumStockpile,
+            )
+          : idleInventory;
         const idleBoostRequests = evaluateBoostRequests(
           (globalCache().creepRefs ?? [])
             .filter(r => r.home === snapshot.roomName)
@@ -372,7 +380,7 @@ export const labSystem: System = {
           // 否则一条"可达但慢"的链会被永久钉在 blocked，反应与 boost 一起停摆。
           if (industryMem.blockedReason !== undefined) {
             const rescue = selectLocallyFeasibleTarget(
-              idleInventory,
+              idleReservedInventory,
               snapshot.minerals.map(m => m.mineralType as string),
               industryMem.reactionAmount ?? 300,
             );
@@ -391,16 +399,25 @@ export const labSystem: System = {
           // 重新开始一轮 600 拍缺料等待 + 幽灵采购。blocked 由市场恢复或
           // 显式目标切换解除（见 run 开头与 waitingInput 分支）。
           if (!industryMem.reactionTarget && industryMem.blockedReason === undefined) {
-            industryMem.reactionTarget = "XGH2O";
-            industryMem.reactionAmount = 300;
+            const idleGTotal =
+              (idleInventory[RESOURCE_GHODIUM] ?? 0) +
+              (snapshot.nuker?.store[RESOURCE_GHODIUM] ?? 0);
+            if (snapshot.nuker !== undefined && idleGTotal < CONFIG.nuker.ghodiumStockpile) {
+              industryMem.reactionTarget = "G";
+              industryMem.reactionAmount = CONFIG.nuker.ghodiumStockpile;
+            } else {
+              industryMem.reactionTarget = "XGH2O";
+              industryMem.reactionAmount = 300;
+            }
           }
           const idleTarget = industryMem.reactionTarget;
           if (
             idleTarget !== undefined &&
             (!industryMem.reactionPlan || industryMem.reactionPlan.target !== idleTarget)
           ) {
+            const planInventory = idleTarget === "G" ? idleInventory : idleReservedInventory;
             industryMem.reactionPlan =
-              planReactionChain(idleTarget, industryMem.reactionAmount ?? 300, idleInventory) ??
+              planReactionChain(idleTarget, industryMem.reactionAmount ?? 300, planInventory) ??
               undefined;
           }
 
@@ -428,6 +445,13 @@ export const labSystem: System = {
       }
 
       const inventory = collectCompoundInventory(snapshot);
+      const reactionInventory = snapshot.nuker
+        ? reserveGhodiumForNuker(
+            inventory,
+            snapshot.nuker.store[RESOURCE_GHODIUM] ?? 0,
+            CONFIG.nuker.ghodiumStockpile,
+          )
+        : inventory;
 
       // 清理已死亡 creep 的名字，防止 boostedCreeps 无限累积。
       // 复用 Game.creeps 判断存活，去重后仅保留仍在世的名字（无需 schema 迁移）。
@@ -625,8 +649,11 @@ export const labSystem: System = {
           industryMem.reactionPlan.target !== industryMem.reactionTarget
         ) {
           industryMem.reactionPlan =
-            planReactionChain(industryMem.reactionTarget, industryMem.reactionAmount, inventory) ??
-            undefined;
+            planReactionChain(
+              industryMem.reactionTarget,
+              industryMem.reactionAmount,
+              industryMem.reactionTarget === "G" ? inventory : reactionInventory,
+            ) ?? undefined;
         }
 
         // 需求发布必须在"不可执行 ⇒ 清空计划"**之前**。
@@ -653,7 +680,10 @@ export const labSystem: System = {
         }
 
         if (industryMem.reactionPlan) {
-          const state = evaluateReactionPlan(industryMem.reactionPlan, inventory);
+          const state = evaluateReactionPlan(
+            industryMem.reactionPlan,
+            industryMem.reactionTarget === "G" ? inventory : reactionInventory,
+          );
           if (state.status === "ready") {
             reactionStep = state.step;
             delete industryMem.reactionWait;
@@ -668,7 +698,7 @@ export const labSystem: System = {
             if (shouldAbandonReaction(industryMem.reactionWait, ctx.tick, marketAvailable)) {
               const ownMineralTypes = snapshot.minerals.map(m => m.mineralType as string);
               const fallback = selectLocallyFeasibleTarget(
-                inventory,
+                reactionInventory,
                 ownMineralTypes,
                 industryMem.reactionAmount ?? 300,
               );
@@ -822,9 +852,8 @@ export const labSystem: System = {
       // 每个 input1+input2+output 三元组独立执行 runReaction —
       // RCL8 有 10 个 lab 时可并行 3 组，产能 5→15/tick。
       // 低储回血期暂停反应（每个 trio 每 10 tick 消耗 10 能量 ≈ 1 e/t）。
-      // Phase D：改读 lab 专用闸（50K 停 / 55K 复）—— 与升级（60K）和修墙（300K）解耦。
-      // lab 成本比单只升级（15 e/t）低一个量级，因此恢复线设得比升级更低：
-      // storage 一过 55K 就让工业链转起来，把 ZK/UL/G 的储备推进（nuker 目标 5,000 G）。
+      // Phase D：RCL8 用 50K/55K 回差；RCL<8 由 room-state 用 10K 维持线。
+      // 反应成本约 1–3 e/t，幼房不应因为储备未满 50K 而停止工业。
       // 闩锁由 room-state 单写者每拍落盘（storage 存在必定义、无 storage 必删除
       // ⇒ undefined 仅出现在无 storage 房，反应本就不该跑）——原始水位回退层
       // 与 fail-open catch 在单写者后不可达，删除（fail-open 本身是行为隐患）。

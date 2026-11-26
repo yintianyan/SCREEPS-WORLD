@@ -1,6 +1,7 @@
 /** 富 storage 闩锁：50K 停 / 100K 复的回差语义。 */
 import { describe, expect, it } from "vitest";
 import {
+  nextLabActive,
   nextStorageRichActive,
   nextUpgradeActive,
 } from "../../../src/domain/economy/storage-latch";
@@ -62,6 +63,24 @@ describe("nextUpgradeActive — 按 RCL 分档", () => {
   it("回归：RCL7 与 RCL8 在同一水位得到不同结论（死区的直接证据）", () => {
     expect(nextUpgradeActive(false, 7, 57942, ENTER, RCL8_RESUME)).toBe(true);
     expect(nextUpgradeActive(false, 8, 57942, ENTER, RCL8_RESUME)).toBe(false);
+  });
+});
+
+describe("nextLabActive — 幼房低成本工业闸", () => {
+  const SUSTAINED = 10_000;
+  const SPRINT = 50_000;
+  const RCL8_RESUME = 55_000;
+
+  it("RCL<8：10K 单门槛，10K–50K 区间允许反应", () => {
+    expect(nextLabActive(undefined, 7, 10_000, SUSTAINED, RCL8_RESUME)).toBe(true);
+    expect(nextLabActive(false, 6, 15_000, SUSTAINED, RCL8_RESUME)).toBe(true);
+    expect(nextLabActive(true, 7, 9_999, SUSTAINED, RCL8_RESUME)).toBe(false);
+  });
+
+  it("RCL8：保留 50K 停 / 55K 复回差", () => {
+    expect(nextLabActive(undefined, 8, 15_000, SPRINT, RCL8_RESUME)).toBe(false);
+    expect(nextLabActive(true, 8, 52_000, SPRINT, RCL8_RESUME)).toBe(true);
+    expect(nextLabActive(false, 8, 55_000, SPRINT, RCL8_RESUME)).toBe(true);
   });
 });
 

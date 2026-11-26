@@ -440,4 +440,32 @@ describe("needsEnergyAid", () => {
       ]),
     ).toBe(false);
   });
+
+  it("任一房间负净流 → 禁止外卖，即使风险缓冲充足", () => {
+    expect(
+      empireAllowsEnergySale([
+        profile(),
+        profile({
+          roomName: "W8N8",
+          netFlow: -3,
+          netFlowPositive: false,
+          riskBuffer: 5_000,
+        }),
+      ]),
+    ).toBe(false);
+  });
+
+  it("任一房间零净流 → 禁止外卖（非正净流不具备卖能资格）", () => {
+    expect(
+      empireAllowsEnergySale([
+        profile(),
+        profile({
+          roomName: "W8N8",
+          netFlow: 0,
+          netFlowPositive: false,
+          riskBuffer: 5_000,
+        }),
+      ]),
+    ).toBe(false);
+  });
 });

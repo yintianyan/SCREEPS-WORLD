@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateReactionPlan,
   getNextExecutableStep,
+  reserveGhodiumForNuker,
 } from "../../../src/domain/industry/reactions";
 import type { ReactionPlan } from "../../../src/domain/industry/types";
 
@@ -20,6 +21,24 @@ const plan = (steps: ReactionPlan["steps"]): ReactionPlan => ({
 });
 
 const STEP = { input1: "X", input2: "GH2O", output: "XGH2O", amount: 300 } as const;
+
+describe("reserveGhodiumForNuker — 威慑储备先于经济反应", () => {
+  it("nuker 空缺时，从经济可用 G 中预留缺口", () => {
+    const reserved = reserveGhodiumForNuker({ G: 4704, ZK: 100 }, 0, 5000);
+    expect(reserved.G).toBe(0);
+    expect(reserved.ZK).toBe(100);
+  });
+
+  it("总库存足够装填时，只预留 nuker 缺口，保留经济余量", () => {
+    const reserved = reserveGhodiumForNuker({ G: 5200 }, 0, 5000);
+    expect(reserved.G).toBe(200);
+  });
+
+  it("nuker 已满时不改变库存引用", () => {
+    const inventory = { G: 5200 };
+    expect(reserveGhodiumForNuker(inventory, 5000, 5000)).toBe(inventory);
+  });
+});
 
 describe("evaluateReactionPlan — 三态而非一 null", () => {
   it("原料齐、产物未满 ⇒ ready，并交出这一步", () => {

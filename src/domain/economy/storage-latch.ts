@@ -52,3 +52,15 @@ export function nextUpgradeActive(
   if (rcl < 8) return storageEnergy >= enterThreshold;
   return nextStorageRichActive(previous, storageEnergy, enterThreshold, rcl8ResumeThreshold);
 }
+
+/** 实验室闸：幼房反应成本低，使用 10K 维持线；RCL8 保留 50K/55K 回差。 */
+export function nextLabActive(
+  previous: boolean | undefined,
+  rcl: number,
+  storageEnergy: number,
+  enterThreshold: number,
+  rcl8ResumeThreshold: number,
+): boolean {
+  if (rcl < 8) return storageEnergy >= enterThreshold;
+  return nextStorageRichActive(previous, storageEnergy, enterThreshold, rcl8ResumeThreshold);
+}

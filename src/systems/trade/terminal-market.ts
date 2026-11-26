@@ -24,6 +24,34 @@ import {
 } from "../../domain/industry/market-pricing";
 import { BOOST_EFFECTS, type Compound } from "../../domain/industry/types";
 
+/** 反应链中间品：只能被生产计划消费，不能走 commodity 清仓通道。 */
+const REACTION_INTERMEDIATES = new Set([
+  "OH",
+  "ZK",
+  "UL",
+  "G",
+  "UH",
+  "UO",
+  "ZH",
+  "ZO",
+  "LH",
+  "LO",
+  "KH",
+  "KO",
+  "GH",
+  "GO",
+  "UH2O",
+  "UHO2",
+  "ZH2O",
+  "ZHO2",
+  "LH2O",
+  "LHO2",
+  "KH2O",
+  "KHO2",
+  "GH2O",
+  "GHO2",
+]);
+
 /** 把 Game.market 的订单对象裁剪为纯函数可消费的摘要。 */
 export function toSummaries(orders: readonly Order[]): MarketOrderSummary[] {
   const ownOrderIds = new Set(Object.keys(Game.market?.orders ?? {}));
@@ -235,10 +263,17 @@ export function tryBuyDeficit(
   if (demandsCache) {
     const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
     ledger.demandsLive = allDemands.length;
-    // 过滤出当前房间的需求（跨房需求不在此房买 — terminal.send 走互济通道）。
-    // 实际上所有房的需求都汇入：任意房的缺口都可在任意 terminal 买入（买入后走互济送到位）。
-    // 但为控制 getAllOrders 开销，只取 priority 最高的一个需求。
-    for (const demand of allDemands) {
+    // 采购必须落在需求所属房，避免“任意 terminal 买入但没有投递闭环”。
+    // 姐妹房调拨由 terminal-selfaid / Plan 负责，市场只补本房需求。
+    const demands = collectDemands(
+      { [snapshot.roomName]: demandsCache.byRoom[snapshot.roomName] ?? [] },
+      ctx.tick,
+    );
+    if (demands.length === 0) {
+      ledger.demandTop = allDemands.length > 0 ? "no-local-demand" : "";
+      return false;
+    }
+    for (const demand of demands) {
       if (demand.deadline <= ctx.tick) continue;
       if (demand.amount <= 0) continue;
       ledger.demandTop = `${demand.resource}:${demand.amount}/p${demand.priority}/${demand.reason}`;
@@ -437,20 +472,21 @@ export function trySellSurplusBattery(
 /**
  * 卖出 factory commodity 产出（circuit/wire/alloy/device 等）。
  * commodity 是 factory 升级链产物，搬到 terminal 后由此函数变现。
- * 口径：terminal 内非 energy、非 homeMineral、非 battery、非 boost 化合物的资源。
+ * 口径：terminal 内非 energy、非 homeMineral、非 battery、非 boost 化合物、非反应中间品的资源。
  * 价格门禁用 minSellPrice（与矿物同底线 — 不贱卖，commodity 单价远高于基础矿）。
  * 每次只卖一种（控制 getAllOrders 开销）。
  */
 export function trySellCommodity(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
   const homeMineral = snapshot.minerals[0]?.mineralType;
 
-  // 扫描 terminal 中 commodity 产出（排除 energy/homeMineral/battery/boost 化合物）。
+  // 扫描 terminal 中 commodity 产出（排除 energy/homeMineral/battery/boost/反应中间品）。
   for (const res of Object.keys(terminal.store) as ResourceConstant[]) {
     if (res === RESOURCE_ENERGY) continue;
     if (res === homeMineral) continue;
     if (res === RESOURCE_BATTERY) continue;
     // boost 化合物由 trySellSurplusCompound 通道处理（有 BOOST_EFFECTS 映射）。
     if (BOOST_EFFECTS[res as Compound]) continue;
+    if (REACTION_INTERMEDIATES.has(res)) continue;
     // 基础矿物由 trySellHomeMineral 通道处理。
     if (["H", "O", "U", "L", "K", "Z", "X"].includes(res)) continue;
     // G 由 tryBuyGhodium 通道管理（买入而非卖出）。

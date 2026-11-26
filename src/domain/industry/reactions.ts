@@ -54,6 +54,20 @@ export function planReactionChain(
   return { steps, target, targetAmount: amount };
 }
 
+/** 从经济反应可用库存中预留 nuker 威慑备弹缺口。 */
+export function reserveGhodiumForNuker(
+  inventory: Readonly<Record<string, number>>,
+  nukerGhodium: number,
+  stockpileTarget: number,
+): Readonly<Record<string, number>> {
+  const reserve = Math.max(0, stockpileTarget - nukerGhodium);
+  if (reserve <= 0) return inventory;
+  return {
+    ...inventory,
+    G: Math.max(0, (inventory.G ?? 0) - reserve),
+  };
+}
+
 /** 库存是否满足单 tick 反应所需（各输入 ≥ 5，非整批 step.amount）。 */
 export function canExecuteStep(
   step: ReactionStep,

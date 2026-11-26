@@ -95,12 +95,11 @@ export function collectDemands(
 
 /**
  * 从反应链计划展开原料缺口需求（阶段 3 扩展：含中间产物）。
-
- * 反应链的每个 step 需要两种输入原料。基础矿物缺口直接发采购需求；
- * 中间产物（OH/ZK/UL/G）缺口也发采购需求 — 阶段 3 扩展，允许市场买入
- * 中间产物以加速反应链（自产是主通道，市场是加速通道）。
- * 已有库存满足的部分不计入缺口。
-
+ *
+ * 先累计全链每种原料的总需求，再扣除现有库存与上游计划产出；只有仍需外部
+ * 补给的资源才发采购需求。重复原料不会被后一步覆盖，中间品也不会在上游
+ * 可自产时重复购买。
+ *
  * @param reactionPlan 反应链计划。
  * @param inventory 完整库存视图。
  * @param tick 当前 tick。
@@ -117,27 +116,32 @@ export function expandReactionDemands(
   tick: number,
   deadlineOffset: number,
 ): ProcurementDemand[] {
-  const demands: ProcurementDemand[] = [];
+  const required = new Map<string, number>();
+  const plannedOutput = new Map<string, number>();
 
   for (const step of reactionPlan.steps) {
     for (const input of [step.input1, step.input2]) {
-      const have = inventory[input] ?? 0;
-      const need = step.amount;
-      const deficit = need - have;
-      if (deficit <= 0) continue;
-
-      // 基础矿 priority=25；中间产物 priority=20（市场买入是加速通道，
-      // 不如自产经济 — 但缺料时比不产强）。
-      const priority = isBaseMineral(input) ? 25 : 20;
-
-      demands.push({
-        resource: input,
-        amount: deficit,
-        priority,
-        deadline: tick + deadlineOffset,
-        reason: "lab-reaction",
-      });
+      required.set(input, (required.get(input) ?? 0) + step.amount);
     }
+    plannedOutput.set(step.output, (plannedOutput.get(step.output) ?? 0) + step.amount);
+  }
+
+  const demands: ProcurementDemand[] = [];
+  for (const [resource, grossNeed] of required) {
+    const covered = (inventory[resource] ?? 0) + (plannedOutput.get(resource) ?? 0);
+    const deficit = grossNeed - covered;
+    if (deficit <= 0) continue;
+
+    // 基础矿 priority=25；中间产物 priority=20（市场买入是加速通道，
+    // 不如自产经济 — 但缺料时比不产强）。
+    const priority = isBaseMineral(resource) ? 25 : 20;
+    demands.push({
+      resource,
+      amount: deficit,
+      priority,
+      deadline: tick + deadlineOffset,
+      reason: "lab-reaction",
+    });
   }
 
   return demands;

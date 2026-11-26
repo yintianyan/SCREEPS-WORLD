@@ -112,7 +112,7 @@ describe("expandReactionDemands — 反应链原料缺口展开（含中间产�
     expect(result).toHaveLength(0);
   });
 
-  it("多步骤反应链展开各层基础矿和中间产物", () => {
+  it("多步骤反应链只采购上游无法自产的外部原料", () => {
     // G ← ZK + UL, ZK ← Z + K, UL ← U + L
     const plan = {
       steps: [
@@ -125,14 +125,25 @@ describe("expandReactionDemands — 反应链原料缺口展开（含中间产�
     };
     const inventory = {};
     const result = expandReactionDemands(plan, inventory, 100, 250);
-    // Z, K, U, L 是基础矿；ZK, UL 是中间产物（也是输入）→ 阶段 3 扩展后都展开。
-    // G 是最终产物，不是任何 step 的输入 → 不展开。
-    const resources = result.map(d => d.resource).sort();
-    expect(resources).toEqual(["K", "L", "U", "UL", "Z", "ZK"]);
+    // ZK/UL 会由本计划产出，不应再发市场采购需求。
+    expect(result.map(d => d.resource).sort()).toEqual(["K", "L", "U", "Z"]);
     expect(result.find(d => d.resource === "G")).toBeUndefined();
   });
 
-  it("中间产物 priority=20（低于基础矿 25）", () => {
+  it("重复原料按全链累计求和", () => {
+    const plan = {
+      steps: [
+        { input1: "O" as const, input2: "H" as const, output: "OH" as const, amount: 115 },
+        { input1: "G" as const, input2: "H" as const, output: "GH" as const, amount: 210 },
+      ],
+      target: "GH",
+      targetAmount: 210,
+    };
+    const result = expandReactionDemands(plan, {}, 100, 250);
+    expect(result.find(d => d.resource === "H")?.amount).toBe(325);
+  });
+
+  it("外部中间产物 priority=20（低于基础矿 25）", () => {
     const plan = {
       steps: [
         { input1: "Z" as const, input2: "K" as const, output: "ZK" as const, amount: 300 },
@@ -143,9 +154,10 @@ describe("expandReactionDemands — 反应链原料缺口展开（含中间产�
     };
     const result = expandReactionDemands(plan, {}, 100, 250);
     const base = result.find(d => d.resource === "Z");
-    const intermediate = result.find(d => d.resource === "ZK");
+    const externalIntermediate = result.find(d => d.resource === "UL");
     expect(base!.priority).toBe(25);
-    expect(intermediate!.priority).toBe(20);
+    expect(externalIntermediate!.priority).toBe(20);
+    expect(result.find(d => d.resource === "ZK")).toBeUndefined();
   });
 
   it("deadline = tick + deadlineOffset", () => {

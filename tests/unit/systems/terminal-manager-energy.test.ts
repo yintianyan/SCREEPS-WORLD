@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/trade/terminal-manager";
 import { mockBudget, mockSnapshot, mockStore, resetGlobals } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
+import { globalCache } from "../../../src/kernel/global-cache";
 
 function terminalMock(opts: { energy?: number; cooldown?: number } = {}): any {
   return {
@@ -93,6 +94,39 @@ describe("terminal-manager — 帝国能量互济", () => {
 
     expect(donor.terminal.send).not.toHaveBeenCalled();
     expect(transferEvents()).toHaveLength(0);
+  });
+
+  it("Plan 只有 storage→storage 请求时，自主能量互济仍执行", () => {
+    setupMarket();
+    const donor = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 80000,
+      terminal: terminalMock({ energy: 13000 }),
+    });
+    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
+    const tick = (globalThis as any).Game.time;
+    globalCache().logisticsPlan = {
+      tick,
+      plan: {
+        plannedAt: tick,
+        requests: [
+          {
+            resource: "energy",
+            amount: 1000,
+            priority: 1,
+            source: { room: "W7N4", type: "storage" },
+            destination: { room: "W8N4", type: "storage" },
+            deadline: tick + 1000,
+            createdAt: tick,
+            origin: "test",
+          } as any,
+        ],
+      },
+    } as any;
+
+    terminalManagerSystem.run(makeContext([donor, needy]));
+
+    expect(donor.terminal.send).toHaveBeenCalledWith("energy", 10000, "W8N4");
   });
 
   it("单房 → 不互济", () => {

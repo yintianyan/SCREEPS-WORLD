@@ -22,6 +22,7 @@ import { getRoomTaskLedger, ledgerValue } from "../support/task-ledger";
 import { getObjectById } from "../support/obj-cache";
 import { moveToTarget } from "../movement";
 import { computeDistributorTier, hasDistributorFillDemand } from "../support/targeting";
+import { NUKE_GHODIUM_COST } from "../../domain/war/planning";
 import type { DistributorTier } from "../support/targeting";
 
 /** 各档位对应的单次最大取能量。tier 0 = 满载（carry 容量）。 */
@@ -185,6 +186,14 @@ function distributorFillValue(ac: ActionContext, t: AnyOwnedStructure): number {
   return ledgerValue(ledger, "fill-cc", 50);
 }
 
+function nukerStockValue(ac: ActionContext): number {
+  const nuker = ac.snapshot.nuker;
+  if (!nuker) return 0;
+  const ghodiumShort = (nuker.store[RESOURCE_GHODIUM] ?? 0) < NUKE_GHODIUM_COST;
+  const carryingGhodium = (ac.creep.store[RESOURCE_GHODIUM] ?? 0) > 0;
+  return ghodiumShort || carryingGhodium ? 130 : 35;
+}
+
 const policy: RolePolicy = {
   park: true,
   isDistributor: true,
@@ -226,8 +235,8 @@ const policy: RolePolicy = {
     supplyLabs(),
     // powerSpawn 原料补给（能量/POWER 取料相）— GPL 涓流是最奢侈的下游，排在最后。
     stockPowerSpawn(),
-    // nuker 威慑备弹装填（能量/G 取料相）— 战略投资受高水位地板门禁，与 powerSpawn 同档垫底。
-    stockNuker(),
+    // nuker 威慑备弹装填（G 缺口优先，能量仍按低优先级垫底）。
+    scored(stockNuker(), nukerStockValue),
   ],
 
   work: [
@@ -260,8 +269,8 @@ const policy: RolePolicy = {
     scored(supplyLabs(), ac => ledgerValue(getRoomTaskLedger(ac.snapshot), "supply-labs", 90)),
     // powerSpawn 原料投放相。
     scored(stockPowerSpawn(), () => 45),
-    // nuker 威慑备弹投放相。
-    scored(stockNuker(), () => 35),
+    // nuker 威慑备弹投放相（G 缺口优先，能量仍按低优先级垫底）。
+    scored(stockNuker(), nukerStockValue),
     // 所有 sink 均满 — 原地待命。注意：distributor 没有 fillStorage — 架构约束，
     // 加上就会重新引入 storage→storage 循环。
     // Phase C 例外：所有 sink 满 + storage 低于恢复线时，把背包能量回吐 storage。

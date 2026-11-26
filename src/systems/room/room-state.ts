@@ -13,7 +13,11 @@ import {
 } from "../../domain/economy/phase";
 import { computeEnergyPrice } from "../../domain/economy/energy-price";
 import { accrueWallBudget } from "../../domain/economy/wall-budget";
-import { nextStorageRichActive, nextUpgradeActive } from "../../domain/economy/storage-latch";
+import {
+  nextLabActive,
+  nextStorageRichActive,
+  nextUpgradeActive,
+} from "../../domain/economy/storage-latch";
 import {
   HOME_MINERAL_STOP_STOCK,
   hasHomeMineralDemand,
@@ -76,8 +80,8 @@ export const roomStateSystem: System = {
         roomMem.storageRichActive = storageRichActive;
       }
 
-      // 分级消费闸 —— 停线统一 50K，恢复线按「收益/紧迫度」分开：
-      // upgrade 60K（长期复利，最优先）< lab 55K（有资产收益）< 修墙 300K（纯消耗）。
+      // 分级消费闸 —— RCL8 停线统一 50K，恢复线按收益/紧迫度分开；
+      // RCL<8 的升级与实验室都用 sustainedStorage(10K) 单门槛，避免幼房永久停摆。
       let upgradeActive: boolean | undefined;
       let labActive: boolean | undefined;
       let fortifyActive: boolean | undefined;
@@ -98,10 +102,15 @@ export const roomStateSystem: System = {
           upgradeEnter,
           CONFIG.economy.waterlines.gclResumeStorage,
         );
-        labActive = nextStorageRichActive(
+        const labEnter =
+          snapshot.rcl < 8
+            ? CONFIG.economy.waterlines.sustainedStorage
+            : CONFIG.economy.waterlines.sprintStorage;
+        labActive = nextLabActive(
           roomMem.labActive,
+          snapshot.rcl,
           storageEnergyNow,
-          CONFIG.economy.waterlines.sprintStorage,
+          labEnter,
           CONFIG.economy.waterlines.labResumeStorage,
         );
         fortifyActive = nextStorageRichActive(

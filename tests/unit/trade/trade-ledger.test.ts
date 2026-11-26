@@ -3,10 +3,10 @@
  * 立案理由见 domain/industry/trade-ledger：2026-09-28 审计参与度时，贸易是唯一一个
  * 「线上看不出它为什么不动作」的模块（不写 Memory，决策输入只在函数栈里）。
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { terminalManagerSystem } from "../../../src/systems/trade/terminal-manager";
-import { tryBuyDeficit } from "../../../src/systems/trade/terminal-market";
+import { tryBuyDeficit, trySellCommodity } from "../../../src/systems/trade/terminal-market";
 import { createTradeLedger } from "../../../src/domain/industry/trade-ledger";
 import { globalCache, publishProcurementDemands } from "../../../src/kernel/global-cache";
 import { mockBudget, mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
@@ -28,6 +28,37 @@ beforeEach(() => {
     createOrder: () => OK,
     cancelOrder: () => OK,
   };
+});
+
+describe("terminal-market — commodity 中间品保护", () => {
+  it("OH 等反应中间品不进入 commodity 卖出扫描", () => {
+    const store: Record<string, number> = { energy: 5000, OH: 1000, wire: 100 };
+    store.getUsedCapacity = ((resource: string) => store[resource] ?? 0) as any;
+    const terminal = { store, cooldown: 0 } as any;
+    const snapshot = mockSnapshot({ terminal });
+    g().Game.market.getAllOrders = (opts: any) =>
+      opts.resourceType === "wire"
+        ? [{ id: "wire-buy", price: 10, amount: 100, roomName: "W1N1" }]
+        : [];
+    g().Game.market.calcTransactionCost = () => 10;
+    g().Game.market.deal = vi.fn(() => OK);
+
+    expect(trySellCommodity(snapshot, terminal)).toBe(true);
+    expect(g().Game.market.deal).toHaveBeenCalledWith("wire-buy", 100, "W7N4");
+  });
+
+  it("terminal 只有反应中间品时不成交", () => {
+    const store: Record<string, number> = { energy: 5000, OH: 1000, GH: 500 };
+    store.getUsedCapacity = ((resource: string) => store[resource] ?? 0) as any;
+    const terminal = { store, cooldown: 0 } as any;
+    const snapshot = mockSnapshot({ terminal });
+    g().Game.market.getAllOrders = () => [];
+    g().Game.market.calcTransactionCost = () => 10;
+    g().Game.market.deal = vi.fn(() => OK);
+
+    expect(trySellCommodity(snapshot, terminal)).toBe(false);
+    expect(g().Game.market.deal).not.toHaveBeenCalled();
+  });
 });
 
 describe("terminal-manager — 决策账本", () => {
@@ -187,6 +218,26 @@ describe("terminal-market — 采购侧账本", () => {
     publish("U");
     expect(tryBuyDeficit(mockSnapshot(), terminal(), ctx())).toBe(false);
     expect(globalCache().tradeLedger!.buyBlockedBy).toBe("credits-floor");
+  });
+
+  it("其他房的需求不在本房 terminal 买入", () => {
+    publishProcurementDemands(
+      "W8N8",
+      [{ resource: "U", amount: 100, priority: 10, deadline: 6000, reason: "lab-reaction" }] as any,
+      5000,
+    );
+    g().Game.market.getAllOrders = () =>
+      [
+        { id: "o1", type: ORDER_SELL, resourceId: "U", amount: 400, price: 1e-6, roomName: "W1N1" },
+      ] as any;
+    g().Game.market.calcTransactionCost = () => 10;
+    g().Game.market.deal = () => OK;
+
+    expect(tryBuyDeficit(mockSnapshot(), terminal(), ctx())).toBe(false);
+    const ledger = globalCache().tradeLedger!;
+    expect(ledger.demandsLive).toBe(1);
+    expect(ledger.demandTop).toBe("no-local-demand");
+    expect(ledger.buyTried).toBe(0);
   });
 
   it("成交时 buyTried/buyOk 同步走，buyBestAsk 留下当时看到的价", () => {

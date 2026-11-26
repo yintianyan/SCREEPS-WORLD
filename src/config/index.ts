@@ -573,16 +573,11 @@ export const CONFIG = {
        */
       gclResumeStorage: 60000,
       /**
-       * Phase D：lab 反应恢复线。
+       * Phase D：RCL8 的 lab 反应恢复线。
        *
-       * 实测成本远低于原设：一个反应 trio 每 10 tick 消耗 10 能量 ⇒ **约 1 e/t**，
-       * 三个 trio 也不过 3 e/t（升级单只是 15 e/t）。原来取 120K 是把 lab 当成
-       * 与升级同量级的消费，导致 24 个 lab 在 40–58K 的经济规模下**永久停摆**：
-       * 半成品（ZK 230 / UL 300 / Z 300 / K 300）卡在 lab 里，nuker 的 G 储备
-       * 停在 245/5,000 无法推进。
-       *
-       * 55K = 停线(50K) + 5K：成本比升级低一个量级，可以早于升级开闸，
-       * 同时留出足够回差吸收补员脉冲。原料来自 terminal（Z/K/U/L 均在 5K+）。
+       * RCL<8 不走这条回差，而由 room-state 使用 sustainedStorage(10K) 单门槛；
+       * 幼房反应成本仅约 1–3 e/t，50K/55K 会让 RCL6–7 的工业链长期停摆。
+       * RCL8 仍保留 sprintStorage(50K) 停 / labResumeStorage(55K) 复的回差。
        */
       labResumeStorage: 55000,
       /** storage 能量 ≥ 此值时维持大 body 满功率升级（≈ 盈余全喂 controller）。 */
