@@ -80,20 +80,37 @@ describe("terminal-manager — 帝国能量互济", () => {
     expect(transferEvents()).toEqual([expect.objectContaining({ k: 24, r: "W8N4", d: [10000] })]);
   });
 
-  it("捐赠方 terminal 能量不足（货量+运费+储备地板）→ 不发送", () => {
+  it("规划量超出 terminal 余量 → 降额发送，不放弃整笔援助", () => {
     setupMarket();
     const donor = roomSnapshot({
       roomName: "W7N4",
       storageEnergy: 80000,
       terminal: terminalMock({ energy: 11000 }),
     });
-    // 10000 + 100(fee) + 2000(reserve) = 12100 > 11000 → 预算不足。
+    // 规划 10000 + 100(fee) + 2000(reserve) = 12100 > 11000；
+    // 最大可发 = 11000 - 100(fee) - 2000(reserve) = 8900。
+    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
+
+    terminalManagerSystem.run(makeContext([donor, needy]));
+
+    expect(donor.terminal.send).toHaveBeenCalledWith("energy", 8900, "W8N4");
+    expect(transferEvents()).toEqual([expect.objectContaining({ k: 24, r: "W8N4", d: [8900] })]);
+  });
+
+  it("terminal 连最小援助量都装不下 → 等储备回补后下轮再发", () => {
+    setupMarket();
+    const donor = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 80000,
+      terminal: terminalMock({ energy: 2500 }),
+    });
     const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
 
     terminalManagerSystem.run(makeContext([donor, needy]));
 
     expect(donor.terminal.send).not.toHaveBeenCalled();
     expect(transferEvents()).toHaveLength(0);
+    expect(globalCache().exportNeeds).toBeUndefined();
   });
 
   it("Plan 只有 storage→storage 请求时，自主能量互济仍执行", () => {

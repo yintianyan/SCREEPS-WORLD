@@ -121,23 +121,32 @@ export function tryEmpireEnergyAid(ctx: TickContext): void {
   if (!terminal || terminal.cooldown > 0) return;
 
   // 发送方 terminal 须同时承担 货量 + 运费 + 储备地板。
-  const fee = Game.market.calcTransactionCost(plan.amount, plan.from, plan.to);
-  const energyInTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
-  if (energyInTerminal < plan.amount + fee + CONFIG.market.terminalEnergyReserveFloor) return;
+  // 规划量装不下时按 terminal 余量降额；连最小援助量都装不下则等
+  // stockTerminalEnergy 按 energyTarget 回补后下一轮再发，不登记无人消费的能量出口票。
+  const reserve = CONFIG.market.terminalEnergyReserveFloor;
+  const held = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+  let amount = Math.min(plan.amount, Math.max(0, held - reserve));
+  let fee = amount > 0 ? Game.market.calcTransactionCost(amount, plan.from, plan.to) : 0;
+  while (amount > 0 && amount + fee + reserve > held) {
+    amount = Math.max(0, amount - (amount + fee + reserve - held));
+    if (amount > 0) fee = Game.market.calcTransactionCost(amount, plan.from, plan.to);
+  }
+  if (amount < CONFIG.energy.aidMinTransfer) return;
 
-  const result = terminal.send(RESOURCE_ENERGY, plan.amount, plan.to);
+  const result = terminal.send(RESOURCE_ENERGY, amount, plan.to);
   if (result === OK) {
     // 两端都记（实情与最初登记不同，这里写清）：此前 terminal 互济**两侧都不记账**，
     // 所以帝国净流并没有被加两次，而是两房各背一段无法解释的 drift（发房 −X、收房 +X）。
     // 只补发端会把误差翻到另一侧 ⇒ 同处补记收端 `imported`。到达要跨 cooldown，
     // 这里按"发给自己房必达"结算（极端情况：收端 terminal 在途中被拆 ⇒ 多记一笔收入，已知偏差）。
-    bumpEnergyCounter(plan.from, "exported", plan.amount);
+    bumpEnergyCounter(plan.from, "exported", amount);
     bumpEnergyCounter(plan.from, "tradeFee", fee);
-    bumpEnergyCounter(plan.to, "imported", plan.amount);
-    recordTyped(EventKind.EnergyTransfer, plan.to, { amount: plan.amount });
+    bumpEnergyCounter(plan.to, "imported", amount);
+    recordTyped(EventKind.EnergyTransfer, plan.to, { amount });
     log.info(
       "terminal",
-      `[${Game.time}] energy-aid: ${plan.from} → ${plan.to} ${plan.amount} energy (fee=${fee})`,
+      `[${Game.time}] energy-aid: ${plan.from} → ${plan.to} ${amount} energy ` +
+        `(requested=${plan.amount}, fee=${fee})`,
     );
   }
 }
