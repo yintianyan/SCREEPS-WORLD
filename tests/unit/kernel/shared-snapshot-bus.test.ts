@@ -58,7 +58,6 @@ describe("Shared Snapshot Bus — creepRefs", () => {
           sourceId: "src-1",
           leaseUntil: 1100,
         },
-        lastActionTick: 995,
         ticksToLive: 800,
       },
     ];
@@ -70,7 +69,6 @@ describe("Shared Snapshot Bus — creepRefs", () => {
     expect(consumed![0]!.role).toBe("hauler");
     expect(consumed![0]!.assignment?.kind).toBe("haul");
     expect(consumed![0]!.assignment?.leaseUntil).toBe(1100);
-    expect(consumed![0]!.lastActionTick).toBe(995);
   });
 
   it("spawn-manager 消费模式：filter !spawning + map 到 CreepSummary", () => {

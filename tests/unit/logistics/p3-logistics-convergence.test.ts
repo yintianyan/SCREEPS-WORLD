@@ -1,4 +1,4 @@
-/** P3 物流请求池完整版测试 — 租约超时回收、空载观测指标、tower 补给请求。 */
+/** P3 物流请求池完整版测试 — 租约超时回收、tower 补给请求。 */
 import { describe, it, expect } from "vitest";
 import {
   supplyLedger,
@@ -6,11 +6,6 @@ import {
   type LeaseSummary,
   type SupplySource,
 } from "../../../src/domain/assignment/request-pool";
-import {
-  idleRatio,
-  detectIdleHaulers,
-  type HaulerIdleSummary,
-} from "../../../src/domain/logistics/idle-detection";
 
 const src = (id: string, available: number): SupplySource => ({
   id,
@@ -47,48 +42,6 @@ describe("租约超时回收 — leaseExpired → valid=false", () => {
     const ledger = supplyLedger(sources, leases, 1);
     expect(ledger.get("c1")!.activeLeases).toBe(1);
     expect(ledger.get("c1")!.remainingSlots).toBe(0);
-  });
-});
-
-describe("空载观测指标 — idleRatio 计算", () => {
-  const hauler = (name: string, lastAction: number, ttl = 1500): HaulerIdleSummary => ({
-    name,
-    lastActionTick: lastAction,
-    ticksToLive: ttl,
-    role: "hauler",
-  });
-
-  it("全部活跃 → idleRatio = 0", () => {
-    const haulers = [hauler("h1", 195), hauler("h2", 190)];
-    expect(idleRatio(haulers, 200, 50)).toBe(0);
-  });
-
-  it("全部空载 → idleRatio = 1", () => {
-    const haulers = [
-      hauler("h1", 50), // 150 tick 无动作 > 50 阈值
-      hauler("h2", 50),
-    ];
-    expect(idleRatio(haulers, 200, 50)).toBe(1);
-  });
-
-  it("半数空载 → idleRatio = 0.5", () => {
-    const haulers = [
-      hauler("active", 200), // 活跃
-      hauler("idle", 50), // 空载
-    ];
-    expect(idleRatio(haulers, 200, 50)).toBe(0.5);
-  });
-
-  it("无 hauler → idleRatio = 0（不误报）", () => {
-    expect(idleRatio([], 200, 50)).toBe(0);
-  });
-
-  it("快死的 hauler 不计入空载（让它自然死）", () => {
-    const haulers = [
-      hauler("dying", 50, 30), // ttl < 50 → 不计
-    ];
-    const idle = detectIdleHaulers(haulers, 200, 50);
-    expect(idle).toEqual([]);
   });
 });
 

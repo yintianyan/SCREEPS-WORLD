@@ -19,14 +19,11 @@ import {
 import type { AssignmentTaskEntry } from "../../domain/assignment/service";
 import { CONFIG } from "../../config";
 import type { TransportRequestV2 } from "../../domain/logistics/transport-request";
-import { idleRatio } from "../../domain/logistics/idle-detection";
 
-/** 每房 heap 态：key 注册表 + 延迟样本环 + 空载观测。global reset 可丢（自动重播种）。 */
+/** 每房 heap 态：key 注册表 + 延迟样本环。global reset 可丢（自动重播种）。 */
 interface RoomPoolState {
   registry: Map<string, RegistryEntry>;
   latencyRing: number[];
-  /** 本房 hauler 空载率快照（每 tick 更新供消费方读取）。 */
-  idleRatio: number;
 }
 const poolRooms = new Map<string, RoomPoolState>();
 
@@ -45,7 +42,7 @@ const PLANNER_PHASE = systemPhase("logistics-planner", PLANNER_INTERVAL);
 function stateFor(roomName: string): RoomPoolState {
   let st = poolRooms.get(roomName);
   if (!st) {
-    st = { registry: new Map(), latencyRing: [], idleRatio: 0 };
+    st = { registry: new Map(), latencyRing: [] };
     poolRooms.set(roomName, st);
   }
   return st;
@@ -91,7 +88,6 @@ export const logisticsSystem: System = {
         role: c.memory.role ?? "unknown",
         home: c.memory.home ?? c.room.name,
         spawning: c.spawning === true,
-        lastActionTick: (c.memory as { lastActionTick?: number }).lastActionTick,
         ticksToLive: c.ticksToLive,
         assignment: c.memory.assignment as
           { id: string; kind: string; sourceId?: Id<Source>; leaseUntil?: number } | undefined,
@@ -103,10 +99,6 @@ export const logisticsSystem: System = {
      * 让"谁占着这个任务"跟着任务一起进池，而不是靠把请求删掉来表达并发）。 */
     const holdersByTask = new Map<string, string[]>();
     const claimsByRoom = new Map<string, Set<string>>();
-    const haulerSummariesByRoom = new Map<
-      string,
-      { name: string; lastActionTick: number; ticksToLive: number; role: string }[]
-    >();
     const tick = ctx.tick;
     for (const ref of allCreeps) {
       if (ref.spawning) continue;
@@ -134,29 +126,11 @@ export const logisticsSystem: System = {
           claims.add(a.id);
         }
       }
-      const role = ref.role;
-      if (role === "hauler" || role === "distributor") {
-        let summaries = haulerSummariesByRoom.get(home);
-        if (!summaries) {
-          summaries = [];
-          haulerSummariesByRoom.set(home, summaries);
-        }
-        summaries.push({
-          name: ref.name,
-          lastActionTick: ref.lastActionTick ?? tick,
-          ticksToLive: ref.ticksToLive ?? 1500,
-          role,
-        });
-      }
     }
 
     for (const snapshot of ctx.snapshots()) {
       const roomName = snapshot.roomName;
       const st = stateFor(roomName);
-
-      // 空载率计算：本房 hauler 摘要 → idleRatio。
-      const haulerSummaries = haulerSummariesByRoom.get(roomName) ?? [];
-      st.idleRatio = idleRatio(haulerSummaries, ctx.tick, cfg.idleHaulerThreshold);
 
       // 供给登记：含能非 controller container（controller container 是投递目标）。
       const ccId = snapshot.controllerContainer?.id;
@@ -281,20 +255,11 @@ export const logisticsSystem: System = {
         }
       }
     }
-    // 空载率指标写入 globalCache 供消费方读取。
     // 修复：清理失守房的 poolRooms 条目，防止 heap 膨胀 + 死房遍历。
     const activeRoomNames = new Set(Array.from(ctx.snapshots()).map(s => s.roomName));
-    const allIdleRatios: Record<string, number> = {};
-    let maxIdleRatio = 0;
-    for (const [roomName, st] of poolRooms) {
-      if (!activeRoomNames.has(roomName)) {
-        poolRooms.delete(roomName);
-        continue;
-      }
-      allIdleRatios[roomName] = st.idleRatio;
-      if (st.idleRatio > maxIdleRatio) maxIdleRatio = st.idleRatio;
+    for (const roomName of poolRooms.keys()) {
+      if (!activeRoomNames.has(roomName)) poolRooms.delete(roomName);
     }
-    g.logisticsIdleRatio = { tick: ctx.tick, byRoom: allIdleRatios, max: maxIdleRatio };
 
     // empire scope 跨房调拨不再通过 transportPool — carrier 角色独立搬运，
     // 不走 hauler assignment 链。agenda-manager 直接提交 carrier spawn 请求。
@@ -309,11 +274,6 @@ export const logisticsSystem: System = {
     }
   },
 };
-
-/** 查询口（观测用）：房间空载率快照。 */
-export function logisticsIdleRatio(roomName: string): number {
-  return poolRooms.get(roomName)?.idleRatio ?? 0;
-}
 
 /**
  * 为低能量塔生成补给搬运请求。

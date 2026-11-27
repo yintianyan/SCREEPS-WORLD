@@ -422,7 +422,6 @@ export class Kernel {
                 leaseUntil: typeof a.leaseUntil === "number" ? a.leaseUntil : undefined,
               }
             : undefined,
-          lastActionTick: typeof mem.lastActionTick === "number" ? mem.lastActionTick : undefined,
           roomName: creep.room.name,
           x: creep.pos.x,
           y: creep.pos.y,

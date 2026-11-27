@@ -26,7 +26,6 @@ import {
   summarizeAccounting,
   type TransportAccounting,
 } from "../../domain/logistics/transport-accounting";
-import { detectIdleHaulers, type HaulerIdleSummary } from "../../domain/logistics/idle-detection";
 import { log } from "../../kernel/log";
 
 /** 获取本 tick 的共享快照总线。未初始化时回退到全量遍历。 */
@@ -47,7 +46,6 @@ function getCreepRefs(): CreepRef[] {
     y: c.pos.y,
     energyCarried: c.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
     ticksToLive: c.ticksToLive,
-    lastActionTick: (c.memory as { lastActionTick?: number }).lastActionTick,
     sourceId: c.memory.sourceId,
     spawnIndex: c.memory.spawnIndex,
     assignment: c.memory.assignment
@@ -71,11 +69,6 @@ function getCreepRefs(): CreepRef[] {
 /** 帝国级 RouteCache — 跨 tick 持久（heap），global reset 后重建。 */
 const routeCache = new RouteCache();
 
-// ─── 空闲追踪（heap，跨 tick 持久） ─────────────────────────
-
-/** 房间 → hauler 闲置持续 tick 计数（heap，跨 tick 持续）。 */
-const idleTicksByRoom = new Map<string, number>();
-
 // 修复：跨 tick Transport Accounting 追踪（heap，跨 tick 持久）。
 // key = requestId, value = TransportAccounting。
 // 每 100t 由 logistics-planner 从 Operation 状态同步 delivered/lost。
@@ -85,7 +78,7 @@ const accountingByRequestId = new Map<string, TransportAccounting>();
 
 /**
  * 帝国物流规划： Supply Contract / 战争与战术需求注入 → 运力规划 →
- * TransportPlan 产出 → Accounting 追踪 → 健康度 / 瓶颈 / 饥饿 / 闲置检测。
+ * TransportPlan 产出 → Accounting 追踪 → 健康度 / 瓶颈 / 饥饿检测。
  *
  * 原 interval=100 的独立系统，合并后由 logistics 系统按
  * `tick % 100 === systemPhase("logistics-planner", 100)` 门控调用，
@@ -200,31 +193,6 @@ export function runLogisticsPlanning(ctx: TickContext): void {
   const avgLatency = computeAvgLatency();
   const health = computeLogisticsHealth(accounting, plan.requests, avgLatency, ctx.tick);
 
-  // ── 7. 检测闲置 hauler ──
-  const haulerSummaries = collectHaulerSummaries();
-  const idleThreshold = 200;
-  const idleHaulerNames = detectIdleHaulers(haulerSummaries, ctx.tick, idleThreshold);
-
-  // 更新闲置 tick 计数
-  for (const [roomName, ticks] of idleTicksByRoom) {
-    // 如果该房没有闲置 hauler，递减计数
-    const roomHasIdle = idleHaulerNames.some(name => {
-      const creep = Game.creeps[name];
-      return creep?.memory?.home === roomName;
-    });
-    if (!roomHasIdle) {
-      idleTicksByRoom.set(roomName, Math.max(0, ticks - 1));
-    }
-  }
-  // 对有闲置 hauler 的房间递增
-  for (const name of idleHaulerNames) {
-    const creep = Game.creeps[name];
-    const home = creep?.memory?.home ?? creep?.room?.name;
-    if (home) {
-      idleTicksByRoom.set(home, (idleTicksByRoom.get(home) ?? 0) + 1);
-    }
-  }
-
   // ── 8. 扩缩编决策 ──
   // 【WO-DEAD 已删除】logisticsScaling — 只写不读的观测字段，构建代码已清理。
 
@@ -236,7 +204,6 @@ export function runLogisticsPlanning(ctx: TickContext): void {
   g.logisticsPlan = { tick: ctx.tick, plan };
   g.logisticsHealth = health;
   g.logisticsCapacity = { tick: ctx.tick, result: capacity };
-  g.logisticsIdleHaulers = { tick: ctx.tick, names: idleHaulerNames };
   // 修复：暴露 Accounting 到 globalCache 供 Observability 消费。
   g.logisticsAccounting = { tick: ctx.tick, summary: accountingSummary, entries: accounting };
 
@@ -560,25 +527,6 @@ function cleanupCompletedAccounting(_tick: number): void {
  */
 function computeAvgLatency(): number {
   return averageLatency(globalCache().logisticsLatencyRing ?? []);
-}
-
-/**
- * 收集 hauler 摘要（供闲置检测）。
- */
-function collectHaulerSummaries(): HaulerIdleSummary[] {
-  const result: HaulerIdleSummary[] = [];
-  for (const ref of getCreepRefs()) {
-    if (ref.spawning) continue;
-    const role = ref.role;
-    if (role !== "hauler" && role !== "carrier" && role !== "remoteHauler") continue;
-    result.push({
-      name: ref.name,
-      lastActionTick: ref.lastActionTick ?? Game.time,
-      ticksToLive: ref.ticksToLive ?? 1500,
-      role,
-    });
-  }
-  return result;
 }
 
 /**
