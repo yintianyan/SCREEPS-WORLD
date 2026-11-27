@@ -2,7 +2,7 @@
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
-import { moveToTarget } from "../movement";
+import { moveToTarget, moveTowardRoom } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 
 /** deposit 可能产出的四种资源（用于 memory.depositType 缺失时的兜底识别）。 */
@@ -118,10 +118,26 @@ function dropHome(): ActionCandidate<true> {
   };
 }
 
+/** 满载且尚未到家：保持 work 并立即返航，避免无候选时在 deposit 房反复 idle。 */
+function returnHomeWhenLoaded(): ActionCandidate<true> {
+  return {
+    name: "deposit-harvester:return-home",
+    resolve: ac => {
+      const home = ac.creep.memory.home;
+      if (!home || ac.creep.room.name === home) return undefined;
+      return ac.creep.store.getUsedCapacity() > 0 ? true : undefined;
+    },
+    execute: ac => {
+      const home = ac.creep.memory.home;
+      if (home) moveTowardRoom(ac.creep, home);
+    },
+  };
+}
+
 const policy: RolePolicy = {
   gate: depositGate,
   acquire: [harvestDeposit()],
-  work: [depositHome(), dropHome()],
+  work: [returnHomeWhenLoaded(), depositHome(), dropHome()],
 };
 
 export const depositHarvesterRole = defineRole("depositHarvester", 2 as Priority, policy);
