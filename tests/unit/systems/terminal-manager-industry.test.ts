@@ -469,10 +469,14 @@ describe("terminal-manager — terminal 快满时买入让位给卖出", () => {
       credits: 1000000,
       getAllOrders: vi.fn((opts: any) => {
         if (opts.type === ORDER_SELL && opts.resourceType === "U") {
-          return [{ id: "sellU", price: 1, remainingAmount: 100000, roomName: "W9N9" }];
+          return [
+            { id: "sellU", price: 1, amount: 100000, remainingAmount: 100000, roomName: "W9N9" },
+          ];
         }
         if (opts.type === ORDER_BUY && opts.resourceType === "O") {
-          return [{ id: "buyO", price: 30, remainingAmount: 100000, roomName: "W9N8" }];
+          return [
+            { id: "buyO", price: 30, amount: 100000, remainingAmount: 100000, roomName: "W9N8" },
+          ];
         }
         return [];
       }),

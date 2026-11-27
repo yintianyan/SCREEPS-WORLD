@@ -74,6 +74,20 @@ describe("toSummaries — 自有订单隔离", () => {
     ] as any);
     expect(summaries[0]?.resourceType).toBe(RESOURCE_ENERGY);
   });
+
+  it("摘要优先当前可成交数量，不被 remainingAmount 误导", () => {
+    const summaries = toSummaries([
+      {
+        id: "other",
+        price: 1,
+        amount: 7,
+        remainingAmount: 1007,
+        roomName: "W2N2",
+        resourceType: RESOURCE_ENERGY,
+      },
+    ] as any);
+    expect(summaries[0]?.amount).toBe(7);
+  });
 });
 
 describe("trySellSurplusEnergy — 帝国援助闸", () => {

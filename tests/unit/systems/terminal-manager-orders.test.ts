@@ -253,7 +253,7 @@ describe("terminal-manager — 挂单与 pixel 集成", () => {
       credits: 1000,
       getAllOrders: vi.fn(({ resourceType }: any) =>
         resourceType === "pixel"
-          ? [{ id: "px1", price: 500, remainingAmount: 100, roomName: undefined }]
+          ? [{ id: "px1", price: 500, amount: 50, remainingAmount: 100, roomName: undefined }]
           : [],
       ),
       calcTransactionCost: vi.fn(() => 100),

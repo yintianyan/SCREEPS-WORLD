@@ -37,7 +37,7 @@ export function toSummaries(orders: readonly Order[]): MarketOrderSummary[] {
     .map(o => ({
       id: o.id,
       price: o.price,
-      amount: o.remainingAmount ?? o.amount,
+      amount: Math.min(o.amount, o.remainingAmount ?? o.amount),
       roomName: o.roomName,
       ...(o.resourceType ? { resourceType: o.resourceType } : {}),
     }));
@@ -738,7 +738,7 @@ export function refreshMarketPrices(): void {
     orderCache[key].push({
       id: o.id,
       price: o.price,
-      amount: o.remainingAmount ?? o.amount,
+      amount: Math.min(o.amount, o.remainingAmount ?? o.amount),
       roomName: o.roomName,
     });
   }
