@@ -112,7 +112,12 @@ export function tryEmpireEnergyAid(ctx: TickContext): void {
   }));
   const capacity = Math.max(0, ...snapshots.map(s => getStorageCapacity(s.storage?.store)));
   const policy = getEnergyPolicy(capacity);
-  const emergencyDonor = rooms.some(room => room.storageEnergy < policy.crisisBuyFloor);
+  const roomsWithStorage = new Set(
+    snapshots.filter(s => s.storage !== undefined).map(s => s.roomName),
+  );
+  const emergencyDonor = rooms.some(
+    room => roomsWithStorage.has(room.roomName) && room.storageEnergy < policy.crisisBuyFloor,
+  );
   const plan = planEnergyAid(rooms, {
     recipientFloor: policy.aidRecipientFloor,
     donorFloor: emergencyDonor ? policy.emergencyDonorFloor : policy.aidDonorFloor,

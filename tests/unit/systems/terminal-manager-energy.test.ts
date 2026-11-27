@@ -99,6 +99,24 @@ describe("terminal-manager — 帝国能量互济", () => {
     expect(donor.terminal.send).toHaveBeenCalledWith("energy", 10_000, "W8N4");
   });
 
+  it("无 storage 的新 claim 房不会永久开启紧急 donor 线", () => {
+    setupMarket();
+    const donor = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 370_000,
+      terminal: terminalMock({ energy: 20_000 }),
+    });
+    const claim = roomSnapshot({
+      roomName: "W8N4",
+      storageEnergy: 0,
+      terminal: terminalMock({ energy: 1000 }),
+    });
+
+    terminalManagerSystem.run(makeContext([donor, claim]));
+
+    expect(donor.terminal.send).not.toHaveBeenCalled();
+  });
+
   it("规划量超出 terminal 余量 → 降额发送，不放弃整笔援助", () => {
     setupMarket();
     const donor = roomSnapshot({

@@ -1408,6 +1408,11 @@ export const CONFIG = {
      * 10% 危机买线 / 25% 受助线 / 40% 援助 donor 线 / 30% 紧急 donor 线 / 70% 卖能线。
      * terminal 与 nuker 是独立战略资产，也按同一容量刻度取门，避免 2k/10k 这种
      * 对 1M storage 几乎无意义的绝对小线。运营即时供水仍走 distributorTiers 低绝对值。
+     *
+     * 刻度分工台账：policyRatios 只管「跨房援助/市场买卖/terminal/nuker」等战略闸；
+     * economy.waterlines/distributorTiers 只管「spawn/extension/upgrade/lab/fortify」
+     * 的即时运营水位。room-state.strategicEnergyStress 是两者唯一的桥：
+     * 帝国负净流且 storage 低于 aidRecipient 比例时，临时关闭运营消费与超量补员。
      */
     policyRatios: {
       crisisBuy: 0.1,

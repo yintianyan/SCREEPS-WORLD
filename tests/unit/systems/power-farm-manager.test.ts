@@ -25,7 +25,7 @@ function makeContext(tick: number): any {
         energy: 50000,
         XUH2O: 1200, // 3×10A×30 + reserve(100) = 1000
         XLHO2: 1600, // 6×8H×30 + reserve(100) = 1540
-        getUsedCapacity (this: Record<string, number>, res?: string) {
+        getUsedCapacity(this: Record<string, number>, res?: string) {
           return res === undefined ? 0 : (this[res] ?? 0);
         },
       },
@@ -96,6 +96,16 @@ describe("power-farm-manager — 任务生命周期（多任务并行）", () =>
         .filter((r: any) => r.role === "pbCollector")
         .every((r: any) => r.memory.mission === "powerCollect"),
     ).toBe(true);
+  });
+
+  it("战略能量压力下的饿房不承接 PB 任务", () => {
+    seedIntel(1000);
+    (globalThis as any).Memory.rooms[HOME].strategicEnergyStress = true;
+
+    powerFarmManagerSystem.run(makeContext(1500));
+
+    expect((globalThis as any).Memory.kernel.powerFarmMissions ?? []).toHaveLength(0);
+    expect((globalThis as any).Memory.rooms[HOME].spawnQueue).toHaveLength(0);
   });
 
   it("warPlan 存续 → 既有任务立即收摊让路", () => {

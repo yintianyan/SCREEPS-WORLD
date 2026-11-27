@@ -425,6 +425,15 @@ function startFarmIfWorth(
     const coalition: Array<{ room: string; distance: number; path?: string[] }> = [];
     for (const snap of myRoomSnaps) {
       const room = snap.roomName;
+      // 饿房不承接 PB 编队：战略压力下孵化与 boost 供给都应让位本地回血。
+      // 无 storage 的新 claim 房同样不能作为军事 sponsor。
+      if (snap.storage === undefined || Memory.rooms[room]?.strategicEnergyStress === true) {
+        log.info(
+          "power-farm-manager",
+          `power-farm: skip ${room}→${candidate.roomName} (energy-stress/no-storage)`,
+        );
+        continue;
+      }
       const routeRooms = findMarchRoute(room, candidate.roomName, threatSet);
       if (routeRooms) {
         const verdict = evaluateMarchRoute(routeRooms, threatSet);
