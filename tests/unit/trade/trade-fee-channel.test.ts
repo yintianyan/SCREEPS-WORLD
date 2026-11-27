@@ -67,6 +67,13 @@ describe("toSummaries — 自有订单隔离", () => {
     ] as any);
     expect(summaries.map(summary => summary.id)).toEqual(["other"]);
   });
+
+  it("摘要保留成交回执所需品种", () => {
+    const summaries = toSummaries([
+      { id: "other", price: 1, amount: 100, roomName: "W2N2", resourceType: RESOURCE_ENERGY },
+    ] as any);
+    expect(summaries[0]?.resourceType).toBe(RESOURCE_ENERGY);
+  });
 });
 
 describe("trySellSurplusEnergy — 帝国援助闸", () => {
@@ -121,6 +128,38 @@ describe("executeDeal — 运费通道分桶", () => {
     expect(l.tradeFee).toBe(4 * COST);
     expect(l.tradeFeeEnergySell + l.tradeFeeEnergyBuy).toBe(3 * COST);
     expect(l.tradeFee).toBeGreaterThanOrEqual(l.tradeFeeEnergySell + l.tradeFeeEnergyBuy);
+  });
+
+  it("成交回执保留品种、数量、运费与信用变化", () => {
+    let credits = 1000;
+    g().Game.market.deal = vi.fn(() => {
+      credits += 20;
+      g().Game.market.credits = credits;
+      return OK;
+    });
+
+    expect(executeDeal(order as any, 1000, terminalWith(5000), "W37S58")).toBe(true);
+    expect(g().obs.deals["W37S58:market"]).toMatchObject({
+      ok: true,
+      rc: OK,
+      resourceType: RESOURCE_ENERGY,
+      amount: 1000,
+      price: 0.02,
+      fee: COST,
+      creditsBefore: 1000,
+      creditsAfter: 1020,
+      counterparty: "unavailable",
+    });
+  });
+
+  it("运费不足时回执保留拒绝码且信用不变", () => {
+    expect(executeDeal(order as any, 1000, terminalWith(0), "W37S58")).toBe(false);
+    expect(g().obs.deals["W37S58:market"]).toMatchObject({
+      ok: false,
+      rc: ERR_NOT_ENOUGH_RESOURCES,
+      creditsBefore: 1000,
+      creditsAfter: 1000,
+    });
   });
 
   it("deal 失败时两格都不进账（分桶写在 OK 分支内，不是前置扣款）", () => {

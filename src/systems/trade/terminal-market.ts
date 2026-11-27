@@ -5,6 +5,7 @@ import type { RoomSnapshot, TickContext } from "../../kernel/contracts";
 import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import { globalCache, bumpEnergyCounter } from "../../kernel/global-cache";
+import { recordDealObservation } from "../../kernel/observability";
 import { energyBuyAmount, energySellAmount } from "../../domain/economy/energy-logistics";
 import {
   getMineralDeficits,
@@ -38,6 +39,7 @@ export function toSummaries(orders: readonly Order[]): MarketOrderSummary[] {
       price: o.price,
       amount: o.remainingAmount ?? o.amount,
       roomName: o.roomName,
+      ...(o.resourceType ? { resourceType: o.resourceType } : {}),
     }));
 }
 
@@ -80,9 +82,43 @@ export function executeDeal(
   roomName: string,
   feeChannel?: "energySell" | "energyBuy",
 ): boolean {
-  if (amount <= 0 || !order.roomName) return false;
+  const channel = feeChannel ?? "market";
+  const creditsBefore = Game.market.credits;
+  if (amount <= 0 || !order.roomName) {
+    recordDealObservation({
+      room: roomName,
+      channel,
+      ok: false,
+      rc: ERR_INVALID_ARGS,
+      orderId: order.id,
+      resourceType: order.resourceType,
+      amount,
+      price: order.price,
+      counterparty: "unavailable",
+      fee: 0,
+      creditsBefore,
+      creditsAfter: creditsBefore,
+    });
+    return false;
+  }
   const cost = Game.market.calcTransactionCost(amount, roomName, order.roomName);
-  if (cost > terminal.store.getUsedCapacity(RESOURCE_ENERGY)) return false;
+  if (cost > terminal.store.getUsedCapacity(RESOURCE_ENERGY)) {
+    recordDealObservation({
+      room: roomName,
+      channel,
+      ok: false,
+      rc: ERR_NOT_ENOUGH_RESOURCES,
+      orderId: order.id,
+      resourceType: order.resourceType,
+      amount,
+      price: order.price,
+      counterparty: "unavailable",
+      fee: cost,
+      creditsBefore,
+      creditsAfter: creditsBefore,
+    });
+    return false;
+  }
   const result = Game.market.deal(order.id, amount, roomName);
   if (result === OK) {
     // 运费从**本房 terminal** 烧掉，是真销毁（买不回来），必须进消费侧。
@@ -102,8 +138,36 @@ export function executeDeal(
       "terminal",
       `[${Game.time}] terminal/${roomName}: deal ${order.id} amount=${amount} price=${order.price} energyCost=${cost}`,
     );
+    recordDealObservation({
+      room: roomName,
+      channel,
+      ok: true,
+      rc: result,
+      orderId: order.id,
+      resourceType: order.resourceType,
+      amount,
+      price: order.price,
+      counterparty: "unavailable",
+      fee: cost,
+      creditsBefore,
+      creditsAfter: Game.market.credits,
+    });
     return true;
   }
+  recordDealObservation({
+    room: roomName,
+    channel,
+    ok: false,
+    rc: result,
+    orderId: order.id,
+    resourceType: order.resourceType,
+    amount,
+    price: order.price,
+    counterparty: "unavailable",
+    fee: 0,
+    creditsBefore,
+    creditsAfter: creditsBefore,
+  });
   return false;
 }
 

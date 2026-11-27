@@ -4,6 +4,7 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/actio
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget, moveTowardRoom } from "../movement";
 import { getObjectById } from "../support/obj-cache";
+import { recordRoleObservation } from "../../kernel/observability";
 
 /** deposit 可能产出的四种资源（用于 memory.depositType 缺失时的兜底识别）。 */
 const DEPOSIT_RESOURCES: readonly ResourceConstant[] = [
@@ -39,9 +40,19 @@ function depositGate(ac: ActionContext): boolean {
   if (getDeposit(creep)) return true;
   if (creep.store.getUsedCapacity() > 0) {
     creep.memory.mode = "work";
+    recordRoleObservation(creep, {
+      exit: "gate",
+      candidate: "deposit-gate",
+      sinkReason: "deposit-missing-cargo",
+    });
     return true;
   }
   creep.memory.recycle = true;
+  recordRoleObservation(creep, {
+    exit: "gate",
+    candidate: "deposit-gate",
+    sinkReason: "deposit-missing-empty",
+  });
   return false;
 }
 
@@ -66,6 +77,12 @@ function harvestDeposit(): ActionCandidate<Deposit> {
           ac.creep.memory.recycle = true;
         }
       }
+      recordRoleObservation(ac.creep, {
+        exit: "harvest",
+        candidate: "deposit-harvester:harvest",
+        targetId: deposit.id,
+        rc: result,
+      });
     },
   };
 }
@@ -89,9 +106,17 @@ function depositHome(): ActionCandidate<DepositSink> {
     execute: (ac, sink) => {
       const type = carriedDepositType(ac.creep);
       if (!type) return;
-      if (ac.creep.transfer(sink, type) === ERR_NOT_IN_RANGE) {
+      const result = ac.creep.transfer(sink, type);
+      if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, sink);
       }
+      recordRoleObservation(ac.creep, {
+        exit: "deposit-home",
+        candidate: "deposit-harvester:deposit-home",
+        targetId: sink.id,
+        rc: result,
+        sinkReason: sink.structureType,
+      });
     },
   };
 }
@@ -113,7 +138,14 @@ function dropHome(): ActionCandidate<true> {
     },
     execute: ac => {
       const type = carriedDepositType(ac.creep);
-      if (type) ac.creep.drop(type);
+      if (!type) return;
+      const result = ac.creep.drop(type);
+      recordRoleObservation(ac.creep, {
+        exit: "drop-home",
+        candidate: "deposit-harvester:drop-home",
+        rc: result,
+        sinkReason: "ground",
+      });
     },
   };
 }
@@ -130,6 +162,10 @@ function returnHomeWhenLoaded(): ActionCandidate<true> {
     execute: ac => {
       const home = ac.creep.memory.home;
       if (home) moveTowardRoom(ac.creep, home);
+      recordRoleObservation(ac.creep, {
+        exit: "return-home",
+        candidate: "deposit-harvester:return-home",
+      });
     },
   };
 }

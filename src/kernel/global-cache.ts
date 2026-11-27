@@ -497,6 +497,8 @@ export interface GlobalCache {
     plan: import("../domain/logistics/transport-plan").TransportPlan;
   };
   // 【WO-DEAD 已删除】logisticsDashboard — 只写不读的仪表盘字段，无消费者。
+  /** 业务动作回执（last-only，纯观测，不参与决策）。 */
+  obs?: import("./observability").BusinessObservations;
   /**Empire Logistics Health（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsHealth?: import("../domain/logistics/logistics-health").LogisticsHealthResult;

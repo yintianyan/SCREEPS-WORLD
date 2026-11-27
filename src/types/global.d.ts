@@ -645,6 +645,8 @@ declare global {
        * 存在的理由与字段语义见 domain/logistics/road-build —— 纯观测，无消费者做决策。
        */
       roadBuild?: Record<string, import("../domain/logistics/road-build").RoadBuildCounters>;
+      /** 业务动作回执（last-only，纯观测，不参与决策）。 */
+      obs?: import("../kernel/observability").BusinessObservations;
       /** 贸易决策实测账本快照（terminal-manager 写 heap，本处落一份供体检读）。 */
       trade?: import("../domain/industry/trade-ledger").TradeLedger;
       /** Memory 原始字符串体积（字符数），每 100 tick 采样。

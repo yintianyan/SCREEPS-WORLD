@@ -36,6 +36,8 @@ export interface MarketOrderSummary {
   amount: number;
   /** 对方 terminal 所在房（计算能量运费用）。 */
   roomName?: string;
+  /** 成交回执归因用；不参与订单挑选。 */
+  resourceType?: MarketResourceConstant;
 }
 
 /** 挑最优卖单：单价不超上限、价低优先、同价量大优先（一次 deal 吃满批量摊薄运费）。 */

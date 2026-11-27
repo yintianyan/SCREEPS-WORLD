@@ -703,6 +703,11 @@ function sampleMemorySize(_tick: number): void {
       },
       { heap: "tradeLedger", memory: "trade", why: "贸易决策现场快照：判被闸挡还是跑了不交易" },
       {
+        heap: "obs",
+        memory: "obs",
+        why: "业务动作回执：判没运行/被闸挡/执行失败/状态机循环",
+      },
+      {
         heap: "wallBudgets",
         memory: "wallBudget",
         why: "和平期修墙速率预算池水位（房→能量）：线上验证 rate≤2 e/t 的唯一读数",

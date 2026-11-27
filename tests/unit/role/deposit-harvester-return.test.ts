@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { depositHarvesterRole } from "../../../src/creeps/roles/deposit-harvester";
 import {
   mockContext,
@@ -58,6 +59,11 @@ describe("depositHarvester 满载返航", () => {
 
     expect(creep.memory.mode).toBe("work");
     expect(moveTowardRoomMock).toHaveBeenCalledWith(creep, "W38S56");
+    expect(globalCache().obs?.roles?.[creep.name]).toMatchObject({
+      exit: "return-home",
+      candidate: "deposit-harvester:return-home",
+      load: 500,
+    });
   });
 
   it("remoteTarget 空载：不返航，继续采集", () => {

@@ -40,6 +40,7 @@ import {
 import type { ProcurementDemand } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";
 import { moveToTarget } from "../../creeps/movement";
+import { recordLabObservation } from "../../kernel/observability";
 
 // ─── Boost/装料常量（引擎数值：boostCreep 每部件 30 矿物 + 20 能量）────
 
@@ -813,8 +814,9 @@ export const labSystem: System = {
         const partType = effect ? BOOST_EFFECT_PART[effect] : undefined;
         if (!partType) continue;
         const matchedParts = creep.body.filter(p => p.type === partType && !p.boost).length;
+        const energyBefore = lab.store.getUsedCapacity(RESOURCE_ENERGY);
         const byMineral = Math.floor((lab.store[compound] ?? 0) / LAB_BOOST_MINERAL);
-        const byEnergy = Math.floor(lab.store.getUsedCapacity(RESOURCE_ENERGY) / LAB_BOOST_ENERGY);
+        const byEnergy = Math.floor(energyBefore / LAB_BOOST_ENERGY);
         const parts = Math.min(matchedParts, byMineral, byEnergy);
         if (parts <= 0) {
           // 备料未到位 — supplyLabs 依据需求表补给后，下一评估周期执行。
@@ -822,6 +824,17 @@ export const labSystem: System = {
         }
 
         const result = lab.boostCreep(creep, parts);
+        recordLabObservation({
+          room: snapshot.roomName,
+          kind: "boost",
+          ok: result === OK,
+          rc: result,
+          labIds: [lab.id],
+          target: creep.name,
+          compound,
+          parts,
+          energyBefore,
+        });
         if (result === OK) {
           bumpEnergyCounter(snapshot.roomName, "industrialSpend", parts * LAB_BOOST_ENERGY);
           if (!industryMem.boostedCreeps) industryMem.boostedCreeps = [];
@@ -861,7 +874,19 @@ export const labSystem: System = {
           const input1Amount = input1Lab.store[labPlan.reaction.input1 as ResourceConstant] ?? 0;
           const input2Amount = input2Lab.store[labPlan.reaction.input2 as ResourceConstant] ?? 0;
           if (input1Amount >= LAB_REACTION_AMOUNT && input2Amount >= LAB_REACTION_AMOUNT) {
-            outputLab.runReaction(input1Lab, input2Lab);
+            const energyBefore = outputLab.store.getUsedCapacity(RESOURCE_ENERGY);
+            const result = outputLab.runReaction(input1Lab, input2Lab);
+            recordLabObservation({
+              room: snapshot.roomName,
+              kind: "reaction",
+              ok: result === OK,
+              rc: result,
+              labIds: [input1Lab.id, input2Lab.id, outputLab.id],
+              compound: labPlan.reaction.output,
+              energyBefore,
+              input1: input1Amount,
+              input2: input2Amount,
+            });
           }
         }
       }
