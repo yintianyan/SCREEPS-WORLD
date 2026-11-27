@@ -109,6 +109,20 @@ describe("computeLabDemands — 需求表推导（TD-024/025）", () => {
     expect(above.unloads).toContainEqual({ labId: "L2", resource: "UH" });
   });
 
+  it("output lab 缺能量：发布 10 能量补给；已足则不重复要", () => {
+    labById.L1 = makeLab("L1", {});
+    const reaction = { input1: "U", input2: "H", output: "UH", amount: 5 } as const;
+    const missing = computeLabDemands({ assignments: [{ labId: "L1", role: "output" }], reaction });
+    expect(missing.loads).toContainEqual({ labId: "L1", resource: "energy", amount: 10 });
+
+    labById.L1 = makeLab("L1", { energy: 10 });
+    const supplied = computeLabDemands({
+      assignments: [{ labId: "L1", role: "output" }],
+      reaction,
+    });
+    expect(supplied.loads.some(l => l.resource === "energy")).toBe(false);
+  });
+
   it("idle lab 残留矿物立即发布卸料需求", () => {
     labById.L1 = makeLab("L1", { ZK: 80 });
     const table = computeLabDemands({ assignments: [{ labId: "L1", role: "idle" }] });

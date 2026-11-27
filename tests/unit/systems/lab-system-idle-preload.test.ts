@@ -18,10 +18,15 @@ describe("lab-system 休眠期预装料需求表", () => {
     globalCache().labDemands = undefined;
   });
 
-  function runLabSystem(tick: number, industry: Record<string, unknown>): void {
+  function runLabSystem(
+    tick: number,
+    industry: Record<string, unknown>,
+    terminalContents: Record<string, number> = {},
+  ): void {
     (globalThis as any).Memory.rooms.W7N4.industry = industry;
     const labs = [1, 2, 3].map(i => mockStructure("lab", { id: `lab${i}` }));
     const terminal = mockStructure("terminal", { id: "term1", energy: 10000, capacity: 300000 });
+    Object.assign(terminal.store, terminalContents);
     const snap = mockSnapshot({ rcl: 7, labs: labs as never, terminal: terminal as never });
     labSystem.run({ tick, snapshots: () => [snap] } as never);
   }
@@ -46,6 +51,28 @@ describe("lab-system 休眠期预装料需求表", () => {
     // 第一步 input1/input2 都应被预装（各 300，lab 全空）
     expect(table!.loads.some(l => l.resource === "U" && l.amount === 300)).toBe(true);
     expect(table!.loads.some(l => l.resource === "L" && l.amount === 300)).toBe(true);
+  });
+
+  it("首步产物已够时，休眠预装切到下一个未完成步骤", () => {
+    const plan = {
+      target: "XGH2O",
+      targetAmount: 300,
+      steps: [
+        { input1: "O", input2: "H", output: "OH", amount: 115 },
+        { input1: "G", input2: "H", output: "GH", amount: 205 },
+      ],
+    };
+    runLabSystem(
+      1000,
+      { idleUntil: 2000, reactionTarget: "XGH2O", reactionAmount: 300, reactionPlan: plan },
+      { OH: 162, G: 500, H: 1000 },
+    );
+
+    const table = globalCache().labDemands?.byRoom.W7N4;
+    expect(table).toBeDefined();
+    expect(table!.loads.some(l => l.resource === "G")).toBe(true);
+    expect(table!.loads.some(l => l.resource === "H")).toBe(true);
+    expect(table!.loads.some(l => l.resource === "O")).toBe(false);
   });
 
   it("idle 分支无 reactionPlan ⇒ 不发布空表（不制造幽灵搬运需求）", () => {

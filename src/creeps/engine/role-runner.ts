@@ -141,6 +141,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           if (!creep.memory.remoteTarget) {
             creep.memory.mode = "idle";
           }
+          policy.onCommute?.(creep);
           return;
         }
 

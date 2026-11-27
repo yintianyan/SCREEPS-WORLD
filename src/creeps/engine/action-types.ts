@@ -64,6 +64,8 @@ export interface RolePolicy {
    * 职责分离：flee 期间的安全区行为由角色层决定，不在引擎层硬编码角色判断。
    */
   onFlee?(ac: ActionContext): boolean;
+  /** ensureHome 返回 false（通勤导航中）时调用；角色可执行不与移动意图冲突的顺路动作。 */
+  onCommute?(creep: Creep): void;
   /** idle 归位：无匹配候选（即将 idle）时是否主动离开关键格/道路到安全格待命。
    * 站桩角色（harvester/upgrader）不设——idle 守在矿位/controller 旁本就正确；
    * 移动角色（hauler/distributor/builder/worker）设 true，避免 idle 时堵塞交通。 */

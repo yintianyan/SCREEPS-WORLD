@@ -47,6 +47,8 @@ const LAB_BOOST_MINERAL = 30;
 const LAB_BOOST_ENERGY = 20;
 /** 反应 input lab 的装料目标 — 一个批次量，避免一次抽干 storage。 */
 const REACTION_LOAD_TARGET = 300;
+/** runReaction 每个 trio 每批消耗 output lab 10 能量。 */
+const LAB_REACTION_ENERGY = 10;
 /** output lab 产物积累到此量即发布回收需求（攒批搬运，减少往返）。 */
 const OUTPUT_RECLAIM_THRESHOLD = 100;
 /** war 前馈激活房的休眠时长（tick）— 缩短重试间隔，market 补给基础矿后
@@ -222,6 +224,13 @@ export function computeLabDemands(labPlan: LabPlan): LabDemandTable {
       target = REACTION_LOAD_TARGET;
     }
 
+    if (assignment.role === "output" && reaction) {
+      const energyMissing = LAB_REACTION_ENERGY - lab.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (energyMissing > 0) {
+        loads.push({ labId: assignment.labId, resource: RESOURCE_ENERGY, amount: energyMissing });
+      }
+    }
+
     if (want) {
       if (held && held !== want) {
         unloads.push({ labId: assignment.labId, resource: held });
@@ -253,7 +262,7 @@ export function computeLabDemands(labPlan: LabPlan): LabDemandTable {
 }
 
 /**
- * 休眠期发布「预装料」需求表 —— 用反应计划的第一步作为预装步骤。
+ * 休眠期发布「预装料」需求表 —— 用反应计划当前首个未完成步骤作为预装步骤。
  *
  * 为什么必须每 tick 发布：supplyLabs 的 lab 角色绑定只认这张表；休眠分支原先
  * 直接 continue，表随之过期（labDemandTtl=20），于是 labTender/distributor
@@ -268,9 +277,11 @@ function publishPreloadLabDemands(
   industryMem: IndustryMemory,
   tick: number,
 ): void {
-  const firstStep = industryMem.reactionPlan?.steps[0];
-  if (!firstStep) return;
-  const labPlan = planLabs(snapshot, [], firstStep);
+  const plan = industryMem.reactionPlan;
+  if (!plan) return;
+  const state = evaluateReactionPlan(plan, collectCompoundInventory(snapshot));
+  if (state.status === "complete") return;
+  const labPlan = planLabs(snapshot, [], state.step);
   const demandTable = computeLabDemands(labPlan);
   const g = globalCache();
   if (!g.labDemands || g.labDemands.tick !== tick) {

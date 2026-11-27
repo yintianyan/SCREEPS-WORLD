@@ -179,6 +179,15 @@ export const spawnManagerSystem: System = {
       else creepsByRoom.set(s.home, [s]);
     }
 
+    // 远矿经济编制按 home+target 预聚合；含孵化中、排除已标记回收，供贫困闸的 bootstrap 例外使用。
+    const remoteEconomyCrewCounts = new Map<string, number>();
+    for (const ref of globalCache().creepRefs ?? []) {
+      if (ref.role !== "remoteHarvester" && ref.role !== "remoteHauler") continue;
+      if (!ref.home || !ref.remoteTarget || ref.recycle) continue;
+      const key = `${ref.home}:${ref.remoteTarget}`;
+      remoteEconomyCrewCounts.set(key, (remoteEconomyCrewCounts.get(key) ?? 0) + 1);
+    }
+
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
@@ -415,7 +424,14 @@ export const spawnManagerSystem: System = {
           c.ticksToLive !== undefined &&
           c.ticksToLive < CONFIG.spawn.replacementHorizonTicks,
       );
-      trySpawn(snapshot, queue, collectorCount, distributorCount, replacementReserve);
+      trySpawn(
+        snapshot,
+        queue,
+        collectorCount,
+        distributorCount,
+        replacementReserve,
+        remoteEconomyCrewCounts,
+      );
 
       // 5. 回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
       //    传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
@@ -603,6 +619,7 @@ export function remoteSpawnPovertyBlocked(
   storageEnergy: number,
   survival: boolean,
   key: string,
+  bootstrap: boolean = false,
 ): boolean {
   if (survival || !REMOTE_LINE_ROLES.has(role)) return false;
   // coreClearer 是「拆 Invader 次级核心解锁远矿房」的一次性军事投资，不是持续抽血的
@@ -616,6 +633,9 @@ export function remoteSpawnPovertyBlocked(
   if (storageEnergy < CONFIG.economy.waterlines.deepPovertyFloor) return true;
   // 替换 = 保住现有线收入的最小支出，只受上面的深贫困地板约束。
   if (key.includes(":repl:")) return false;
+  // active op 零经济编制时允许首只 harvester/hauler bootstrap；否则 100K 闸会把
+  // 「已开点 → 无在役 → 无法首孵 → 永不产生收入」锁成死循环。其他角色与后续扩编不放宽。
+  if (bootstrap && (role === "remoteHarvester" || role === "remoteHauler")) return false;
   // 低储回血期暂停远矿「首孵/扩编」—— 新编制是净支出，先让 home storage
   // 回到 expansionMinStorage(100K)。现役成员与替换不受影响，收入线不断。
   return storageEnergy < CONFIG.remote.expansionMinStorage;
@@ -651,6 +671,7 @@ export function trySpawn(
   collectorCount: number,
   distributorCount = 1,
   replacementReserve = false,
+  remoteEconomyCrewCounts?: ReadonlyMap<string, number>,
 ): void {
   if (queue.length === 0) return;
   if (snapshot.spawns.length === 0) return;
@@ -724,12 +745,21 @@ export function trySpawn(
     }
 
     // 贫困闸（见 remoteSpawnPovertyBlocked 注释）。
+    const remoteTarget = req.memory.remoteTarget;
+    const remoteOp = remoteTarget
+      ? Memory.rooms[snapshot.roomName]?.remoteOps?.[remoteTarget]
+      : undefined;
+    const remoteBootstrap =
+      remoteOp?.state === "active" &&
+      remoteTarget !== undefined &&
+      (remoteEconomyCrewCounts?.get(`${snapshot.roomName}:${remoteTarget}`) ?? 0) === 0;
     if (
       remoteSpawnPovertyBlocked(
         req.role,
         snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
         req.survival === true,
         req.key,
+        remoteBootstrap,
       )
     ) {
       req.block = "poverty";

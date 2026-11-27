@@ -314,3 +314,78 @@ describe("降级许可从未打开 ⇒ 单独可计", () => {
     expect(rejects()?.degradeGateClosed).toBe(1);
   });
 });
+
+describe("远矿 bootstrap 贫困闸例外", () => {
+  const TARGET = "W1N1";
+
+  function remoteRequest(): SpawnRequest {
+    return makeRequest({
+      key: `remoteHarvester:${ROOM}:${TARGET}:0`,
+      role: "remoteHarvester",
+      body: [
+        "work",
+        "work",
+        "work",
+        "work",
+        "work",
+        "carry",
+        "move",
+        "move",
+        "move",
+      ] as BodyPartConstant[],
+      memory: {
+        role: "remoteHarvester",
+        home: ROOM,
+        mode: "acquire",
+        remoteTarget: TARGET,
+      } as CreepMemory,
+    });
+  }
+
+  it("active op 零经济编制：低储首只 harvester 可孵化", () => {
+    (Memory.rooms[ROOM] as any).remoteOps = { [TARGET]: { state: "active" } };
+    const spawn = mockSpawn(2_000, 5_300);
+    const storage = mockStructure("storage", { id: "st", energy: 5_000, capacity: 1_000_000 });
+    const req = remoteRequest();
+    trySpawn(
+      mockSnapshot({ spawns: [spawn], storage, energyCapacityAvailable: 5_300 }),
+      [req],
+      3,
+      1,
+      false,
+      new Map([[`${ROOM}:${TARGET}`, 0]]),
+    );
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+    expect(rejects()?.poverty ?? 0).toBe(0);
+  });
+
+  it("已有经济编制或 op 非 active：仍受 100K 闸约束", () => {
+    (Memory.rooms[ROOM] as any).remoteOps = { [TARGET]: { state: "active" } };
+    const spawn = mockSpawn(2_000, 5_300);
+    const storage = mockStructure("storage", { id: "st", energy: 5_000, capacity: 1_000_000 });
+    const req = remoteRequest();
+    trySpawn(
+      mockSnapshot({ spawns: [spawn], storage, energyCapacityAvailable: 5_300 }),
+      [req],
+      3,
+      1,
+      false,
+      new Map([[`${ROOM}:${TARGET}`, 1]]),
+    );
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(rejects()?.poverty).toBe(1);
+
+    (Memory.rooms[ROOM] as any).remoteOps = { [TARGET]: { state: "paused" } };
+    const pausedReq = remoteRequest();
+    trySpawn(
+      mockSnapshot({ spawns: [spawn], storage, energyCapacityAvailable: 5_300 }),
+      [pausedReq],
+      3,
+      1,
+      false,
+      new Map([[`${ROOM}:${TARGET}`, 0]]),
+    );
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(pausedReq.block).toBe("poverty");
+  });
+});

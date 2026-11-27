@@ -61,6 +61,25 @@ describe("remoteSpawnPovertyBlocked", () => {
     ).toBe(true);
   });
 
+  it("active op 零经济编制：首只 harvester/hauler 可越过 100K，但仍受 4K 地板约束", () => {
+    expect(
+      remoteSpawnPovertyBlocked("remoteHarvester", 5_000, false, "remoteHarvester:A:B:0", true),
+    ).toBe(false);
+    expect(
+      remoteSpawnPovertyBlocked("remoteHauler", 5_000, false, "remoteHauler:A:B:0", true),
+    ).toBe(false);
+    expect(
+      remoteSpawnPovertyBlocked("remoteHarvester", 3_999, false, "remoteHarvester:A:B:0", true),
+    ).toBe(true);
+  });
+
+  it("bootstrap 例外不放宽其他远矿角色，也不改变常规扩编", () => {
+    expect(remoteSpawnPovertyBlocked("reserver", 5_000, false, "reserver:A:B:0", true)).toBe(true);
+    expect(
+      remoteSpawnPovertyBlocked("remoteHarvester", 5_000, false, "remoteHarvester:A:B:0", false),
+    ).toBe(true);
+  });
+
   it("survival 请求豁免（生存优先）", () => {
     expect(remoteSpawnPovertyBlocked("remoteHauler", 0, true, "remoteHauler:A:B:0")).toBe(false);
   });

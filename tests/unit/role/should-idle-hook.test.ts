@@ -4,7 +4,13 @@ import { remoteHaulerRole } from "../../../src/creeps/roles/remote-hauler";
 import { defineRole } from "../../../src/creeps/engine/role-runner";
 import type { RolePolicy } from "../../../src/creeps/engine/action-types";
 import type { Priority } from "../../../src/kernel/contracts";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockPos,
+  mockSnapshot,
+  resetGlobals,
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();
@@ -96,5 +102,46 @@ describe("shouldIdleWhenNoCandidate 钩子等价性", () => {
 
     // 不切 idle — 保持 work（错误行为，但验证了默认逻辑不因 undefined 误切）
     expect(creep.memory.mode).toBe("work");
+  });
+});
+
+describe("onCommute 通勤钩子", () => {
+  it("ensureHome 返回 false 时调用；已到目的地不调用", () => {
+    const onCommute = vi.fn();
+    const role = defineRole("remoteHauler", 1 as Priority, { acquire: [], work: [], onCommute });
+    const snap = emptySinkSnapshot();
+    const commuting = makeRemoteHauler({ mode: "work", roomName: "W7N9", used: 50 });
+    role.run(commuting, mockContext(snap));
+    expect(onCommute).toHaveBeenCalledWith(commuting);
+
+    onCommute.mockClear();
+    const arrived = makeRemoteHauler({ mode: "work", roomName: "W7N4", used: 50 });
+    role.run(arrived, mockContext(snap));
+    expect(onCommute).not.toHaveBeenCalled();
+  });
+
+  it("remoteHauler 满载返程在 remoteTarget 房顺路建路；空载或非目标房不建", () => {
+    const snap = emptySinkSnapshot();
+    const loaded = makeRemoteHauler({ mode: "work", roomName: "W7N9", used: 50 });
+    const site = {
+      id: "road1",
+      my: true,
+      structureType: STRUCTURE_ROAD,
+      pos: mockPos(loaded.pos.x + 1, loaded.pos.y),
+      progress: 100,
+    };
+    loaded.room.find = vi.fn((type: number) => (type === FIND_MY_CONSTRUCTION_SITES ? [site] : []));
+    remoteHaulerRole.run(loaded, mockContext(snap));
+    expect(loaded.build).toHaveBeenCalledWith(site);
+
+    const empty = makeRemoteHauler({ mode: "work", roomName: "W7N9", used: 0 });
+    empty.room.find = loaded.room.find;
+    remoteHaulerRole.run(empty, mockContext(snap));
+    expect(empty.build).not.toHaveBeenCalled();
+
+    const transit = makeRemoteHauler({ mode: "work", roomName: "W7N8", used: 50 });
+    transit.room.find = loaded.room.find;
+    remoteHaulerRole.run(transit, mockContext(snap));
+    expect(transit.build).not.toHaveBeenCalled();
   });
 });
