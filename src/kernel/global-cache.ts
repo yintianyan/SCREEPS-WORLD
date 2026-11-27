@@ -499,6 +499,8 @@ export interface GlobalCache {
   // 【WO-DEAD 已删除】logisticsDashboard — 只写不读的仪表盘字段，无消费者。
   /** 业务动作回执（last-only，纯观测，不参与决策）。 */
   obs?: import("./observability").BusinessObservations;
+  /** 已接受、待下一拍结算信用的市场 deal（纯观测）。 */
+  pendingDealCredits?: Record<string, import("./observability").PendingDealCredit>;
   /**Empire Logistics Health（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsHealth?: import("../domain/logistics/logistics-health").LogisticsHealthResult;

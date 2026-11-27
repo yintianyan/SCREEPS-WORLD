@@ -67,6 +67,7 @@ export function resetGlobals(): void {
   delete g.pluginCooldowns;
   delete g.telemetry;
   delete g.obs;
+  delete g.pendingDealCredits;
   delete g.skipBuffer;
   // per-tick 事件缓冲（recordEvent 写入）— 漏清会让事件断言跨用例污染。
   delete g.eventBuffer;

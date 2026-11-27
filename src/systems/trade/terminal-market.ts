@@ -5,7 +5,7 @@ import type { RoomSnapshot, TickContext } from "../../kernel/contracts";
 import { EventKind } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
 import { globalCache, bumpEnergyCounter } from "../../kernel/global-cache";
-import { recordDealObservation } from "../../kernel/observability";
+import { recordDealObservation, settleDealCredits } from "../../kernel/observability";
 import { energyBuyAmount, energySellAmount } from "../../domain/economy/energy-logistics";
 import {
   getMineralDeficits,
@@ -36,6 +36,7 @@ export function toSummaries(orders: readonly Order[]): MarketOrderSummary[] {
     .filter(o => !ownOrderIds.has(o.id))
     .map(o => ({
       id: o.id,
+      type: o.type,
       price: o.price,
       amount: Math.min(o.amount, o.remainingAmount ?? o.amount),
       roomName: o.roomName,
@@ -82,6 +83,7 @@ export function executeDeal(
   roomName: string,
   feeChannel?: "energySell" | "energyBuy",
 ): boolean {
+  settleDealCredits();
   const channel = feeChannel ?? "market";
   const creditsBefore = Game.market.credits;
   if (amount <= 0 || !order.roomName) {
@@ -91,19 +93,28 @@ export function executeDeal(
       ok: false,
       rc: ERR_INVALID_ARGS,
       orderId: order.id,
+      orderType: order.type,
       resourceType: order.resourceType,
       amount,
       price: order.price,
       counterparty: "unavailable",
       fee: 0,
       creditsBefore,
+      expectedCreditDelta: 0,
       creditsAfter: creditsBefore,
+      accountCreditDelta: 0,
     });
     return false;
   }
   const resourceBefore = order.resourceType
     ? terminal.store.getUsedCapacity(order.resourceType as ResourceConstant)
     : undefined;
+  const expectedCreditDelta =
+    order.type === ORDER_BUY
+      ? amount * order.price
+      : order.type === ORDER_SELL
+        ? -amount * order.price
+        : undefined;
   const cost = Game.market.calcTransactionCost(amount, roomName, order.roomName);
   if (cost > terminal.store.getUsedCapacity(RESOURCE_ENERGY)) {
     recordDealObservation({
@@ -112,6 +123,7 @@ export function executeDeal(
       ok: false,
       rc: ERR_NOT_ENOUGH_RESOURCES,
       orderId: order.id,
+      orderType: order.type,
       resourceType: order.resourceType,
       resourceBefore,
       amount,
@@ -119,7 +131,9 @@ export function executeDeal(
       counterparty: "unavailable",
       fee: cost,
       creditsBefore,
+      expectedCreditDelta: 0,
       creditsAfter: creditsBefore,
+      accountCreditDelta: 0,
     });
     return false;
   }
@@ -148,6 +162,7 @@ export function executeDeal(
       ok: true,
       rc: result,
       orderId: order.id,
+      orderType: order.type,
       resourceType: order.resourceType,
       resourceBefore,
       amount,
@@ -155,8 +170,16 @@ export function executeDeal(
       counterparty: "unavailable",
       fee: cost,
       creditsBefore,
-      creditsAfter: Game.market.credits,
+      expectedCreditDelta,
     });
+    const g = globalCache();
+    (g.pendingDealCredits ??= {})[`${roomName}:${channel}`] = {
+      at: Game.time,
+      room: roomName,
+      channel,
+      orderId: order.id,
+      creditsBefore,
+    };
     return true;
   }
   recordDealObservation({
@@ -165,6 +188,7 @@ export function executeDeal(
     ok: false,
     rc: result,
     orderId: order.id,
+    orderType: order.type,
     resourceType: order.resourceType,
     resourceBefore,
     amount,
@@ -172,7 +196,9 @@ export function executeDeal(
     counterparty: "unavailable",
     fee: 0,
     creditsBefore,
+    expectedCreditDelta: 0,
     creditsAfter: creditsBefore,
+    accountCreditDelta: 0,
   });
   return false;
 }
@@ -743,6 +769,7 @@ export function refreshMarketPrices(): void {
     if (!orderCache[key]) orderCache[key] = [];
     orderCache[key].push({
       id: o.id,
+      type: o.type,
       price: o.price,
       amount: Math.min(o.amount, o.remainingAmount ?? o.amount),
       roomName: o.roomName,

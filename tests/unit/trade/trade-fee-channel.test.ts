@@ -22,6 +22,7 @@ import {
   type EnergyLedger,
 } from "../../../src/domain/economy/accounting";
 import { resetGlobals } from "../../support/factories";
+import { settleDealCredits } from "../../../src/kernel/observability";
 
 const g = (): any => globalThis as any;
 const ledgerOf = (room: string): any => g().energyLedger.rooms[room];
@@ -180,14 +181,23 @@ describe("executeDeal — 运费通道分桶", () => {
     expect(g().obs.deals["W37S58:market"]).toMatchObject({
       ok: true,
       rc: OK,
+      orderType: ORDER_BUY,
       resourceType: RESOURCE_ENERGY,
       resourceBefore: 5000,
       amount: 1000,
       price: 0.02,
       fee: COST,
       creditsBefore: 1000,
-      creditsAfter: 1020,
+      expectedCreditDelta: 20,
       counterparty: "unavailable",
+    });
+    expect(g().obs.deals["W37S58:market"].creditsAfter).toBeUndefined();
+
+    settleDealCredits();
+
+    expect(g().obs.deals["W37S58:market"]).toMatchObject({
+      creditsAfter: 1020,
+      accountCreditDelta: 20,
     });
   });
 

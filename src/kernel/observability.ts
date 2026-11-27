@@ -23,6 +23,7 @@ export interface DealObservation {
   ok: boolean;
   rc: number;
   orderId: string;
+  orderType?: "buy" | "sell";
   resourceType?: MarketResourceConstant;
   resourceBefore?: number;
   amount: number;
@@ -30,8 +31,18 @@ export interface DealObservation {
   counterparty: string;
   fee: number;
   creditsBefore: number;
-  creditsAfter: number;
+  expectedCreditDelta?: number;
+  creditsAfter?: number;
+  accountCreditDelta?: number;
   count: number;
+}
+
+export interface PendingDealCredit {
+  at: number;
+  room: string;
+  channel: string;
+  orderId: string;
+  creditsBefore: number;
 }
 
 export interface LabObservation {
@@ -141,6 +152,23 @@ export function recordDealObservation(detail: Omit<DealObservation, "at" | "coun
     { ...detail, at: Game.time, count: (previous?.count ?? 0) + 1 },
     DEAL_CAP,
   );
+}
+
+export function settleDealCredits(): void {
+  const g = globalCache();
+  const pending = g.pendingDealCredits;
+  if (!pending) return;
+  const credits = Game.market?.credits;
+  if (typeof credits !== "number") return;
+  for (const [key, entry] of Object.entries(pending)) {
+    const observation = g.obs?.deals?.[key];
+    if (!observation || observation.at !== entry.at || observation.orderId !== entry.orderId) {
+      continue;
+    }
+    observation.creditsAfter = credits;
+    observation.accountCreditDelta = credits - entry.creditsBefore;
+  }
+  g.pendingDealCredits = undefined;
 }
 
 export function recordLabObservation(detail: Omit<LabObservation, "at" | "count">): void {

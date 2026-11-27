@@ -25,6 +25,7 @@ import {
 import { drainEventBuffer, EventKind } from "../kernel/event-log";
 import { ringPush, ringToArray } from "../kernel/ring-buffer";
 import { log } from "../kernel/log";
+import { settleDealCredits } from "../kernel/observability";
 
 // ─── 系统定义 ───────────────────────────────────────────────
 
@@ -540,6 +541,7 @@ const MEMORY_SIZE_ALERT = 1_500_000;
  * [Fact: typings get(): string]，.length 是零成本属性读取（不解析 JSON）。
  * 写入 stats.memorySize 供 @TELEMETRY 外部采集器追踪体积趋势。 */
 function sampleMemorySize(_tick: number): void {
+  settleDealCredits();
   // safeRun 包裹：私服或测试环境可能无 RawMemory.get（typings 不保证所有环境）。
   try {
     const size = RawMemory.get().length;

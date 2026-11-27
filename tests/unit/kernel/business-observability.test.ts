@@ -20,6 +20,7 @@ beforeEach(() => {
   Object.assign(globalThis, { Game: { time: 100 } });
   Object.assign(globalThis, { Memory: { kernel: { stats: {} } } });
   delete (globalThis as unknown as { obs?: unknown }).obs;
+  delete (globalThis as unknown as { pendingDealCredits?: unknown }).pendingDealCredits;
 });
 
 describe("业务动作回执", () => {

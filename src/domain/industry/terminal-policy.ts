@@ -30,6 +30,8 @@ export function getMineralDeficits(
 /** 订单摘要 — 纯数据（决策所需字段），不持有 Game.market 的 Order 对象。 */
 export interface MarketOrderSummary {
   id: string;
+  /** 成交回执归因用；不参与订单挑选。 */
+  type?: "buy" | "sell";
   /** 单价（credits/单位）。 */
   price: number;
   /** 剩余可成交量。 */
