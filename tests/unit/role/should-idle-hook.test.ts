@@ -1,5 +1,6 @@
 /** 回归测试：shouldIdleWhenNoCandidate 钩子等价性锁住。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { remoteHaulerRole } from "../../../src/creeps/roles/remote-hauler";
 import { defineRole } from "../../../src/creeps/engine/role-runner";
 import type { RolePolicy } from "../../../src/creeps/engine/action-types";
@@ -66,6 +67,11 @@ describe("shouldIdleWhenNoCandidate 钩子等价性", () => {
     remoteHaulerRole.run(creep, mockContext(snap));
 
     expect(creep.memory.mode).toBe("idle");
+    expect(globalCache().obs?.roles?.rh1).toMatchObject({
+      exit: "no-candidate",
+      candidate: "remoteHauler",
+      mode: "idle",
+    });
   });
 
   it("② remoteHauler acquire 在 home 房 → 不切 idle（ensureHome 导航去 remoteTarget）", () => {
@@ -102,6 +108,37 @@ describe("shouldIdleWhenNoCandidate 钩子等价性", () => {
 
     // 不切 idle — 保持 work（错误行为，但验证了默认逻辑不因 undefined 误切）
     expect(creep.memory.mode).toBe("work");
+    expect(globalCache().obs?.roles?.rh1).toMatchObject({
+      exit: "no-candidate",
+      candidate: "remoteHauler",
+      mode: "work",
+    });
+  });
+});
+
+describe("角色停止原因回执", () => {
+  it("gate 拒绝与候选耗尽使用不同 exit，且保留角色现场", () => {
+    const gate = vi.fn(() => false);
+    const gated = defineRole("hauler", 1 as Priority, { gate, acquire: [], work: [] });
+    const creep = mockCreep({
+      name: "hauler1",
+      role: "hauler",
+      home: "W7N4",
+      mode: "work",
+      used: 0,
+    });
+
+    gated.run(creep, mockContext(emptySinkSnapshot()));
+
+    expect(creep.memory.mode).toBe("idle");
+    expect(globalCache().obs?.roles?.hauler1).toMatchObject({
+      exit: "gate-blocked",
+      candidate: "hauler",
+      role: "hauler",
+      home: "W7N4",
+      room: "W7N4",
+      mode: "idle",
+    });
   });
 });
 

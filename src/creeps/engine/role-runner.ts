@@ -19,6 +19,8 @@ import { interceptForBoost } from "./boost-report";
 import { CONFIG } from "../../config";
 import { recordActionCpu } from "../../kernel/safe-run";
 import { runUtilityArbitration } from "./arbiter";
+import { recordRoleObservation } from "../../kernel/observability";
+import { globalCache } from "../../kernel/global-cache";
 
 /** 创建一个由 RolePolicy 驱动的 CreepRole。 */
 export function defineRole(name: string, priority: Priority, policy: RolePolicy): CreepRole {
@@ -165,6 +167,9 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // 角色级门禁（gate）：不通过则切 idle。
         if (policy.gate && !policy.gate(ac)) {
           creep.memory.mode = "idle";
+          if (globalCache().obs?.roles?.[creep.name]?.at !== Game.time) {
+            recordRoleObservation(creep, { exit: "gate-blocked", candidate: name });
+          }
           return;
         }
 
@@ -223,6 +228,9 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           policy.shouldIdleWhenNoCandidate?.(ac) === true
         ) {
           creep.memory.mode = "idle";
+        }
+        if (globalCache().obs?.roles?.[creep.name]?.at !== Game.time) {
+          recordRoleObservation(creep, { exit: "no-candidate", candidate: name });
         }
       } finally {
         drawStatusLight(creep);
