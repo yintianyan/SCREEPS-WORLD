@@ -9,7 +9,13 @@ import { terminalManagerSystem } from "../../../src/systems/trade/terminal-manag
 import { tryBuyDeficit, trySellCommodity } from "../../../src/systems/trade/terminal-market";
 import { createTradeLedger } from "../../../src/domain/industry/trade-ledger";
 import { globalCache, publishProcurementDemands } from "../../../src/kernel/global-cache";
-import { mockBudget, mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
+import {
+  mockBudget,
+  mockContext,
+  mockSnapshot,
+  mockStructure,
+  resetGlobals,
+} from "../../support/factories";
 
 const g = (): any => globalThis as any;
 
@@ -80,6 +86,9 @@ describe("terminal-manager — 决策账本", () => {
         "demandsComputed",
         "attemptedAt",
         "publishedAt",
+        "energySaleAllowed",
+        "energySaleGateAt",
+        "energySaleProfiles",
         "gatedBy",
         "lastTick",
         "myOrders",
@@ -123,6 +132,30 @@ describe("terminal-manager — 决策账本", () => {
     expect(ledger.gatedBy).toBe("");
     expect(ledger.roomsWithTerminal).toBe(0);
     expect(ledger.terminalEnergy).toBe(0);
+  });
+
+  it("记录能量停卖闸的各房净流与援助判定", () => {
+    const terminal = mockStructure("terminal", { id: "terminal1", energy: 1000 });
+    const storage = mockStructure("storage", { id: "storage1", energy: 200_000 });
+    const snapshot = mockSnapshot({ terminal, storage });
+    g().Memory.rooms.W7N4.economy = {
+      t: Game.time,
+      nf: -100,
+      cr: 200_000,
+      rb: 1000,
+      dr: 0,
+      ei: 200,
+      ef: 100,
+    };
+
+    runWith(snapshot);
+
+    const ledger = globalCache().tradeLedger!;
+    expect(ledger.energySaleAllowed).toBe(false);
+    expect(ledger.energySaleGateAt).toBe(Game.time);
+    expect(ledger.energySaleProfiles).toEqual([
+      { room: "W7N4", netFlow: -1, riskBuffer: 100, needsAid: true },
+    ]);
   });
 
   it("有 terminal 时记下它的能量、本房 storage 的盈余与账户挂单数", () => {

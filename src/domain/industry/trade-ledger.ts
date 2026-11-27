@@ -97,6 +97,18 @@ export interface TradeLedger {
   sellOrderGateAt: number;
   /** 止步现场关键读数：`房 资源 surplus=N bid=P ask=A min=M`（定价/阈值一字符串看全）。 */
   sellOrderDetail: string;
+  // ── 能量停卖闸（terminal-manager 写）：判「负净流仍在卖」是闸失效还是成交当拍已放行 ──
+  /** 帝国级能量停卖闸最近一次判决；true = 允许卖能量。 */
+  energySaleAllowed: boolean;
+  /** 上述判决的 tick（heap 值，global reset 后归零）。 */
+  energySaleGateAt: number;
+  /** 判决时各房输入快照（最多 16 房）；netFlow 为能量/tick，riskBuffer 为 tick。 */
+  energySaleProfiles: Array<{
+    room: string;
+    netFlow: number;
+    riskBuffer: number;
+    needsAid: boolean;
+  }>;
 }
 
 /**
@@ -139,5 +151,8 @@ export function createTradeLedger(): TradeLedger {
     sellOrderGate: "",
     sellOrderGateAt: 0,
     sellOrderDetail: "",
+    energySaleAllowed: true,
+    energySaleGateAt: 0,
+    energySaleProfiles: [],
   };
 }

@@ -18,6 +18,7 @@ import type { TransportPlan } from "../../domain/logistics/transport-plan";
 import {
   buildRoomEconomicProfile,
   empireAllowsEnergySale,
+  needsEnergyAid,
   readEconomyQuery,
   type RoomEconomicMemory,
 } from "../../domain/economy/room-profile";
@@ -53,6 +54,9 @@ import {
   tryEmpireMineralAid,
   tryNukeSalvage,
 } from "./terminal-selfaid";
+
+/** 停卖闸输入快照上限，避免未来房间数增长把 Memory 镜像撑大。 */
+const ENERGY_SALE_PROFILE_CAP = 16;
 
 /** 取（或建行）贸易决策账本 —— heap 单例；建行走 domain 的同一处（采购侧字段由 terminal-market 写）。 */
 function tradeLedger(): TradeLedger {
@@ -135,6 +139,14 @@ export const terminalManagerSystem: System = {
       ];
     });
     const allowEnergySale = empireAllowsEnergySale(energyProfiles);
+    ledger.energySaleAllowed = allowEnergySale;
+    ledger.energySaleGateAt = ctx.tick;
+    ledger.energySaleProfiles = energyProfiles.slice(0, ENERGY_SALE_PROFILE_CAP).map(profile => ({
+      room: profile.roomName,
+      netFlow: profile.netFlow,
+      riskBuffer: profile.riskBuffer,
+      needsAid: needsEnergyAid(profile),
+    }));
 
     for (const snapshot of ctx.snapshots()) {
       const terminal = snapshot.terminal;
