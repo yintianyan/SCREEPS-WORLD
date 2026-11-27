@@ -9,7 +9,7 @@
  */
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
-import { selectBody } from "../../config/bodies";
+import { capBodyCarry, selectBody } from "../../config/bodies";
 import {
   buildSpawnRequest,
   hasRoomRequest,
@@ -17,6 +17,7 @@ import {
   submitRoomRequests,
 } from "../../domain/spawn/queue";
 import {
+  estimateDepositHarvestableUnits,
   planDepositAssignments,
   type DepositHomeObservation,
   type DepositObservation,
@@ -60,11 +61,17 @@ const DEPOSIT_ARRIVAL_RUNWAY_TICKS = 200;
 
 /**
  * 疲劳门（引擎 4.3.2 实测：cooldown = ceil(0.001 × harvested^1.2)，harvested
- * 为跨采集者累计、永不重置）。lastCooldown > 30 时吞吐 < ~0.33 单位/tick，
- * 采集者 1500 寿命装不满一趟 carry（500）— 派工等于罚站。实时视野与 intel
- * 都可读 lastCooldown（同一疲劳口径；intel 观测滞后但疲劳单调不减，只会低估）。
+ * 为跨采集者累计、永不重置）。>30 的 deposit 吞吐已低到不值得占一条 spawn 线；
+ * 门内再由 manager 按剩余寿命估算产量并裁剪 CARRY，避免 500 运力注定装不满。
+ * 实时视野与 intel 都可读 lastCooldown（同一疲劳口径；intel 观测滞后但疲劳单调不减，只会低估）。
  */
 const EXHAUSTED_DEPOSIT_LAST_COOLDOWN = 30;
+
+/** 采集者寿命与 onsite 预算（引擎 creep 寿命 1500；通勤按 50 tick/房）。 */
+const DEPOSIT_CREEP_LIFETIME_TICKS = 1500;
+const DEPOSIT_ROUNDTRIP_SAFETY_TICKS = 100;
+/** 估算产量只按 90% 配 CARRY，给寻路/冷却误差留余量，避免再次到死装不满。 */
+const DEPOSIT_YIELD_SAFETY_RATIO = 0.9;
 
 /**
  * 行军威胁房记忆 TTL（tick）— 与 PB 侧同口径：intel room 域是 heap、global reset
@@ -179,6 +186,7 @@ function collectVisibleDeposits(): DepositObservation[] {
         roomName: room.name,
         ticksToDecay: deposit.ticksToDecay,
         depositType: deposit.depositType,
+        lastCooldown: deposit.lastCooldown,
       });
     }
   }
@@ -214,6 +222,7 @@ function collectIntelDeposits(
         roomName: entry.subject,
         ticksToDecay,
         depositType: deposit.type,
+        lastCooldown: deposit.cooldown,
       });
     }
   }
@@ -279,9 +288,44 @@ export const depositManagerSystem: System = {
       const key = spawnKey("depositHarvester", assignment.home, 0, assignment.depositId);
       if (hasRoomRequest(homeMem, key)) continue;
 
-      const body = selectBody("depositHarvester", homeRoom.energyCapacityAvailable, {
+      const selectedBody = selectBody("depositHarvester", homeRoom.energyCapacityAvailable, {
         rcl: homeRoom.controller?.level,
       });
+      const lastCooldown = assignment.lastCooldown ?? liveDeposit?.lastCooldown;
+      if (lastCooldown === undefined) {
+        log.info(
+          "deposit-manager",
+          `deposit: skip ${assignment.home} → ${assignment.depositRoom} ` +
+            `(${assignment.depositId.slice(0, 6)}): fatigue unknown`,
+        );
+        continue;
+      }
+      const workParts = selectedBody.filter(part => part === "work").length;
+      const baseCarryParts = selectedBody.filter(part => part === "carry").length;
+      const oneWayTicks =
+        Game.map.getRoomLinearDistance(assignment.home, assignment.depositRoom) *
+        DEPOSIT_TRAVEL_TICKS_PER_ROOM;
+      const onsiteTicks =
+        DEPOSIT_CREEP_LIFETIME_TICKS - oneWayTicks * 2 - DEPOSIT_ROUNDTRIP_SAFETY_TICKS;
+      const expectedUnits = estimateDepositHarvestableUnits({
+        lastCooldown,
+        cooldown: liveDeposit?.cooldown,
+        workParts,
+        ticksAvailable: onsiteTicks,
+      });
+      const maxCarryParts = Math.min(
+        baseCarryParts,
+        Math.floor((expectedUnits * DEPOSIT_YIELD_SAFETY_RATIO) / 50),
+      );
+      if (maxCarryParts < 1) {
+        log.info(
+          "deposit-manager",
+          `deposit: skip ${assignment.home} → ${assignment.depositRoom} ` +
+            `(${assignment.depositId.slice(0, 6)}): expected ${expectedUnits} < 50`,
+        );
+        continue;
+      }
+      const body = capBodyCarry(selectedBody, maxCarryParts);
       submitRoomRequests(homeMem, [
         buildSpawnRequest(ctx.tick, {
           key,
@@ -307,7 +351,8 @@ export const depositManagerSystem: System = {
       log.info(
         "deposit-manager",
         `deposit: ${assignment.home} → ${assignment.depositRoom} ` +
-          `(${assignment.depositId.slice(0, 6)}, ${depositType})`,
+          `(${assignment.depositId.slice(0, 6)}, ${depositType}, ` +
+          `expected ${expectedUnits}, carry ${maxCarryParts})`,
       );
     }
   },

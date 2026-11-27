@@ -11,7 +11,8 @@ function creep(name: string, overrides: Record<string, unknown> = {}): Creep {
     name,
     memory: { role: "depositHarvester", home: "W37S58", mode: "work" },
     room: { name: "W38S56" },
-    store: { getUsedCapacity: () => 250 },
+    store: { getUsedCapacity: () => 250, getCapacity: () => 500 },
+    ticksToLive: 321,
     ...overrides,
   } as unknown as Creep;
 }
@@ -44,6 +45,8 @@ describe("业务动作回执", () => {
       room: "W38S56",
       mode: "work",
       load: 250,
+      capacity: 500,
+      ticksToLive: 321,
       exit: "return-home",
       candidate: "deposit-harvester:return-home",
       rc: 0,

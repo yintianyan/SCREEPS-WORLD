@@ -5,6 +5,7 @@ import { defineRole } from "../engine/role-runner";
 import { moveToTarget, moveTowardRoom } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 import { recordRoleObservation } from "../../kernel/observability";
+import { estimateDepositHarvestableUnits } from "../../domain/remote/deposit";
 
 /** deposit 可能产出的四种资源（用于 memory.depositType 缺失时的兜底识别）。 */
 const DEPOSIT_RESOURCES: readonly ResourceConstant[] = [
@@ -56,6 +57,19 @@ function depositGate(ac: ActionContext): boolean {
   return false;
 }
 
+/** 剩余寿命扣除返航通勤后还能采多少；用于疲劳期动态收工。 */
+function remainingHarvestableUnits(creep: Creep, deposit: Deposit): number {
+  const home = creep.memory.home;
+  if (!home) return 0;
+  const oneWayTicks = Game.map.getRoomLinearDistance(home, creep.room.name) * 50;
+  return estimateDepositHarvestableUnits({
+    lastCooldown: deposit.lastCooldown,
+    cooldown: deposit.cooldown,
+    workParts: creep.getActiveBodyparts(WORK),
+    ticksAvailable: (creep.ticksToLive ?? 0) - oneWayTicks - 100,
+  });
+}
+
 /** 在 deposit 旁采集（背包未满时）。 */
 function harvestDeposit(): ActionCandidate<Deposit> {
   return {
@@ -66,15 +80,72 @@ function harvestDeposit(): ActionCandidate<Deposit> {
       return getDeposit(ac.creep);
     },
     execute: (ac, deposit) => {
+      const expectedBefore = remainingHarvestableUnits(ac.creep, deposit);
+      const load = ac.creep.store.getUsedCapacity();
+
+      // 冷却不是采空：等待期间检查是否还来得及再采一次，来不及就带现有负载收工。
+      if (deposit.cooldown > 0) {
+        if (load > 0 && expectedBefore === 0) {
+          ac.creep.memory.mode = "work";
+          recordRoleObservation(ac.creep, {
+            exit: "return-partial",
+            candidate: "deposit-fatigue",
+            sinkReason: "no-harvest-window",
+            cooldown: deposit.cooldown,
+            lastCooldown: deposit.lastCooldown,
+            expectedUnits: expectedBefore,
+          });
+          return;
+        }
+        recordRoleObservation(ac.creep, {
+          exit: "harvest-wait",
+          candidate: "deposit-harvester:harvest",
+          targetId: deposit.id,
+          sinkReason: `cooldown:${deposit.cooldown}`,
+          cooldown: deposit.cooldown,
+          lastCooldown: deposit.lastCooldown,
+          expectedUnits: expectedBefore,
+        });
+        return;
+      }
+
       const result = ac.creep.harvest(deposit);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, deposit);
       } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
-        // 已采空：有货先回家落仓，不把背包里的资源一起回收掉。
+        // 并发/缓存误差下仍可能读到冷却；只有 cooldown=0 的 -6 才是真正采空。
+        if (deposit.cooldown > 0) {
+          recordRoleObservation(ac.creep, {
+            exit: "harvest-wait",
+            candidate: "deposit-harvester:harvest",
+            targetId: deposit.id,
+            rc: result,
+            sinkReason: `cooldown:${deposit.cooldown}`,
+            cooldown: deposit.cooldown,
+            lastCooldown: deposit.lastCooldown,
+            expectedUnits: expectedBefore,
+          });
+          return;
+        }
         if (ac.creep.store.getUsedCapacity() > 0) {
           ac.creep.memory.mode = "work";
         } else {
           ac.creep.memory.recycle = true;
+        }
+      } else if (result === OK && ac.creep.store.getUsedCapacity() > 0) {
+        const expectedAfter = remainingHarvestableUnits(ac.creep, deposit);
+        if (expectedAfter === 0) {
+          ac.creep.memory.mode = "work";
+          recordRoleObservation(ac.creep, {
+            exit: "return-partial",
+            candidate: "deposit-fatigue",
+            sinkReason: "no-harvest-window",
+            rc: result,
+            cooldown: deposit.cooldown,
+            lastCooldown: deposit.lastCooldown,
+            expectedUnits: expectedAfter,
+          });
+          return;
         }
       }
       recordRoleObservation(ac.creep, {
@@ -82,6 +153,9 @@ function harvestDeposit(): ActionCandidate<Deposit> {
         candidate: "deposit-harvester:harvest",
         targetId: deposit.id,
         rc: result,
+        cooldown: deposit.cooldown,
+        lastCooldown: deposit.lastCooldown,
+        expectedUnits: expectedBefore,
       });
     },
   };

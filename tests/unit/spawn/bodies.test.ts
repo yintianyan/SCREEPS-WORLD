@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bodyCost,
+  capBodyCarry,
   degradeBody,
   selectBody,
   RECOVERY_BODY,
@@ -20,6 +21,19 @@ describe("Bodies — bodyCost", () => {
 
   it("returns 0 for empty body", () => {
     expect(bodyCost([])).toBe(0);
+  });
+});
+
+describe("Bodies — capBodyCarry", () => {
+  it("只裁剪 CARRY，保留 WORK/MOVE 配比与部件顺序", () => {
+    const body: BodyPartConstant[] = ["work", "carry", "move", "carry", "move", "carry"];
+    expect(capBodyCarry(body, 2)).toEqual(["work", "carry", "move", "carry", "move"]);
+    expect(bodyCost(capBodyCarry(body, 2))).toBe(300);
+  });
+
+  it("上限不低于现有 CARRY 时原样返回", () => {
+    const body: BodyPartConstant[] = ["work", "carry", "move"];
+    expect(capBodyCarry(body, 10)).toEqual(body);
   });
 });
 

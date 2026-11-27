@@ -1909,6 +1909,20 @@ export function bodyCost(body: readonly BodyPartConstant[]): number {
   return body.reduce((sum, part) => sum + (PART_COST[part] ?? 0), 0);
 }
 
+/** 按可采量上限裁剪 CARRY；不改变 WORK/MOVE 配比，只去掉注定装不满的运力。 */
+export function capBodyCarry(
+  body: readonly BodyPartConstant[],
+  maxCarryParts: number,
+): BodyPartConstant[] {
+  let remaining = Math.max(0, Math.floor(maxCarryParts));
+  return body.filter(part => {
+    if (part !== "carry") return true;
+    if (remaining <= 0) return false;
+    remaining -= 1;
+    return true;
+  });
+}
+
 /**
  * 选择适合 spawn 能量容量的最佳 body；无档位匹配时回退 RECOVERY_BODY，
  * 确保 P0 孵化不因 body 选择阻塞。options.rcl ≥ 4 时 hauler 走道路优化变体（HA-10）。

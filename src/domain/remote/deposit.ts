@@ -15,6 +15,58 @@ export interface DepositObservation {
   ticksToDecay: number;
   /** 资源类型（mist/biomass/metal/silicon）；实时视野或 intel 快照携带。 */
   depositType?: string;
+  /** 累计采集量对应的最近一次冷却（ceil(0.001 × harvested^1.2)）。 */
+  lastCooldown?: number;
+}
+
+export const DEPOSIT_COOLDOWN_FACTOR = 0.001;
+export const DEPOSIT_COOLDOWN_EXPONENT = 1.2;
+export const DEPOSIT_HARVEST_POWER = 1;
+
+/** 引擎公式：deposit 累计采集量 → 下一次 harvest 冷却 tick。 */
+export function depositCooldown(totalHarvested: number): number {
+  return Math.ceil(
+    DEPOSIT_COOLDOWN_FACTOR * Math.pow(Math.max(0, totalHarvested), DEPOSIT_COOLDOWN_EXPONENT),
+  );
+}
+
+/**
+ * 估算剩余 onsite 时间还能采多少单位。
+ *
+ * lastCooldown 是 ceil 后的单调值，反解累计量会略高估 harvested，因此后续冷却
+ * 预测偏保守；cooldown 若提供则优先使用当前剩余冷却，避免把正在冷却的时间
+ * 重复算成等待。ticksAvailable 必须由调用方扣除往返通勤与安全余量。
+ */
+export function estimateDepositHarvestableUnits(input: {
+  lastCooldown: number;
+  cooldown?: number;
+  workParts: number;
+  ticksAvailable: number;
+}): number {
+  const workParts = Math.max(0, Math.floor(input.workParts));
+  const ticks = Math.max(0, Math.floor(input.ticksAvailable));
+  if (workParts === 0 || ticks === 0) return 0;
+
+  const lastCooldown = Math.max(0, Math.floor(input.lastCooldown));
+  let totalHarvested = Math.pow(
+    lastCooldown / DEPOSIT_COOLDOWN_FACTOR,
+    1 / DEPOSIT_COOLDOWN_EXPONENT,
+  );
+  let cooldown = Math.max(0, Math.floor(input.cooldown ?? lastCooldown));
+  let elapsed = 0;
+  let units = 0;
+
+  while (elapsed < ticks) {
+    if (cooldown > 0) {
+      elapsed += cooldown;
+      if (elapsed > ticks) break;
+    }
+    const amount = workParts * DEPOSIT_HARVEST_POWER;
+    units += amount;
+    totalHarvested += amount;
+    cooldown = depositCooldown(totalHarvested);
+  }
+  return units;
 }
 
 /** 可派工的候选 home 房。 */
@@ -74,6 +126,8 @@ export interface DepositAssignment {
   home: string;
   /** 派工携带的资源类型；系统层写入 creep memory，落仓时据此 transfer。 */
   depositType?: string;
+  /** 派工时的疲劳值，供系统层按剩余寿命裁剪 CARRY。 */
+  lastCooldown?: number;
 }
 
 /**
@@ -147,6 +201,7 @@ export function planDepositAssignments(input: DepositPlanInput): DepositAssignme
       depositRoom: deposit.roomName,
       home: bestHome.roomName,
       ...(deposit.depositType ? { depositType: deposit.depositType } : {}),
+      ...(deposit.lastCooldown !== undefined ? { lastCooldown: deposit.lastCooldown } : {}),
     });
   }
   return assignments;

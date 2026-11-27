@@ -9,6 +9,11 @@ export interface RoleObservation {
   room: string;
   mode: string;
   load: number;
+  capacity: number;
+  ticksToLive: number;
+  cooldown?: number;
+  lastCooldown?: number;
+  expectedUnits?: number;
   exit: string;
   candidate?: string;
   targetId?: string;
@@ -120,7 +125,18 @@ function observations(): BusinessObservations {
 export function recordRoleObservation(
   creep: Creep,
   detail: Pick<RoleObservation, "exit"> &
-    Partial<Pick<RoleObservation, "candidate" | "targetId" | "rc" | "sinkReason">>,
+    Partial<
+      Pick<
+        RoleObservation,
+        | "candidate"
+        | "targetId"
+        | "rc"
+        | "sinkReason"
+        | "cooldown"
+        | "lastCooldown"
+        | "expectedUnits"
+      >
+    >,
 ): void {
   const obs = observations();
   obs.at = Game.time;
@@ -135,6 +151,8 @@ export function recordRoleObservation(
       room: creep.room.name,
       mode: creep.memory.mode ?? "unknown",
       load: creep.store.getUsedCapacity(),
+      capacity: creep.store.getCapacity(),
+      ticksToLive: creep.ticksToLive ?? 0,
       ...detail,
     },
     ROLE_CAP,

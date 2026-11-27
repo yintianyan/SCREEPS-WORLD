@@ -1,6 +1,8 @@
 /** 远矿 deposit 派工规划（纯函数）单测。 */
 import { describe, expect, it } from "vitest";
 import {
+  depositCooldown,
+  estimateDepositHarvestableUnits,
   planDepositAssignments,
   type DepositHomeObservation,
   type DepositObservation,
@@ -80,9 +82,9 @@ describe("planDepositAssignments — 正常路径", () => {
     expect(result[0]?.depositId).toBe("d1");
   });
 
-  it("派工携带资源类型（intel 无视野派工时靠它写 creep memory）", () => {
+  it("派工携带资源类型与疲劳值（供系统层裁剪 CARRY）", () => {
     const result = planDepositAssignments({
-      deposits: [{ ...deposit("d1", "W1N2"), depositType: "biomass" }],
+      deposits: [{ ...deposit("d1", "W1N2"), depositType: "biomass", lastCooldown: 29 }],
       homes: [home("W1N1")],
       liveDepositIds: new Set(),
       pendingDepositIds: new Set(),
@@ -94,6 +96,7 @@ describe("planDepositAssignments — 正常路径", () => {
       distance,
     });
     expect(result[0]?.depositType).toBe("biomass");
+    expect(result[0]?.lastCooldown).toBe(29);
   });
 
   it("home 已有在役/在队采集者时不再向它派工，改选次近的房", () => {
@@ -112,6 +115,64 @@ describe("planDepositAssignments — 正常路径", () => {
       distance,
     });
     expect(result[0]?.home).toBe("W1N3");
+  });
+});
+
+describe("deposit 疲劳产量估算", () => {
+  it("按引擎公式计算累计采集量对应的 cooldown", () => {
+    expect(depositCooldown(0)).toBe(0);
+    expect(depositCooldown(1000)).toBe(4);
+    expect(depositCooldown(5415)).toBe(31);
+  });
+
+  it("lastCooldown=29、10W、1300 onsite tick 只能采 420，装不满 500", () => {
+    expect(
+      estimateDepositHarvestableUnits({
+        lastCooldown: 29,
+        cooldown: 29,
+        workParts: 10,
+        ticksAvailable: 1300,
+      }),
+    ).toBe(420);
+  });
+
+  it("lastCooldown=31 时同窗口产量进一步降到 390", () => {
+    expect(
+      estimateDepositHarvestableUnits({
+        lastCooldown: 31,
+        cooldown: 31,
+        workParts: 10,
+        ticksAvailable: 1300,
+      }),
+    ).toBe(390);
+  });
+
+  it("优先使用当前剩余 cooldown，不重复计入已经等待过的时间", () => {
+    expect(
+      estimateDepositHarvestableUnits({
+        lastCooldown: 30,
+        cooldown: 5,
+        workParts: 10,
+        ticksAvailable: 1300,
+      }),
+    ).toBe(410);
+  });
+
+  it("无 WORK 或无 onsite 时间时产量为 0", () => {
+    expect(
+      estimateDepositHarvestableUnits({
+        lastCooldown: 20,
+        workParts: 0,
+        ticksAvailable: 1300,
+      }),
+    ).toBe(0);
+    expect(
+      estimateDepositHarvestableUnits({
+        lastCooldown: 20,
+        workParts: 10,
+        ticksAvailable: 0,
+      }),
+    ).toBe(0);
   });
 });
 

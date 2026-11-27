@@ -20,7 +20,10 @@ export function resetGlobals(): void {
   (globalThis as any).Game = {
     time: 1000,
     getObjectById: (id: string) => objectRegistry.get(id) ?? null,
-    map: { describeExits: () => ({ "1": "W7N3", "3": "W6N4", "5": "W7N5", "7": "W8N4" }) },
+    map: {
+      describeExits: () => ({ "1": "W7N3", "3": "W6N4", "5": "W7N5", "7": "W8N4" }),
+      getRoomLinearDistance: (a: string, b: string) => (a === b ? 0 : 1),
+    },
     cpu: { getUsed: () => 0, limit: 20, tickLimit: 500 },
     rooms: {},
     creeps: {},
