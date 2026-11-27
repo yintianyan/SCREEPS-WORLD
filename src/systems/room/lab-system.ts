@@ -551,10 +551,9 @@ export const labSystem: System = {
         );
         pbNeed.heal = Math.max(pbNeed.heal, pbDemandEntry.healUnits + CONFIG.boost.reserveAmount);
       }
-      const pbTarget =
-        pbCompounds && pbMission
-          ? decidePbReactionTarget(inventory, pbNeed.attack, pbNeed.heal, pbCompounds)
-          : undefined;
+      const pbTarget = pbCompounds
+        ? decidePbReactionTarget(inventory, pbNeed.attack, pbNeed.heal, pbCompounds)
+        : undefined;
 
       // PB combat 前馈抢占：被 latch 的经济链（XGH2O 等默认生产线）让位给
       // combat 化合物 — 私服实证：XGH2O 链因催化剂 X 断供休眠 latch 数万

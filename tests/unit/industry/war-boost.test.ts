@@ -427,6 +427,52 @@ describe("lab-system — PB 野采前馈接线", () => {
     expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XUH2O");
   });
 
+  it("pbBoostDemand 有本房前馈需求 + 化合物缺口 → 不开任务也产 XUH2O", () => {
+    g.Game.rooms = { W7N4: {} };
+    g.Game.creeps = {};
+    g.Memory.rooms = { W7N4: {} };
+    g.Memory.kernel = {
+      pbBoostDemand: {
+        W7N4: {
+          attackUnits: 900,
+          healUnits: 1440,
+          until: 2000,
+          compounds: { attack: "XUH2O", heal: "XLHO2" },
+        },
+      },
+    };
+    const snap = mockSnapshot({
+      rcl: 6,
+      labs: [makeLab("L1", 25, 25), makeLab("L2", 26, 25), makeLab("L3", 25, 26)],
+      storage: { id: "stor1", store: { energy: 5000, ...ALL_BASE_MINERALS } } as never,
+    });
+    labSystem.run(mockContext(snap));
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XUH2O");
+  });
+
+  it("pbBoostDemand 过期 → 不前馈（默认 XGH2O）", () => {
+    g.Game.rooms = { W7N4: {} };
+    g.Game.creeps = {};
+    g.Memory.rooms = { W7N4: {} };
+    g.Memory.kernel = {
+      pbBoostDemand: {
+        W7N4: {
+          attackUnits: 900,
+          healUnits: 1440,
+          until: 900,
+          compounds: { attack: "XUH2O", heal: "XLHO2" },
+        },
+      },
+    };
+    const snap = mockSnapshot({
+      rcl: 6,
+      labs: [makeLab("L1", 25, 25), makeLab("L2", 26, 25), makeLab("L3", 25, 26)],
+      storage: { id: "stor1", store: { energy: 5000, ...ALL_BASE_MINERALS } } as never,
+    });
+    labSystem.run(mockContext(snap));
+    expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XGH2O");
+  });
+
   it("PB 任务 sponsor 为他房 → 本房不受影响（默认 XGH2O）", () => {
     g.Game.rooms = { W7N4: {} };
     g.Game.creeps = {};
