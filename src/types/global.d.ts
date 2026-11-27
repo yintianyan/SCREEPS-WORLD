@@ -414,6 +414,11 @@ declare global {
      */
     storageRichActive?: boolean;
     /**
+     * 帝国级能量压力：brakeNetFlow/gateNetFlow 和为负且本房 storage 低于容量比例受助线。
+     * room-state 每拍唯一写入；spawn-manager 据此停补非关键编制，upgrade/lab 闸同步关闭。
+     */
+    strategicEnergyStress?: boolean;
+    /**
      * Phase D：分级消费闸（停线统一 sprintStorage=50K，恢复线各自独立）。
      * - upgradeActive：GCL 升级，恢复线 60K（长期复利，最优先）
      * - labActive：lab 反应，恢复线 55K（成本仅 1–3 e/t，可早于升级开闸）

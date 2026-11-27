@@ -264,6 +264,12 @@ export const spawnManagerSystem: System = {
         removeRequestsByRole(queue, "mineralMiner", snapshot.roomName);
         removeRequestsByRole(queue, "labTender", snapshot.roomName);
       }
+      // 帝国负净流且 storage 低于 25% 容量：清掉物流扩编在途请求，
+      // demand 随后只按 minCount 重新补最小运力，避免旧请求继续把饿房抽干。
+      if (roomMem.strategicEnergyStress === true) {
+        removeRequestsByRole(queue, "hauler", snapshot.roomName);
+        removeRequestsByRole(queue, "distributor", snapshot.roomName);
+      }
       // Phase C：home mineral 已到停采线 → 撤销在途矿工请求（存量继续工作，不强制回收）。
       if (roomMem.homeMiningActive === false) {
         removeRequestsByRole(queue, "mineralMiner", snapshot.roomName);
@@ -309,6 +315,7 @@ export const spawnManagerSystem: System = {
         economyPressure: roomMem.economyPressure ?? 0,
         energyPrice: roomMem.energyPrice ?? 0.5,
         storageNearFull: roomMem.storageNearFull === true,
+        strategicEnergyStress: roomMem.strategicEnergyStress === true,
         liquidityScore: roomMem.phase?.liquidityScore ?? 0,
         drainScore: roomMem.phase?.drainScore ?? 0,
         prevHysteresis: {

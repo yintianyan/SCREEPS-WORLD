@@ -448,3 +448,95 @@ describe("Phase D：分级消费闸 —— 三档独立", () => {
     expect(requests.filter(r => r.role === "labTender")).toHaveLength(2);
   });
 });
+
+describe("战略能量压力：停补升级与超量物流/工业编制", () => {
+  it("storage 100K 且 upgradeActive=true，但战略压力开启 ⇒ 不补 upgrader", () => {
+    const snap = stationSnapshot({
+      storage: mockStructure("storage", { id: "st", energy: 100_000, capacity: 1_000_000 }),
+    });
+    const requests = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      ctx({ upgradeActive: true, strategicEnergyStress: true }),
+      1000,
+    ).requests;
+    expect(requests.filter(r => r.role === "upgrader")).toHaveLength(0);
+  });
+
+  it("战略压力下 controller 降级风险仍保留保级补员", () => {
+    const snap = stationSnapshot({
+      storage: mockStructure("storage", { id: "st", energy: 100_000, capacity: 1_000_000 }),
+    });
+    const requests = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      ctx({
+        upgradeActive: true,
+        strategicEnergyStress: true,
+        controllerDowngradeRisk: true,
+      }),
+      1000,
+    ).requests;
+    expect(requests.filter(r => r.role === "upgrader").length).toBeGreaterThan(0);
+  });
+
+  it("战略压力下 hauler 只补最小运力，不按 container 积压扩编", () => {
+    const snap = mockSnapshot({
+      rcl: 6,
+      storage: mockStructure("storage", { id: "st", energy: 100_000, capacity: 1_000_000 }),
+      containers: [mockStructure("container", { id: "c1", energy: 1900, capacity: 2000 })],
+      sources: [mockSource()],
+    });
+    const stressed = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      ctx({ strategicEnergyStress: true }),
+      1000,
+    ).requests.filter(r => r.role === "hauler");
+    const normal = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      ctx({ strategicEnergyStress: false, haulerPendingTarget: 4 }),
+      1000,
+    ).requests.filter(r => r.role === "hauler");
+    expect(stressed.length).toBeLessThan(normal.length);
+  });
+
+  it("战略压力下 labActive=true 也停补 mineralMiner/labTender", () => {
+    const snap = mockSnapshot({
+      rcl: 6,
+      storage: mockStructure("storage", { id: "st", energy: 100_000, capacity: 1_000_000 }),
+      extractor: mockStructure("extractor", { id: "ex" }),
+      terminal: mockStructure("terminal", { id: "term" }),
+      minerals: [{ mineralType: "H", mineralAmount: 5000 } as any],
+      labs: [
+        mockStructure("lab", { id: "lab1" }),
+        mockStructure("lab", { id: "lab2" }),
+        mockStructure("lab", { id: "lab3" }),
+      ],
+    });
+    const requests = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      ctx({ labActive: true, labSupplyNeeded: true, strategicEnergyStress: true }),
+      1000,
+    ).requests;
+    expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "labTender")).toHaveLength(0);
+  });
+});

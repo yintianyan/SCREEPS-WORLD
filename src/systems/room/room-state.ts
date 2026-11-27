@@ -1,5 +1,5 @@
 import { recordTyped } from "../../kernel/event-log";
-import { ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
+import { brakeGateSum, ECONOMY_SNAPSHOT_SCALE } from "../../domain/economy/accounting";
 import { flipLatch } from "../../core/scale";
 import { INVADER_USERNAME } from "../../domain/intel";
 import { CONFIG } from "../../config";
@@ -20,6 +20,7 @@ import {
   nextHomeMineralMiningActive,
 } from "../../domain/economy/home-mining";
 import { collectRoomResourceStocks } from "../../domain/economy/resource-stock";
+import { getEnergyPolicyForStorage } from "../../domain/economy/energy-policy";
 import { scaledControllerRiskBand } from "../../domain/economy/downgrade-risk";
 import { hasSurvivalRequest } from "../../domain/spawn/queue";
 import { EventKind } from "../../kernel/event-log";
@@ -76,6 +77,14 @@ export const roomStateSystem: System = {
         roomMem.storageRichActive = storageRichActive;
       }
 
+      const energyPolicy = getEnergyPolicyForStorage(snapshot.storage?.store);
+      const empireGateSum = brakeGateSum(Memory.kernel?.brakeNetFlow, Memory.kernel?.gateNetFlow);
+      const strategicEnergyStress =
+        snapshot.storage !== undefined &&
+        empireGateSum < 0 &&
+        storageEnergyNow < energyPolicy.aidRecipientFloor;
+      roomMem.strategicEnergyStress = strategicEnergyStress;
+
       // 分级消费闸 —— RCL8 停线统一 50K，恢复线按收益/紧迫度分开；
       // RCL<8 的升级与实验室都用 sustainedStorage(10K) 单门槛，避免幼房永久停摆。
       let upgradeActive: boolean | undefined;
@@ -91,24 +100,28 @@ export const roomStateSystem: System = {
           snapshot.rcl < 8
             ? CONFIG.economy.waterlines.sustainedStorage
             : CONFIG.economy.waterlines.sprintStorage;
-        upgradeActive = nextUpgradeActive(
-          roomMem.upgradeActive,
-          snapshot.rcl,
-          storageEnergyNow,
-          upgradeEnter,
-          CONFIG.economy.waterlines.gclResumeStorage,
-        );
+        upgradeActive = strategicEnergyStress
+          ? false
+          : nextUpgradeActive(
+              roomMem.upgradeActive,
+              snapshot.rcl,
+              storageEnergyNow,
+              upgradeEnter,
+              CONFIG.economy.waterlines.gclResumeStorage,
+            );
         const labEnter =
           snapshot.rcl < 8
             ? CONFIG.economy.waterlines.sustainedStorage
             : CONFIG.economy.waterlines.sprintStorage;
-        labActive = nextUpgradeActive(
-          roomMem.labActive,
-          snapshot.rcl,
-          storageEnergyNow,
-          labEnter,
-          CONFIG.economy.waterlines.labResumeStorage,
-        );
+        labActive = strategicEnergyStress
+          ? false
+          : nextUpgradeActive(
+              roomMem.labActive,
+              snapshot.rcl,
+              storageEnergyNow,
+              labEnter,
+              CONFIG.economy.waterlines.labResumeStorage,
+            );
         fortifyActive = nextStorageRichActive(
           roomMem.fortifyActive,
           storageEnergyNow,

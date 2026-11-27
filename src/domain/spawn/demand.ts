@@ -96,6 +96,8 @@ export interface RoomDemandContext {
   homeMiningActive?: boolean;
   /** storage 超满仓阈值 — 触发限采 + 加速消费。 */
   storageNearFull?: boolean;
+  /** 帝国负净流且本房 storage 低于容量比例受助线；停补非关键编制。 */
+  strategicEnergyStress?: boolean;
   /** 流动性危机分 (0-100)（方案 C）：能量冻在 container / spawn 破产的物流死锁；
    *  与 drainScore 比较判定危机由哪一维度主导（流动性需多 hauler，偿付需收缩）。 */
   liquidityScore?: number;
@@ -382,6 +384,7 @@ export function evaluateDemand(
   let haulerTarget: number | undefined;
   // 统一经济状态：recovery 涵盖 crisis + recovery 相位，收缩非关键消耗。
   const inCrisis = colonyState === "recovery";
+  const strategicEnergyStress = roomCtx.strategicEnergyStress === true;
   // Storage 满仓信号 — 限采 + 加速消费。
   const storageNearFull = roomCtx.storageNearFull === true;
   // 低储回血期（闩锁显式关闭）。undefined 视为未注入，不节流。
@@ -726,13 +729,18 @@ export function evaluateDemand(
   const liquidityScore = roomCtx.liquidityScore ?? 0;
   const drainScore = roomCtx.drainScore ?? 0;
   const liquidityDriven = liquidityScore >= 40 && liquidityScore >= drainScore;
-  haulerTarget =
-    inCrisis && !liquidityDriven
+  haulerTarget = strategicEnergyStress
+    ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
+    : inCrisis && !liquidityDriven
       ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
       : dynamicHaulerTarget;
   // tuning pending 期间收敛到合同目标（上调扩编/下调缩编），让 isContractMet 可满足；
-  // 危机收缩优先级更高 — 危机时只留 minCount，合同延后到危机解除后验证。
-  if (!(inCrisis && !liquidityDriven) && roomCtx.haulerPendingTarget !== undefined) {
+  // 危机/战略储备收缩优先级更高 — 合同延后到危机解除后验证。
+  if (
+    !strategicEnergyStress &&
+    !(inCrisis && !liquidityDriven) &&
+    roomCtx.haulerPendingTarget !== undefined
+  ) {
     haulerTarget = roomCtx.haulerPendingTarget;
   }
   if (haulerTotal < haulerTarget && hasLogistics) {
@@ -940,6 +948,9 @@ export function evaluateDemand(
     // 缓存到外层 nextHysteresis（与 builder 状态合并）。
     nextHysteresis.distScaleUpSince = nextDistScaleUpSince;
   }
+  if (strategicEnergyStress) {
+    distTarget = Math.min(distTarget, distConfig.minCount);
+  }
   if (distTotal < distTarget && hasStorage) {
     for (let i = distTotal; i < distTarget; i++) {
       const key = spawnKey("distributor", home, i);
@@ -970,6 +981,7 @@ export function evaluateDemand(
   if (
     roomCtx.homeMiningActive !== false &&
     !labLatchClosed &&
+    !strategicEnergyStress &&
     (colonyState === "normal" || colonyState === "recovery") &&
     snapshot.rcl >= 6 &&
     snapshot.extractor !== undefined &&
@@ -1019,6 +1031,7 @@ export function evaluateDemand(
     roomCtx.labSupplyNeeded === true || snapshot.labs.filter(l => l.mineralAmount > 0).length >= 2;
   if (
     !labLatchClosed &&
+    !strategicEnergyStress &&
     colonyState === "normal" &&
     snapshot.rcl >= 6 &&
     snapshot.labs.length >= 3 &&
@@ -1084,6 +1097,7 @@ export function evaluateDemand(
   const allowUpgrader =
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) &&
     !rcl8NoUpgrade &&
+    (!strategicEnergyStress || hasDowngradeRisk) &&
     (cpuAllowsThisRoomUpgrade || hasDowngradeRisk || earlyRoom) &&
     (richStorageForUpgrade ||
       hasDowngradeRisk ||

@@ -151,6 +151,55 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
     // colonyState 不应为 recovery（有充足储备）
     expect(roomMem.colonyState).not.toBe("recovery");
   });
+
+  it("帝国负净流且 storage 低于 25% 容量：关闭 upgrade/lab 并标记战略压力", () => {
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: {
+        W1N1: {
+          phase: { phase: "growth", reserve: 1000, drainScore: 0, liquidityScore: 0, bandTicks: 0 },
+        },
+      },
+      kernel: { brakeNetFlow: { W1N1: -5 } },
+    };
+    const snapshot = makeSnapshot({
+      storage: {
+        store: mockCapacityStore(10_000, 1_000_000),
+      } as unknown as StructureStorage,
+    });
+
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
+
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
+    expect(roomMem.strategicEnergyStress).toBe(true);
+    expect(roomMem.upgradeActive).toBe(false);
+    expect(roomMem.labActive).toBe(false);
+  });
+
+  it("帝国净流转正：不标记战略压力，RCL<8 维持档升级恢复", () => {
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: {
+        W1N1: {
+          phase: { phase: "growth", reserve: 1000, drainScore: 0, liquidityScore: 0, bandTicks: 0 },
+        },
+      },
+      kernel: { brakeNetFlow: { W1N1: 5 } },
+    };
+    const snapshot = makeSnapshot({
+      storage: {
+        store: mockCapacityStore(10_000, 1_000_000),
+      } as unknown as StructureStorage,
+    });
+
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
+
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
+    expect(roomMem.strategicEnergyStress).toBe(false);
+    expect(roomMem.upgradeActive).toBe(true);
+  });
 });
 
 describe("room-state system — TD-014 controllerDowngradeRisk 迟滞带", () => {
