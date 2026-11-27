@@ -5,6 +5,7 @@ export interface EnergyPolicy {
   crisisBuyFloor: number;
   aidRecipientFloor: number;
   aidDonorFloor: number;
+  emergencyDonorFloor: number;
   saleFloor: number;
   terminalStorageFloor: number;
   terminalEnergyTarget: number;
@@ -21,6 +22,7 @@ export function getEnergyPolicy(storageCapacity?: number): EnergyPolicy {
     crisisBuyFloor: Math.floor(capacity * r.crisisBuy),
     aidRecipientFloor: Math.floor(capacity * r.aidRecipient),
     aidDonorFloor: Math.floor(capacity * r.aidDonor),
+    emergencyDonorFloor: Math.floor(capacity * r.aidEmergencyDonor),
     saleFloor: Math.floor(capacity * r.sale),
     terminalStorageFloor: Math.floor(capacity * r.terminalStorage),
     terminalEnergyTarget: Math.floor(capacity * r.terminalEnergyTarget),

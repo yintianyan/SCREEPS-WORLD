@@ -11,6 +11,7 @@ describe("getEnergyPolicy — 战略能量闸容量刻度", () => {
       crisisBuyFloor: 100_000,
       aidRecipientFloor: 250_000,
       aidDonorFloor: 400_000,
+      emergencyDonorFloor: 350_000,
       saleFloor: 700_000,
       terminalStorageFloor: 250_000,
       terminalEnergyTarget: 25_000,

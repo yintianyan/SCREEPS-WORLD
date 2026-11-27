@@ -1405,7 +1405,7 @@ export const CONFIG = {
   energy: {
     /**
      * 战略能量闸的容量比例。storage 容量 1,000,000 时：
-     * 10% 危机买线 / 25% 受助线 / 40% 援助 donor 线 / 70% 卖能线。
+     * 10% 危机买线 / 25% 受助线 / 40% 援助 donor 线 / 35% 紧急 donor 线 / 70% 卖能线。
      * terminal 与 nuker 是独立战略资产，也按同一容量刻度取门，避免 2k/10k 这种
      * 对 1M storage 几乎无意义的绝对小线。运营即时供水仍走 distributorTiers 低绝对值。
      */
@@ -1413,6 +1413,7 @@ export const CONFIG = {
       crisisBuy: 0.1,
       aidRecipient: 0.25,
       aidDonor: 0.4,
+      aidEmergencyDonor: 0.35,
       sale: 0.7,
       terminalStorage: 0.25,
       terminalEnergyTarget: 0.025,

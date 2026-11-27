@@ -85,6 +85,20 @@ describe("terminal-manager — 帝国能量互济", () => {
     expect(transferEvents()).toEqual([expect.objectContaining({ k: 24, r: "W8N4", d: [10000] })]);
   });
 
+  it("受助房跌破危机线 → 允许 donor 让储备到紧急线 350k", () => {
+    setupMarket();
+    const donor = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 370_000,
+      terminal: terminalMock({ energy: 20_000 }),
+    });
+    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 50_000 });
+
+    terminalManagerSystem.run(makeContext([donor, needy]));
+
+    expect(donor.terminal.send).toHaveBeenCalledWith("energy", 10_000, "W8N4");
+  });
+
   it("规划量超出 terminal 余量 → 降额发送，不放弃整笔援助", () => {
     setupMarket();
     const donor = roomSnapshot({

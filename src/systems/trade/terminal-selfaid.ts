@@ -112,10 +112,10 @@ export function tryEmpireEnergyAid(ctx: TickContext): void {
   }));
   const capacity = Math.max(0, ...snapshots.map(s => getStorageCapacity(s.storage?.store)));
   const policy = getEnergyPolicy(capacity);
-
+  const emergencyDonor = rooms.some(room => room.storageEnergy < policy.crisisBuyFloor);
   const plan = planEnergyAid(rooms, {
     recipientFloor: policy.aidRecipientFloor,
-    donorFloor: policy.aidDonorFloor,
+    donorFloor: emergencyDonor ? policy.emergencyDonorFloor : policy.aidDonorFloor,
     maxTransfer: CONFIG.energy.aidMaxTransfer,
     minTransfer: CONFIG.energy.aidMinTransfer,
   });
