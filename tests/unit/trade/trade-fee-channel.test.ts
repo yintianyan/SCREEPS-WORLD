@@ -10,6 +10,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   executeDeal,
+  getCachedOrders,
+  refreshMarketPrices,
   toSummaries,
   trySellSurplusEnergy,
 } from "../../../src/systems/trade/terminal-market";
@@ -88,6 +90,28 @@ describe("toSummaries — 自有订单隔离", () => {
     ] as any);
     expect(summaries[0]?.amount).toBe(7);
   });
+
+  it("全市场缓存保留品种，供失败回执归因", () => {
+    g().Game.market.getAllOrders = vi.fn(() => [
+      {
+        id: "cached",
+        price: 1,
+        amount: 7,
+        remainingAmount: 1007,
+        roomName: "W2N2",
+        resourceType: RESOURCE_ENERGY,
+        type: ORDER_SELL,
+      },
+    ]);
+
+    refreshMarketPrices();
+
+    expect(getCachedOrders(ORDER_SELL, RESOURCE_ENERGY)?.[0]).toMatchObject({
+      id: "cached",
+      amount: 7,
+      resourceType: RESOURCE_ENERGY,
+    });
+  });
 });
 
 describe("trySellSurplusEnergy — 帝国援助闸", () => {
@@ -157,6 +181,7 @@ describe("executeDeal — 运费通道分桶", () => {
       ok: true,
       rc: OK,
       resourceType: RESOURCE_ENERGY,
+      resourceBefore: 5000,
       amount: 1000,
       price: 0.02,
       fee: COST,
@@ -171,6 +196,7 @@ describe("executeDeal — 运费通道分桶", () => {
     expect(g().obs.deals["W37S58:market"]).toMatchObject({
       ok: false,
       rc: ERR_NOT_ENOUGH_RESOURCES,
+      resourceBefore: 0,
       creditsBefore: 1000,
       creditsAfter: 1000,
     });

@@ -101,6 +101,9 @@ export function executeDeal(
     });
     return false;
   }
+  const resourceBefore = order.resourceType
+    ? terminal.store.getUsedCapacity(order.resourceType as ResourceConstant)
+    : undefined;
   const cost = Game.market.calcTransactionCost(amount, roomName, order.roomName);
   if (cost > terminal.store.getUsedCapacity(RESOURCE_ENERGY)) {
     recordDealObservation({
@@ -110,6 +113,7 @@ export function executeDeal(
       rc: ERR_NOT_ENOUGH_RESOURCES,
       orderId: order.id,
       resourceType: order.resourceType,
+      resourceBefore,
       amount,
       price: order.price,
       counterparty: "unavailable",
@@ -145,6 +149,7 @@ export function executeDeal(
       rc: result,
       orderId: order.id,
       resourceType: order.resourceType,
+      resourceBefore,
       amount,
       price: order.price,
       counterparty: "unavailable",
@@ -161,6 +166,7 @@ export function executeDeal(
     rc: result,
     orderId: order.id,
     resourceType: order.resourceType,
+    resourceBefore,
     amount,
     price: order.price,
     counterparty: "unavailable",
@@ -740,6 +746,7 @@ export function refreshMarketPrices(): void {
       price: o.price,
       amount: Math.min(o.amount, o.remainingAmount ?? o.amount),
       roomName: o.roomName,
+      resourceType: o.resourceType,
     });
   }
 

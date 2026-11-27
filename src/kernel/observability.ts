@@ -24,6 +24,7 @@ export interface DealObservation {
   rc: number;
   orderId: string;
   resourceType?: MarketResourceConstant;
+  resourceBefore?: number;
   amount: number;
   price: number;
   counterparty: string;
