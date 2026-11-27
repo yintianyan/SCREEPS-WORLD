@@ -621,7 +621,8 @@ function submitTerminalTrade(
   }
   // 按最高买价预算可负担量（保守：实际成交价只低不高）—— 与危机买能量同一算法。
   const affordable = Math.floor(
-    ((Game.market?.credits ?? 0) - CONFIG.market.creditFloor) / CONFIG.energy.maxEnergyBuyPrice,
+    ((Game.market?.credits ?? 0) - CONFIG.market.creditFloor) /
+      CONFIG.energy.maxCrisisEnergyBuyPrice,
   );
   const amount = energyBuyAmount(
     storageEnergy,

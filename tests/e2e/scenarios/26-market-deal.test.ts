@@ -11,7 +11,7 @@
  *   - NPC room W1N1: NPC sell order energy @0.04 × 100000
  *   - bot credits: 100000（远超 creditFloor=100）
  *   - terminal-manager 在 200t interval 运行 → 检测 storage < energyBuyFloor
- *   → tryBuyCrisisEnergy → pickBestSellOrder(0.04 < maxEnergyBuyPrice=0.05) → deal
+ *   → tryBuyCrisisEnergy → pickBestSellOrder(0.04 < dynamic cap) → deal
  *
  * 证据绑定：schemaVersion / ticks / room / collectedAt 在输出登记。
  */
@@ -56,7 +56,7 @@ describe("E2E-026 市场交易链路 — NPC 订单注入 + deal 成交结算", 
     }
 
     // 注入 NPC 卖单：energy 0.04/单位 × 100000
-    // maxEnergyBuyPrice=0.05 → 0.04 < 0.05 → 价格达标，会买入
+    // 动态上限 = min(35, 0.04×1.5) = 0.06 → 价格达标，会买入
     await injectMarketOrder(runner, {
       type: "sell",
       resourceType: "energy",

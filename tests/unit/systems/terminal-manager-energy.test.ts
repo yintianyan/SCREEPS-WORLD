@@ -276,21 +276,41 @@ describe("terminal-manager — 能量市场交易", () => {
 
     terminalManagerSystem.run(makeContext([room]));
 
-    // affordable = floor((500-100)/maxEnergyBuyPrice 0.05) = 8000；
-    // amount = min(缺口 2000, 单笔上限 maxDealAmount, affordable 8000) = 2000。
+    // affordable = floor((500-100)/dynamicCap)，dynamicCap=min(35, 0.04×1.5)=0.06；
+    // amount = min(缺口 2000, 单笔上限 maxDealAmount, affordable) = 2000。
     // ⚠️ 缺口是这里的约束项，不是单笔上限（maxDealAmount 已由 1,000 抬到 5,000）——
     // 断言按 min() 的四项现算，常数再变时用例不会静默失去判别力。
-    const affordable = Math.floor(
-      (500 - CONFIG.market.creditFloor) / CONFIG.energy.maxEnergyBuyPrice,
+    const dynamicCap = Math.min(
+      CONFIG.energy.maxCrisisEnergyBuyPrice,
+      0.04 * CONFIG.energy.crisisEnergyBuyPremium,
     );
+    const affordable = Math.floor((500 - CONFIG.market.creditFloor) / dynamicCap);
     const expected = Math.min(2000, CONFIG.market.maxDealAmount, affordable);
     expect(expected).toBe(2000); // 前置断言：本用例声称的"缺口截断"确实成立
     expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith("sell1", expected, "W7N4");
   });
 
-  it("卖单价格超上限 → 不买（宁可压缩运营）", () => {
+  it("市场地板 18.44 不再被历史 0.05 闸锁死，可按动态上限买入", () => {
+    const getAllOrders = resourceAwareOrders({ energy: energySellOrders(18.44) });
+    setupMarket({ getAllOrders, credits: 1_000_000 });
+    const room = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 1000,
+      terminal: terminalMock({ energy: 20_000 }),
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith(
+      "sell1",
+      CONFIG.market.maxDealAmount,
+      "W7N4",
+    );
+  });
+
+  it("卖单价格超硬顶 → 不买（宁可压缩运营）", () => {
     const getAllOrders = resourceAwareOrders({
-      energy: energySellOrders(CONFIG.energy.maxEnergyBuyPrice + 0.01),
+      energy: energySellOrders(CONFIG.energy.maxCrisisEnergyBuyPrice + 0.01),
     });
     setupMarket({ getAllOrders });
     const room = roomSnapshot({

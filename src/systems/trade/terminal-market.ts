@@ -236,29 +236,38 @@ export function trySellSurplusEnergy(
   return false;
 }
 
-/** 危机能量买：storage 低于 energyBuyFloor 且 credits 充足时买入（最后救助通道）。 */
+/** 危机能量买：storage 低于容量比例危机线且 credits 充足时买入（最后救助通道）。 */
 export function tryBuyCrisisEnergy(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
   if (Game.market.credits < CONFIG.market.creditFloor) return false;
 
   const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
   const policy = getEnergyPolicyForStorage(snapshot.storage?.store);
-  // 按最高买价预算可负担量（保守：实际成交价只低不高）。
-  const affordable = Math.floor(
-    (Game.market.credits - CONFIG.market.creditFloor) / CONFIG.energy.maxEnergyBuyPrice,
+  const orders =
+    getCachedOrders(ORDER_SELL, RESOURCE_ENERGY) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_ENERGY }));
+  let marketFloor = Number.POSITIVE_INFINITY;
+  for (const order of orders) {
+    if (order.amount > 0 && order.price < marketFloor) marketFloor = order.price;
+  }
+  if (!Number.isFinite(marketFloor)) return false;
+
+  // 价格闸不再用 0.05 这种历史绝对值：市场地板 18.44 时它等于永久锁死。
+  // 动态地板覆盖真实行情，35 硬顶防止极端通胀把国库烧穿。
+  const maxPrice = Math.min(
+    CONFIG.energy.maxCrisisEnergyBuyPrice,
+    marketFloor * CONFIG.energy.crisisEnergyBuyPremium,
   );
-  const amount = energyBuyAmount(
+  const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / maxPrice);
+  const deficitAmount = energyBuyAmount(
     storageEnergy,
     policy.crisisBuyFloor,
     CONFIG.market.maxDealAmount,
     affordable,
   );
-  if (amount <= 0) return false;
-
-  const orders =
-    getCachedOrders(ORDER_SELL, RESOURCE_ENERGY) ??
-    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_ENERGY }));
-  const best = pickBestSellOrder(orders, CONFIG.energy.maxEnergyBuyPrice);
+  const best = pickBestSellOrder(orders, maxPrice);
   if (!best) return false;
+  const amount = Math.min(deficitAmount, best.amount);
+  if (amount <= 0) return false;
   // 【审计修复 Phase 4-5】买入能量入 L1 账本 — 记 bought。
   if (executeDeal(best, amount, terminal, snapshot.roomName, "energyBuy")) {
     bumpEnergyCounter(snapshot.roomName, "bought", amount);
@@ -351,8 +360,10 @@ export function tryBuyDeficit(
       // 高优先级需求(priority≥30)允许上浮50% — boost/war 时间价值 > 价格差异。
       const prices = getMarketPrices();
       const fallback =
-        CONFIG.market.fallbackMaxBuyPrice[demand.resource] ??
-        Math.max(...Object.values(CONFIG.market.fallbackMaxBuyPrice));
+        demand.resource === RESOURCE_ENERGY
+          ? CONFIG.energy.maxCrisisEnergyBuyPrice
+          : (CONFIG.market.fallbackMaxBuyPrice[demand.resource] ??
+            Math.max(...Object.values(CONFIG.market.fallbackMaxBuyPrice)));
       const basePrice = computeDynamicBuyPrice(
         demand.resource,
         prices,

@@ -1426,8 +1426,10 @@ export const CONFIG = {
     aidMinTransfer: 2000,
     /** 能量最低卖出价（credits/单位）— 低于此价囤着等行情。 */
     minEnergySellPrice: 0.02,
-    /** 能量最高买入价（credits/单位）— 危机救助价，高于此价宁可压缩运营。 */
-    maxEnergyBuyPrice: 0.05,
+    /** 危机能量买价硬顶（credits/单位）：覆盖当前市场地板，同时限制极端通胀下的救急支出。 */
+    maxCrisisEnergyBuyPrice: 35,
+    /** 危机买价相对市场最低卖价的溢价系数；与硬顶取小。 */
+    crisisEnergyBuyPremium: 1.5,
   },
 
   /** 帝国议程 — 主动自治的短期目标层。 */
