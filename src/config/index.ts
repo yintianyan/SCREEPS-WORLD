@@ -1352,19 +1352,10 @@ export const CONFIG = {
      * runs=2/buyOk=2 地吃满每一个成交窗口。
      */
     buyFreeCapacityFloor: 50000,
-    /** terminal 能量储备目标 — deal 双向都从本方 terminal 扣能量运费。 */
-    energyTarget: 10000,
     /**
-     * storage 饥饿时的 terminal 能量储备地板（W7 止血修正，2026-08-01）。
-     * 背景：私服 4.3.0 自带市场 API 但市场可为空（credits=0、无订单）—
-     * terminal-manager 从不成交，10k 交易储备在 storage 枯竭的房间变成死资本
-     * （W7N3/W7N4 实测 terminal 恒 10150/10400、storage=0、长期 crisis）。
-     * 语义：storage < storageEnergyFloor(20k) 时，hauler 把 terminal 能量压缩到
-     * 此地板（有市场时保留少量运费余量；无市场时归零，见 industry.ts
-     * withdrawTerminalEnergy）；storage 恢复健康后按 energyTarget 重新回补。
+     * 运营危机地板（storage 能量低于此值）：只用于 factory 危机回收 / terminal 急救抽能，
+     * 不是战略储备线。战略闸统一走 CONFIG.energy.policyRatios × storageCapacity。
      */
-    terminalEnergyReserveFloor: 2000,
-    /** storage 能量低于此值时不给 terminal 备能（经济优先于贸易）。 */
     storageEnergyFloor: 20000,
     /** credits 低于此值暂停买入（保留应急余额）。 */
     creditFloor: 100,
@@ -1412,24 +1403,30 @@ export const CONFIG = {
 
   /** 帝国能量网络与市场深化 — 跨房互济 + 能量市场交易。 */
   energy: {
-    /** 救助地板：storage 能量低于此值 → 帝国互济的救助候选。 */
-    aidRecipientFloor: 20000,
-    /** 捐赠地板：storage 高于此值才可捐赠；捐赠后仍须高于此值。与救助地板分离
-     * （50k > 20k）：受助方被补到 20k 后仍远低于捐赠线，结构性滞回 — 同一笔救助
-     * 不可能让受助方翻转为捐赠方（防震荡）。 */
-    aidDonorFloor: 50000,
-    /** 单次跨房救助最大量（terminal 储备 target 10k，批次以不掏空捐赠方 terminal 为界）。 */
+    /**
+     * 战略能量闸的容量比例。storage 容量 1,000,000 时：
+     * 10% 危机买线 / 25% 受助线 / 40% 援助 donor 线 / 70% 卖能线。
+     * terminal 与 nuker 是独立战略资产，也按同一容量刻度取门，避免 2k/10k 这种
+     * 对 1M storage 几乎无意义的绝对小线。运营即时供水仍走 distributorTiers 低绝对值。
+     */
+    policyRatios: {
+      crisisBuy: 0.1,
+      aidRecipient: 0.25,
+      aidDonor: 0.4,
+      sale: 0.7,
+      terminalStorage: 0.25,
+      terminalEnergyTarget: 0.025,
+      terminalReserve: 0.005,
+      nukerStorage: 0.7,
+    },
+    /** 单次跨房救助最大量（terminal 能量目标 25k，批次以不掏空捐赠方 terminal 为界）。 */
     aidMaxTransfer: 10000,
     /** 低于此量不送（能量运费不划算）。 */
     aidMinTransfer: 2000,
-    /** 能量溢出卖线：storage 超过此水位才向市场卖能量（真实盈余出口）。 */
-    energySellFloor: 100000,
     /** 能量最低卖出价（credits/单位）— 低于此价囤着等行情。 */
     minEnergySellPrice: 0.02,
     /** 能量最高买入价（credits/单位）— 危机救助价，高于此价宁可压缩运营。 */
     maxEnergyBuyPrice: 0.05,
-    /** 能量买入触发线：storage 低于此值且 credits 充足才买（市场是最后救助通道）。 */
-    energyBuyFloor: 5000,
   },
 
   /** 帝国议程 — 主动自治的短期目标层。 */

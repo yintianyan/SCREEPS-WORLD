@@ -6,6 +6,11 @@ import { EventKind } from "../../kernel/event-log";
 import { bumpEnergyCounter, globalCache } from "../../kernel/global-cache";
 import { log } from "../../kernel/log";
 import { planEnergyAid, type RoomEnergyState } from "../../domain/economy/energy-logistics";
+import {
+  getEnergyPolicy,
+  getEnergyPolicyForStorage,
+  getStorageCapacity,
+} from "../../domain/economy/energy-policy";
 import { planMineralAid, type RoomMineralState } from "../../domain/economy/mineral-logistics";
 import {
   pickSalvageRecipient,
@@ -43,11 +48,8 @@ export function tryNukeSalvage(ctx: TickContext): void {
     const resources = new Map<string, number>(
       Object.entries(terminal.store as unknown as Record<string, number>),
     );
-    const plan = planSalvageShipment(
-      resources,
-      recipient.roomName,
-      CONFIG.market.terminalEnergyReserveFloor,
-    );
+    const policy = getEnergyPolicyForStorage(snapshot.storage?.store);
+    const plan = planSalvageShipment(resources, recipient.roomName, policy.terminalReserveFloor);
     if (!plan) continue;
 
     const salvageResult = terminal.send(
@@ -108,10 +110,12 @@ export function tryEmpireEnergyAid(ctx: TickContext): void {
     canSend: s.terminal !== undefined && s.terminal.cooldown === 0,
     canReceive: s.terminal !== undefined,
   }));
+  const capacity = Math.max(0, ...snapshots.map(s => getStorageCapacity(s.storage?.store)));
+  const policy = getEnergyPolicy(capacity);
 
   const plan = planEnergyAid(rooms, {
-    recipientFloor: CONFIG.energy.aidRecipientFloor,
-    donorFloor: CONFIG.energy.aidDonorFloor,
+    recipientFloor: policy.aidRecipientFloor,
+    donorFloor: policy.aidDonorFloor,
     maxTransfer: CONFIG.energy.aidMaxTransfer,
     minTransfer: CONFIG.energy.aidMinTransfer,
   });
@@ -122,8 +126,8 @@ export function tryEmpireEnergyAid(ctx: TickContext): void {
 
   // 发送方 terminal 须同时承担 货量 + 运费 + 储备地板。
   // 规划量装不下时按 terminal 余量降额；连最小援助量都装不下则等
-  // stockTerminalEnergy 按 energyTarget 回补后下一轮再发，不登记无人消费的能量出口票。
-  const reserve = CONFIG.market.terminalEnergyReserveFloor;
+  // stockTerminalEnergy 按 terminalEnergyTarget 回补后下一轮再发，不登记无人消费的能量出口票。
+  const reserve = policy.terminalReserveFloor;
   const held = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
   let amount = Math.min(plan.amount, Math.max(0, held - reserve));
   let fee = amount > 0 ? Game.market.calcTransactionCost(amount, plan.from, plan.to) : 0;
@@ -225,7 +229,8 @@ export function tryEmpireMineralAid(ctx: TickContext): void {
 
   const fee = Game.market.calcTransactionCost(plan.amount, plan.from, plan.to);
   const energyInTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
-  if (energyInTerminal < fee + CONFIG.market.terminalEnergyReserveFloor) return;
+  const policy = getEnergyPolicyForStorage(ctx.getSnapshot(plan.from)?.storage?.store);
+  if (energyInTerminal < fee + policy.terminalReserveFloor) return;
 
   const result = terminal.send(plan.mineral as ResourceConstant, plan.amount, plan.to);
   if (result === OK) {

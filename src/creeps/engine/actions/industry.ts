@@ -9,6 +9,7 @@ import { moveToTarget } from "../../movement";
 import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../domain/war/planning";
 import { collectBuyOrderResources } from "../../../domain/industry/market-outlet";
 import { firstTicketOf, planTerminalLane } from "../../../domain/economy/terminal-lane";
+import { getEnergyPolicyForStorage } from "../../../domain/economy/energy-policy";
 
 /** haulMineralsToStorage 的 resolve 返回类型（仅 deposit 相：倒已携带的矿物）。 */
 type MineralHaulTarget = {
@@ -275,19 +276,20 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
     name: "haul:stock-terminal-energy",
     resolve: ac => {
       // 无市场（真无 market API 的服务器）时禁止向 terminal 灌能量——能量无消费方会永久锁死；
-      // 有市场时靠下方 D-1 水位门禁（storage ≥ 20k 才备货）。与 terminal-manager 的 no-market 守卫同款。
+      // 有市场时靠下方 D-1 水位门禁（storage ≥ 25% 容量才备货）。与 terminal-manager 的 no-market 守卫同款。
       if (typeof Game.market?.getAllOrders !== "function") return undefined;
       const terminal = ac.snapshot.terminal;
       const storage = ac.snapshot.storage;
       if (!terminal || !storage) return undefined;
-      const need = CONFIG.market.energyTarget - terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+      const policy = getEnergyPolicyForStorage(storage.store);
+      const need = policy.terminalEnergyTarget - terminal.store.getUsedCapacity(RESOURCE_ENERGY);
       if (need <= 0) return undefined;
 
       const carrying = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY);
       // D-1 修复：deposit 相同样受水位门禁 — 原先只有 withdraw 相检查 floor，携能 creep 在 storage
       // 跌破地板后仍会把背包能量喂给 terminal（贸易储备侵占经济能量）。低水位返回 undefined，
       // 放行后续候选把能量送回经济 sink（distributorFillTarget 等）。
-      if (storage.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.market.storageEnergyFloor) {
+      if (storage.store.getUsedCapacity(RESOURCE_ENERGY) < policy.terminalStorageFloor) {
         return undefined;
       }
       if (carrying > 0) return { dest: terminal, phase: "deposit" as const };
@@ -481,7 +483,8 @@ export function withdrawTerminalEnergy(): ActionCandidate<StructureTerminal> {
       }
       // 饥饿储备地板：有市场留运费余量，无市场归零（死资本全量排空）。
       const marketAvailable = typeof Game.market?.getAllOrders === "function";
-      const reserveFloor = marketAvailable ? CONFIG.market.terminalEnergyReserveFloor : 0;
+      const policy = getEnergyPolicyForStorage(storage.store);
+      const reserveFloor = marketAvailable ? policy.terminalReserveFloor : 0;
       const terminalEnergy = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
       if (terminalEnergy <= reserveFloor) return undefined;
       if (storage.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
@@ -788,10 +791,11 @@ export function stockNuker(): ActionCandidate<NukerStockTarget> {
         return undefined;
       }
 
-      // 空载：能量装填受高水位地板（50k 大额抽血不与 spawn/tower 抢）。
+      // 空载：能量装填受战略储备地板（storage ≥ 70% 容量才补核弹，不与运营抢血）。
+      const policy = getEnergyPolicyForStorage(storage.store);
       if (
         energyShort &&
-        storage.store.getUsedCapacity(RESOURCE_ENERGY) > CONFIG.market.storageEnergyFloor
+        storage.store.getUsedCapacity(RESOURCE_ENERGY) > policy.nukerStorageFloor
       ) {
         return { source: storage, resource: RESOURCE_ENERGY, phase: "withdraw" as const };
       }

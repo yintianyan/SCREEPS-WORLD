@@ -23,6 +23,7 @@ import {
 } from "../../../src/domain/economy/accounting";
 import { resetGlobals } from "../../support/factories";
 import { settleDealCredits } from "../../../src/kernel/observability";
+import { getEnergyPolicy } from "../../../src/domain/economy/energy-policy";
 
 const g = (): any => globalThis as any;
 const ledgerOf = (room: string): any => g().energyLedger.rooms[room];
@@ -123,7 +124,7 @@ describe("trySellSurplusEnergy — 帝国援助闸", () => {
     g().Game.market.getAllOrders = () => [{ id: "bid", price: 1, amount: 5000, roomName: "W1N1" }];
     const snapshot = {
       roomName: "W37S58",
-      storage: { store: { getUsedCapacity: () => 120_000 } },
+      storage: { store: { getUsedCapacity: () => getEnergyPolicy(1_000_000).saleFloor + 5000 } },
     } as any;
 
     expect(trySellSurplusEnergy(snapshot, terminalWith(10_000), false)).toBe(false);

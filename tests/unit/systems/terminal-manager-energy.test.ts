@@ -4,6 +4,11 @@ import { terminalManagerSystem } from "../../../src/systems/trade/terminal-manag
 import { mockBudget, mockSnapshot, mockStore, resetGlobals } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 import { globalCache } from "../../../src/kernel/global-cache";
+import { getEnergyPolicy } from "../../../src/domain/economy/energy-policy";
+
+const policy = getEnergyPolicy(1_000_000);
+const donorStorage = policy.aidDonorFloor + 30_000;
+const needyStorage = policy.aidRecipientFloor - 15_000;
 
 function terminalMock(opts: { energy?: number; cooldown?: number } = {}): any {
   return {
@@ -61,15 +66,15 @@ beforeEach(() => {
 describe("terminal-manager — 帝国能量互济", () => {
   it("盈余房 → 危机房：terminal.send 一次，量三重约束封顶", () => {
     setupMarket();
-    // 10000(货) + 100(运费) + 2000(储备) = 12100 ≤ 13000 → 预算充足。
+    // 10000(货) + 100(运费) + 5000(储备) = 15100 ≤ 20000 → 预算充足。
     const donor = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: 80000,
-      terminal: terminalMock({ energy: 13000 }),
+      storageEnergy: donorStorage,
+      terminal: terminalMock({ energy: 20000 }),
     });
     const needy = roomSnapshot({
       roomName: "W8N4",
-      storageEnergy: 5000,
+      storageEnergy: needyStorage,
       terminal: terminalMock({ cooldown: 99 }),
     });
 
@@ -84,27 +89,27 @@ describe("terminal-manager — 帝国能量互济", () => {
     setupMarket();
     const donor = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: 80000,
+      storageEnergy: donorStorage,
       terminal: terminalMock({ energy: 11000 }),
     });
-    // 规划 10000 + 100(fee) + 2000(reserve) = 12100 > 11000；
-    // 最大可发 = 11000 - 100(fee) - 2000(reserve) = 8900。
-    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
+    // 规划 10000 + 100(fee) + 5000(reserve) = 15100 > 11000；
+    // 最大可发 = 11000 - 100(fee) - 5000(reserve) = 5900。
+    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: needyStorage });
 
     terminalManagerSystem.run(makeContext([donor, needy]));
 
-    expect(donor.terminal.send).toHaveBeenCalledWith("energy", 8900, "W8N4");
-    expect(transferEvents()).toEqual([expect.objectContaining({ k: 24, r: "W8N4", d: [8900] })]);
+    expect(donor.terminal.send).toHaveBeenCalledWith("energy", 5900, "W8N4");
+    expect(transferEvents()).toEqual([expect.objectContaining({ k: 24, r: "W8N4", d: [5900] })]);
   });
 
   it("terminal 连最小援助量都装不下 → 等储备回补后下轮再发", () => {
     setupMarket();
     const donor = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: 80000,
+      storageEnergy: donorStorage,
       terminal: terminalMock({ energy: 2500 }),
     });
-    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
+    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: needyStorage });
 
     terminalManagerSystem.run(makeContext([donor, needy]));
 
@@ -117,10 +122,10 @@ describe("terminal-manager — 帝国能量互济", () => {
     setupMarket();
     const donor = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: 80000,
-      terminal: terminalMock({ energy: 13000 }),
+      storageEnergy: donorStorage,
+      terminal: terminalMock({ energy: 20000 }),
     });
-    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
+    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: needyStorage });
     const tick = (globalThis as any).Game.time;
     globalCache().logisticsPlan = {
       tick,
@@ -148,7 +153,7 @@ describe("terminal-manager — 帝国能量互济", () => {
 
   it("单房 → 不互济", () => {
     setupMarket();
-    const only = roomSnapshot({ roomName: "W7N4", storageEnergy: 80000 });
+    const only = roomSnapshot({ roomName: "W7N4", storageEnergy: donorStorage });
 
     terminalManagerSystem.run(makeContext([only]));
 
@@ -159,10 +164,10 @@ describe("terminal-manager — 帝国能量互济", () => {
     setupMarket();
     const donor = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: 80000,
+      storageEnergy: donorStorage,
       terminal: terminalMock({ cooldown: 5 }),
     });
-    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
+    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: needyStorage });
 
     terminalManagerSystem.run(makeContext([donor, needy]));
 
@@ -172,8 +177,8 @@ describe("terminal-manager — 帝国能量互济", () => {
   it("无 market 交易费 API（部分私服）→ 互济整体跳过，不抛错", () => {
     setupMarket();
     delete (globalThis as any).Game.market.calcTransactionCost;
-    const donor = roomSnapshot({ roomName: "W7N4", storageEnergy: 80000 });
-    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
+    const donor = roomSnapshot({ roomName: "W7N4", storageEnergy: donorStorage });
+    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: needyStorage });
 
     expect(() => terminalManagerSystem.run(makeContext([donor, needy]))).not.toThrow();
     expect(donor.terminal.send).not.toHaveBeenCalled();
@@ -202,7 +207,7 @@ describe("terminal-manager — 能量市场交易", () => {
     const surplus = CONFIG.market.maxDealAmount + 2000;
     const room = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: CONFIG.energy.energySellFloor + surplus,
+      storageEnergy: getEnergyPolicy(1_000_000).saleFloor + surplus,
       terminal: terminalMock({ energy: 20000 }),
     });
 
@@ -221,7 +226,7 @@ describe("terminal-manager — 能量市场交易", () => {
     setupMarket({ getAllOrders });
     const room = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: CONFIG.energy.energySellFloor - 1,
+      storageEnergy: getEnergyPolicy(1_000_000).saleFloor - 1,
       terminal: terminalMock({ energy: 20000 }),
     });
 
@@ -237,7 +242,7 @@ describe("terminal-manager — 能量市场交易", () => {
     setupMarket({ getAllOrders });
     const room = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: CONFIG.energy.energySellFloor + 5000,
+      storageEnergy: getEnergyPolicy(1_000_000).saleFloor + 5000,
       terminal: terminalMock({ energy: 20000 }),
     });
 
@@ -251,7 +256,7 @@ describe("terminal-manager — 能量市场交易", () => {
     setupMarket({ getAllOrders, credits: 500 });
     const room = roomSnapshot({
       roomName: "W7N4",
-      storageEnergy: CONFIG.energy.energyBuyFloor - 2000, // 缺口 2000
+      storageEnergy: getEnergyPolicy(1_000_000).crisisBuyFloor - 2000, // 缺口 2000
       terminal: terminalMock({ energy: 10000 }),
     });
 

@@ -6,6 +6,7 @@ import { distributorRole } from "../../../src/creeps/roles/distributor";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";
 import { getSource } from "../../../src/creeps/support/targeting";
 import { roomStateSystem } from "../../../src/systems/room/room-state";
+import { getEnergyPolicy } from "../../../src/domain/economy/energy-policy";
 import {
   mockContext,
   mockController,
@@ -150,13 +151,13 @@ describe("水位表 — terminal 备货双相门禁（D-1）", () => {
     return { creep, terminal };
   }
 
-  it("storage < storageEnergyFloor(20k)：携能 distributor 不喂 terminal", () => {
-    const { creep, terminal } = runDistributor(5000);
+  it("storage < terminalStorageFloor(25%)：携能 distributor 不喂 terminal", () => {
+    const { creep, terminal } = runDistributor(getEnergyPolicy(1_000_000).terminalStorageFloor - 1);
     expect(creep.transfer).not.toHaveBeenCalledWith(terminal, "energy");
   });
 
-  it("storage ≥ storageEnergyFloor(20k)：deposit 相照常", () => {
-    const { creep, terminal } = runDistributor(30000);
+  it("storage ≥ terminalStorageFloor(25%)：deposit 相照常", () => {
+    const { creep, terminal } = runDistributor(getEnergyPolicy(1_000_000).terminalStorageFloor + 1);
     expect(creep.transfer).toHaveBeenCalledWith(terminal, "energy");
   });
 });

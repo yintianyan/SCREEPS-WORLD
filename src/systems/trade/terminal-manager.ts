@@ -13,6 +13,7 @@ import { pickBestBuyOrder } from "../../domain/industry/terminal-policy";
 import { computeDynamicSellPrice } from "../../domain/industry/market-pricing";
 import { collectDemands, collectRoomDemands } from "../../domain/industry/procurement";
 import { ensureTradeLedger, type TradeLedger } from "../../domain/industry/trade-ledger";
+import { getEnergyPolicy, getEnergyPolicyForStorage } from "../../domain/economy/energy-policy";
 import { globalCache } from "../../kernel/global-cache";
 import type { TransportPlan } from "../../domain/logistics/transport-plan";
 import {
@@ -146,6 +147,9 @@ export const terminalManagerSystem: System = {
       netFlow: profile.netFlow,
       riskBuffer: profile.riskBuffer,
       needsAid: needsEnergyAid(profile),
+      storageEnergy: profile.storageEnergy,
+      storageCapacity: profile.storageCapacity,
+      saleFloor: getEnergyPolicy(profile.storageCapacity).saleFloor,
     }));
 
     for (const snapshot of ctx.snapshots()) {
@@ -600,7 +604,8 @@ function tryPlanDrivenSend(
         req.destination.room,
       );
       const energyInTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
-      if (energyInTerminal < fee + CONFIG.market.terminalEnergyReserveFloor) continue;
+      const policy = getEnergyPolicyForStorage(snapshot.storage?.store);
+      if (energyInTerminal < fee + policy.terminalReserveFloor) continue;
     }
 
     // 执行 send

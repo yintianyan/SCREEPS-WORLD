@@ -108,6 +108,9 @@ export interface TradeLedger {
     netFlow: number;
     riskBuffer: number;
     needsAid: boolean;
+    storageEnergy: number;
+    storageCapacity: number;
+    saleFloor: number;
   }>;
 }
 

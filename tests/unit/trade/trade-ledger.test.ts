@@ -136,7 +136,11 @@ describe("terminal-manager — 决策账本", () => {
 
   it("记录能量停卖闸的各房净流与援助判定", () => {
     const terminal = mockStructure("terminal", { id: "terminal1", energy: 1000 });
-    const storage = mockStructure("storage", { id: "storage1", energy: 200_000 });
+    const storage = mockStructure("storage", {
+      id: "storage1",
+      energy: 200_000,
+      capacity: 1_000_000,
+    });
     const snapshot = mockSnapshot({ terminal, storage });
     g().Memory.rooms.W7N4.economy = {
       t: Game.time,
@@ -154,7 +158,15 @@ describe("terminal-manager — 决策账本", () => {
     expect(ledger.energySaleAllowed).toBe(false);
     expect(ledger.energySaleGateAt).toBe(Game.time);
     expect(ledger.energySaleProfiles).toEqual([
-      { room: "W7N4", netFlow: -1, riskBuffer: 100, needsAid: true },
+      {
+        room: "W7N4",
+        netFlow: -1,
+        riskBuffer: 100,
+        needsAid: true,
+        storageEnergy: 200_000,
+        storageCapacity: 1_000_000,
+        saleFloor: 700_000,
+      },
     ]);
   });
 

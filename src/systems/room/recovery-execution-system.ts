@@ -22,6 +22,7 @@ import {
   buildSpawnRequest,
 } from "../../domain/spawn/queue";
 import { energyBuyAmount } from "../../domain/economy/energy-logistics";
+import { getEnergyPolicy } from "../../domain/economy/energy-policy";
 import {
   brakeGateSum,
   isUpgradeReserveActive,
@@ -610,9 +611,11 @@ function submitTerminalTrade(
   // "缺能量才买"这个语义原先只在 tryBuyCrisisEnergy 那一条路径上设防 ⇒ 这里复用同一把尺
   // （energyBuyAmount），storage ≥ floor 时缺口为 0，没缺口就不发布需求。
   let storageEnergy = 0;
+  let storageCapacity = 0;
   for (const s of ctx.snapshots()) {
     if (s.roomName === room) {
       storageEnergy = s.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      storageCapacity = s.storage?.store.getCapacity(RESOURCE_ENERGY) ?? 0;
       break;
     }
   }
@@ -622,7 +625,7 @@ function submitTerminalTrade(
   );
   const amount = energyBuyAmount(
     storageEnergy,
-    CONFIG.energy.energyBuyFloor,
+    getEnergyPolicy(storageCapacity).crisisBuyFloor,
     CONFIG.market.maxDealAmount,
     affordable,
   );

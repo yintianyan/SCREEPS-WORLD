@@ -1,6 +1,7 @@
 /** stockTerminalEnergy 无市场守卫测试（W7 止血）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { stockTerminalEnergy } from "../../../src/creeps/engine/actions/industry";
+import { getEnergyPolicy } from "../../../src/domain/economy/energy-policy";
 import {
   mockContext,
   mockCreep,
@@ -15,7 +16,11 @@ describe("stockTerminalEnergy — 无市场守卫（W7 止血）", () => {
   });
 
   function makeAc() {
-    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const storage = mockStructure("storage", {
+      id: "st",
+      energy: getEnergyPolicy(1_000_000).terminalStorageFloor + 1,
+      capacity: 1000000,
+    });
     const terminal = mockStructure("terminal", { id: "tm", energy: 0, capacity: 1000000 });
     const snap = mockSnapshot({ storage, terminal });
     const creep = mockCreep({ role: "distributor", used: 0, capacity: 300 });

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/trade/terminal-manager";
 import type { CpuTier } from "../../../src/kernel/contracts";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
+import { getEnergyPolicy } from "../../../src/domain/economy/energy-policy";
 
 /** 多资源 terminal store mock（引擎语义：store 是资源→数量映射 + 容量方法）。 */
 function multiStore(resources: Record<string, number>, capacity = 300000): any {
@@ -150,8 +151,12 @@ describe("terminal-manager — nuke 资产抢救链", () => {
 
     terminalManagerSystem.run(makeContext([alert, safe]));
 
-    // 10000 - 2000（terminalEnergyReserveFloor）= 8000。
-    expect(alert.terminal.send).toHaveBeenCalledWith("energy", 8000, "W8N4");
+    // 10000 - terminalReserveFloor（0.5% × 1M = 5000）。
+    expect(alert.terminal.send).toHaveBeenCalledWith(
+      "energy",
+      10000 - getEnergyPolicy().terminalReserveFloor,
+      "W8N4",
+    );
   });
 
   it("无警报房不触发抢救（常态零行为）", () => {

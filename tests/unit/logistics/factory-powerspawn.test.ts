@@ -8,6 +8,7 @@ import {
 } from "../../../src/creeps/engine/actions/industry";
 import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../src/domain/war/planning";
 import { CONFIG } from "../../../src/config";
+import { getEnergyPolicy } from "../../../src/domain/economy/energy-policy";
 import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 /**
@@ -218,7 +219,7 @@ describe("stockNuker — nuker 威慑备弹装填", () => {
   it("能量空弹 + storage 高于储备地板 → withdraw energy from storage", () => {
     const { ac } = makeAc({
       nukerStore: { energy: 0, G: NUKE_GHODIUM_COST },
-      storageStore: { energy: CONFIG.market.storageEnergyFloor + 1000 },
+      storageStore: { energy: getEnergyPolicy(1_000_000).nukerStorageFloor + 1000 },
     });
     const t = stockNuker().resolve!(ac as any);
     expect(t).toBeDefined();
@@ -230,7 +231,7 @@ describe("stockNuker — nuker 威慑备弹装填", () => {
   it("storage 低于储备地板且 G 不缺 → undefined（50k 大额抽血不与 spawn/tower 抢）", () => {
     const { ac } = makeAc({
       nukerStore: { energy: 0, G: NUKE_GHODIUM_COST },
-      storageStore: { energy: CONFIG.market.storageEnergyFloor - 1 },
+      storageStore: { energy: getEnergyPolicy(1_000_000).nukerStorageFloor - 1 },
     });
     expect(stockNuker().resolve!(ac as any)).toBeUndefined();
   });

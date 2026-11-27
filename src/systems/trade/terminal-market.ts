@@ -7,6 +7,7 @@ import { log } from "../../kernel/log";
 import { globalCache, bumpEnergyCounter } from "../../kernel/global-cache";
 import { recordDealObservation, settleDealCredits } from "../../kernel/observability";
 import { energyBuyAmount, energySellAmount } from "../../domain/economy/energy-logistics";
+import { getEnergyPolicyForStorage } from "../../domain/economy/energy-policy";
 import {
   getMineralDeficits,
   pickBestBuyOrder,
@@ -211,11 +212,8 @@ export function trySellSurplusEnergy(
 ): boolean {
   if (!allowSale) return false;
   const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-  const amount = energySellAmount(
-    storageEnergy,
-    CONFIG.energy.energySellFloor,
-    CONFIG.market.maxDealAmount,
-  );
+  const policy = getEnergyPolicyForStorage(snapshot.storage?.store);
+  const amount = energySellAmount(storageEnergy, policy.saleFloor, CONFIG.market.maxDealAmount);
   if (amount <= 0) return false;
 
   const orders =
@@ -243,13 +241,14 @@ export function tryBuyCrisisEnergy(snapshot: RoomSnapshot, terminal: StructureTe
   if (Game.market.credits < CONFIG.market.creditFloor) return false;
 
   const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+  const policy = getEnergyPolicyForStorage(snapshot.storage?.store);
   // 按最高买价预算可负担量（保守：实际成交价只低不高）。
   const affordable = Math.floor(
     (Game.market.credits - CONFIG.market.creditFloor) / CONFIG.energy.maxEnergyBuyPrice,
   );
   const amount = energyBuyAmount(
     storageEnergy,
-    CONFIG.energy.energyBuyFloor,
+    policy.crisisBuyFloor,
     CONFIG.market.maxDealAmount,
     affordable,
   );
