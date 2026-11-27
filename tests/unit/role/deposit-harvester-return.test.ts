@@ -75,6 +75,19 @@ describe("depositHarvester 满载返航", () => {
     expect(creep.harvest).toHaveBeenCalled();
   });
 
+  it("deposit 消失且空包：保留具体 gate 回执，不被通用 gate-blocked 覆盖", () => {
+    const creep = makeDepositHarvester({ roomName: "W40S55", mode: "acquire", used: 0 });
+    registerObject("deposit1", null);
+
+    depositHarvesterRole.run(creep, mockContext(mockSnapshot()));
+
+    expect(creep.memory.recycle).toBe(true);
+    expect(globalCache().obs?.roles?.[creep.name]).toMatchObject({
+      exit: "gate",
+      sinkReason: "deposit-missing-empty",
+    });
+  });
+
   it("已到家满载：直接落仓，不再触发返航", () => {
     const storage = mockStructure("storage", { id: "storage1", energy: 0, capacity: 1_000_000 });
     const creep = makeDepositHarvester({ roomName: "W38S56", mode: "work", used: 500 });

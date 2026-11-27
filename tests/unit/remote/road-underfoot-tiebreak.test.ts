@@ -15,7 +15,7 @@ const g = (): any => globalThis as any;
 let tickSeed = 5000;
 
 function site(x: number, y: number, progress: number): any {
-  return { structureType: STRUCTURE_ROAD, pos: { x, y }, progress };
+  return { id: `site-${x}-${y}`, structureType: STRUCTURE_ROAD, pos: { x, y }, progress };
 }
 
 /** creep 站在 (0,0)，getRangeTo 按切比雪夫距离返回 site 到原点的距离。 */
@@ -24,11 +24,13 @@ function hauler(sites: any[]): any {
   // 第一个用例的 site 列表（假绿）。
   g().Game.time = ++tickSeed;
   return {
+    name: "rh1",
+    memory: { role: "remoteHauler", home: "W37S58", remoteTarget: "W37S54", mode: "work" },
     store: { getUsedCapacity: vi.fn(() => 500) },
     getActiveBodyparts: vi.fn(() => 1),
     pos: { getRangeTo: (s: any) => Math.max(Math.abs(s.pos.x), Math.abs(s.pos.y)) },
     room: { name: "W37S54", find: vi.fn(() => sites) },
-    build: vi.fn(),
+    build: vi.fn(() => OK),
   };
 }
 

@@ -49,16 +49,34 @@ export interface LabObservation {
   count: number;
 }
 
+export type RoadBuildLeg = "acquire" | "work" | "commute" | "unclassified";
+
+export interface RoadBuildObservation {
+  at: number;
+  home: string;
+  remoteTarget: string;
+  room: string;
+  leg: RoadBuildLeg;
+  outcome: string;
+  siteId?: string;
+  rc?: number;
+  energy: number;
+  workParts: number;
+  count: number;
+}
+
 export interface BusinessObservations {
   at: number;
   roles?: Record<string, RoleObservation>;
   deals?: Record<string, DealObservation>;
   labs?: Record<string, LabObservation>;
+  roads?: Record<string, RoadBuildObservation>;
 }
 
 const ROLE_CAP = 64;
 const DEAL_CAP = 32;
 const LAB_CAP = 32;
+const ROAD_CAP = 64;
 
 function storeLast<T extends { at: number }>(
   map: Record<string, T> | undefined,
@@ -134,5 +152,33 @@ export function recordLabObservation(detail: Omit<LabObservation, "at" | "count"
     key,
     { ...detail, at: Game.time, count: (previous?.count ?? 0) + 1 },
     LAB_CAP,
+  );
+}
+
+export function recordRoadBuildObservation(
+  creep: Creep,
+  detail: Omit<
+    RoadBuildObservation,
+    "at" | "count" | "home" | "remoteTarget" | "room" | "energy" | "workParts"
+  > & { energy: number; workParts: number },
+): void {
+  const obs = observations();
+  obs.at = Game.time;
+  const home = creep.memory.home ?? creep.room.name;
+  const remoteTarget = creep.memory.remoteTarget ?? "none";
+  const key = `${home}>${remoteTarget}|${detail.leg}`;
+  const previous = obs.roads?.[key];
+  obs.roads = storeLast(
+    obs.roads,
+    key,
+    {
+      ...detail,
+      home,
+      remoteTarget,
+      room: creep.room.name,
+      at: Game.time,
+      count: (previous?.count ?? 0) + 1,
+    },
+    ROAD_CAP,
   );
 }

@@ -8,7 +8,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRoadSiteUnderfoot } from "../../../src/creeps/roles/remote-hauler";
-import { roadBuildCounters } from "../../../src/kernel/global-cache";
+import { roadBuildCounters, globalCache } from "../../../src/kernel/global-cache";
 import {
   classifyRoadBuildAttempt,
   roadBuildRangeBucket,
@@ -19,13 +19,15 @@ const g = (): any => globalThis as any;
 
 let tickSeed = 90000;
 function site(x: number, y: number, progress = 0): any {
-  return { structureType: STRUCTURE_ROAD, pos: { x, y }, progress };
+  return { id: `site-${x}-${y}`, structureType: STRUCTURE_ROAD, pos: { x, y }, progress };
 }
 
 /** creep 站在 (0,0)；getRangeTo 返回切比雪夫距离。每用例换 tick 以避开 per-tick site 缓存。 */
 function hauler(opts: { sites?: any[]; energy?: number; work?: number; buildCode?: number }): any {
   g().Game.time = ++tickSeed;
   return {
+    name: "rh1",
+    memory: { role: "remoteHauler", home: "W37S58", remoteTarget: "W37S54", mode: "work" },
     store: { getUsedCapacity: vi.fn(() => opts.energy ?? 500) },
     getActiveBodyparts: vi.fn(() => opts.work ?? 1),
     pos: { getRangeTo: (s: any) => Math.max(Math.abs(s.pos.x), Math.abs(s.pos.y)) },
@@ -114,6 +116,31 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     expect(counters.buildRejected).toBe(0);
   });
 
+  it("回执按 home>remoteTarget|leg 归因，并保留 site 与结果码", () => {
+    const creep = hauler({ sites: [site(1, 0, 5)] });
+    buildRoadSiteUnderfoot(creep, "acquire");
+    buildRoadSiteUnderfoot(creep, "commute");
+
+    const roads = globalCache().obs?.roads;
+    expect(roads?.["W37S58>W37S54|acquire"]).toMatchObject({
+      home: "W37S58",
+      remoteTarget: "W37S54",
+      room: "W37S54",
+      leg: "acquire",
+      outcome: "built",
+      siteId: "site-1-0",
+      rc: OK,
+      energy: 500,
+      workParts: 1,
+      count: 1,
+    });
+    expect(roads?.["W37S58>W37S54|commute"]).toMatchObject({
+      leg: "commute",
+      outcome: "built",
+      count: 1,
+    });
+  });
+
   it("背包空：记 noEnergy 且不发 build（满载腿先交能、脚下就没力气 —— 情形③）", () => {
     const creep = hauler({ sites: [site(1, 1)], energy: 0 });
     buildRoadSiteUnderfoot(creep);
@@ -130,6 +157,12 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     expect(counters.noEnergy).toBe(1);
     // 两格里只有 (1,1) 在射程内 ⇒ 子集关系：noEnergyInRange 可与 noEnergy 同为 1，但两者不可相加。
     expect(counters.noEnergyInRange).toBe(1);
+    expect(globalCache().obs?.roads?.["W37S58>W37S54|work"]).toMatchObject({
+      outcome: "noEnergyInRange",
+      siteId: "site-1-1",
+      energy: 0,
+      workParts: 1,
+    });
   });
 
   it("背包空且最近 site 在射程外 → noEnergyInRange 不记（留着能量也没处建，动作属落点不属时机）", () => {
@@ -205,6 +238,10 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     expect(counters.outOfRangeMid).toBe(1);
     expect(counters.outOfRangeNear).toBe(0);
     expect(counters.outOfRangeFar).toBe(0);
+    expect(globalCache().obs?.roads?.["W37S58>W37S54|work"]).toMatchObject({
+      outcome: "outOfRangeMid",
+      siteId: "site-9-9",
+    });
   });
 
   it("只差 4 格与差 20 格记进不同桶 —— 这两个形状要的动作完全相反", () => {
@@ -223,6 +260,11 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     const counters = roadBuildCounters("W37S54");
     expect(counters.built).toBe(0);
     expect(counters.buildRejected).toBe(1);
+    expect(globalCache().obs?.roads?.["W37S58>W37S54|work"]).toMatchObject({
+      outcome: "buildRejected",
+      siteId: "site-1-0",
+      rc: ERR_NOT_IN_RANGE,
+    });
   });
 
   it("账本按房分桶 —— 两个远矿房不能记在同一行上", () => {

@@ -2,6 +2,7 @@
 import type { Priority } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { roadBuildCounters } from "../../kernel/global-cache";
+import { recordRoadBuildObservation, type RoadBuildLeg } from "../../kernel/observability";
 import { classifyRoadBuildAttempt, roadBuildRangeBucket } from "../../domain/logistics/road-build";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { fillStorage, haulFillTarget } from "../engine/actions";
@@ -35,7 +36,10 @@ const UNDERFOOT_BUILD_RANGE_LIMIT = 4;
  *
  * @internal 导出仅供单元测试 — 业务入口是 withRoadBuild 包裹的通勤候选。
  */
-export function buildRoadSiteUnderfoot(creep: Creep): void {
+export function buildRoadSiteUnderfoot(
+  creep: Creep,
+  leg: RoadBuildLeg = creep.memory.mode === "work" ? "work" : "acquire",
+): void {
   // 实测账本（heap，不参与任何决策）：远矿路「建成 0」查到今天，缺的从来不是想法，
   // 而是「这一拍到底为什么没施工」的分桶读数。立案与判据见 domain/logistics/road-build。
   const counters = roadBuildCounters(creep.room.name);
@@ -54,10 +58,28 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
     // 无 WORK 的 body 即便有能也建不动，所以不计 —— 那一类要的动作是 body，不是能量。
     if (workParts > 0) {
       let inRange = 0;
+      let inRangeSite: ConstructionSite | undefined;
       for (const site of findMySitesCached(creep.room)) {
-        if (creep.pos.getRangeTo(site) < UNDERFOOT_BUILD_RANGE_LIMIT) inRange++;
+        if (creep.pos.getRangeTo(site) < UNDERFOOT_BUILD_RANGE_LIMIT) {
+          inRange++;
+          inRangeSite ??= site;
+        }
       }
       if (inRange > 0) counters.noEnergyInRange++;
+      recordRoadBuildObservation(creep, {
+        leg,
+        outcome: inRange > 0 ? "noEnergyInRange" : "noEnergy",
+        siteId: inRangeSite?.id,
+        energy: energyInStore,
+        workParts,
+      });
+    } else {
+      recordRoadBuildObservation(creep, {
+        leg,
+        outcome: "noEnergy",
+        energy: energyInStore,
+        workParts,
+      });
     }
     return;
   }
@@ -69,12 +91,21 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
     // 同样只遍历 room-scans 的**按房按 tick 缓存**：命中即纯数组遍历；未命中时最坏是
     // **本房这一拍多一次 `FIND_MY_CONSTRUCTION_SITES` find**（缓存按房共享 ⇒ 增量上界是
     // 每房每拍 1 次，不随该房 creep 数放大）。不发寻路、不发 build。
+    let inRangeSite: ConstructionSite | undefined;
     for (const site of findMySitesCached(creep.room)) {
       if (creep.pos.getRangeTo(site) < UNDERFOOT_BUILD_RANGE_LIMIT) {
         counters.noWorkInRange++;
+        inRangeSite = site;
         break;
       }
     }
+    recordRoadBuildObservation(creep, {
+      leg,
+      outcome: inRangeSite ? "noWorkInRange" : "noWork",
+      siteId: inRangeSite?.id,
+      energy: energyInStore,
+      workParts,
+    });
     return;
   }
 
@@ -84,9 +115,13 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
   let bestProgress = -1;
   let inRangeCount = 0;
   let minRange = Infinity;
+  let nearest: ConstructionSite | undefined;
   for (const site of sites) {
     const range = creep.pos.getRangeTo(site);
-    if (range < minRange) minRange = range;
+    if (range < minRange) {
+      minRange = range;
+      nearest = site;
+    }
     if (range >= UNDERFOOT_BUILD_RANGE_LIMIT) continue;
     inRangeCount++;
     const progress = site.progress;
@@ -106,13 +141,29 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
   if (outcome !== "proceed") {
     counters[outcome]++;
     if (outcome === "outOfRange") counters[roadBuildRangeBucket(minRange)]++;
+    recordRoadBuildObservation(creep, {
+      leg,
+      outcome: outcome === "outOfRange" ? roadBuildRangeBucket(minRange) : outcome,
+      siteId: nearest?.id,
+      energy: energyInStore,
+      workParts,
+    });
     return;
   }
   // build() 的资源结算发生在意图执行阶段（本 tick 读不到余额差），所以投入速率不由
   // creep 侧计量 —— 交给 road-planner 的 roadProgressSum 快照做差。
-  const code = creep.build(best!);
+  const target = best!;
+  const code = creep.build(target);
   if (code === OK) counters.built++;
   else counters.buildRejected++;
+  recordRoadBuildObservation(creep, {
+    leg,
+    outcome: code === OK ? "built" : "buildRejected",
+    siteId: target.id,
+    rc: code,
+    energy: energyInStore,
+    workParts,
+  });
 }
 
 /** 包装通勤候选：执行前先建脚下的路（移动意图由内层 execute 照常登记）。 */
@@ -264,7 +315,7 @@ const policy: RolePolicy = {
   park: true,
   onCommute: creep => {
     if (creep.memory.mode !== "work" || creep.room.name !== creep.memory.remoteTarget) return;
-    buildRoadSiteUnderfoot(creep);
+    buildRoadSiteUnderfoot(creep, "commute");
   },
   // 原 role-runner 硬编码 `role === "remoteHauler" && mode === "work" && room === home`
   //   下沉为角色钩子。work 在 home 房无候选时切 idle（ensureHome 保持在家）；
