@@ -79,9 +79,11 @@ export const roomStateSystem: System = {
 
       const energyPolicy = getEnergyPolicyForStorage(snapshot.storage?.store);
       const empireGateSum = brakeGateSum(Memory.kernel?.brakeNetFlow, Memory.kernel?.gateNetFlow);
+      // 帝国级闸已在 100 拍趟上做双向往复保持；房间侧只叠 storage 门槛，不再按零线逐拍翻面。
+      const empireGateClosed = Memory.kernel?.upgradeBrake?.closed ?? empireGateSum < 0;
       const strategicEnergyStress =
         snapshot.storage !== undefined &&
-        empireGateSum < 0 &&
+        empireGateClosed &&
         storageEnergyNow < energyPolicy.aidRecipientFloor;
       roomMem.strategicEnergyStress = strategicEnergyStress;
 

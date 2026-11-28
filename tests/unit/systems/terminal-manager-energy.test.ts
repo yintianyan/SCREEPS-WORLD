@@ -5,6 +5,10 @@ import { mockBudget, mockSnapshot, mockStore, resetGlobals } from "../../support
 import { CONFIG } from "../../../src/config";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { getEnergyPolicy } from "../../../src/domain/economy/energy-policy";
+import {
+  tryBuyCrisisEnergy,
+  trySellSurplusEnergy,
+} from "../../../src/systems/trade/terminal-market";
 
 const policy = getEnergyPolicy(1_000_000);
 const donorStorage = policy.aidDonorFloor + 30_000;
@@ -218,6 +222,12 @@ describe("terminal-manager — 帝国能量互济", () => {
 });
 
 describe("terminal-manager — 能量市场交易", () => {
+  beforeEach(() => {
+    globalCache().tradeLedger = undefined;
+    globalCache().marketOrderCache = undefined;
+    globalCache().marketPrices = undefined;
+  });
+
   function energyBuyOrders(price: number): any[] {
     return [{ id: "buy1", price, amount: 100000, remainingAmount: 100000, roomName: "W9N9" }];
   }
@@ -280,6 +290,23 @@ describe("terminal-manager — 能量市场交易", () => {
 
     terminalManagerSystem.run(makeContext([room]));
 
+    expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
+  });
+
+  it("主动卖能按市场买价动态定底价，不再用 0.02 遗物地板成交", () => {
+    const getAllOrders = resourceAwareOrders({ energy: energyBuyOrders(20) });
+    setupMarket({ getAllOrders });
+    globalCache().marketPrices = {
+      tick: Game.time,
+      prices: { energy: { sellMin: 0, buyMax: 30 } },
+    };
+    const room = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: getEnergyPolicy(1_000_000).saleFloor + 5000,
+      terminal: terminalMock({ energy: 20000 }),
+    });
+
+    expect(trySellSurplusEnergy(room, room.terminal, true)).toBe(false);
     expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
   });
 
@@ -354,5 +381,78 @@ describe("terminal-manager — 能量市场交易", () => {
     terminalManagerSystem.run(makeContext([room]));
 
     expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
+  });
+
+  it("危机买能绕过 interval 缓存直查，避免拿到已被抢走的最低价单", () => {
+    const stale = energySellOrders(18.44);
+    stale[0].id = "stale-energy";
+    const fresh = energySellOrders(19);
+    fresh[0].id = "fresh-energy";
+    globalCache().marketOrderCache = {
+      tick: Game.time,
+      orders: {
+        [`${ORDER_SELL}/energy`]: [
+          { id: "stale-energy", price: 18.44, amount: 100_000, roomName: "W9N9" },
+        ],
+      },
+    };
+    const getAllOrders = vi.fn(() => fresh);
+    setupMarket({ getAllOrders, credits: 1_000_000 });
+    const room = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 1000,
+      terminal: terminalMock({ energy: 20_000 }),
+    });
+
+    expect(tryBuyCrisisEnergy(room, room.terminal)).toBe(true);
+
+    expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith(
+      "fresh-energy",
+      CONFIG.market.maxDealAmount,
+      "W7N4",
+    );
+    expect(globalCache().tradeLedger?.lastBuy).toMatchObject({
+      resource: "energy",
+      orderId: "fresh-energy",
+      price: 19,
+      ok: true,
+    });
+  });
+
+  it("危机买能 deal 失败后强刷订单并重试一次", () => {
+    const first = energySellOrders(18.44);
+    first[0].id = "energy-first";
+    const second = energySellOrders(19);
+    second[0].id = "energy-second";
+    const getAllOrders = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+    setupMarket({ getAllOrders, credits: 1_000_000 });
+    (globalThis as any).Game.market.deal = vi
+      .fn()
+      .mockReturnValueOnce(ERR_NOT_ENOUGH_RESOURCES)
+      .mockReturnValueOnce(OK);
+    const room = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 1000,
+      terminal: terminalMock({ energy: 20_000 }),
+    });
+
+    expect(tryBuyCrisisEnergy(room, room.terminal)).toBe(true);
+
+    expect((globalThis as any).Game.market.deal).toHaveBeenNthCalledWith(
+      1,
+      "energy-first",
+      CONFIG.market.maxDealAmount,
+      "W7N4",
+    );
+    expect((globalThis as any).Game.market.deal).toHaveBeenNthCalledWith(
+      2,
+      "energy-second",
+      CONFIG.market.maxDealAmount,
+      "W7N4",
+    );
+    const ledger = globalCache().tradeLedger!;
+    expect(ledger.buyByResource.energy!.buyTried).toBe(2);
+    expect(ledger.buyByResource.energy!.buyOk).toBe(1);
+    expect(ledger.lastBuy).toMatchObject({ orderId: "energy-second", ok: true });
   });
 });

@@ -1405,7 +1405,7 @@ export const CONFIG = {
   energy: {
     /**
      * 战略能量闸的容量比例。storage 容量 1,000,000 时：
-     * 10% 危机买线 / 25% 受助线 / 40% 援助 donor 线 / 30% 紧急 donor 线 / 70% 卖能线。
+     * 10% 危机买线 / 25% 受助线 / 40% 援助 donor 线 / 30% 紧急 donor 线 / 40% 主动卖能线。
      * terminal 与 nuker 是独立战略资产，也按同一容量刻度取门，避免 2k/10k 这种
      * 对 1M storage 几乎无意义的绝对小线。运营即时供水仍走 distributorTiers 低绝对值。
      *
@@ -1419,7 +1419,7 @@ export const CONFIG = {
       aidRecipient: 0.25,
       aidDonor: 0.4,
       aidEmergencyDonor: 0.3,
-      sale: 0.7,
+      sale: 0.4,
       terminalStorage: 0.25,
       terminalEnergyTarget: 0.025,
       terminalReserve: 0.005,
@@ -1429,7 +1429,7 @@ export const CONFIG = {
     aidMaxTransfer: 10000,
     /** 低于此量不送（能量运费不划算）。 */
     aidMinTransfer: 2000,
-    /** 能量最低卖出价（credits/单位）— 低于此价囤着等行情。 */
+    /** 能量绝对最低卖出价（credits/单位）；主动收益线实际取市场买价 × sellDiscount 与此值的大者。 */
     minEnergySellPrice: 0.02,
     /** 危机能量买价硬顶（credits/单位）：覆盖当前市场地板，同时限制极端通胀下的救急支出。 */
     maxCrisisEnergyBuyPrice: 35,

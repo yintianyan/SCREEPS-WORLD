@@ -11,6 +11,44 @@
  * 本文件只出类型与建行函数，不碰 Game/Memory（写者 terminal-manager，快照者 telemetry-collector）。
  */
 
+export interface ResourceBuyBucket {
+  /** 累计：该资源有需求但价格门禁下无匹配卖单。 */
+  buyNoMatch: number;
+  /** 累计：该资源有需求但市场没有任何卖单。 */
+  buyNoOrders: number;
+  /** 最近一次该资源的买入价门禁（credits/单位）。 */
+  buyGatePrice: number;
+  /** 最近一次该资源看到的最低卖价；0 = 没匹配到单。 */
+  buyBestAsk: number;
+  /** 累计：该资源发出过多少次 deal。 */
+  buyTried: number;
+  /** 累计：该资源 deal 被引擎接受多少次。 */
+  buyOk: number;
+  /** 最近一次该资源采购现场 tick。 */
+  lastAt: number;
+  /** 最近一次该资源采购现场房间。 */
+  lastRoom: string;
+  /** 最近一次该资源实际尝试的成交量。 */
+  lastAmount: number;
+  /** 最近一次该资源实际尝试的成交价。 */
+  lastPrice: number;
+  /** 最近一次该资源实际尝试的订单号。 */
+  lastOrderId: string;
+}
+
+/** 最近一笔买入尝试的回执；资源品种与价格同源落盘，避免跨资源猜归因。 */
+export interface BuyReceipt {
+  at: number;
+  room: string;
+  resource: string;
+  amount: number;
+  price: number;
+  gatePrice: number;
+  bestAsk: number;
+  ok: boolean;
+  orderId: string;
+}
+
 /** 一次运行记下的决策现场（heap 累计 + 最近一次的输入快照）。 */
 export interface TradeLedger {
   /** 本进程内 terminal-manager 进入 run 的次数（分母）。 */
@@ -64,16 +102,18 @@ export interface TradeLedger {
   attemptedAt: number;
   /** 采购在进入撮合前被什么挡住：`""` = 没被挡。 */
   buyBlockedBy: "" | "credits-floor";
-  /** 累计：有需求但在价格门禁下找不到任何一张卖单（`buyGatePrice` 太低的直接证据）。 */
+  /** 累计：所有资源有需求但在价格门禁下找不到任何一张卖单。 */
   buyNoMatch: number;
-  /** 最近一次用的买入价门禁（每单位 credits）。 */
-  buyGatePrice: number;
-  /** 最近一次看到的最低卖价（每单位 credits）；0 = 没匹配到单。 */
-  buyBestAsk: number;
-  /** 累计：发出过多少次 deal。 */
+  /** 累计：所有资源有需求但市场没有任何卖单。 */
+  buyNoOrders: number;
+  /** 累计：所有资源发出过多少次 deal。 */
   buyTried: number;
-  /** 累计：deal 被引擎接受多少次（与 buyTried 的差 = 撮合成功但执行被拒）。 */
+  /** 累计：所有资源 deal 被引擎接受多少次（与 buyTried 的差 = 撮合成功但执行被拒）。 */
   buyOk: number;
+  /** 按资源分桶的采购现场；价格与计数不得再混成全资源标量。 */
+  buyByResource: Record<string, ResourceBuyBucket>;
+  /** 最近一笔买入尝试回执（含资源、房间、订单号、价格与是否成交）。 */
+  lastBuy?: BuyReceipt;
   /**
    * 本轮 buy-deficit 候选拿到的优先级（`DEFICIT_PRIORITY_BASE` = 需求表为空时的基线）。
    * 与 `SELL_PRIORITY_CAP` 对照才知道买入有没有被日常卖出挤出 deal 窗口。
@@ -146,10 +186,10 @@ export function createTradeLedger(): TradeLedger {
     attemptedAt: 0,
     buyBlockedBy: "",
     buyNoMatch: 0,
-    buyGatePrice: 0,
-    buyBestAsk: 0,
+    buyNoOrders: 0,
     buyTried: 0,
     buyOk: 0,
+    buyByResource: {},
     buyDeficitPriority: 0,
     sellOrderGate: "",
     sellOrderGateAt: 0,

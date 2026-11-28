@@ -414,7 +414,7 @@ declare global {
      */
     storageRichActive?: boolean;
     /**
-     * 帝国级能量压力：brakeNetFlow/gateNetFlow 和为负且本房 storage 低于容量比例受助线。
+     * 帝国级能量压力：upgradeBrake.closed（100 拍双向保持）且本房 storage 低于容量比例受助线。
      * room-state 每拍唯一写入；spawn-manager 据此停补非关键编制，upgrade/lab 闸同步关闭。
      */
     strategicEnergyStress?: boolean;

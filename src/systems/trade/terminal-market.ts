@@ -21,7 +21,11 @@ import {
   collectRoomDemands,
   adjustMaxPrice,
 } from "../../domain/industry/procurement";
-import { ensureTradeLedger } from "../../domain/industry/trade-ledger";
+import {
+  ensureTradeLedger,
+  type ResourceBuyBucket,
+  type TradeLedger,
+} from "../../domain/industry/trade-ledger";
 import {
   computeDynamicBuyPrice,
   computeDynamicSellPrice,
@@ -204,6 +208,101 @@ export function executeDeal(
   return false;
 }
 
+function resourceBuyBucket(ledger: TradeLedger, resource: string): ResourceBuyBucket {
+  return (ledger.buyByResource[resource] ??= {
+    buyNoMatch: 0,
+    buyNoOrders: 0,
+    buyGatePrice: 0,
+    buyBestAsk: 0,
+    buyTried: 0,
+    buyOk: 0,
+    lastAt: 0,
+    lastRoom: "",
+    lastAmount: 0,
+    lastPrice: 0,
+    lastOrderId: "",
+  });
+}
+
+function noteBuyNoMatch(
+  ledger: TradeLedger,
+  room: string,
+  resource: string,
+  gatePrice: number,
+): void {
+  const bucket = resourceBuyBucket(ledger, resource);
+  bucket.buyNoMatch++;
+  bucket.buyGatePrice = gatePrice;
+  bucket.buyBestAsk = 0;
+  bucket.lastAt = Game.time;
+  bucket.lastRoom = room;
+  ledger.buyNoMatch++;
+}
+
+function noteBuyNoOrders(
+  ledger: TradeLedger,
+  room: string,
+  resource: string,
+  gatePrice: number,
+): void {
+  const bucket = resourceBuyBucket(ledger, resource);
+  bucket.buyNoOrders++;
+  bucket.buyGatePrice = gatePrice;
+  bucket.buyBestAsk = 0;
+  bucket.lastAt = Game.time;
+  bucket.lastRoom = room;
+  ledger.buyNoOrders++;
+}
+
+function noteBuyAttempt(
+  ledger: TradeLedger,
+  room: string,
+  resource: string,
+  gatePrice: number,
+  order: MarketOrderSummary,
+  amount: number,
+  terminal: StructureTerminal,
+  feeChannel?: "energyBuy",
+): boolean {
+  const bucket = resourceBuyBucket(ledger, resource);
+  bucket.buyGatePrice = gatePrice;
+  bucket.buyBestAsk = order.price;
+  bucket.lastAt = Game.time;
+  bucket.lastRoom = room;
+  bucket.lastAmount = amount;
+  bucket.lastPrice = order.price;
+  bucket.lastOrderId = order.id;
+  bucket.buyTried++;
+  ledger.buyTried++;
+  const ok = executeDeal(order, amount, terminal, room, feeChannel);
+  if (ok) {
+    bucket.buyOk++;
+    ledger.buyOk++;
+  }
+  ledger.lastBuy = {
+    at: Game.time,
+    room,
+    resource,
+    amount,
+    price: order.price,
+    gatePrice,
+    bestAsk: order.price,
+    ok,
+    orderId: order.id,
+  };
+  return ok;
+}
+
+/** 危机买能绕过 interval 订单缓存；失败重试前用同一入口强刷。 */
+function freshSellOrders(resource: string): MarketOrderSummary[] {
+  const orders = toSummaries(
+    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: resource as ResourceConstant }),
+  );
+  const cache = globalCache().marketOrderCache;
+  if (cache) cache.orders[`${ORDER_SELL}/${resource}`] = orders;
+  return orders;
+}
+
 /** 能量溢出卖：storage 高于 energySellFloor 时向市场卖能量（terminal 现货出货）。 */
 export function trySellSurplusEnergy(
   snapshot: RoomSnapshot,
@@ -220,12 +319,14 @@ export function trySellSurplusEnergy(
     getCachedOrders(ORDER_BUY, RESOURCE_ENERGY) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_ENERGY }));
   const held = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
-  const plan = planEnergySale(
-    orders,
-    amount,
-    held,
+  const minPrice = computeDynamicSellPrice(
+    RESOURCE_ENERGY,
+    getMarketPrices(),
+    CONFIG.market.sellDiscount,
     CONFIG.energy.minEnergySellPrice,
-    (quantity, roomName) => Game.market.calcTransactionCost(quantity, snapshot.roomName, roomName),
+  );
+  const plan = planEnergySale(orders, amount, held, minPrice, (quantity, roomName) =>
+    Game.market.calcTransactionCost(quantity, snapshot.roomName, roomName),
   );
   if (!plan) return false;
 
@@ -242,36 +343,61 @@ export function tryBuyCrisisEnergy(snapshot: RoomSnapshot, terminal: StructureTe
 
   const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
   const policy = getEnergyPolicyForStorage(snapshot.storage?.store);
-  const orders =
-    getCachedOrders(ORDER_SELL, RESOURCE_ENERGY) ??
-    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_ENERGY }));
-  let marketFloor = Number.POSITIVE_INFINITY;
-  for (const order of orders) {
-    if (order.amount > 0 && order.price < marketFloor) marketFloor = order.price;
-  }
-  if (!Number.isFinite(marketFloor)) return false;
+  const ledger = ensureTradeLedger(globalCache());
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // 危机通道不吃 interval 缓存：最低价单在被查询与 deal 之间可能被抢。
+    const orders = freshSellOrders(RESOURCE_ENERGY);
+    let marketFloor = Number.POSITIVE_INFINITY;
+    for (const order of orders) {
+      if (order.amount > 0 && order.price < marketFloor) marketFloor = order.price;
+    }
+    if (!Number.isFinite(marketFloor)) {
+      noteBuyNoOrders(
+        ledger,
+        snapshot.roomName,
+        RESOURCE_ENERGY,
+        CONFIG.energy.maxCrisisEnergyBuyPrice,
+      );
+      return false;
+    }
 
-  // 价格闸不再用 0.05 这种历史绝对值：市场地板 18.44 时它等于永久锁死。
-  // 动态地板覆盖真实行情，35 硬顶防止极端通胀把国库烧穿。
-  const maxPrice = Math.min(
-    CONFIG.energy.maxCrisisEnergyBuyPrice,
-    marketFloor * CONFIG.energy.crisisEnergyBuyPremium,
-  );
-  const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / maxPrice);
-  const deficitAmount = energyBuyAmount(
-    storageEnergy,
-    policy.crisisBuyFloor,
-    CONFIG.market.maxDealAmount,
-    affordable,
-  );
-  const best = pickBestSellOrder(orders, maxPrice);
-  if (!best) return false;
-  const amount = Math.min(deficitAmount, best.amount);
-  if (amount <= 0) return false;
-  // 【审计修复 Phase 4-5】买入能量入 L1 账本 — 记 bought。
-  if (executeDeal(best, amount, terminal, snapshot.roomName, "energyBuy")) {
-    bumpEnergyCounter(snapshot.roomName, "bought", amount);
-    return true;
+    // 价格闸不再用 0.05 这种历史绝对值：市场地板 18.44 时它等于永久锁死。
+    // 动态地板覆盖真实行情，35 硬顶防止极端通胀把国库烧穿。
+    const maxPrice = Math.min(
+      CONFIG.energy.maxCrisisEnergyBuyPrice,
+      marketFloor * CONFIG.energy.crisisEnergyBuyPremium,
+    );
+    const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / maxPrice);
+    const deficitAmount = energyBuyAmount(
+      storageEnergy,
+      policy.crisisBuyFloor,
+      CONFIG.market.maxDealAmount,
+      affordable,
+    );
+    const best = pickBestSellOrder(orders, maxPrice);
+    if (!best) {
+      noteBuyNoMatch(ledger, snapshot.roomName, RESOURCE_ENERGY, maxPrice);
+      return false;
+    }
+    const amount = Math.min(deficitAmount, best.amount);
+    if (amount <= 0) return false;
+    // 【审计修复 Phase 4-5】买入能量入 L1 账本 — 记 bought。
+    if (
+      noteBuyAttempt(
+        ledger,
+        snapshot.roomName,
+        RESOURCE_ENERGY,
+        maxPrice,
+        best,
+        amount,
+        terminal,
+        "energyBuy",
+      )
+    ) {
+      bumpEnergyCounter(snapshot.roomName, "bought", amount);
+      return true;
+    }
+    if (attempt === 1) return false;
   }
   return false;
 }
@@ -371,7 +497,7 @@ export function tryBuyDeficit(
         fallback,
       );
       const maxPrice = Math.min(adjustMaxPrice(basePrice, demand.priority), fallback);
-      ledger.buyGatePrice = maxPrice;
+      resourceBuyBucket(ledger, demand.resource).buyGatePrice = maxPrice;
 
       const orders =
         getCachedOrders(ORDER_SELL, demand.resource) ??
@@ -381,15 +507,17 @@ export function tryBuyDeficit(
             resourceType: demand.resource as ResourceConstant,
           }),
         );
+      if (orders.length === 0) {
+        noteBuyNoOrders(ledger, snapshot.roomName, demand.resource, maxPrice);
+        continue;
+      }
       const best = pickBestSellOrder(orders, maxPrice);
       if (!best) {
         // 「有需求、门禁价下一张单都没有」是这一路最常见的一次止步，也是唯一能区分
         // "门禁太紧" 与 "市场真没货" 的那个数（后者要看 buyBestAsk 有没有非零历史）。
-        ledger.buyNoMatch++;
-        ledger.buyBestAsk = 0;
+        noteBuyNoMatch(ledger, snapshot.roomName, demand.resource, maxPrice);
         continue;
       }
-      ledger.buyBestAsk = best.price;
 
       const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / best.price);
       const amount = Math.min(demand.amount, best.amount, CONFIG.market.maxDealAmount, affordable);
@@ -399,10 +527,15 @@ export function tryBuyDeficit(
         "terminal",
         `[${Game.time}] terminal/${snapshot.roomName}: 买入 ${demand.resource} amount=${amount} priority=${demand.priority} reason=${demand.reason}`,
       );
-      ledger.buyTried++;
-      const ok = executeDeal(best, amount, terminal, snapshot.roomName);
-      if (ok) ledger.buyOk++;
-      return ok;
+      return noteBuyAttempt(
+        ledger,
+        snapshot.roomName,
+        demand.resource,
+        maxPrice,
+        best,
+        amount,
+        terminal,
+      );
     }
     // 需求表有需求但全部买入失败（无卖单/价超门禁）— 不回退到硬编码目标，
     // 避免在已有明确需求时买不需要的东西。
@@ -429,7 +562,7 @@ export function tryBuyDeficit(
     CONFIG.market.buyPremium,
     fallback,
   );
-  ledger.buyGatePrice = maxPrice;
+  resourceBuyBucket(ledger, target.mineral).buyGatePrice = maxPrice;
   if (maxPrice <= 0) return false;
 
   const orders =
@@ -440,21 +573,28 @@ export function tryBuyDeficit(
         resourceType: target.mineral as ResourceConstant,
       }),
     );
-  const best = pickBestSellOrder(orders, maxPrice);
-  if (!best) {
-    ledger.buyNoMatch++;
-    ledger.buyBestAsk = 0;
+  if (orders.length === 0) {
+    noteBuyNoOrders(ledger, snapshot.roomName, target.mineral, maxPrice);
     return false;
   }
-  ledger.buyBestAsk = best.price;
+  const best = pickBestSellOrder(orders, maxPrice);
+  if (!best) {
+    noteBuyNoMatch(ledger, snapshot.roomName, target.mineral, maxPrice);
+    return false;
+  }
 
   // 成交量受缺口、订单余量、单笔上限与 credits 余额四重约束。
   const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / best.price);
   const amount = Math.min(target.deficit, best.amount, CONFIG.market.maxDealAmount, affordable);
-  ledger.buyTried++;
-  const ok = executeDeal(best, amount, terminal, snapshot.roomName);
-  if (ok) ledger.buyOk++;
-  return ok;
+  return noteBuyAttempt(
+    ledger,
+    snapshot.roomName,
+    target.mineral,
+    maxPrice,
+    best,
+    amount,
+    terminal,
+  );
 }
 
 /**
@@ -726,6 +866,7 @@ export function trySellPixel(): void {
 
 /** 需要采集行情的资源列表 — 覆盖所有交易涉及的资源类型。 */
 const PRICED_RESOURCES = [
+  "energy",
   "H",
   "O",
   "U",

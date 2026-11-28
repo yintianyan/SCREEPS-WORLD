@@ -200,6 +200,61 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
     expect(roomMem.strategicEnergyStress).toBe(false);
     expect(roomMem.upgradeActive).toBe(true);
   });
+
+  it("帝国闸已关闭时，即使慢净流转正也保持战略压力直到 latch 放行", () => {
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: {
+        W1N1: {
+          phase: { phase: "growth", reserve: 1000, drainScore: 0, liquidityScore: 0, bandTicks: 0 },
+        },
+      },
+      kernel: {
+        brakeNetFlow: { W1N1: 5 },
+        upgradeBrake: { closed: true, since: 1 },
+      },
+    };
+    const snapshot = makeSnapshot({
+      storage: {
+        store: mockCapacityStore(10_000, 1_000_000),
+      } as unknown as StructureStorage,
+    });
+
+    roomStateSystem.run(mockRoomStateCtx([snapshot], 100));
+
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
+    expect(roomMem.strategicEnergyStress).toBe(true);
+    expect(roomMem.upgradeActive).toBe(false);
+    expect(roomMem.labActive).toBe(false);
+  });
+
+  it("帝国闸已放行时，即使慢净流转负也保持战略压力解除直到 latch 关闭", () => {
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: {
+        W1N1: {
+          phase: { phase: "growth", reserve: 1000, drainScore: 0, liquidityScore: 0, bandTicks: 0 },
+        },
+      },
+      kernel: {
+        brakeNetFlow: { W1N1: -5 },
+        upgradeBrake: { closed: false, since: 1 },
+      },
+    };
+    const snapshot = makeSnapshot({
+      storage: {
+        store: mockCapacityStore(10_000, 1_000_000),
+      } as unknown as StructureStorage,
+    });
+
+    roomStateSystem.run(mockRoomStateCtx([snapshot], 100));
+
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
+    expect(roomMem.strategicEnergyStress).toBe(false);
+    expect(roomMem.upgradeActive).toBe(true);
+  });
 });
 
 describe("room-state system — TD-014 controllerDowngradeRisk 迟滞带", () => {

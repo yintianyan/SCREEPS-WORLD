@@ -72,11 +72,11 @@ describe("terminal-manager — 决策账本", () => {
     expect(Object.keys(createTradeLedger()).sort()).toEqual(
       [
         "bucket",
-        "buyBestAsk",
         "buyBlockedBy",
+        "buyByResource",
         "buyDeficitPriority",
-        "buyGatePrice",
         "buyNoMatch",
+        "buyNoOrders",
         "buyOk",
         "buyTried",
         "credits",
@@ -165,7 +165,7 @@ describe("terminal-manager — 决策账本", () => {
         needsAid: true,
         storageEnergy: 200_000,
         storageCapacity: 1_000_000,
-        saleFloor: 700_000,
+        saleFloor: 400_000,
       },
     ]);
   });
@@ -244,7 +244,7 @@ describe("terminal-market — 采购侧账本", () => {
       5000,
     );
 
-  it("有需求但市场一张单都没匹配上 → buyNoMatch 计数、demandTop 指出是哪种料", () => {
+  it("市场没有卖单 → buyNoOrders 计数，不与价门不匹配混桶", () => {
     publish("U");
     const ok = tryBuyDeficit(mockSnapshot(), terminal(), ctx());
 
@@ -252,10 +252,34 @@ describe("terminal-market — 采购侧账本", () => {
     expect(ok).toBe(false);
     expect(ledger.demandsLive).toBe(1);
     expect(ledger.demandTop).toBe("U:100/p10/lab-reaction");
-    expect(ledger.buyNoMatch).toBe(1);
-    expect(ledger.buyBestAsk).toBe(0);
+    expect(ledger.buyNoOrders).toBe(1);
+    expect(ledger.buyByResource.U!.buyNoOrders).toBe(1);
+    expect(ledger.buyByResource.U!.buyNoMatch).toBe(0);
+    expect(ledger.buyByResource.U!.buyBestAsk).toBe(0);
+    expect(ledger.buyByResource.U!.buyGatePrice).toBeGreaterThan(0);
     expect(ledger.buyTried).toBe(0);
-    expect(ledger.buyGatePrice).toBeGreaterThan(0);
+  });
+
+  it("市场有卖单但价格超门禁 → buyNoMatch 计数，buyNoOrders 不增加", () => {
+    publish("U");
+    g().Game.market.getAllOrders = () => [
+      {
+        id: "expensive",
+        type: ORDER_SELL,
+        resourceType: "U",
+        amount: 100,
+        price: 1e9,
+        roomName: "W1N1",
+      },
+    ];
+
+    expect(tryBuyDeficit(mockSnapshot(), terminal(), ctx())).toBe(false);
+
+    const ledger = globalCache().tradeLedger!;
+    expect(ledger.buyNoMatch).toBe(1);
+    expect(ledger.buyNoOrders).toBe(0);
+    expect(ledger.buyByResource.U!.buyNoMatch).toBe(1);
+    expect(ledger.buyByResource.U!.buyNoOrders).toBe(0);
   });
 
   it("credits 不足 → 记成 credits-floor（与「没需求」必须是两个不同的读数）", () => {
@@ -285,6 +309,42 @@ describe("terminal-market — 采购侧账本", () => {
     expect(ledger.buyTried).toBe(0);
   });
 
+  it("不同资源分桶：U 无匹配与 Z 成交互不污染，回执指向 Z", () => {
+    publishProcurementDemands(
+      "W7N4",
+      [
+        { resource: "U", amount: 100, priority: 10, deadline: 6000, reason: "lab-reaction" },
+        { resource: "Z", amount: 100, priority: 10, deadline: 6000, reason: "lab-reaction" },
+      ] as any,
+      5000,
+    );
+    g().Game.market.getAllOrders = (opts: any) =>
+      opts.resourceType === "Z"
+        ? [
+            {
+              id: "z-order",
+              type: ORDER_SELL,
+              resourceType: "Z",
+              amount: 100,
+              price: 1e-6,
+              roomName: "W1N1",
+            },
+          ]
+        : [];
+    g().Game.market.calcTransactionCost = () => 10;
+    g().Game.market.deal = () => OK;
+
+    expect(tryBuyDeficit(mockSnapshot(), terminal(), ctx())).toBe(true);
+
+    const ledger = globalCache().tradeLedger!;
+    expect(ledger.buyByResource.U!.buyNoOrders).toBe(1);
+    expect(ledger.buyByResource.U!.buyNoMatch).toBe(0);
+    expect(ledger.buyByResource.U!.buyTried).toBe(0);
+    expect(ledger.buyByResource.Z!.buyTried).toBe(1);
+    expect(ledger.buyByResource.Z!.buyOk).toBe(1);
+    expect(ledger.lastBuy).toMatchObject({ resource: "Z", orderId: "z-order", ok: true });
+  });
+
   it("成交时 buyTried/buyOk 同步走，buyBestAsk 留下当时看到的价", () => {
     publish("Z");
     // 价取远低于任何门禁：本用例钉的是「撮合成功后计数怎么走」，门禁有自己的用例，
@@ -301,7 +361,18 @@ describe("terminal-market — 采购侧账本", () => {
     const ledger = globalCache().tradeLedger!;
     expect(ledger.buyTried).toBe(1);
     expect(ledger.buyOk).toBe(1);
-    expect(ledger.buyBestAsk).toBe(1e-6);
+    expect(ledger.buyByResource.Z!.buyTried).toBe(1);
+    expect(ledger.buyByResource.Z!.buyOk).toBe(1);
+    expect(ledger.buyByResource.Z!.buyBestAsk).toBe(1e-6);
+    expect(ledger.lastBuy).toMatchObject({
+      room: "W7N4",
+      resource: "Z",
+      amount: 100,
+      price: 1e-6,
+      ok: true,
+      orderId: "o1",
+    });
     expect(ledger.buyNoMatch).toBe(0);
+    expect(ledger.buyNoOrders).toBe(0);
   });
 });
